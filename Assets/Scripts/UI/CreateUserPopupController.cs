@@ -25,7 +25,7 @@ public class CreateUserPopupController : MonoBehaviour
 
         if (saveButton != null)
         {
-            saveButton.onClick.AddListener(SaveUser);
+            saveButton.onClick.AddListener(CreateUser);
         }
 
         if (closeButton != null)
@@ -38,7 +38,7 @@ public class CreateUserPopupController : MonoBehaviour
     {
         if (saveButton != null)
         {
-            saveButton.onClick.RemoveListener(SaveUser);
+            saveButton.onClick.RemoveListener(CreateUser);
         }
 
         if (closeButton != null)
@@ -47,7 +47,7 @@ public class CreateUserPopupController : MonoBehaviour
         }
     }
 
-    private void SaveUser()
+    private void CreateUser()
     {
         string playerName = nameInputField != null ? nameInputField.text.Trim() : string.Empty;
 
@@ -57,13 +57,26 @@ public class CreateUserPopupController : MonoBehaviour
             return;
         }
 
-        LocalUserProfile.SavePlayerName(playerName);
-        popupManager.CloseActivePopup();
+        if (UserManager.instance == null)
+        {
+            SetError("User Manager was not found.");
+            return;
+        }
+
+        UserManager.instance.CreateUser(playerName);
+
+        if (popupManager != null)
+        {
+            popupManager.OpenPopup(PopupId.UserInfo);
+        }
     }
 
     private void ClosePopup()
     {
-        popupManager.CloseActivePopup();
+        if (popupManager != null)
+        {
+            popupManager.CloseActivePopup();
+        }
     }
 
     private void SetError(string message)

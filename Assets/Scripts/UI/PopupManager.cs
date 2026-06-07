@@ -31,11 +31,29 @@ public class PopupManager : MonoBehaviour
 
     private PopupId activePopupId = PopupId.None;
 
+    public PopupId ActivePopupId => activePopupId;
     public bool HasOpenPopup => activePopupId != PopupId.None;
 
     private void Awake()
     {
         CloseAllPopups();
+    }
+
+    public void TogglePopup(PopupId popupId)
+    {
+        if (popupId == PopupId.None)
+        {
+            CloseAllPopups();
+            return;
+        }
+
+        if (activePopupId == popupId)
+        {
+            CloseActivePopup();
+            return;
+        }
+
+        OpenPopup(popupId);
     }
 
     public void OpenPopup(PopupId popupId)

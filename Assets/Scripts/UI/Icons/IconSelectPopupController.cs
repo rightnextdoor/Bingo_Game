@@ -1,9 +1,12 @@
 using System.Collections.Generic;
+using System;
 using UnityEngine;
 using UnityEngine.UI;
 
 public class IconSelectPopupController : MonoBehaviour
 {
+    private Action<UserIconData> iconSelectedCallback;
+
     [Header("Managers")]
     [SerializeField] private UIIconManager iconManager;
 
@@ -61,6 +64,21 @@ public class IconSelectPopupController : MonoBehaviour
     private void OnEnable()
     {
         if (populateOnEnable)
+        {
+            PopulateIconSlots();
+        }
+    }
+
+    public void OpenForSelection(string currentIconId, Action<UserIconData> onIconSelected)
+    {
+        selectedIconId = string.IsNullOrWhiteSpace(currentIconId) ? string.Empty : currentIconId;
+        iconSelectedCallback = onIconSelected;
+
+        if (!gameObject.activeSelf)
+        {
+            gameObject.SetActive(true);
+        }
+        else
         {
             PopulateIconSlots();
         }
@@ -143,10 +161,17 @@ public class IconSelectPopupController : MonoBehaviour
 
         Debug.Log($"Selected icon: {selectedIconId}");
 
+        iconSelectedCallback?.Invoke(iconData);
+
         if (autoCloseOnSelect)
         {
-            gameObject.SetActive(false);
+            CloseIconPopup();
         }
+    }
+
+    public void CloseIconPopup()
+    {
+        gameObject.SetActive(false);
     }
 
     public void SetSelectedIconId(string iconId)

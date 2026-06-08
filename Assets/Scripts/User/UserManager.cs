@@ -58,20 +58,26 @@ public class UserManager : MonoBehaviour, ISaveManager
 
     public void CreateUser(string playerName)
     {
+        CreateUser(playerName, string.Empty);
+    }
+
+    public void CreateUser(string playerName, string iconId)
+    {
         if (string.IsNullOrWhiteSpace(playerName))
         {
             Debug.LogWarning("Cannot create user with an empty player name.");
             return;
         }
 
-        CurrentUser.CreateUser(playerName);
+        CurrentUser.CreateUser(playerName, iconId);
 
         SaveManager.instance?.SaveGame();
 
         UserChanged?.Invoke();
 
-        Debug.Log($"Created user: {CurrentUser.playerName} / {CurrentUser.userId}");
+        Debug.Log($"Created user: {CurrentUser.playerName} / {CurrentUser.userId} / Icon: {CurrentUser.iconId}");
     }
+
 
     public void ChangePlayerName(string playerName)
     {
@@ -87,13 +93,16 @@ public class UserManager : MonoBehaviour, ISaveManager
         UserChanged?.Invoke();
     }
 
+
     public void ChangeIcon(string iconId)
     {
-        CurrentUser.iconId = string.IsNullOrWhiteSpace(iconId) ? string.Empty : iconId.Trim();
+        CurrentUser.SetIcon(iconId);
 
         SaveManager.instance?.SaveGame();
 
         UserChanged?.Invoke();
+
+        Debug.Log($"Changed user icon to: {CurrentUser.iconId}");
     }
 
     public void SetLastGameId(string gameId)

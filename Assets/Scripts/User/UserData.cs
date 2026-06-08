@@ -30,11 +30,21 @@ public class UserData
 
     public void CreateUser(string newPlayerName)
     {
+        CreateUser(newPlayerName, string.Empty);
+    }
+
+    public void CreateUser(string newPlayerName, string newIconId)
+    {
         userId = Guid.NewGuid().ToString("N");
         playerName = newPlayerName.Trim();
-        iconId = string.Empty;
+        iconId = string.IsNullOrWhiteSpace(newIconId) ? string.Empty : newIconId.Trim();
         lastGameId = string.Empty;
         stats = new UserStats();
+    }
+
+    public void SetIcon(string newIconId)
+    {
+        iconId = string.IsNullOrWhiteSpace(newIconId) ? string.Empty : newIconId.Trim();
     }
 
     public void RepairData()

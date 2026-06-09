@@ -74,8 +74,6 @@ public class UserManager : MonoBehaviour, ISaveManager
         SaveManager.instance?.SaveGame();
 
         UserChanged?.Invoke();
-
-        Debug.Log($"Created user: {CurrentUser.playerName} / {CurrentUser.userId} / Icon: {CurrentUser.iconId}");
     }
 
 
@@ -101,8 +99,6 @@ public class UserManager : MonoBehaviour, ISaveManager
         SaveManager.instance?.SaveGame();
 
         UserChanged?.Invoke();
-
-        Debug.Log($"Changed user icon to: {CurrentUser.iconId}");
     }
 
     public void SetLastGameId(string gameId)

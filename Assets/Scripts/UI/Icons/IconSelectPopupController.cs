@@ -1,6 +1,8 @@
-using System.Collections.Generic;
 using System;
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.Controls;
 using UnityEngine.UI;
 
 public class IconSelectPopupController : MonoBehaviour
@@ -50,6 +52,11 @@ public class IconSelectPopupController : MonoBehaviour
     [SerializeField] private bool populateOnEnable = true;
     [SerializeField] private bool autoCloseOnSelect = true;
 
+    [Header("Close Behavior")]
+    [SerializeField] private bool closeWhenClickOutside = true;
+
+    private Canvas parentCanvas;
+
     private readonly List<UIUserIconSlot> spawnedSlots = new List<UIUserIconSlot>();
 
     private string selectedIconId = string.Empty;
@@ -59,6 +66,40 @@ public class IconSelectPopupController : MonoBehaviour
     private void Awake()
     {
         FindMissingReferences();
+        parentCanvas = GetComponentInParent<Canvas>();
+    }
+
+    private void Update()
+    {
+        if (!closeWhenClickOutside)
+        {
+            return;
+        }
+
+        if (!gameObject.activeInHierarchy)
+        {
+            return;
+        }
+
+        if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
+        {
+            CloseIfPointerIsOutside(Mouse.current.position.ReadValue());
+            return;
+        }
+
+        if (Touchscreen.current != null)
+        {
+            for (int i = 0; i < Touchscreen.current.touches.Count; i++)
+            {
+                TouchControl touch = Touchscreen.current.touches[i];
+
+                if (touch.press.wasPressedThisFrame)
+                {
+                    CloseIfPointerIsOutside(touch.position.ReadValue());
+                    return;
+                }
+            }
+        }
     }
 
     private void OnEnable()
@@ -69,10 +110,58 @@ public class IconSelectPopupController : MonoBehaviour
         }
     }
 
+    private void CloseIfPointerIsOutside(Vector2 screenPosition)
+    {
+        if (popupRect == null)
+        {
+            return;
+        }
+
+        Camera uiCamera = GetUICamera();
+
+        bool pointerIsInsidePopup = RectTransformUtility.RectangleContainsScreenPoint(
+            popupRect,
+            screenPosition,
+            uiCamera
+        );
+
+        if (pointerIsInsidePopup)
+        {
+            return;
+        }
+
+        CloseIconPopup();
+    }
+
+    private Camera GetUICamera()
+    {
+        if (parentCanvas == null)
+        {
+            parentCanvas = GetComponentInParent<Canvas>();
+        }
+
+        if (parentCanvas == null)
+        {
+            return null;
+        }
+
+        if (parentCanvas.renderMode == RenderMode.ScreenSpaceOverlay)
+        {
+            return null;
+        }
+
+        return parentCanvas.worldCamera;
+    }
+
     public void OpenForSelection(string currentIconId, Action<UserIconData> onIconSelected)
     {
         selectedIconId = string.IsNullOrWhiteSpace(currentIconId) ? string.Empty : currentIconId;
         iconSelectedCallback = onIconSelected;
+
+        if (parentCanvas == null)
+        {
+            parentCanvas = GetComponentInParent<Canvas>();
+        }
 
         if (!gameObject.activeSelf)
         {
@@ -159,8 +248,6 @@ public class IconSelectPopupController : MonoBehaviour
             slot.SetSelected(slot.IconData.IconId == selectedIconId);
         }
 
-        Debug.Log($"Selected icon: {selectedIconId}");
-
         iconSelectedCallback?.Invoke(iconData);
 
         if (autoCloseOnSelect)
@@ -171,6 +258,7 @@ public class IconSelectPopupController : MonoBehaviour
 
     public void CloseIconPopup()
     {
+        iconSelectedCallback = null;
         gameObject.SetActive(false);
     }
 

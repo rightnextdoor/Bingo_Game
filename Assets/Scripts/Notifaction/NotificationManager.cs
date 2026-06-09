@@ -19,17 +19,13 @@ public class NotificationManager : MonoBehaviour
         }
     }
 
-    [Header("UI References - Assign Later")]
-    [SerializeField] private CanvasGroup notificationCanvasGroup;
+    [Header("Notification UI")]
+    [SerializeField] private CanvasGroup notificationAreaCanvasGroup;
     [SerializeField] private Image notificationBackground;
     [SerializeField] private TMP_Text notificationText;
 
-    [Header("Fallback Timing")]
-    [SerializeField] private float fallbackDisplaySeconds = 1.5f;
-    [SerializeField] private float fallbackFadeOutSeconds = 0.35f;
-
-    [Header("Debug")]
-    [SerializeField] private bool logWhenNoUIAssigned = true;
+    [Header("Queue Timing")]
+    [SerializeField] private float delayBetweenMessages = 0.35f;
 
     private readonly Queue<NotificationRequest> notificationQueue = new Queue<NotificationRequest>();
 
@@ -62,7 +58,7 @@ public class NotificationManager : MonoBehaviour
     {
         if (messageData == null)
         {
-            Debug.LogWarning("Cannot send notification because message data is null.");
+            Debug.LogWarning("Cannot send notification because UIMessageData is null.");
             return;
         }
 
@@ -83,6 +79,11 @@ public class NotificationManager : MonoBehaviour
             NotificationRequest request = notificationQueue.Dequeue();
 
             yield return PlayNotification(request);
+
+            if (notificationQueue.Count > 0 && delayBetweenMessages > 0f)
+            {
+                yield return new WaitForSecondsRealtime(delayBetweenMessages);
+            }
         }
 
         isPlayingNotification = false;
@@ -96,25 +97,19 @@ public class NotificationManager : MonoBehaviour
             yield break;
         }
 
-        UIMessageData messageData = request.MessageData;
-        string message = messageData.BuildMessage();
-
-        ApplyNotificationVisuals(messageData, message);
-
-        if (!HasNotificationUI())
+        if (!HasRequiredUI())
         {
-            if (logWhenNoUIAssigned)
-            {
-                Debug.Log($"Notification: {message}");
-            }
-
+            Debug.LogWarning("NotificationManager is missing NotificationArea CanvasGroup or NotificationText.");
             yield break;
         }
 
-        float displaySeconds = GetDisplaySeconds(messageData);
-        float fadeOutSeconds = GetFadeOutSeconds(messageData);
+        UIMessageData messageData = request.MessageData;
 
         ShowNotificationInstant();
+        ApplyNotificationVisuals(messageData);
+
+        float displaySeconds = Mathf.Max(0f, messageData.DisplaySeconds);
+        float fadeOutSeconds = Mathf.Max(0f, messageData.FadeOutSeconds);
 
         if (displaySeconds > 0f)
         {
@@ -129,12 +124,20 @@ public class NotificationManager : MonoBehaviour
         HideNotificationInstant();
     }
 
-    private void ApplyNotificationVisuals(UIMessageData messageData, string message)
+    private void ApplyNotificationVisuals(UIMessageData messageData)
     {
+        if (notificationBackground != null)
+        {
+            notificationBackground.gameObject.SetActive(true);
+            notificationBackground.color = messageData.BackgroundColor;
+            notificationBackground.raycastTarget = false;
+        }
+
         if (notificationText != null)
         {
+            notificationText.gameObject.SetActive(true);
             notificationText.richText = true;
-            notificationText.text = message;
+            notificationText.text = messageData.BuildMessage();
 
             if (messageData.FontAsset != null)
             {
@@ -143,11 +146,11 @@ public class NotificationManager : MonoBehaviour
 
             notificationText.fontSize = messageData.FontSize;
             notificationText.color = messageData.TextColor;
-        }
 
-        if (notificationBackground != null)
-        {
-            notificationBackground.color = messageData.BackgroundColor;
+            notificationText.textWrappingMode = TextWrappingModes.Normal;
+            notificationText.overflowMode = TextOverflowModes.Ellipsis;
+            notificationText.enableAutoSizing = false;
+            notificationText.alignment = TextAlignmentOptions.Center;
         }
     }
 
@@ -172,70 +175,45 @@ public class NotificationManager : MonoBehaviour
 
     private void ShowNotificationInstant()
     {
-        if (notificationCanvasGroup != null)
+        GameObject notificationArea = notificationAreaCanvasGroup.gameObject;
+
+        if (!notificationArea.activeSelf)
         {
-            notificationCanvasGroup.gameObject.SetActive(true);
-            notificationCanvasGroup.alpha = 1f;
-            notificationCanvasGroup.blocksRaycasts = false;
-            notificationCanvasGroup.interactable = false;
+            notificationArea.SetActive(true);
         }
-        else if (notificationText != null)
-        {
-            notificationText.gameObject.SetActive(true);
-        }
+
+        notificationAreaCanvasGroup.alpha = 1f;
+        notificationAreaCanvasGroup.blocksRaycasts = false;
+        notificationAreaCanvasGroup.interactable = false;
     }
 
     private void HideNotificationInstant()
     {
-        SetNotificationAlpha(0f);
-
-        if (notificationCanvasGroup != null)
-        {
-            notificationCanvasGroup.gameObject.SetActive(false);
-            notificationCanvasGroup.blocksRaycasts = false;
-            notificationCanvasGroup.interactable = false;
-        }
-        else if (notificationText != null)
-        {
-            notificationText.gameObject.SetActive(false);
-        }
-
         if (notificationText != null)
         {
             notificationText.text = string.Empty;
+        }
+
+        if (notificationAreaCanvasGroup != null)
+        {
+            notificationAreaCanvasGroup.alpha = 0f;
+            notificationAreaCanvasGroup.blocksRaycasts = false;
+            notificationAreaCanvasGroup.interactable = false;
+            notificationAreaCanvasGroup.gameObject.SetActive(false);
         }
     }
 
     private void SetNotificationAlpha(float alpha)
     {
-        if (notificationCanvasGroup != null)
+        if (notificationAreaCanvasGroup != null)
         {
-            notificationCanvasGroup.alpha = alpha;
+            notificationAreaCanvasGroup.alpha = alpha;
         }
     }
 
-    private bool HasNotificationUI()
+    private bool HasRequiredUI()
     {
-        return notificationCanvasGroup != null && notificationText != null;
-    }
-
-    private float GetDisplaySeconds(UIMessageData messageData)
-    {
-        if (messageData.DisplaySeconds > 0f)
-        {
-            return messageData.DisplaySeconds;
-        }
-
-        return fallbackDisplaySeconds;
-    }
-
-    private float GetFadeOutSeconds(UIMessageData messageData)
-    {
-        if (messageData.FadeOutSeconds > 0f)
-        {
-            return messageData.FadeOutSeconds;
-        }
-
-        return fallbackFadeOutSeconds;
+        return notificationAreaCanvasGroup != null &&
+               notificationText != null;
     }
 }

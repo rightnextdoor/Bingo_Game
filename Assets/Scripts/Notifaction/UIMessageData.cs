@@ -61,4 +61,26 @@ public class UIMessageData : ScriptableObject
     {
         return ColorUtility.ToHtmlStringRGBA(numberColor);
     }
+
+    public static UIMessageData CreateRuntimeMessage(
+    string message,
+    int fontSize,
+    Color textColor,
+    Color numberColor,
+    Color backgroundColor,
+    float displaySeconds,
+    float fadeOutSeconds)
+    {
+        UIMessageData data = CreateInstance<UIMessageData>();
+
+        data.messageText = message;
+        data.fontSize = fontSize;
+        data.textColor = textColor;
+        data.numberColor = numberColor;
+        data.backgroundColor = backgroundColor;
+        data.displaySeconds = displaySeconds;
+        data.fadeOutSeconds = fadeOutSeconds;
+
+        return data;
+    }
 }

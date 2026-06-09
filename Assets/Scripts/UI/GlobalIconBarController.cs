@@ -1,89 +1,161 @@
-using TMPro;
+using System;
+using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.UI;
 
 public class GlobalIconBarController : MonoBehaviour
 {
+    private enum TopBarAction
+    {
+        User,
+        Leaderboard,
+        Settings
+    }
+
+    [Serializable]
+    private class TopBarIconEntry
+    {
+        [SerializeField] private TopBarAction action;
+        [SerializeField] private UserIconData iconData;
+
+        public TopBarAction Action => action;
+        public UserIconData IconData => iconData;
+    }
+
+    private class RuntimeTopBarIcon
+    {
+        public TopBarIconEntry Entry { get; }
+        public UITopBarIconSlot Slot { get; }
+
+        public RuntimeTopBarIcon(TopBarIconEntry entry, UITopBarIconSlot slot)
+        {
+            Entry = entry;
+            Slot = slot;
+        }
+    }
+
     [Header("Managers")]
     [SerializeField] private PopupManager popupManager;
+    [SerializeField] private UIIconManager iconManager;
+    [SerializeField] private IconSelectPopupController iconSelectPopupController;
 
-    [Header("Icon Buttons")]
-    [SerializeField] private Button leaderboardButton;
-    [SerializeField] private Button settingsButton;
-    [SerializeField] private Button userButton;
+    [Header("Top Icon Bar")]
+    [SerializeField] private RectTransform topIconGroup;
+    [SerializeField] private UITopBarIconSlot topIconSlotPrefab;
 
-    [Header("User Display")]
-    [SerializeField] private TMP_Text userNameText;
-    [SerializeField] private GameObject emptyUserIconVisual;
-    [SerializeField] private GameObject savedUserIconVisual;
+    [Header("Ordered Icons")]
+    [SerializeField] private List<TopBarIconEntry> topBarIcons = new List<TopBarIconEntry>();
+
+    private readonly List<RuntimeTopBarIcon> runtimeIcons = new List<RuntimeTopBarIcon>();
 
     private void OnEnable()
     {
-        if (leaderboardButton != null)
-        {
-            leaderboardButton.onClick.AddListener(ToggleLeaderboardPopup);
-        }
+        BuildTopIconBar();
 
-        if (settingsButton != null)
-        {
-            settingsButton.onClick.AddListener(ToggleSettingsPopup);
-        }
+        UserManager.UserChanged += RefreshTopBarIcons;
+        SaveManager.SaveDataChanged += RefreshTopBarIcons;
 
-        if (userButton != null)
-        {
-            userButton.onClick.AddListener(ToggleUserPopup);
-        }
-
-        UserManager.UserChanged += RefreshUserDisplay;
-        SaveManager.SaveDataChanged += RefreshUserDisplay;
-
-        RefreshUserDisplay();
+        RefreshTopBarIcons();
     }
 
     private void OnDisable()
     {
-        if (leaderboardButton != null)
-        {
-            leaderboardButton.onClick.RemoveListener(ToggleLeaderboardPopup);
-        }
-
-        if (settingsButton != null)
-        {
-            settingsButton.onClick.RemoveListener(ToggleSettingsPopup);
-        }
-
-        if (userButton != null)
-        {
-            userButton.onClick.RemoveListener(ToggleUserPopup);
-        }
-
-        UserManager.UserChanged -= RefreshUserDisplay;
-        SaveManager.SaveDataChanged -= RefreshUserDisplay;
+        UserManager.UserChanged -= RefreshTopBarIcons;
+        SaveManager.SaveDataChanged -= RefreshTopBarIcons;
     }
 
-    private void ToggleLeaderboardPopup()
+    public void BuildTopIconBar()
     {
-        if (popupManager != null)
+        FindMissingReferences();
+        ClearTopIconSlots();
+
+        if (topIconGroup == null)
         {
-            popupManager.TogglePopup(PopupId.Leaderboard);
+            Debug.LogWarning("GlobalIconBarController needs Top Icon Group assigned.");
+            return;
+        }
+
+        if (topIconSlotPrefab == null)
+        {
+            Debug.LogWarning("GlobalIconBarController needs Top Icon Slot Prefab assigned.");
+            return;
+        }
+
+        for (int i = 0; i < topBarIcons.Count; i++)
+        {
+            TopBarIconEntry entry = topBarIcons[i];
+
+            if (entry == null)
+            {
+                continue;
+            }
+
+            TopBarAction action = entry.Action;
+            Sprite iconSprite = GetSpriteForEntry(entry);
+
+            UITopBarIconSlot slot = Instantiate(topIconSlotPrefab, topIconGroup);
+            slot.name = $"UITopBarIconSlot_{action}";
+            slot.Setup(iconSprite, () => HandleTopBarAction(action));
+
+            runtimeIcons.Add(new RuntimeTopBarIcon(entry, slot));
         }
     }
 
-    private void ToggleSettingsPopup()
+    private void ClearTopIconSlots()
     {
-        if (popupManager != null)
+        runtimeIcons.Clear();
+
+        if (topIconGroup == null)
         {
-            popupManager.TogglePopup(PopupId.Settings);
+            return;
+        }
+
+        for (int i = topIconGroup.childCount - 1; i >= 0; i--)
+        {
+            Transform child = topIconGroup.GetChild(i);
+
+            if (Application.isPlaying)
+            {
+                Destroy(child.gameObject);
+            }
+            else
+            {
+                DestroyImmediate(child.gameObject);
+            }
+        }
+    }
+
+    private void HandleTopBarAction(TopBarAction action)
+    {
+        CloseIconSelectPopupIfOpen();
+
+        if (popupManager == null)
+        {
+            Debug.LogWarning("GlobalIconBarController needs PopupManager assigned.");
+            return;
+        }
+
+        switch (action)
+        {
+            case TopBarAction.User:
+                ToggleUserPopup();
+                break;
+
+            case TopBarAction.Leaderboard:
+                popupManager.TogglePopup(PopupId.Leaderboard);
+                break;
+
+            case TopBarAction.Settings:
+                popupManager.TogglePopup(PopupId.Settings);
+                break;
+
+            default:
+                Debug.LogWarning($"Unhandled top bar action: {action}");
+                break;
         }
     }
 
     private void ToggleUserPopup()
     {
-        if (popupManager == null)
-        {
-            return;
-        }
-
         UserManager userManager = UserManager.instance;
 
         if (userManager != null && userManager.HasUser)
@@ -96,24 +168,110 @@ public class GlobalIconBarController : MonoBehaviour
         }
     }
 
-    private void RefreshUserDisplay()
+    private void RefreshTopBarIcons()
+    {
+        FindMissingReferences();
+
+        for (int i = 0; i < runtimeIcons.Count; i++)
+        {
+            RuntimeTopBarIcon runtimeIcon = runtimeIcons[i];
+
+            if (runtimeIcon == null || runtimeIcon.Slot == null || runtimeIcon.Entry == null)
+            {
+                continue;
+            }
+
+            Sprite iconSprite = GetSpriteForEntry(runtimeIcon.Entry);
+            runtimeIcon.Slot.SetIcon(iconSprite);
+        }
+    }
+
+    private Sprite GetSpriteForEntry(TopBarIconEntry entry)
+    {
+        if (entry == null)
+        {
+            return null;
+        }
+
+        if (entry.Action == TopBarAction.User)
+        {
+            Sprite savedUserIconSprite = GetSavedUserIconSprite();
+
+            if (savedUserIconSprite != null)
+            {
+                return savedUserIconSprite;
+            }
+        }
+
+        return entry.IconData != null ? entry.IconData.IconSprite : null;
+    }
+
+    private Sprite GetSavedUserIconSprite()
     {
         UserManager userManager = UserManager.instance;
-        bool hasUser = userManager != null && userManager.HasUser;
 
-        if (userNameText != null)
+        if (userManager == null || !userManager.HasUser)
         {
-            userNameText.text = hasUser ? userManager.PlayerName : string.Empty;
+            return null;
         }
 
-        if (emptyUserIconVisual != null)
+        string iconId = userManager.CurrentUser.iconId;
+
+        if (string.IsNullOrWhiteSpace(iconId))
         {
-            emptyUserIconVisual.SetActive(!hasUser);
+            return null;
         }
 
-        if (savedUserIconVisual != null)
+        if (iconManager == null)
         {
-            savedUserIconVisual.SetActive(hasUser);
+            iconManager = UIIconManager.instance;
+        }
+
+        if (iconManager == null)
+        {
+            return null;
+        }
+
+        IReadOnlyList<UserIconData> playerIcons = iconManager.PlayerIcons;
+
+        for (int i = 0; i < playerIcons.Count; i++)
+        {
+            UserIconData iconData = playerIcons[i];
+
+            if (iconData == null)
+            {
+                continue;
+            }
+
+            if (iconData.IconId == iconId && iconData.IconSprite != null)
+            {
+                return iconData.IconSprite;
+            }
+        }
+
+        return null;
+    }
+
+    private void CloseIconSelectPopupIfOpen()
+    {
+        if (iconSelectPopupController == null)
+        {
+            return;
+        }
+
+        if (!iconSelectPopupController.gameObject.activeInHierarchy)
+        {
+            return;
+        }
+
+        iconSelectPopupController.CloseIconPopup();
+    }
+
+    private void FindMissingReferences()
+    {
+        if (iconManager == null)
+        {
+            iconManager = UIIconManager.instance;
         }
     }
 }

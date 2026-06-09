@@ -9,6 +9,7 @@ public class ToolTipManager : MonoBehaviour
     [SerializeField] private UI_ToolTip toolTipUI;
 
     private UIMessageData currentMessageData;
+    private RectTransform currentTargetRect;
 
     private void Awake()
     {
@@ -32,33 +33,25 @@ public class ToolTipManager : MonoBehaviour
         }
     }
 
-    public void ShowToolTip(UIMessageData messageData, Vector2 pointerScreenPosition)
+    public void ShowToolTip(UIMessageData messageData, RectTransform targetRect)
     {
-        if (messageData == null || toolTipUI == null)
+        if (messageData == null || targetRect == null || toolTipUI == null)
         {
             return;
         }
 
         currentMessageData = messageData;
+        currentTargetRect = targetRect;
 
         string message = messageData.BuildMessage();
 
-        toolTipUI.Show(messageData, message, pointerScreenPosition);
-    }
-
-    public void MoveToolTip(Vector2 pointerScreenPosition)
-    {
-        if (toolTipUI == null || currentMessageData == null)
-        {
-            return;
-        }
-
-        toolTipUI.MoveToPointer(pointerScreenPosition, currentMessageData.TooltipOffset);
+        toolTipUI.ShowNearTarget(messageData, message, targetRect);
     }
 
     public void HideToolTip()
     {
         currentMessageData = null;
+        currentTargetRect = null;
 
         if (toolTipUI != null)
         {

@@ -69,7 +69,8 @@ public class UIMessageData : ScriptableObject
     Color numberColor,
     Color backgroundColor,
     float displaySeconds,
-    float fadeOutSeconds)
+    float fadeOutSeconds,
+    Vector2 tooltipOffset)
     {
         UIMessageData data = CreateInstance<UIMessageData>();
 
@@ -80,6 +81,7 @@ public class UIMessageData : ScriptableObject
         data.backgroundColor = backgroundColor;
         data.displaySeconds = displaySeconds;
         data.fadeOutSeconds = fadeOutSeconds;
+        data.tooltipOffset = tooltipOffset;
 
         return data;
     }

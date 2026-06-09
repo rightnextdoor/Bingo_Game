@@ -42,7 +42,15 @@ public class UI_ToolTip : MonoBehaviour
 
         FindMissingReferences();
 
-        gameObject.SetActive(true);
+        if (!gameObject.activeSelf)
+        {
+            gameObject.SetActive(true);
+        }
+
+        if (!gameObject.activeSelf)
+        {
+            gameObject.SetActive(true);
+        }
 
         ApplyMessageStyle(messageData, message);
         ResizeToFitMessage(message);

@@ -5,13 +5,9 @@ public class UIIconManager : MonoBehaviour
 {
     public static UIIconManager instance;
 
-    [Header("System Icons")]
-    [SerializeField] private List<UserIconData> systemIcons = new List<UserIconData>();
-
     [Header("Player Icons")]
     [SerializeField] private List<UserIconData> playerIcons = new List<UserIconData>();
 
-    public IReadOnlyList<UserIconData> SystemIcons => systemIcons;
     public IReadOnlyList<UserIconData> PlayerIcons => playerIcons;
 
     private void Awake()
@@ -23,26 +19,6 @@ public class UIIconManager : MonoBehaviour
         }
 
         instance = this;
-    }
-
-    public UserIconData GetSystemIconByLookupName(string lookupName)
-    {
-        if (string.IsNullOrWhiteSpace(lookupName))
-        {
-            return null;
-        }
-
-        for (int i = 0; i < systemIcons.Count; i++)
-        {
-            UserIconData iconData = systemIcons[i];
-
-            if (iconData != null && iconData.LookupName == lookupName)
-            {
-                return iconData;
-            }
-        }
-
-        return null;
     }
 
     public UserIconData GetPlayerIconById(string iconId)
@@ -94,10 +70,4 @@ public class UIIconManager : MonoBehaviour
         return iconData != null ? iconData.IconSprite : null;
     }
 
-    public Sprite GetSystemIconSpriteByLookupName(string lookupName)
-    {
-        UserIconData iconData = GetSystemIconByLookupName(lookupName);
-
-        return iconData != null ? iconData.IconSprite : null;
-    }
 }

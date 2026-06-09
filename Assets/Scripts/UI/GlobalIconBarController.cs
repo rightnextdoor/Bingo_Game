@@ -16,9 +16,11 @@ public class GlobalIconBarController : MonoBehaviour
     {
         [SerializeField] private TopBarAction action;
         [SerializeField] private UserIconData iconData;
+        [SerializeField] private UIMessageData tooltipMessageData;
 
         public TopBarAction Action => action;
         public UserIconData IconData => iconData;
+        public UIMessageData TooltipMessageData => tooltipMessageData;
     }
 
     private class RuntimeTopBarIcon
@@ -94,7 +96,7 @@ public class GlobalIconBarController : MonoBehaviour
 
             UITopBarIconSlot slot = Instantiate(topIconSlotPrefab, topIconGroup);
             slot.name = $"UITopBarIconSlot_{action}";
-            slot.Setup(iconSprite, () => HandleTopBarAction(action));
+            slot.Setup(iconSprite, () => HandleTopBarAction(action), entry.TooltipMessageData);
 
             runtimeIcons.Add(new RuntimeTopBarIcon(entry, slot));
         }

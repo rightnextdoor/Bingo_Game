@@ -1775,7 +1775,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &327399252265475189
 RectTransform:
   m_ObjectHideFlags: 0
@@ -4736,10 +4736,13 @@ MonoBehaviour:
   topBarIcons:
   - action: 1
     iconData: {fileID: 11400000, guid: 95f48b6a09f7a964d91fbae1624bcad4, type: 2}
+    tooltipMessageData: {fileID: 11400000, guid: 84b3d49cfa002e04392b1b49fc1c6fef, type: 2}
   - action: 2
     iconData: {fileID: 11400000, guid: 739ed1a0b16223b47b94129555507cf7, type: 2}
+    tooltipMessageData: {fileID: 11400000, guid: b1d78bce337e3874fb32c35b34f6b4c5, type: 2}
   - action: 0
     iconData: {fileID: 11400000, guid: ea2fb9c7699c4d64f8223aca4d7c8017, type: 2}
+    tooltipMessageData: {fileID: 11400000, guid: 5bec5c43d31197540a4171061924b568, type: 2}
 --- !u!1 &4300391491717698312
 GameObject:
   m_ObjectHideFlags: 0
@@ -9425,10 +9428,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 73939ba36c170bc498f3a5c1a1d2f6a8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::UIIconManager
-  systemIcons:
-  - {fileID: 11400000, guid: 95f48b6a09f7a964d91fbae1624bcad4, type: 2}
-  - {fileID: 11400000, guid: 739ed1a0b16223b47b94129555507cf7, type: 2}
-  - {fileID: 11400000, guid: ea2fb9c7699c4d64f8223aca4d7c8017, type: 2}
   playerIcons:
   - {fileID: 11400000, guid: fc59ac91592ea1d4a957ad92078228eb, type: 2}
   - {fileID: 11400000, guid: 30ecb379cf775c345a7da1c80e157799, type: 2}

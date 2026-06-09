@@ -25,6 +25,8 @@ public class UITopBarIconSlot : MonoBehaviour,
     [SerializeField] private float hoverScale = 1.08f;
     [SerializeField] private float pressedScale = 0.92f;
 
+    private UIMessageData tooltipMessageData;
+
     private Action clickCallback;
 
     private bool hasIcon;
@@ -36,11 +38,23 @@ public class UITopBarIconSlot : MonoBehaviour,
         FindMissingReferences();
     }
 
-    public void Setup(Sprite iconSprite, Action onClicked)
+    private void OnDisable()
+    {
+        if (isHovering && ToolTipManager.instance != null)
+        {
+            ToolTipManager.instance.HideToolTip();
+        }
+
+        isHovering = false;
+        isPressed = false;
+    }
+
+    public void Setup(Sprite iconSprite, Action onClicked, UIMessageData newTooltipMessageData)
     {
         FindMissingReferences();
 
         clickCallback = onClicked;
+        tooltipMessageData = newTooltipMessageData;
 
         SetIcon(iconSprite);
 
@@ -71,6 +85,11 @@ public class UITopBarIconSlot : MonoBehaviour,
     {
         isHovering = true;
         ApplyVisualState();
+
+        if (tooltipMessageData != null && ToolTipManager.instance != null)
+        {
+            ToolTipManager.instance.ShowToolTip(tooltipMessageData, GetComponent<RectTransform>());
+        }
     }
 
     public void OnPointerExit(PointerEventData eventData)
@@ -78,6 +97,11 @@ public class UITopBarIconSlot : MonoBehaviour,
         isHovering = false;
         isPressed = false;
         ApplyVisualState();
+
+        if (ToolTipManager.instance != null)
+        {
+            ToolTipManager.instance.HideToolTip();
+        }
     }
 
     public void OnPointerDown(PointerEventData eventData)
@@ -102,6 +126,11 @@ public class UITopBarIconSlot : MonoBehaviour,
         if (eventData.button != PointerEventData.InputButton.Left)
         {
             return;
+        }
+
+        if (ToolTipManager.instance != null)
+        {
+            ToolTipManager.instance.HideToolTip();
         }
 
         clickCallback?.Invoke();

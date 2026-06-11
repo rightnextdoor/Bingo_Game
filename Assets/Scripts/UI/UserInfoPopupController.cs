@@ -25,7 +25,6 @@ public class UserInfoPopupController : MonoBehaviour
     [SerializeField] private Button saveNameButton;
     [SerializeField] private Button cancelNameButton;
     [SerializeField] private TMP_Text nameErrorText;
-    [SerializeField] private Color errorColor = new Color32(232, 109, 109, 255);
 
     [Header("Stats Section")]
     [SerializeField] private TMP_Text statsText;
@@ -374,7 +373,6 @@ public class UserInfoPopupController : MonoBehaviour
             return;
         }
 
-        nameErrorText.color = errorColor;
         nameErrorText.text = message;
         nameErrorText.gameObject.SetActive(true);
     }

@@ -12,7 +12,6 @@ public class CreateUserPopupController : MonoBehaviour
     [Header("Input")]
     [SerializeField] private TMP_InputField nameInputField;
     [SerializeField] private TMP_Text errorText;
-    [SerializeField] private Color errorColor = new Color32(232, 109, 109, 255);
 
     [Header("Buttons")]
     [SerializeField] private Button saveButton;
@@ -215,7 +214,6 @@ public class CreateUserPopupController : MonoBehaviour
             return;
         }
 
-        errorText.color = errorColor;
         errorText.text = message;
         errorText.gameObject.SetActive(true);
     }

@@ -5,6 +5,9 @@ using UnityEngine;
 [CustomEditor(typeof(UIThemeData))]
 public class UIThemeDataEditor : Editor
 {
+    private static bool themeRefreshQueued;
+    private static UIThemeData pendingThemeRefreshData;
+
     private SerializedProperty themeTypeProperty;
 
     private bool backgroundSectionExpanded = false;
@@ -56,13 +59,7 @@ public class UIThemeDataEditor : Editor
 
         if (changed)
         {
-            UIThemeData themeData = target as UIThemeData;
-
-            if (themeData != null)
-            {
-                UIThemeManager.RefreshThemeData(themeData);
-                EditorUtility.SetDirty(themeData);
-            }
+            QueueThemeRefresh(target as UIThemeData);
         }
     }
 
@@ -770,6 +767,39 @@ public class UIThemeDataEditor : Editor
         }
 
         return newValue;
+    }
+
+    private void QueueThemeRefresh(UIThemeData themeData)
+    {
+        if (themeData == null)
+        {
+            return;
+        }
+
+        pendingThemeRefreshData = themeData;
+
+        if (themeRefreshQueued)
+        {
+            return;
+        }
+
+        themeRefreshQueued = true;
+
+        EditorApplication.delayCall += () =>
+        {
+            themeRefreshQueued = false;
+
+            UIThemeData dataToRefresh = pendingThemeRefreshData;
+            pendingThemeRefreshData = null;
+
+            if (dataToRefresh == null)
+            {
+                return;
+            }
+
+            EditorUtility.SetDirty(dataToRefresh);
+            UIThemeManager.RefreshThemeData(dataToRefresh);
+        };
     }
 
     #endregion

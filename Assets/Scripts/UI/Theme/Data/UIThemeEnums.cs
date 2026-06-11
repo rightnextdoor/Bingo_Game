@@ -33,8 +33,10 @@ public enum UIThemeButtonType
 
 public enum UIThemeTextType
 {
+    Default,
     Title,
-    Subtitle
+    Subtitle,
+    Error
 }
 
 public enum UIThemeInputType

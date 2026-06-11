@@ -7,12 +7,12 @@ public class UIThemeDataEditor : Editor
 {
     private SerializedProperty themeTypeProperty;
 
-    private bool backgroundSectionExpanded = true;
-    private bool buttonSectionExpanded = true;
-    private bool textSectionExpanded = true;
-    private bool inputSectionExpanded = true;
-    private bool dropdownSectionExpanded = true;
-    private bool scrollSectionExpanded = true;
+    private bool backgroundSectionExpanded = false;
+    private bool buttonSectionExpanded = false;
+    private bool textSectionExpanded = false;
+    private bool inputSectionExpanded = false;
+    private bool dropdownSectionExpanded = false;
+    private bool scrollSectionExpanded = false;
 
     private SerializedProperty backgroundStylesProperty;
     private SerializedProperty buttonStylesProperty;
@@ -114,11 +114,7 @@ public class UIThemeDataEditor : Editor
     {
         EditorGUILayout.Space(6);
 
-        inputSectionExpanded = EditorGUILayout.Foldout(
-            inputSectionExpanded,
-            "Input Section",
-            true
-        );
+        inputSectionExpanded = DrawRememberedSectionFoldout("Input Section", inputSectionExpanded);
 
         if (!inputSectionExpanded)
         {
@@ -136,11 +132,7 @@ public class UIThemeDataEditor : Editor
     {
         EditorGUILayout.Space(6);
 
-        dropdownSectionExpanded = EditorGUILayout.Foldout(
-            dropdownSectionExpanded,
-            "Dropdown Section",
-            true
-        );
+        dropdownSectionExpanded = DrawRememberedSectionFoldout("Dropdown Section", dropdownSectionExpanded);
 
         if (!dropdownSectionExpanded)
         {
@@ -158,11 +150,7 @@ public class UIThemeDataEditor : Editor
     {
         EditorGUILayout.Space(6);
 
-        scrollSectionExpanded = EditorGUILayout.Foldout(
-            scrollSectionExpanded,
-            "Scroll Section",
-            true
-        );
+        scrollSectionExpanded = DrawRememberedSectionFoldout("Scroll Section", scrollSectionExpanded);
 
         if (!scrollSectionExpanded)
         {
@@ -191,11 +179,7 @@ public class UIThemeDataEditor : Editor
     {
         EditorGUILayout.Space(6);
 
-        sectionExpanded = EditorGUILayout.Foldout(
-            sectionExpanded,
-            sectionTitle,
-            true
-        );
+        sectionExpanded = DrawRememberedSectionFoldout(sectionTitle, sectionExpanded);
 
         if (!sectionExpanded)
         {
@@ -280,7 +264,7 @@ public class UIThemeDataEditor : Editor
             SerializedProperty newEntry = listProperty.GetArrayElementAtIndex(newIndex);
             newEntry.isExpanded = true;
 
-            ResetNewEntryColorDefaults(newEntry);
+            ResetNewEntryDefaults(newEntry);
         }
 
         EditorGUI.indentLevel--;
@@ -402,12 +386,6 @@ public class UIThemeDataEditor : Editor
         EditorGUILayout.LabelField("Item", EditorStyles.boldLabel);
 
         DrawFixedStyle(
-            "Item Visual",
-            dropdownProperty.FindPropertyRelative("itemVisual"),
-            DrawSelectableVisualFields
-        );
-
-        DrawFixedStyle(
             "Item Background Image",
             dropdownProperty.FindPropertyRelative("itemBackgroundImage"),
             DrawImageComponentFields
@@ -417,6 +395,12 @@ public class UIThemeDataEditor : Editor
             "Item Checkmark Image",
             dropdownProperty.FindPropertyRelative("itemCheckmarkImage"),
             DrawImageComponentFields
+        );
+
+        DrawFixedStyle(
+            "Item Visual",
+            dropdownProperty.FindPropertyRelative("itemVisual"),
+            DrawSelectableVisualFields
         );
 
         DrawFixedStyle(
@@ -670,7 +654,7 @@ public class UIThemeDataEditor : Editor
         EditorGUILayout.EndVertical();
     }
 
-    private void ResetNewEntryColorDefaults(SerializedProperty entryProperty)
+    private void ResetNewEntryDefaults(SerializedProperty entryProperty)
     {
         if (entryProperty == null)
         {
@@ -691,23 +675,101 @@ public class UIThemeDataEditor : Editor
 
             enterChildren = true;
 
-            if (iterator.propertyType != SerializedPropertyType.Color)
+            if (iterator.propertyType == SerializedPropertyType.ObjectReference)
             {
+                switch (iterator.name)
+                {
+                    case "sourceImage":
+                    case "material":
+                    case "fontAsset":
+                    case "textMaterial":
+                    case "colorGradient":
+                        iterator.objectReferenceValue = null;
+                        break;
+                }
+
                 continue;
             }
 
-            switch (iterator.name)
+            if (iterator.propertyType == SerializedPropertyType.Color)
             {
-                case "pressedColor":
-                case "disabledColor":
-                    iterator.colorValue = new Color32(128, 128, 128, 255);
-                    break;
+                switch (iterator.name)
+                {
+                    case "pressedColor":
+                    case "disabledColor":
+                        iterator.colorValue = new Color32(128, 128, 128, 255);
+                        break;
 
-                default:
-                    iterator.colorValue = new Color32(255, 255, 255, 255);
-                    break;
+                    default:
+                        iterator.colorValue = new Color32(255, 255, 255, 255);
+                        break;
+                }
+
+                continue;
+            }
+
+            if (iterator.propertyType == SerializedPropertyType.Boolean)
+            {
+                switch (iterator.name)
+                {
+                    case "raycastTarget":
+                    case "textRaycastTarget":
+                        iterator.boolValue = true;
+                        break;
+                }
+
+                continue;
+            }
+
+            if (iterator.propertyType == SerializedPropertyType.Enum)
+            {
+                if (iterator.name == "transition")
+                {
+                    iterator.enumValueIndex = (int)UnityEngine.UI.Selectable.Transition.ColorTint;
+                }
+
+                continue;
+            }
+
+            if (iterator.propertyType == SerializedPropertyType.Float)
+            {
+                switch (iterator.name)
+                {
+                    case "colorMultiplier":
+                        iterator.floatValue = 1f;
+                        break;
+
+                    case "fadeDuration":
+                        iterator.floatValue = 0.1f;
+                        break;
+                }
             }
         }
+    }
+
+    private string GetSectionFoldoutKey(string sectionName)
+    {
+        return $"{target.GetInstanceID()}_UIThemeDataEditor_{sectionName}";
+    }
+
+    private bool DrawRememberedSectionFoldout(string sectionName, bool currentValue)
+    {
+        string key = GetSectionFoldoutKey(sectionName);
+
+        bool savedValue = SessionState.GetBool(key, currentValue);
+
+        bool newValue = EditorGUILayout.Foldout(
+            savedValue,
+            sectionName,
+            true
+        );
+
+        if (newValue != savedValue)
+        {
+            SessionState.SetBool(key, newValue);
+        }
+
+        return newValue;
     }
 
     #endregion

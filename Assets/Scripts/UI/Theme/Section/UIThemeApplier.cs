@@ -10,9 +10,18 @@ public static class UIThemeApplier
             return;
         }
 
-        image.sprite = style.SourceImage;
+        if (style.SourceImage != null)
+        {
+            image.sprite = style.SourceImage;
+        }
+
         image.color = style.Color;
-        image.material = style.Material;
+
+        if (style.Material != null)
+        {
+            image.material = style.Material;
+        }
+
         image.raycastTarget = style.RaycastTarget;
     }
 
@@ -44,11 +53,28 @@ public static class UIThemeApplier
             return;
         }
 
-        text.font = style.FontAsset;
-        text.fontMaterial = style.TextMaterial;
+        if (style.FontAsset != null)
+        {
+            text.font = style.FontAsset;
+        }
+
+        if (style.TextMaterial != null)
+        {
+            text.fontMaterial = style.TextMaterial;
+        }
+
         text.color = style.VertexColor;
-        text.colorGradientPreset = style.ColorGradient;
-        text.enableVertexGradient = style.ColorGradient != null;
+
+        if (style.ColorGradient != null)
+        {
+            text.colorGradientPreset = style.ColorGradient;
+            text.enableVertexGradient = true;
+        }
+        else
+        {
+            text.enableVertexGradient = false;
+        }
+
         text.raycastTarget = style.TextRaycastTarget;
     }
 }

@@ -37,6 +37,8 @@ public class UIThemeDataEditor : Editor
     {
         serializedObject.Update();
 
+        EditorGUI.BeginChangeCheck();
+
         DrawThemeInfo();
 
         EditorGUILayout.Space(8);
@@ -48,7 +50,20 @@ public class UIThemeDataEditor : Editor
         DrawDropdownSection();
         DrawScrollSection();
 
+        bool changed = EditorGUI.EndChangeCheck();
+
         serializedObject.ApplyModifiedProperties();
+
+        if (changed)
+        {
+            UIThemeData themeData = target as UIThemeData;
+
+            if (themeData != null)
+            {
+                UIThemeManager.RefreshThemeData(themeData);
+                EditorUtility.SetDirty(themeData);
+            }
+        }
     }
 
     private void DrawThemeInfo()
@@ -264,6 +279,8 @@ public class UIThemeDataEditor : Editor
 
             SerializedProperty newEntry = listProperty.GetArrayElementAtIndex(newIndex);
             newEntry.isExpanded = true;
+
+            ResetNewEntryColorDefaults(newEntry);
         }
 
         EditorGUI.indentLevel--;
@@ -651,6 +668,46 @@ public class UIThemeDataEditor : Editor
         }
 
         EditorGUILayout.EndVertical();
+    }
+
+    private void ResetNewEntryColorDefaults(SerializedProperty entryProperty)
+    {
+        if (entryProperty == null)
+        {
+            return;
+        }
+
+        SerializedProperty iterator = entryProperty.Copy();
+        SerializedProperty endProperty = entryProperty.GetEndProperty();
+
+        bool enterChildren = true;
+
+        while (iterator.NextVisible(enterChildren))
+        {
+            if (SerializedProperty.EqualContents(iterator, endProperty))
+            {
+                break;
+            }
+
+            enterChildren = true;
+
+            if (iterator.propertyType != SerializedPropertyType.Color)
+            {
+                continue;
+            }
+
+            switch (iterator.name)
+            {
+                case "pressedColor":
+                case "disabledColor":
+                    iterator.colorValue = new Color32(128, 128, 128, 255);
+                    break;
+
+                default:
+                    iterator.colorValue = new Color32(255, 255, 255, 255);
+                    break;
+            }
+        }
     }
 
     #endregion

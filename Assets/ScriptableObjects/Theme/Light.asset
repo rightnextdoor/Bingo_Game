@@ -10,14 +10,14 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: ad7f3294815eaf74eb234344f42fd217, type: 3}
-  m_Name: Default
+  m_Name: Light
   m_EditorClassIdentifier: Assembly-CSharp::UIThemeData
-  themeType: 0
+  themeType: 2
   backgroundStyles:
   - backgroundType: 0
     style:
       sourceImage: {fileID: 0}
-      color: {r: 0.07058824, g: 0.09411765, b: 0.14901961, a: 1}
+      color: {r: 0.95686275, g: 0.96862745, b: 0.9843137, a: 1}
       material: {fileID: 0}
       raycastTarget: 0
       transition: 0
@@ -36,7 +36,7 @@ MonoBehaviour:
   - backgroundType: 1
     style:
       sourceImage: {fileID: 0}
-      color: {r: 0.12156863, g: 0.16470589, b: 0.26666668, a: 1}
+      color: {r: 0.8666667, g: 0.90588236, b: 0.9529412, a: 1}
       material: {fileID: 0}
       raycastTarget: 0
       transition: 0
@@ -55,7 +55,7 @@ MonoBehaviour:
   - backgroundType: 2
     style:
       sourceImage: {fileID: 0}
-      color: {r: 0.14509805, g: 0.19215687, b: 0.30980393, a: 1}
+      color: {r: 0.91764706, g: 0.9411765, b: 0.96862745, a: 1}
       material: {fileID: 0}
       raycastTarget: 0
       transition: 0
@@ -75,7 +75,7 @@ MonoBehaviour:
   - buttonType: 0
     style:
       sourceImage: {fileID: 0}
-      color: {r: 0.2505975, g: 0.84905654, b: 0.71584, a: 1}
+      color: {r: 0.26844832, g: 0.3602166, b: 0.96226406, a: 1}
       material: {fileID: 0}
       raycastTarget: 0
       transition: 0
@@ -94,11 +94,11 @@ MonoBehaviour:
   - buttonType: 1
     style:
       sourceImage: {fileID: 0}
-      color: {r: 0.76819396, g: 0.106636055, b: 0.7068123, a: 1}
+      color: {r: 0.39685488, g: 0.89757407, b: 0.1729825, a: 1}
       material: {fileID: 0}
       raycastTarget: 0
       transition: 0
-      normalColor: {r: 0.6280323, g: 0.04655218, b: 0.04655218, a: 1}
+      normalColor: {r: 1, g: 1, b: 1, a: 1}
       highlightedColor: {r: 1, g: 1, b: 1, a: 1}
       pressedColor: {r: 0.5019608, g: 0.5019608, b: 0.5019608, a: 1}
       selectedColor: {r: 1, g: 1, b: 1, a: 1}
@@ -113,7 +113,7 @@ MonoBehaviour:
   - buttonType: 2
     style:
       sourceImage: {fileID: 0}
-      color: {r: 0.8274932, g: 0.5347381, b: 0.11040675, a: 1}
+      color: {r: 0.3066354, g: 0.13346665, b: 0.89218324, a: 1}
       material: {fileID: 0}
       raycastTarget: 0
       transition: 0
@@ -129,105 +129,13 @@ MonoBehaviour:
       vertexColor: {r: 1, g: 1, b: 1, a: 1}
       colorGradient: {fileID: 0}
       textRaycastTarget: 0
-  textStyles:
-  - textType: 0
-    style:
-      sourceImage: {fileID: 0}
-      color: {r: 1, g: 1, b: 1, a: 1}
-      material: {fileID: 0}
-      raycastTarget: 0
-      transition: 0
-      normalColor: {r: 1, g: 1, b: 1, a: 1}
-      highlightedColor: {r: 1, g: 1, b: 1, a: 1}
-      pressedColor: {r: 0.5019608, g: 0.5019608, b: 0.5019608, a: 1}
-      selectedColor: {r: 1, g: 1, b: 1, a: 1}
-      disabledColor: {r: 0.5019608, g: 0.5019608, b: 0.5019608, a: 1}
-      colorMultiplier: 0
-      fadeDuration: 0
-      fontAsset: {fileID: 0}
-      textMaterial: {fileID: 0}
-      vertexColor: {r: 0.52021563, g: 0.09444629, b: 0.03014725, a: 1}
-      colorGradient: {fileID: 0}
-      textRaycastTarget: 0
-  inputStyles:
-  - inputType: 0
-    fieldImage:
-      sourceImage: {fileID: 0}
-      color: {r: 0.88679236, g: 0.5103239, b: 0.5103239, a: 1}
-      material: {fileID: 0}
-      raycastTarget: 0
-      transition: 0
-      normalColor: {r: 1, g: 1, b: 1, a: 1}
-      highlightedColor: {r: 1, g: 1, b: 1, a: 1}
-      pressedColor: {r: 0.5019608, g: 0.5019608, b: 0.5019608, a: 1}
-      selectedColor: {r: 1, g: 1, b: 1, a: 1}
-      disabledColor: {r: 0.5019608, g: 0.5019608, b: 0.5019608, a: 1}
-      colorMultiplier: 0
-      fadeDuration: 0
-      fontAsset: {fileID: 0}
-      textMaterial: {fileID: 0}
-      vertexColor: {r: 1, g: 1, b: 1, a: 1}
-      colorGradient: {fileID: 0}
-      textRaycastTarget: 0
-    fieldVisual:
-      sourceImage: {fileID: 0}
-      color: {r: 1, g: 1, b: 1, a: 1}
-      material: {fileID: 0}
-      raycastTarget: 0
-      transition: 0
-      normalColor: {r: 1, g: 1, b: 1, a: 1}
-      highlightedColor: {r: 1, g: 1, b: 1, a: 1}
-      pressedColor: {r: 0.5019608, g: 0.5019608, b: 0.5019608, a: 1}
-      selectedColor: {r: 1, g: 1, b: 1, a: 1}
-      disabledColor: {r: 0.5019608, g: 0.5019608, b: 0.5019608, a: 1}
-      colorMultiplier: 0
-      fadeDuration: 0
-      fontAsset: {fileID: 0}
-      textMaterial: {fileID: 0}
-      vertexColor: {r: 1, g: 1, b: 1, a: 1}
-      colorGradient: {fileID: 0}
-      textRaycastTarget: 0
-    inputText:
-      sourceImage: {fileID: 0}
-      color: {r: 1, g: 1, b: 1, a: 1}
-      material: {fileID: 0}
-      raycastTarget: 0
-      transition: 0
-      normalColor: {r: 1, g: 1, b: 1, a: 1}
-      highlightedColor: {r: 1, g: 1, b: 1, a: 1}
-      pressedColor: {r: 0.5019608, g: 0.5019608, b: 0.5019608, a: 1}
-      selectedColor: {r: 1, g: 1, b: 1, a: 1}
-      disabledColor: {r: 0.5019608, g: 0.5019608, b: 0.5019608, a: 1}
-      colorMultiplier: 0
-      fadeDuration: 0
-      fontAsset: {fileID: 0}
-      textMaterial: {fileID: 0}
-      vertexColor: {r: 0.029110124, g: 0.02030276, b: 0.55795145, a: 1}
-      colorGradient: {fileID: 0}
-      textRaycastTarget: 0
-    placeholderText:
-      sourceImage: {fileID: 0}
-      color: {r: 1, g: 1, b: 1, a: 1}
-      material: {fileID: 0}
-      raycastTarget: 0
-      transition: 0
-      normalColor: {r: 1, g: 1, b: 1, a: 1}
-      highlightedColor: {r: 1, g: 1, b: 1, a: 1}
-      pressedColor: {r: 0.5019608, g: 0.5019608, b: 0.5019608, a: 1}
-      selectedColor: {r: 1, g: 1, b: 1, a: 1}
-      disabledColor: {r: 0.5019608, g: 0.5019608, b: 0.5019608, a: 1}
-      colorMultiplier: 0
-      fadeDuration: 0
-      fontAsset: {fileID: 0}
-      textMaterial: {fileID: 0}
-      vertexColor: {r: 1, g: 1, b: 1, a: 1}
-      colorGradient: {fileID: 0}
-      textRaycastTarget: 0
+  textStyles: []
+  inputStyles: []
   dropdownStyles:
   - dropdownType: 0
     dropdownImage:
       sourceImage: {fileID: 0}
-      color: {r: 0.37294292, g: 0.8059299, b: 0.18573307, a: 1}
+      color: {r: 0, g: 0, b: 0, a: 0}
       material: {fileID: 0}
       raycastTarget: 0
       transition: 0
@@ -463,7 +371,7 @@ MonoBehaviour:
   - scrollType: 0
     rootImage:
       sourceImage: {fileID: 0}
-      color: {r: 0.4552306, g: 0.16317447, b: 0.5849056, a: 1}
+      color: {r: 0, g: 0, b: 0, a: 0}
       material: {fileID: 0}
       raycastTarget: 0
       transition: 0

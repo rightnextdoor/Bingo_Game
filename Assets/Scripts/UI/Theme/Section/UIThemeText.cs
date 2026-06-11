@@ -1,6 +1,7 @@
 using TMPro;
 using UnityEngine;
 
+[ExecuteAlways]
 public class UIThemeText : MonoBehaviour, IUIThemeTarget
 {
     [SerializeField] private UIThemeTextType textType;
@@ -10,12 +11,12 @@ public class UIThemeText : MonoBehaviour, IUIThemeTarget
 
     private void OnEnable()
     {
-        if (UIThemeManager.Instance == null)
-        {
-            return;
-        }
+        RegisterWithManager();
+    }
 
-        UIThemeManager.Instance.Register(this);
+    private void Start()
+    {
+        RegisterWithManager();
     }
 
     private void OnDisable()
@@ -26,6 +27,23 @@ public class UIThemeText : MonoBehaviour, IUIThemeTarget
         }
 
         UIThemeManager.Instance.Unregister(this);
+    }
+
+#if UNITY_EDITOR
+    private void OnValidate()
+    {
+        RegisterWithManager();
+    }
+#endif
+
+    private void RegisterWithManager()
+    {
+        if (UIThemeManager.Instance == null)
+        {
+            return;
+        }
+
+        UIThemeManager.Instance.Register(this);
     }
 
     public void ReapplyTheme()

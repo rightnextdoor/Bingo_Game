@@ -2,6 +2,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
+[ExecuteAlways]
 public class UIThemeButton : MonoBehaviour, IUIThemeTarget
 {
     [SerializeField] private UIThemeButtonType buttonType;
@@ -13,12 +14,12 @@ public class UIThemeButton : MonoBehaviour, IUIThemeTarget
 
     private void OnEnable()
     {
-        if (UIThemeManager.Instance == null)
-        {
-            return;
-        }
+        RegisterWithManager();
+    }
 
-        UIThemeManager.Instance.Register(this);
+    private void Start()
+    {
+        RegisterWithManager();
     }
 
     private void OnDisable()
@@ -29,6 +30,23 @@ public class UIThemeButton : MonoBehaviour, IUIThemeTarget
         }
 
         UIThemeManager.Instance.Unregister(this);
+    }
+
+#if UNITY_EDITOR
+    private void OnValidate()
+    {
+        RegisterWithManager();
+    }
+#endif
+
+    private void RegisterWithManager()
+    {
+        if (UIThemeManager.Instance == null)
+        {
+            return;
+        }
+
+        UIThemeManager.Instance.Register(this);
     }
 
     public void ReapplyTheme()

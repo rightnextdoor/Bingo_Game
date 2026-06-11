@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 
+[ExecuteAlways]
 public class UIThemeBackground : MonoBehaviour, IUIThemeTarget
 {
     [SerializeField] private UIThemeBackgroundType backgroundType;
@@ -10,12 +11,12 @@ public class UIThemeBackground : MonoBehaviour, IUIThemeTarget
 
     private void OnEnable()
     {
-        if (UIThemeManager.Instance == null)
-        {
-            return;
-        }
+        RegisterWithManager();
+    }
 
-        UIThemeManager.Instance.Register(this);
+    private void Start()
+    {
+        RegisterWithManager();
     }
 
     private void OnDisable()
@@ -26,6 +27,23 @@ public class UIThemeBackground : MonoBehaviour, IUIThemeTarget
         }
 
         UIThemeManager.Instance.Unregister(this);
+    }
+
+#if UNITY_EDITOR
+    private void OnValidate()
+    {
+        RegisterWithManager();
+    }
+#endif
+
+    private void RegisterWithManager()
+    {
+        if (UIThemeManager.Instance == null)
+        {
+            return;
+        }
+
+        UIThemeManager.Instance.Register(this);
     }
 
     public void ReapplyTheme()

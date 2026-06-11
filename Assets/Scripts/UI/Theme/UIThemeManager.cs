@@ -1,13 +1,18 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
+[ExecuteAlways]
 public class UIThemeManager : MonoBehaviour
 {
     public static UIThemeManager Instance { get; private set; }
 
     [Header("Theme Selection")]
     [SerializeField] private UIThemeType selectedThemeType = UIThemeType.Default;
+    private UIThemeData defaultThemeData;
 
     [Header("Theme Data")]
     [SerializeField] private List<UIThemeData> themeDataList = new();
@@ -32,20 +37,28 @@ public class UIThemeManager : MonoBehaviour
         SetTheme(selectedThemeType);
     }
 
+    private void OnEnable()
+    {
+        Instance = this;
+
+        SetTheme(selectedThemeType);
+
+#if UNITY_EDITOR
+        ReconnectActiveThemeTargetsInEditor();
+#endif
+    }
+
 #if UNITY_EDITOR
     private void OnValidate()
     {
-        if (!Application.isPlaying)
-        {
-            return;
-        }
-
-        if (Instance != this)
-        {
-            return;
-        }
+        Instance = this;
 
         SetTheme(selectedThemeType);
+
+        if (!Application.isPlaying)
+        {
+            ReconnectActiveThemeTargetsInEditor();
+        }
     }
 #endif
 
@@ -85,6 +98,7 @@ public class UIThemeManager : MonoBehaviour
     {
         selectedThemeType = themeType;
 
+        defaultThemeData = FindThemeData(UIThemeType.Default);
         activeThemeData = FindThemeData(themeType);
 
         RebuildActiveThemeLists();
@@ -211,6 +225,13 @@ public class UIThemeManager : MonoBehaviour
             }
         }
 
+        UIThemeStyle defaultStyle = FindDefaultBackgroundStyle(backgroundType);
+
+        if (defaultStyle != null)
+        {
+            return defaultStyle;
+        }
+
         Debug.LogWarning($"UIThemeManager could not find background style: {backgroundType}");
         return null;
     }
@@ -238,6 +259,13 @@ public class UIThemeManager : MonoBehaviour
             {
                 return style.Style;
             }
+        }
+
+        UIThemeStyle defaultStyle = FindDefaultButtonStyle(buttonType);
+
+        if (defaultStyle != null)
+        {
+            return defaultStyle;
         }
 
         Debug.LogWarning($"UIThemeManager could not find button style: {buttonType}");
@@ -269,6 +297,13 @@ public class UIThemeManager : MonoBehaviour
             }
         }
 
+        UIThemeStyle defaultStyle = FindDefaultTextStyle(textType);
+
+        if (defaultStyle != null)
+        {
+            return defaultStyle;
+        }
+
         Debug.LogWarning($"UIThemeManager could not find text style: {textType}");
         return null;
     }
@@ -296,6 +331,13 @@ public class UIThemeManager : MonoBehaviour
             {
                 return style;
             }
+        }
+
+        UIThemeInputStyle defaultStyle = FindDefaultInputStyle(inputType);
+
+        if (defaultStyle != null)
+        {
+            return defaultStyle;
         }
 
         Debug.LogWarning($"UIThemeManager could not find input style: {inputType}");
@@ -327,6 +369,13 @@ public class UIThemeManager : MonoBehaviour
             }
         }
 
+        UIThemeDropdownStyle defaultStyle = FindDefaultDropdownStyle(dropdownType);
+
+        if (defaultStyle != null)
+        {
+            return defaultStyle;
+        }
+
         Debug.LogWarning($"UIThemeManager could not find dropdown style: {dropdownType}");
         return null;
     }
@@ -356,6 +405,13 @@ public class UIThemeManager : MonoBehaviour
             }
         }
 
+        UIThemeScrollStyle defaultStyle = FindDefaultScrollStyle(scrollType);
+
+        if (defaultStyle != null)
+        {
+            return defaultStyle;
+        }
+
         Debug.LogWarning($"UIThemeManager could not find scroll style: {scrollType}");
         return null;
     }
@@ -372,4 +428,187 @@ public class UIThemeManager : MonoBehaviour
         typedValue = default;
         return false;
     }
+
+    public static void RefreshThemeData(UIThemeData changedThemeData)
+    {
+        if (Instance == null || changedThemeData == null)
+        {
+            return;
+        }
+
+        if (Instance.selectedThemeType != changedThemeData.ThemeType)
+        {
+            return;
+        }
+
+        Instance.activeThemeData = changedThemeData;
+        Instance.RebuildActiveThemeLists();
+        Instance.ReapplyThemeToRegisteredTargets();
+    }
+
+    private UIThemeStyle FindDefaultBackgroundStyle(UIThemeBackgroundType backgroundType)
+    {
+        if (defaultThemeData == null)
+        {
+            return null;
+        }
+
+        for (int i = 0; i < defaultThemeData.BackgroundStyles.Count; i++)
+        {
+            UIThemeBackgroundStyle style = defaultThemeData.BackgroundStyles[i];
+
+            if (style != null && style.BackgroundType == backgroundType)
+            {
+                return style.Style;
+            }
+        }
+
+        return null;
+    }
+
+    private UIThemeStyle FindDefaultButtonStyle(UIThemeButtonType buttonType)
+    {
+        if (defaultThemeData == null)
+        {
+            return null;
+        }
+
+        for (int i = 0; i < defaultThemeData.ButtonStyles.Count; i++)
+        {
+            UIThemeButtonStyle style = defaultThemeData.ButtonStyles[i];
+
+            if (style != null && style.ButtonType == buttonType)
+            {
+                return style.Style;
+            }
+        }
+
+        return null;
+    }
+
+    private UIThemeStyle FindDefaultTextStyle(UIThemeTextType textType)
+    {
+        if (defaultThemeData == null)
+        {
+            return null;
+        }
+
+        for (int i = 0; i < defaultThemeData.TextStyles.Count; i++)
+        {
+            UIThemeTextStyle style = defaultThemeData.TextStyles[i];
+
+            if (style != null && style.TextType == textType)
+            {
+                return style.Style;
+            }
+        }
+
+        return null;
+    }
+
+    private UIThemeInputStyle FindDefaultInputStyle(UIThemeInputType inputType)
+    {
+        if (defaultThemeData == null)
+        {
+            return null;
+        }
+
+        for (int i = 0; i < defaultThemeData.InputStyles.Count; i++)
+        {
+            UIThemeInputStyle style = defaultThemeData.InputStyles[i];
+
+            if (style != null && style.InputType == inputType)
+            {
+                return style;
+            }
+        }
+
+        return null;
+    }
+
+    private UIThemeDropdownStyle FindDefaultDropdownStyle(UIThemeDropdownType dropdownType)
+    {
+        if (defaultThemeData == null)
+        {
+            return null;
+        }
+
+        for (int i = 0; i < defaultThemeData.DropdownStyles.Count; i++)
+        {
+            UIThemeDropdownStyle style = defaultThemeData.DropdownStyles[i];
+
+            if (style != null && style.DropdownType == dropdownType)
+            {
+                return style;
+            }
+        }
+
+        return null;
+    }
+
+    private UIThemeScrollStyle FindDefaultScrollStyle(UIThemeScrollType scrollType)
+    {
+        if (defaultThemeData == null)
+        {
+            return null;
+        }
+
+        for (int i = 0; i < defaultThemeData.ScrollStyles.Count; i++)
+        {
+            UIThemeScrollStyle style = defaultThemeData.ScrollStyles[i];
+
+            if (style != null && style.ScrollType == scrollType)
+            {
+                return style;
+            }
+        }
+
+        return null;
+    }
+
+#if UNITY_EDITOR
+
+    private void ReconnectActiveThemeTargetsInEditor()
+    {
+        if (Application.isPlaying)
+        {
+            return;
+        }
+
+        registeredTargets.Clear();
+
+        MonoBehaviour[] sceneBehaviours = FindObjectsByType<MonoBehaviour>(
+            FindObjectsInactive.Exclude,
+            FindObjectsSortMode.None
+        );
+
+        for (int i = 0; i < sceneBehaviours.Length; i++)
+        {
+            MonoBehaviour behaviour = sceneBehaviours[i];
+
+            if (behaviour == null)
+            {
+                continue;
+            }
+
+            if (PrefabUtility.IsPartOfPrefabAsset(behaviour))
+            {
+                continue;
+            }
+
+            if (behaviour is not IUIThemeTarget themeTarget)
+            {
+                continue;
+            }
+
+            if (!registeredTargets.Contains(themeTarget))
+            {
+                registeredTargets.Add(themeTarget);
+            }
+
+            themeTarget.ReapplyTheme();
+        }
+    }
+
+#endif
 }

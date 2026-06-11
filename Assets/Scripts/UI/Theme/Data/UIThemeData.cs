@@ -32,4 +32,11 @@ public class UIThemeData : ScriptableObject
     public IReadOnlyList<UIThemeInputStyle> InputStyles => inputStyles;
     public IReadOnlyList<UIThemeDropdownStyle> DropdownStyles => dropdownStyles;
     public IReadOnlyList<UIThemeScrollStyle> ScrollStyles => scrollStyles;
+
+#if UNITY_EDITOR
+    private void OnValidate()
+    {
+        UIThemeManager.RefreshThemeData(this);
+    }
+#endif
 }

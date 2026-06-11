@@ -4,6 +4,8 @@ using UnityEngine;
 [Serializable]
 public class UIThemeScrollStyle
 {
+    [SerializeField] private UIThemeScrollType scrollType = UIThemeScrollType.Default;
+
     [Header("Root")]
     [SerializeField] private UIThemeStyle rootImage = new();
 
@@ -19,6 +21,9 @@ public class UIThemeScrollStyle
     [SerializeField] private UIThemeStyle verticalScrollbarImage = new();
     [SerializeField] private UIThemeStyle verticalScrollbarVisual = new();
     [SerializeField] private UIThemeStyle verticalHandleImage = new();
+
+    public UIThemeSectionType SectionType => UIThemeSectionType.Scroll;
+    public UIThemeScrollType ScrollType => scrollType;
 
     public UIThemeStyle RootImage => rootImage;
 

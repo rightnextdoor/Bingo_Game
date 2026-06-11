@@ -14,42 +14,23 @@ public class UIThemeDataEditor : Editor
     private bool dropdownSectionExpanded = true;
     private bool scrollSectionExpanded = true;
 
-    private SerializedProperty mainBackgroundProperty;
-    private SerializedProperty headerBackgroundProperty;
-    private SerializedProperty secondaryBackgroundProperty;
-
-    private SerializedProperty primaryButtonProperty;
-    private SerializedProperty secondaryButtonProperty;
-    private SerializedProperty closeButtonProperty;
-
-    private SerializedProperty titleTextProperty;
-    private SerializedProperty subtitleTextProperty;
-
-    private SerializedProperty inputProperty;
-
-    private SerializedProperty dropdownProperty;
-
-    private SerializedProperty scrollProperty;
+    private SerializedProperty backgroundStylesProperty;
+    private SerializedProperty buttonStylesProperty;
+    private SerializedProperty textStylesProperty;
+    private SerializedProperty inputStylesProperty;
+    private SerializedProperty dropdownStylesProperty;
+    private SerializedProperty scrollStylesProperty;
 
     private void OnEnable()
     {
         themeTypeProperty = serializedObject.FindProperty("themeType");
 
-        mainBackgroundProperty = serializedObject.FindProperty("mainBackground");
-        headerBackgroundProperty = serializedObject.FindProperty("headerBackground");
-        secondaryBackgroundProperty = serializedObject.FindProperty("secondaryBackground");
-
-        primaryButtonProperty = serializedObject.FindProperty("primaryButton");
-        secondaryButtonProperty = serializedObject.FindProperty("secondaryButton");
-        closeButtonProperty = serializedObject.FindProperty("closeButton");
-
-        titleTextProperty = serializedObject.FindProperty("titleText");
-        subtitleTextProperty = serializedObject.FindProperty("subtitleText");
-
-        inputProperty = serializedObject.FindProperty("input");
-
-        dropdownProperty = serializedObject.FindProperty("dropdown");
-        scrollProperty = serializedObject.FindProperty("scroll");
+        backgroundStylesProperty = serializedObject.FindProperty("backgroundStyles");
+        buttonStylesProperty = serializedObject.FindProperty("buttonStyles");
+        textStylesProperty = serializedObject.FindProperty("textStyles");
+        inputStylesProperty = serializedObject.FindProperty("inputStyles");
+        dropdownStylesProperty = serializedObject.FindProperty("dropdownStyles");
+        scrollStylesProperty = serializedObject.FindProperty("scrollStyles");
     }
 
     public override void OnInspectorGUI()
@@ -80,73 +61,38 @@ public class UIThemeDataEditor : Editor
 
     private void DrawBackgroundSection()
     {
-        EditorGUILayout.Space(6);
-
-        backgroundSectionExpanded = EditorGUILayout.Foldout(
-            backgroundSectionExpanded,
+        DrawSimpleStyleListSection(
+            ref backgroundSectionExpanded,
             "Background Section",
-            true
+            backgroundStylesProperty,
+            "Background",
+            "backgroundType",
+            DrawImageComponentFields
         );
-
-        if (!backgroundSectionExpanded)
-        {
-            return;
-        }
-
-        EditorGUI.indentLevel++;
-
-        DrawFixedStyle("Main Background", mainBackgroundProperty, DrawImageComponentFields);
-        DrawFixedStyle("Header Background", headerBackgroundProperty, DrawImageComponentFields);
-        DrawFixedStyle("Secondary Background", secondaryBackgroundProperty, DrawImageComponentFields);
-
-        EditorGUI.indentLevel--;
     }
 
     private void DrawButtonSection()
     {
-        EditorGUILayout.Space(6);
-
-        buttonSectionExpanded = EditorGUILayout.Foldout(
-            buttonSectionExpanded,
+        DrawSimpleStyleListSection(
+            ref buttonSectionExpanded,
             "Button Section",
-            true
+            buttonStylesProperty,
+            "Button",
+            "buttonType",
+            DrawButtonStyleFields
         );
-
-        if (!buttonSectionExpanded)
-        {
-            return;
-        }
-
-        EditorGUI.indentLevel++;
-
-        DrawFixedStyle("Primary Button", primaryButtonProperty, DrawButtonStyleFields);
-        DrawFixedStyle("Secondary Button", secondaryButtonProperty, DrawButtonStyleFields);
-        DrawFixedStyle("Close Button", closeButtonProperty, DrawButtonStyleFields);
-
-        EditorGUI.indentLevel--;
     }
 
     private void DrawTextSection()
     {
-        EditorGUILayout.Space(6);
-
-        textSectionExpanded = EditorGUILayout.Foldout(
-            textSectionExpanded,
+        DrawSimpleStyleListSection(
+            ref textSectionExpanded,
             "Text Section",
-            true
+            textStylesProperty,
+            "Text",
+            "textType",
+            DrawTextComponentFields
         );
-
-        if (!textSectionExpanded)
-        {
-            return;
-        }
-
-        EditorGUI.indentLevel++;
-
-        DrawFixedStyle("Title Text", titleTextProperty, DrawTextComponentFields);
-        DrawFixedStyle("Subtitle Text", subtitleTextProperty, DrawTextComponentFields);
-
-        EditorGUI.indentLevel--;
     }
 
     private void DrawInputSection()
@@ -164,21 +110,177 @@ public class UIThemeDataEditor : Editor
             return;
         }
 
-        EditorGUI.indentLevel++;
-
-        inputProperty.isExpanded = EditorGUILayout.Foldout(
-            inputProperty.isExpanded,
+        DrawList(
+            inputStylesProperty,
             "Input",
+            DrawInputStyleEntry
+        );
+    }
+
+    private void DrawDropdownSection()
+    {
+        EditorGUILayout.Space(6);
+
+        dropdownSectionExpanded = EditorGUILayout.Foldout(
+            dropdownSectionExpanded,
+            "Dropdown Section",
             true
         );
 
-        if (!inputProperty.isExpanded)
+        if (!dropdownSectionExpanded)
         {
-            EditorGUI.indentLevel--;
+            return;
+        }
+
+        DrawList(
+            dropdownStylesProperty,
+            "Dropdown",
+            DrawDropdownStyleEntry
+        );
+    }
+
+    private void DrawScrollSection()
+    {
+        EditorGUILayout.Space(6);
+
+        scrollSectionExpanded = EditorGUILayout.Foldout(
+            scrollSectionExpanded,
+            "Scroll Section",
+            true
+        );
+
+        if (!scrollSectionExpanded)
+        {
+            return;
+        }
+
+        DrawList(
+            scrollStylesProperty,
+            "Scroll",
+            DrawScrollStyleEntry
+        );
+    }
+
+    #endregion
+
+    #region List Drawing
+
+    private void DrawSimpleStyleListSection(
+        ref bool sectionExpanded,
+        string sectionTitle,
+        SerializedProperty listProperty,
+        string entryLabel,
+        string typePropertyName,
+        System.Action<SerializedProperty> drawStyleFields
+    )
+    {
+        EditorGUILayout.Space(6);
+
+        sectionExpanded = EditorGUILayout.Foldout(
+            sectionExpanded,
+            sectionTitle,
+            true
+        );
+
+        if (!sectionExpanded)
+        {
+            return;
+        }
+
+        DrawList(
+            listProperty,
+            entryLabel,
+            entryProperty =>
+            {
+                SerializedProperty typeProperty = entryProperty.FindPropertyRelative(typePropertyName);
+                SerializedProperty styleProperty = entryProperty.FindPropertyRelative("style");
+
+                EditorGUILayout.PropertyField(typeProperty, new GUIContent("Type"));
+
+                EditorGUILayout.Space(4);
+
+                DrawFixedStyle("Style", styleProperty, drawStyleFields);
+            }
+        );
+    }
+
+    private void DrawList(
+        SerializedProperty listProperty,
+        string entryLabel,
+        System.Action<SerializedProperty> drawEntry
+    )
+    {
+        if (listProperty == null)
+        {
+            EditorGUILayout.HelpBox(
+                $"Missing property for {entryLabel} list. Make sure UIThemeData has the new list field.",
+                MessageType.Error
+            );
             return;
         }
 
         EditorGUI.indentLevel++;
+
+        for (int i = 0; i < listProperty.arraySize; i++)
+        {
+            SerializedProperty entryProperty = listProperty.GetArrayElementAtIndex(i);
+
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+
+            entryProperty.isExpanded = EditorGUILayout.Foldout(
+                entryProperty.isExpanded,
+                $"{entryLabel} {i + 1}",
+                true
+            );
+
+            if (entryProperty.isExpanded)
+            {
+                EditorGUI.indentLevel++;
+
+                drawEntry?.Invoke(entryProperty);
+
+                EditorGUILayout.Space(4);
+
+                if (GUILayout.Button($"Remove {entryLabel} {i + 1}"))
+                {
+                    listProperty.DeleteArrayElementAtIndex(i);
+                    EditorGUI.indentLevel--;
+                    EditorGUILayout.EndVertical();
+                    break;
+                }
+
+                EditorGUI.indentLevel--;
+            }
+
+            EditorGUILayout.EndVertical();
+        }
+
+        EditorGUILayout.Space(4);
+
+        if (GUILayout.Button($"Add {entryLabel}"))
+        {
+            int newIndex = listProperty.arraySize;
+            listProperty.InsertArrayElementAtIndex(newIndex);
+
+            SerializedProperty newEntry = listProperty.GetArrayElementAtIndex(newIndex);
+            newEntry.isExpanded = true;
+        }
+
+        EditorGUI.indentLevel--;
+    }
+
+    #endregion
+
+    #region Compound Entries
+
+    private void DrawInputStyleEntry(SerializedProperty inputProperty)
+    {
+        EditorGUILayout.PropertyField(
+            inputProperty.FindPropertyRelative("inputType"),
+            new GUIContent("Type")
+        );
+
+        EditorGUILayout.Space(6);
 
         EditorGUILayout.LabelField("Field", EditorStyles.boldLabel);
 
@@ -213,48 +315,25 @@ public class UIThemeDataEditor : Editor
             inputProperty.FindPropertyRelative("placeholderText"),
             DrawTextComponentFields
         );
-
-        EditorGUI.indentLevel--;
-        EditorGUI.indentLevel--;
     }
 
-    private void DrawDropdownSection()
+    private void DrawDropdownStyleEntry(SerializedProperty dropdownProperty)
     {
+        EditorGUILayout.PropertyField(
+            dropdownProperty.FindPropertyRelative("dropdownType"),
+            new GUIContent("Type")
+        );
+
         EditorGUILayout.Space(6);
 
-        dropdownSectionExpanded = EditorGUILayout.Foldout(
-            dropdownSectionExpanded,
-            "Dropdown Section",
-            true
-        );
-
-        if (!dropdownSectionExpanded)
-        {
-            return;
-        }
-
-        EditorGUI.indentLevel++;
-
-        dropdownProperty.isExpanded = EditorGUILayout.Foldout(
-            dropdownProperty.isExpanded,
-            "Dropdown",
-            true
-        );
-
-        if (!dropdownProperty.isExpanded)
-        {
-            EditorGUI.indentLevel--;
-            return;
-        }
-
-        EditorGUI.indentLevel++;
-
         EditorGUILayout.LabelField("Dropdown Root", EditorStyles.boldLabel);
+
         DrawFixedStyle(
             "Dropdown Image",
             dropdownProperty.FindPropertyRelative("dropdownImage"),
             DrawImageComponentFields
         );
+
         DrawFixedStyle(
             "Dropdown Visual",
             dropdownProperty.FindPropertyRelative("dropdownVisual"),
@@ -264,6 +343,7 @@ public class UIThemeDataEditor : Editor
         EditorGUILayout.Space(6);
 
         EditorGUILayout.LabelField("Label", EditorStyles.boldLabel);
+
         DrawFixedStyle(
             "Label Text",
             dropdownProperty.FindPropertyRelative("labelText"),
@@ -273,6 +353,7 @@ public class UIThemeDataEditor : Editor
         EditorGUILayout.Space(6);
 
         EditorGUILayout.LabelField("Arrow", EditorStyles.boldLabel);
+
         DrawFixedStyle(
             "Arrow Image",
             dropdownProperty.FindPropertyRelative("arrowImage"),
@@ -282,6 +363,7 @@ public class UIThemeDataEditor : Editor
         EditorGUILayout.Space(6);
 
         EditorGUILayout.LabelField("Template", EditorStyles.boldLabel);
+
         DrawFixedStyle(
             "Template Image",
             dropdownProperty.FindPropertyRelative("templateImage"),
@@ -291,6 +373,7 @@ public class UIThemeDataEditor : Editor
         EditorGUILayout.Space(6);
 
         EditorGUILayout.LabelField("Viewport", EditorStyles.boldLabel);
+
         DrawFixedStyle(
             "Viewport Image",
             dropdownProperty.FindPropertyRelative("viewportImage"),
@@ -300,21 +383,25 @@ public class UIThemeDataEditor : Editor
         EditorGUILayout.Space(6);
 
         EditorGUILayout.LabelField("Item", EditorStyles.boldLabel);
+
         DrawFixedStyle(
             "Item Visual",
             dropdownProperty.FindPropertyRelative("itemVisual"),
             DrawSelectableVisualFields
         );
+
         DrawFixedStyle(
             "Item Background Image",
             dropdownProperty.FindPropertyRelative("itemBackgroundImage"),
             DrawImageComponentFields
         );
+
         DrawFixedStyle(
             "Item Checkmark Image",
             dropdownProperty.FindPropertyRelative("itemCheckmarkImage"),
             DrawImageComponentFields
         );
+
         DrawFixedStyle(
             "Item Label Text",
             dropdownProperty.FindPropertyRelative("itemLabelText"),
@@ -324,56 +411,34 @@ public class UIThemeDataEditor : Editor
         EditorGUILayout.Space(6);
 
         EditorGUILayout.LabelField("Scrollbar", EditorStyles.boldLabel);
+
         DrawFixedStyle(
             "Scrollbar Image",
             dropdownProperty.FindPropertyRelative("scrollbarImage"),
             DrawImageComponentFields
         );
+
         DrawFixedStyle(
             "Scrollbar Visual",
             dropdownProperty.FindPropertyRelative("scrollbarVisual"),
             DrawSelectableVisualFields
         );
+
         DrawFixedStyle(
             "Scrollbar Handle Image",
             dropdownProperty.FindPropertyRelative("scrollbarHandleImage"),
             DrawImageComponentFields
         );
-
-        EditorGUI.indentLevel--;
-        EditorGUI.indentLevel--;
     }
 
-    private void DrawScrollSection()
+    private void DrawScrollStyleEntry(SerializedProperty scrollProperty)
     {
+        EditorGUILayout.PropertyField(
+            scrollProperty.FindPropertyRelative("scrollType"),
+            new GUIContent("Type")
+        );
+
         EditorGUILayout.Space(6);
-
-        scrollSectionExpanded = EditorGUILayout.Foldout(
-            scrollSectionExpanded,
-            "Scroll Section",
-            true
-        );
-
-        if (!scrollSectionExpanded)
-        {
-            return;
-        }
-
-        EditorGUI.indentLevel++;
-
-        scrollProperty.isExpanded = EditorGUILayout.Foldout(
-            scrollProperty.isExpanded,
-            "Scroll",
-            true
-        );
-
-        if (!scrollProperty.isExpanded)
-        {
-            EditorGUI.indentLevel--;
-            return;
-        }
-
-        EditorGUI.indentLevel++;
 
         EditorGUILayout.LabelField("Root", EditorStyles.boldLabel);
 
@@ -436,14 +501,11 @@ public class UIThemeDataEditor : Editor
             scrollProperty.FindPropertyRelative("verticalHandleImage"),
             DrawImageComponentFields
         );
-
-        EditorGUI.indentLevel--;
-        EditorGUI.indentLevel--;
     }
 
     #endregion
 
-    #region Draw Fields
+    #region Style Field Drawers
 
     private void DrawImageComponentFields(SerializedProperty styleProperty)
     {
@@ -560,11 +622,17 @@ public class UIThemeDataEditor : Editor
     #region Helpers
 
     private void DrawFixedStyle(
-    string label,
-    SerializedProperty styleProperty,
-    System.Action<SerializedProperty> drawStyleFields
-)
+        string label,
+        SerializedProperty styleProperty,
+        System.Action<SerializedProperty> drawStyleFields
+    )
     {
+        if (styleProperty == null)
+        {
+            EditorGUILayout.HelpBox($"Missing style property: {label}", MessageType.Error);
+            return;
+        }
+
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
 
         styleProperty.isExpanded = EditorGUILayout.Foldout(

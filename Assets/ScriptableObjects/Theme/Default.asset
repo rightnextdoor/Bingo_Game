@@ -13,456 +13,465 @@ MonoBehaviour:
   m_Name: Default
   m_EditorClassIdentifier: Assembly-CSharp::UIThemeData
   themeType: 0
-  mainBackground:
-    sourceImage: {fileID: 0}
-    color: {r: 0.94609153, g: 0.91166496, b: 0.91166496, a: 1}
-    material: {fileID: 0}
-    raycastTarget: 1
-    transition: 1
-    normalColor: {r: 1, g: 1, b: 1, a: 1}
-    highlightedColor: {r: 1, g: 1, b: 1, a: 1}
-    pressedColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-    selectedColor: {r: 1, g: 1, b: 1, a: 1}
-    disabledColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-    colorMultiplier: 1
-    fadeDuration: 0.1
-    fontAsset: {fileID: 0}
-    textMaterial: {fileID: 0}
-    vertexColor: {r: 1, g: 1, b: 1, a: 1}
-    colorGradient: {fileID: 0}
-    textRaycastTarget: 1
-  headerBackground:
-    sourceImage: {fileID: 0}
-    color: {r: 1, g: 1, b: 1, a: 1}
-    material: {fileID: 0}
-    raycastTarget: 1
-    transition: 1
-    normalColor: {r: 1, g: 1, b: 1, a: 1}
-    highlightedColor: {r: 1, g: 1, b: 1, a: 1}
-    pressedColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-    selectedColor: {r: 1, g: 1, b: 1, a: 1}
-    disabledColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-    colorMultiplier: 1
-    fadeDuration: 0.1
-    fontAsset: {fileID: 0}
-    textMaterial: {fileID: 0}
-    vertexColor: {r: 1, g: 1, b: 1, a: 1}
-    colorGradient: {fileID: 0}
-    textRaycastTarget: 1
-  secondaryBackground:
-    sourceImage: {fileID: 0}
-    color: {r: 1, g: 1, b: 1, a: 1}
-    material: {fileID: 0}
-    raycastTarget: 1
-    transition: 1
-    normalColor: {r: 1, g: 1, b: 1, a: 1}
-    highlightedColor: {r: 1, g: 1, b: 1, a: 1}
-    pressedColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-    selectedColor: {r: 1, g: 1, b: 1, a: 1}
-    disabledColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-    colorMultiplier: 1
-    fadeDuration: 0.1
-    fontAsset: {fileID: 0}
-    textMaterial: {fileID: 0}
-    vertexColor: {r: 1, g: 1, b: 1, a: 1}
-    colorGradient: {fileID: 0}
-    textRaycastTarget: 1
-  primaryButton:
-    sourceImage: {fileID: 0}
-    color: {r: 1, g: 1, b: 1, a: 1}
-    material: {fileID: 0}
-    raycastTarget: 1
-    transition: 1
-    normalColor: {r: 1, g: 1, b: 1, a: 1}
-    highlightedColor: {r: 1, g: 1, b: 1, a: 1}
-    pressedColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-    selectedColor: {r: 1, g: 1, b: 1, a: 1}
-    disabledColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-    colorMultiplier: 1
-    fadeDuration: 0.1
-    fontAsset: {fileID: 0}
-    textMaterial: {fileID: 0}
-    vertexColor: {r: 1, g: 1, b: 1, a: 1}
-    colorGradient: {fileID: 0}
-    textRaycastTarget: 1
-  secondaryButton:
-    sourceImage: {fileID: 0}
-    color: {r: 1, g: 1, b: 1, a: 1}
-    material: {fileID: 0}
-    raycastTarget: 1
-    transition: 1
-    normalColor: {r: 1, g: 1, b: 1, a: 1}
-    highlightedColor: {r: 1, g: 1, b: 1, a: 1}
-    pressedColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-    selectedColor: {r: 1, g: 1, b: 1, a: 1}
-    disabledColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-    colorMultiplier: 1
-    fadeDuration: 0.1
-    fontAsset: {fileID: 0}
-    textMaterial: {fileID: 0}
-    vertexColor: {r: 1, g: 1, b: 1, a: 1}
-    colorGradient: {fileID: 0}
-    textRaycastTarget: 1
-  closeButton:
-    sourceImage: {fileID: 0}
-    color: {r: 1, g: 1, b: 1, a: 1}
-    material: {fileID: 0}
-    raycastTarget: 1
-    transition: 1
-    normalColor: {r: 1, g: 1, b: 1, a: 1}
-    highlightedColor: {r: 1, g: 1, b: 1, a: 1}
-    pressedColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-    selectedColor: {r: 1, g: 1, b: 1, a: 1}
-    disabledColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-    colorMultiplier: 1
-    fadeDuration: 0.1
-    fontAsset: {fileID: 0}
-    textMaterial: {fileID: 0}
-    vertexColor: {r: 1, g: 1, b: 1, a: 1}
-    colorGradient: {fileID: 0}
-    textRaycastTarget: 1
-  titleText:
-    sourceImage: {fileID: 0}
-    color: {r: 1, g: 1, b: 1, a: 1}
-    material: {fileID: 0}
-    raycastTarget: 1
-    transition: 1
-    normalColor: {r: 1, g: 1, b: 1, a: 1}
-    highlightedColor: {r: 1, g: 1, b: 1, a: 1}
-    pressedColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-    selectedColor: {r: 1, g: 1, b: 1, a: 1}
-    disabledColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-    colorMultiplier: 1
-    fadeDuration: 0.1
-    fontAsset: {fileID: 0}
-    textMaterial: {fileID: 0}
-    vertexColor: {r: 1, g: 1, b: 1, a: 1}
-    colorGradient: {fileID: 0}
-    textRaycastTarget: 1
-  subtitleText:
-    sourceImage: {fileID: 0}
-    color: {r: 1, g: 1, b: 1, a: 1}
-    material: {fileID: 0}
-    raycastTarget: 1
-    transition: 1
-    normalColor: {r: 1, g: 1, b: 1, a: 1}
-    highlightedColor: {r: 1, g: 1, b: 1, a: 1}
-    pressedColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-    selectedColor: {r: 1, g: 1, b: 1, a: 1}
-    disabledColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-    colorMultiplier: 1
-    fadeDuration: 0.1
-    fontAsset: {fileID: 0}
-    textMaterial: {fileID: 0}
-    vertexColor: {r: 1, g: 1, b: 1, a: 1}
-    colorGradient: {fileID: 0}
-    textRaycastTarget: 1
-  input:
-    fieldImage:
+  backgroundStyles:
+  - backgroundType: 0
+    style:
       sourceImage: {fileID: 0}
-      color: {r: 1, g: 1, b: 1, a: 1}
+      color: {r: 0, g: 0, b: 0, a: 0}
       material: {fileID: 0}
-      raycastTarget: 1
-      transition: 1
-      normalColor: {r: 1, g: 1, b: 1, a: 1}
-      highlightedColor: {r: 1, g: 1, b: 1, a: 1}
-      pressedColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-      selectedColor: {r: 1, g: 1, b: 1, a: 1}
-      disabledColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-      colorMultiplier: 1
-      fadeDuration: 0.1
+      raycastTarget: 0
+      transition: 0
+      normalColor: {r: 0, g: 0, b: 0, a: 0}
+      highlightedColor: {r: 0, g: 0, b: 0, a: 0}
+      pressedColor: {r: 0, g: 0, b: 0, a: 0}
+      selectedColor: {r: 0, g: 0, b: 0, a: 0}
+      disabledColor: {r: 0, g: 0, b: 0, a: 0}
+      colorMultiplier: 0
+      fadeDuration: 0
       fontAsset: {fileID: 0}
       textMaterial: {fileID: 0}
-      vertexColor: {r: 1, g: 1, b: 1, a: 1}
+      vertexColor: {r: 0, g: 0, b: 0, a: 0}
       colorGradient: {fileID: 0}
-      textRaycastTarget: 1
-    fieldVisual:
+      textRaycastTarget: 0
+  buttonStyles:
+  - buttonType: 0
+    style:
       sourceImage: {fileID: 0}
-      color: {r: 1, g: 1, b: 1, a: 1}
+      color: {r: 0, g: 0, b: 0, a: 0}
       material: {fileID: 0}
-      raycastTarget: 1
-      transition: 1
-      normalColor: {r: 1, g: 1, b: 1, a: 1}
-      highlightedColor: {r: 1, g: 1, b: 1, a: 1}
-      pressedColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-      selectedColor: {r: 1, g: 1, b: 1, a: 1}
-      disabledColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-      colorMultiplier: 1
-      fadeDuration: 0.1
+      raycastTarget: 0
+      transition: 0
+      normalColor: {r: 0, g: 0, b: 0, a: 0}
+      highlightedColor: {r: 0, g: 0, b: 0, a: 0}
+      pressedColor: {r: 0, g: 0, b: 0, a: 0}
+      selectedColor: {r: 0, g: 0, b: 0, a: 0}
+      disabledColor: {r: 0, g: 0, b: 0, a: 0}
+      colorMultiplier: 0
+      fadeDuration: 0
       fontAsset: {fileID: 0}
       textMaterial: {fileID: 0}
-      vertexColor: {r: 1, g: 1, b: 1, a: 1}
+      vertexColor: {r: 0, g: 0, b: 0, a: 0}
       colorGradient: {fileID: 0}
-      textRaycastTarget: 1
-    inputText:
+      textRaycastTarget: 0
+  - buttonType: 1
+    style:
       sourceImage: {fileID: 0}
-      color: {r: 1, g: 1, b: 1, a: 1}
+      color: {r: 0, g: 0, b: 0, a: 0}
       material: {fileID: 0}
-      raycastTarget: 1
-      transition: 1
-      normalColor: {r: 1, g: 1, b: 1, a: 1}
-      highlightedColor: {r: 1, g: 1, b: 1, a: 1}
-      pressedColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-      selectedColor: {r: 1, g: 1, b: 1, a: 1}
-      disabledColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-      colorMultiplier: 1
-      fadeDuration: 0.1
+      raycastTarget: 0
+      transition: 0
+      normalColor: {r: 0, g: 0, b: 0, a: 0}
+      highlightedColor: {r: 0, g: 0, b: 0, a: 0}
+      pressedColor: {r: 0, g: 0, b: 0, a: 0}
+      selectedColor: {r: 0, g: 0, b: 0, a: 0}
+      disabledColor: {r: 0, g: 0, b: 0, a: 0}
+      colorMultiplier: 0
+      fadeDuration: 0
       fontAsset: {fileID: 0}
       textMaterial: {fileID: 0}
-      vertexColor: {r: 1, g: 1, b: 1, a: 1}
+      vertexColor: {r: 0, g: 0, b: 0, a: 0}
       colorGradient: {fileID: 0}
-      textRaycastTarget: 1
-    placeholderText:
+      textRaycastTarget: 0
+  - buttonType: 2
+    style:
       sourceImage: {fileID: 0}
-      color: {r: 1, g: 1, b: 1, a: 1}
+      color: {r: 0, g: 0, b: 0, a: 0}
       material: {fileID: 0}
-      raycastTarget: 1
-      transition: 1
-      normalColor: {r: 1, g: 1, b: 1, a: 1}
-      highlightedColor: {r: 1, g: 1, b: 1, a: 1}
-      pressedColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-      selectedColor: {r: 1, g: 1, b: 1, a: 1}
-      disabledColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-      colorMultiplier: 1
-      fadeDuration: 0.1
+      raycastTarget: 0
+      transition: 0
+      normalColor: {r: 0, g: 0, b: 0, a: 0}
+      highlightedColor: {r: 0, g: 0, b: 0, a: 0}
+      pressedColor: {r: 0, g: 0, b: 0, a: 0}
+      selectedColor: {r: 0, g: 0, b: 0, a: 0}
+      disabledColor: {r: 0, g: 0, b: 0, a: 0}
+      colorMultiplier: 0
+      fadeDuration: 0
       fontAsset: {fileID: 0}
       textMaterial: {fileID: 0}
-      vertexColor: {r: 1, g: 1, b: 1, a: 1}
+      vertexColor: {r: 0, g: 0, b: 0, a: 0}
       colorGradient: {fileID: 0}
-      textRaycastTarget: 1
-  dropdown:
+      textRaycastTarget: 0
+  textStyles: []
+  inputStyles: []
+  dropdownStyles:
+  - dropdownType: 0
     dropdownImage:
       sourceImage: {fileID: 0}
-      color: {r: 1, g: 1, b: 1, a: 1}
+      color: {r: 0, g: 0, b: 0, a: 0}
       material: {fileID: 0}
-      raycastTarget: 1
-      transition: 1
-      normalColor: {r: 1, g: 1, b: 1, a: 1}
-      highlightedColor: {r: 1, g: 1, b: 1, a: 1}
-      pressedColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-      selectedColor: {r: 1, g: 1, b: 1, a: 1}
-      disabledColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-      colorMultiplier: 1
-      fadeDuration: 0.1
+      raycastTarget: 0
+      transition: 0
+      normalColor: {r: 0, g: 0, b: 0, a: 0}
+      highlightedColor: {r: 0, g: 0, b: 0, a: 0}
+      pressedColor: {r: 0, g: 0, b: 0, a: 0}
+      selectedColor: {r: 0, g: 0, b: 0, a: 0}
+      disabledColor: {r: 0, g: 0, b: 0, a: 0}
+      colorMultiplier: 0
+      fadeDuration: 0
       fontAsset: {fileID: 0}
       textMaterial: {fileID: 0}
-      vertexColor: {r: 1, g: 1, b: 1, a: 1}
+      vertexColor: {r: 0, g: 0, b: 0, a: 0}
       colorGradient: {fileID: 0}
-      textRaycastTarget: 1
+      textRaycastTarget: 0
     dropdownVisual:
       sourceImage: {fileID: 0}
-      color: {r: 1, g: 1, b: 1, a: 1}
+      color: {r: 0, g: 0, b: 0, a: 0}
       material: {fileID: 0}
-      raycastTarget: 1
-      transition: 1
-      normalColor: {r: 1, g: 1, b: 1, a: 1}
-      highlightedColor: {r: 1, g: 1, b: 1, a: 1}
-      pressedColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-      selectedColor: {r: 1, g: 1, b: 1, a: 1}
-      disabledColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-      colorMultiplier: 1
-      fadeDuration: 0.1
+      raycastTarget: 0
+      transition: 0
+      normalColor: {r: 0, g: 0, b: 0, a: 0}
+      highlightedColor: {r: 0, g: 0, b: 0, a: 0}
+      pressedColor: {r: 0, g: 0, b: 0, a: 0}
+      selectedColor: {r: 0, g: 0, b: 0, a: 0}
+      disabledColor: {r: 0, g: 0, b: 0, a: 0}
+      colorMultiplier: 0
+      fadeDuration: 0
       fontAsset: {fileID: 0}
       textMaterial: {fileID: 0}
-      vertexColor: {r: 1, g: 1, b: 1, a: 1}
+      vertexColor: {r: 0, g: 0, b: 0, a: 0}
       colorGradient: {fileID: 0}
-      textRaycastTarget: 1
+      textRaycastTarget: 0
     labelText:
       sourceImage: {fileID: 0}
-      color: {r: 1, g: 1, b: 1, a: 1}
+      color: {r: 0, g: 0, b: 0, a: 0}
       material: {fileID: 0}
-      raycastTarget: 1
-      transition: 1
-      normalColor: {r: 1, g: 1, b: 1, a: 1}
-      highlightedColor: {r: 1, g: 1, b: 1, a: 1}
-      pressedColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-      selectedColor: {r: 1, g: 1, b: 1, a: 1}
-      disabledColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-      colorMultiplier: 1
-      fadeDuration: 0.1
+      raycastTarget: 0
+      transition: 0
+      normalColor: {r: 0, g: 0, b: 0, a: 0}
+      highlightedColor: {r: 0, g: 0, b: 0, a: 0}
+      pressedColor: {r: 0, g: 0, b: 0, a: 0}
+      selectedColor: {r: 0, g: 0, b: 0, a: 0}
+      disabledColor: {r: 0, g: 0, b: 0, a: 0}
+      colorMultiplier: 0
+      fadeDuration: 0
       fontAsset: {fileID: 0}
       textMaterial: {fileID: 0}
-      vertexColor: {r: 1, g: 1, b: 1, a: 1}
+      vertexColor: {r: 0, g: 0, b: 0, a: 0}
       colorGradient: {fileID: 0}
-      textRaycastTarget: 1
+      textRaycastTarget: 0
     arrowImage:
       sourceImage: {fileID: 0}
-      color: {r: 1, g: 1, b: 1, a: 1}
+      color: {r: 0, g: 0, b: 0, a: 0}
       material: {fileID: 0}
-      raycastTarget: 1
-      transition: 1
-      normalColor: {r: 1, g: 1, b: 1, a: 1}
-      highlightedColor: {r: 1, g: 1, b: 1, a: 1}
-      pressedColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-      selectedColor: {r: 1, g: 1, b: 1, a: 1}
-      disabledColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-      colorMultiplier: 1
-      fadeDuration: 0.1
+      raycastTarget: 0
+      transition: 0
+      normalColor: {r: 0, g: 0, b: 0, a: 0}
+      highlightedColor: {r: 0, g: 0, b: 0, a: 0}
+      pressedColor: {r: 0, g: 0, b: 0, a: 0}
+      selectedColor: {r: 0, g: 0, b: 0, a: 0}
+      disabledColor: {r: 0, g: 0, b: 0, a: 0}
+      colorMultiplier: 0
+      fadeDuration: 0
       fontAsset: {fileID: 0}
       textMaterial: {fileID: 0}
-      vertexColor: {r: 1, g: 1, b: 1, a: 1}
+      vertexColor: {r: 0, g: 0, b: 0, a: 0}
       colorGradient: {fileID: 0}
-      textRaycastTarget: 1
+      textRaycastTarget: 0
     templateImage:
       sourceImage: {fileID: 0}
-      color: {r: 1, g: 1, b: 1, a: 1}
+      color: {r: 0, g: 0, b: 0, a: 0}
       material: {fileID: 0}
-      raycastTarget: 1
-      transition: 1
-      normalColor: {r: 1, g: 1, b: 1, a: 1}
-      highlightedColor: {r: 1, g: 1, b: 1, a: 1}
-      pressedColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-      selectedColor: {r: 1, g: 1, b: 1, a: 1}
-      disabledColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-      colorMultiplier: 1
-      fadeDuration: 0.1
+      raycastTarget: 0
+      transition: 0
+      normalColor: {r: 0, g: 0, b: 0, a: 0}
+      highlightedColor: {r: 0, g: 0, b: 0, a: 0}
+      pressedColor: {r: 0, g: 0, b: 0, a: 0}
+      selectedColor: {r: 0, g: 0, b: 0, a: 0}
+      disabledColor: {r: 0, g: 0, b: 0, a: 0}
+      colorMultiplier: 0
+      fadeDuration: 0
       fontAsset: {fileID: 0}
       textMaterial: {fileID: 0}
-      vertexColor: {r: 1, g: 1, b: 1, a: 1}
+      vertexColor: {r: 0, g: 0, b: 0, a: 0}
       colorGradient: {fileID: 0}
-      textRaycastTarget: 1
+      textRaycastTarget: 0
     viewportImage:
       sourceImage: {fileID: 0}
-      color: {r: 1, g: 1, b: 1, a: 1}
+      color: {r: 0, g: 0, b: 0, a: 0}
       material: {fileID: 0}
-      raycastTarget: 1
-      transition: 1
-      normalColor: {r: 1, g: 1, b: 1, a: 1}
-      highlightedColor: {r: 1, g: 1, b: 1, a: 1}
-      pressedColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-      selectedColor: {r: 1, g: 1, b: 1, a: 1}
-      disabledColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-      colorMultiplier: 1
-      fadeDuration: 0.1
+      raycastTarget: 0
+      transition: 0
+      normalColor: {r: 0, g: 0, b: 0, a: 0}
+      highlightedColor: {r: 0, g: 0, b: 0, a: 0}
+      pressedColor: {r: 0, g: 0, b: 0, a: 0}
+      selectedColor: {r: 0, g: 0, b: 0, a: 0}
+      disabledColor: {r: 0, g: 0, b: 0, a: 0}
+      colorMultiplier: 0
+      fadeDuration: 0
       fontAsset: {fileID: 0}
       textMaterial: {fileID: 0}
-      vertexColor: {r: 1, g: 1, b: 1, a: 1}
+      vertexColor: {r: 0, g: 0, b: 0, a: 0}
       colorGradient: {fileID: 0}
-      textRaycastTarget: 1
+      textRaycastTarget: 0
     itemVisual:
       sourceImage: {fileID: 0}
-      color: {r: 1, g: 1, b: 1, a: 1}
+      color: {r: 0, g: 0, b: 0, a: 0}
       material: {fileID: 0}
-      raycastTarget: 1
-      transition: 1
-      normalColor: {r: 1, g: 1, b: 1, a: 1}
-      highlightedColor: {r: 1, g: 1, b: 1, a: 1}
-      pressedColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-      selectedColor: {r: 1, g: 1, b: 1, a: 1}
-      disabledColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-      colorMultiplier: 1
-      fadeDuration: 0.1
+      raycastTarget: 0
+      transition: 0
+      normalColor: {r: 0, g: 0, b: 0, a: 0}
+      highlightedColor: {r: 0, g: 0, b: 0, a: 0}
+      pressedColor: {r: 0, g: 0, b: 0, a: 0}
+      selectedColor: {r: 0, g: 0, b: 0, a: 0}
+      disabledColor: {r: 0, g: 0, b: 0, a: 0}
+      colorMultiplier: 0
+      fadeDuration: 0
       fontAsset: {fileID: 0}
       textMaterial: {fileID: 0}
-      vertexColor: {r: 1, g: 1, b: 1, a: 1}
+      vertexColor: {r: 0, g: 0, b: 0, a: 0}
       colorGradient: {fileID: 0}
-      textRaycastTarget: 1
+      textRaycastTarget: 0
     itemBackgroundImage:
       sourceImage: {fileID: 0}
-      color: {r: 1, g: 1, b: 1, a: 1}
+      color: {r: 0, g: 0, b: 0, a: 0}
       material: {fileID: 0}
-      raycastTarget: 1
-      transition: 1
-      normalColor: {r: 1, g: 1, b: 1, a: 1}
-      highlightedColor: {r: 1, g: 1, b: 1, a: 1}
-      pressedColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-      selectedColor: {r: 1, g: 1, b: 1, a: 1}
-      disabledColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-      colorMultiplier: 1
-      fadeDuration: 0.1
+      raycastTarget: 0
+      transition: 0
+      normalColor: {r: 0, g: 0, b: 0, a: 0}
+      highlightedColor: {r: 0, g: 0, b: 0, a: 0}
+      pressedColor: {r: 0, g: 0, b: 0, a: 0}
+      selectedColor: {r: 0, g: 0, b: 0, a: 0}
+      disabledColor: {r: 0, g: 0, b: 0, a: 0}
+      colorMultiplier: 0
+      fadeDuration: 0
       fontAsset: {fileID: 0}
       textMaterial: {fileID: 0}
-      vertexColor: {r: 1, g: 1, b: 1, a: 1}
+      vertexColor: {r: 0, g: 0, b: 0, a: 0}
       colorGradient: {fileID: 0}
-      textRaycastTarget: 1
+      textRaycastTarget: 0
     itemCheckmarkImage:
       sourceImage: {fileID: 0}
-      color: {r: 1, g: 1, b: 1, a: 1}
+      color: {r: 0, g: 0, b: 0, a: 0}
       material: {fileID: 0}
-      raycastTarget: 1
-      transition: 1
-      normalColor: {r: 1, g: 1, b: 1, a: 1}
-      highlightedColor: {r: 1, g: 1, b: 1, a: 1}
-      pressedColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-      selectedColor: {r: 1, g: 1, b: 1, a: 1}
-      disabledColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-      colorMultiplier: 1
-      fadeDuration: 0.1
+      raycastTarget: 0
+      transition: 0
+      normalColor: {r: 0, g: 0, b: 0, a: 0}
+      highlightedColor: {r: 0, g: 0, b: 0, a: 0}
+      pressedColor: {r: 0, g: 0, b: 0, a: 0}
+      selectedColor: {r: 0, g: 0, b: 0, a: 0}
+      disabledColor: {r: 0, g: 0, b: 0, a: 0}
+      colorMultiplier: 0
+      fadeDuration: 0
       fontAsset: {fileID: 0}
       textMaterial: {fileID: 0}
-      vertexColor: {r: 1, g: 1, b: 1, a: 1}
+      vertexColor: {r: 0, g: 0, b: 0, a: 0}
       colorGradient: {fileID: 0}
-      textRaycastTarget: 1
+      textRaycastTarget: 0
     itemLabelText:
       sourceImage: {fileID: 0}
-      color: {r: 1, g: 1, b: 1, a: 1}
+      color: {r: 0, g: 0, b: 0, a: 0}
       material: {fileID: 0}
-      raycastTarget: 1
-      transition: 1
-      normalColor: {r: 1, g: 1, b: 1, a: 1}
-      highlightedColor: {r: 1, g: 1, b: 1, a: 1}
-      pressedColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-      selectedColor: {r: 1, g: 1, b: 1, a: 1}
-      disabledColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-      colorMultiplier: 1
-      fadeDuration: 0.1
+      raycastTarget: 0
+      transition: 0
+      normalColor: {r: 0, g: 0, b: 0, a: 0}
+      highlightedColor: {r: 0, g: 0, b: 0, a: 0}
+      pressedColor: {r: 0, g: 0, b: 0, a: 0}
+      selectedColor: {r: 0, g: 0, b: 0, a: 0}
+      disabledColor: {r: 0, g: 0, b: 0, a: 0}
+      colorMultiplier: 0
+      fadeDuration: 0
       fontAsset: {fileID: 0}
       textMaterial: {fileID: 0}
-      vertexColor: {r: 1, g: 1, b: 1, a: 1}
+      vertexColor: {r: 0, g: 0, b: 0, a: 0}
       colorGradient: {fileID: 0}
-      textRaycastTarget: 1
+      textRaycastTarget: 0
     scrollbarImage:
       sourceImage: {fileID: 0}
-      color: {r: 1, g: 1, b: 1, a: 1}
+      color: {r: 0, g: 0, b: 0, a: 0}
       material: {fileID: 0}
-      raycastTarget: 1
-      transition: 1
-      normalColor: {r: 1, g: 1, b: 1, a: 1}
-      highlightedColor: {r: 1, g: 1, b: 1, a: 1}
-      pressedColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-      selectedColor: {r: 1, g: 1, b: 1, a: 1}
-      disabledColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-      colorMultiplier: 1
-      fadeDuration: 0.1
+      raycastTarget: 0
+      transition: 0
+      normalColor: {r: 0, g: 0, b: 0, a: 0}
+      highlightedColor: {r: 0, g: 0, b: 0, a: 0}
+      pressedColor: {r: 0, g: 0, b: 0, a: 0}
+      selectedColor: {r: 0, g: 0, b: 0, a: 0}
+      disabledColor: {r: 0, g: 0, b: 0, a: 0}
+      colorMultiplier: 0
+      fadeDuration: 0
       fontAsset: {fileID: 0}
       textMaterial: {fileID: 0}
-      vertexColor: {r: 1, g: 1, b: 1, a: 1}
+      vertexColor: {r: 0, g: 0, b: 0, a: 0}
       colorGradient: {fileID: 0}
-      textRaycastTarget: 1
+      textRaycastTarget: 0
     scrollbarVisual:
       sourceImage: {fileID: 0}
-      color: {r: 1, g: 1, b: 1, a: 1}
+      color: {r: 0, g: 0, b: 0, a: 0}
       material: {fileID: 0}
-      raycastTarget: 1
-      transition: 1
-      normalColor: {r: 1, g: 1, b: 1, a: 1}
-      highlightedColor: {r: 1, g: 1, b: 1, a: 1}
-      pressedColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-      selectedColor: {r: 1, g: 1, b: 1, a: 1}
-      disabledColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-      colorMultiplier: 1
-      fadeDuration: 0.1
+      raycastTarget: 0
+      transition: 0
+      normalColor: {r: 0, g: 0, b: 0, a: 0}
+      highlightedColor: {r: 0, g: 0, b: 0, a: 0}
+      pressedColor: {r: 0, g: 0, b: 0, a: 0}
+      selectedColor: {r: 0, g: 0, b: 0, a: 0}
+      disabledColor: {r: 0, g: 0, b: 0, a: 0}
+      colorMultiplier: 0
+      fadeDuration: 0
       fontAsset: {fileID: 0}
       textMaterial: {fileID: 0}
-      vertexColor: {r: 1, g: 1, b: 1, a: 1}
+      vertexColor: {r: 0, g: 0, b: 0, a: 0}
       colorGradient: {fileID: 0}
-      textRaycastTarget: 1
+      textRaycastTarget: 0
     scrollbarHandleImage:
       sourceImage: {fileID: 0}
-      color: {r: 1, g: 1, b: 1, a: 1}
+      color: {r: 0, g: 0, b: 0, a: 0}
       material: {fileID: 0}
-      raycastTarget: 1
-      transition: 1
-      normalColor: {r: 1, g: 1, b: 1, a: 1}
-      highlightedColor: {r: 1, g: 1, b: 1, a: 1}
-      pressedColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-      selectedColor: {r: 1, g: 1, b: 1, a: 1}
-      disabledColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-      colorMultiplier: 1
-      fadeDuration: 0.1
+      raycastTarget: 0
+      transition: 0
+      normalColor: {r: 0, g: 0, b: 0, a: 0}
+      highlightedColor: {r: 0, g: 0, b: 0, a: 0}
+      pressedColor: {r: 0, g: 0, b: 0, a: 0}
+      selectedColor: {r: 0, g: 0, b: 0, a: 0}
+      disabledColor: {r: 0, g: 0, b: 0, a: 0}
+      colorMultiplier: 0
+      fadeDuration: 0
       fontAsset: {fileID: 0}
       textMaterial: {fileID: 0}
-      vertexColor: {r: 1, g: 1, b: 1, a: 1}
+      vertexColor: {r: 0, g: 0, b: 0, a: 0}
       colorGradient: {fileID: 0}
-      textRaycastTarget: 1
-  scrollStyles: []
+      textRaycastTarget: 0
+  scrollStyles:
+  - scrollType: 0
+    rootImage:
+      sourceImage: {fileID: 0}
+      color: {r: 0, g: 0, b: 0, a: 0}
+      material: {fileID: 0}
+      raycastTarget: 0
+      transition: 0
+      normalColor: {r: 0, g: 0, b: 0, a: 0}
+      highlightedColor: {r: 0, g: 0, b: 0, a: 0}
+      pressedColor: {r: 0, g: 0, b: 0, a: 0}
+      selectedColor: {r: 0, g: 0, b: 0, a: 0}
+      disabledColor: {r: 0, g: 0, b: 0, a: 0}
+      colorMultiplier: 0
+      fadeDuration: 0
+      fontAsset: {fileID: 0}
+      textMaterial: {fileID: 0}
+      vertexColor: {r: 0, g: 0, b: 0, a: 0}
+      colorGradient: {fileID: 0}
+      textRaycastTarget: 0
+    viewportImage:
+      sourceImage: {fileID: 0}
+      color: {r: 0, g: 0, b: 0, a: 0}
+      material: {fileID: 0}
+      raycastTarget: 0
+      transition: 0
+      normalColor: {r: 0, g: 0, b: 0, a: 0}
+      highlightedColor: {r: 0, g: 0, b: 0, a: 0}
+      pressedColor: {r: 0, g: 0, b: 0, a: 0}
+      selectedColor: {r: 0, g: 0, b: 0, a: 0}
+      disabledColor: {r: 0, g: 0, b: 0, a: 0}
+      colorMultiplier: 0
+      fadeDuration: 0
+      fontAsset: {fileID: 0}
+      textMaterial: {fileID: 0}
+      vertexColor: {r: 0, g: 0, b: 0, a: 0}
+      colorGradient: {fileID: 0}
+      textRaycastTarget: 0
+    horizontalScrollbarImage:
+      sourceImage: {fileID: 0}
+      color: {r: 0, g: 0, b: 0, a: 0}
+      material: {fileID: 0}
+      raycastTarget: 0
+      transition: 0
+      normalColor: {r: 0, g: 0, b: 0, a: 0}
+      highlightedColor: {r: 0, g: 0, b: 0, a: 0}
+      pressedColor: {r: 0, g: 0, b: 0, a: 0}
+      selectedColor: {r: 0, g: 0, b: 0, a: 0}
+      disabledColor: {r: 0, g: 0, b: 0, a: 0}
+      colorMultiplier: 0
+      fadeDuration: 0
+      fontAsset: {fileID: 0}
+      textMaterial: {fileID: 0}
+      vertexColor: {r: 0, g: 0, b: 0, a: 0}
+      colorGradient: {fileID: 0}
+      textRaycastTarget: 0
+    horizontalScrollbarVisual:
+      sourceImage: {fileID: 0}
+      color: {r: 0, g: 0, b: 0, a: 0}
+      material: {fileID: 0}
+      raycastTarget: 0
+      transition: 0
+      normalColor: {r: 0, g: 0, b: 0, a: 0}
+      highlightedColor: {r: 0, g: 0, b: 0, a: 0}
+      pressedColor: {r: 0, g: 0, b: 0, a: 0}
+      selectedColor: {r: 0, g: 0, b: 0, a: 0}
+      disabledColor: {r: 0, g: 0, b: 0, a: 0}
+      colorMultiplier: 0
+      fadeDuration: 0
+      fontAsset: {fileID: 0}
+      textMaterial: {fileID: 0}
+      vertexColor: {r: 0, g: 0, b: 0, a: 0}
+      colorGradient: {fileID: 0}
+      textRaycastTarget: 0
+    horizontalHandleImage:
+      sourceImage: {fileID: 0}
+      color: {r: 0, g: 0, b: 0, a: 0}
+      material: {fileID: 0}
+      raycastTarget: 0
+      transition: 0
+      normalColor: {r: 0, g: 0, b: 0, a: 0}
+      highlightedColor: {r: 0, g: 0, b: 0, a: 0}
+      pressedColor: {r: 0, g: 0, b: 0, a: 0}
+      selectedColor: {r: 0, g: 0, b: 0, a: 0}
+      disabledColor: {r: 0, g: 0, b: 0, a: 0}
+      colorMultiplier: 0
+      fadeDuration: 0
+      fontAsset: {fileID: 0}
+      textMaterial: {fileID: 0}
+      vertexColor: {r: 0, g: 0, b: 0, a: 0}
+      colorGradient: {fileID: 0}
+      textRaycastTarget: 0
+    verticalScrollbarImage:
+      sourceImage: {fileID: 0}
+      color: {r: 0, g: 0, b: 0, a: 0}
+      material: {fileID: 0}
+      raycastTarget: 0
+      transition: 0
+      normalColor: {r: 0, g: 0, b: 0, a: 0}
+      highlightedColor: {r: 0, g: 0, b: 0, a: 0}
+      pressedColor: {r: 0, g: 0, b: 0, a: 0}
+      selectedColor: {r: 0, g: 0, b: 0, a: 0}
+      disabledColor: {r: 0, g: 0, b: 0, a: 0}
+      colorMultiplier: 0
+      fadeDuration: 0
+      fontAsset: {fileID: 0}
+      textMaterial: {fileID: 0}
+      vertexColor: {r: 0, g: 0, b: 0, a: 0}
+      colorGradient: {fileID: 0}
+      textRaycastTarget: 0
+    verticalScrollbarVisual:
+      sourceImage: {fileID: 0}
+      color: {r: 0, g: 0, b: 0, a: 0}
+      material: {fileID: 0}
+      raycastTarget: 0
+      transition: 0
+      normalColor: {r: 0, g: 0, b: 0, a: 0}
+      highlightedColor: {r: 0, g: 0, b: 0, a: 0}
+      pressedColor: {r: 0, g: 0, b: 0, a: 0}
+      selectedColor: {r: 0, g: 0, b: 0, a: 0}
+      disabledColor: {r: 0, g: 0, b: 0, a: 0}
+      colorMultiplier: 0
+      fadeDuration: 0
+      fontAsset: {fileID: 0}
+      textMaterial: {fileID: 0}
+      vertexColor: {r: 0, g: 0, b: 0, a: 0}
+      colorGradient: {fileID: 0}
+      textRaycastTarget: 0
+    verticalHandleImage:
+      sourceImage: {fileID: 0}
+      color: {r: 0, g: 0, b: 0, a: 0}
+      material: {fileID: 0}
+      raycastTarget: 0
+      transition: 0
+      normalColor: {r: 0, g: 0, b: 0, a: 0}
+      highlightedColor: {r: 0, g: 0, b: 0, a: 0}
+      pressedColor: {r: 0, g: 0, b: 0, a: 0}
+      selectedColor: {r: 0, g: 0, b: 0, a: 0}
+      disabledColor: {r: 0, g: 0, b: 0, a: 0}
+      colorMultiplier: 0
+      fadeDuration: 0
+      fontAsset: {fileID: 0}
+      textMaterial: {fileID: 0}
+      vertexColor: {r: 0, g: 0, b: 0, a: 0}
+      colorGradient: {fileID: 0}
+      textRaycastTarget: 0

@@ -4,6 +4,8 @@ using UnityEngine;
 [Serializable]
 public class UIThemeDropdownStyle
 {
+    [SerializeField] private UIThemeDropdownType dropdownType = UIThemeDropdownType.Default;
+
     [Header("Dropdown Root")]
     [SerializeField] private UIThemeStyle dropdownImage = new();
     [SerializeField] private UIThemeStyle dropdownVisual = new();
@@ -30,6 +32,9 @@ public class UIThemeDropdownStyle
     [SerializeField] private UIThemeStyle scrollbarImage = new();
     [SerializeField] private UIThemeStyle scrollbarVisual = new();
     [SerializeField] private UIThemeStyle scrollbarHandleImage = new();
+
+    public UIThemeSectionType SectionType => UIThemeSectionType.Dropdown;
+    public UIThemeDropdownType DropdownType => dropdownType;
 
     public UIThemeStyle DropdownImage => dropdownImage;
     public UIThemeStyle DropdownVisual => dropdownVisual;

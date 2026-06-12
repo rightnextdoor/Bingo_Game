@@ -30,6 +30,8 @@ public class LeaderboardHeaderController : MonoBehaviour
         {
             layoutElement = GetComponent<LayoutElement>();
         }
+
+        ClearHeaderCells();
     }
 
     public void SetHeaderCells(IReadOnlyList<LeaderboardCellData> cells)
@@ -61,14 +63,7 @@ public class LeaderboardHeaderController : MonoBehaviour
 
     public void ClearHeaderCells()
     {
-        for (int i = spawnedCells.Count - 1; i >= 0; i--)
-        {
-            if (spawnedCells[i] != null)
-            {
-                Destroy(spawnedCells[i].gameObject);
-            }
-        }
-
+        ClearCellParentChildren();
         spawnedCells.Clear();
     }
 
@@ -103,6 +98,44 @@ public class LeaderboardHeaderController : MonoBehaviour
         horizontalLayoutGroup.padding.right = right;
         horizontalLayoutGroup.padding.top = top;
         horizontalLayoutGroup.padding.bottom = bottom;
+    }
+
+    private void ClearCellParentChildren()
+    {
+        if (cellParent == null)
+        {
+            return;
+        }
+
+        for (int i = cellParent.childCount - 1; i >= 0; i--)
+        {
+            Transform child = cellParent.GetChild(i);
+
+            if (cellPrefab != null && child == cellPrefab.transform)
+            {
+                child.gameObject.SetActive(false);
+                continue;
+            }
+
+            DestroyChildObject(child.gameObject);
+        }
+    }
+
+    private void DestroyChildObject(GameObject childObject)
+    {
+        if (childObject == null)
+        {
+            return;
+        }
+
+        if (Application.isPlaying)
+        {
+            Destroy(childObject);
+        }
+        else
+        {
+            DestroyImmediate(childObject);
+        }
     }
 
     private void ApplyCellData(LeaderboardCellUI cell, LeaderboardCellData cellData)

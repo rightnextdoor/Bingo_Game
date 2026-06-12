@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -11,6 +12,7 @@ public class LeaderboardPageController : MonoBehaviour
 
     [Header("Input")]
     [SerializeField] private TMP_InputField pageInputField;
+    [SerializeField] private float pageInputSubmitDelay = 0.35f;
 
     [Header("Text")]
     [SerializeField] private TMP_Text pageCountText;
@@ -22,6 +24,8 @@ public class LeaderboardPageController : MonoBehaviour
     private int currentPage = 1;
     private int totalPages = 1;
     private bool filteringInput;
+
+    private Coroutine pageInputSubmitCoroutine;
 
     private void Awake()
     {
@@ -64,6 +68,8 @@ public class LeaderboardPageController : MonoBehaviour
             pageInputField.onValueChanged.RemoveListener(FilterPageInput);
             pageInputField.onEndEdit.RemoveListener(RequestPageFromInput);
         }
+
+        StopPageInputSubmitDelay();
     }
 
     public void SetPageDisplay(int newCurrentPage, int newTotalPages)
@@ -89,7 +95,7 @@ public class LeaderboardPageController : MonoBehaviour
         if (pageInputField != null)
         {
             pageInputField.characterLimit = GetDigitCount(totalPages);
-            pageInputField.SetTextWithoutNotify(string.Empty);
+            pageInputField.SetTextWithoutNotify(currentPage.ToString());
         }
     }
 
@@ -135,22 +141,8 @@ public class LeaderboardPageController : MonoBehaviour
 
     private void RequestPageFromInput(string inputText)
     {
-        if (string.IsNullOrWhiteSpace(inputText))
-        {
-            return;
-        }
-
-        if (!int.TryParse(inputText, out int requestedPage))
-        {
-            pageInputField.SetTextWithoutNotify(string.Empty);
-            return;
-        }
-
-        requestedPage = Mathf.Clamp(requestedPage, 1, totalPages);
-
-        pageInputField.SetTextWithoutNotify(string.Empty);
-
-        PageRequested?.Invoke(requestedPage);
+        StopPageInputSubmitDelay();
+        SubmitPageInput(inputText);
     }
 
     private void FilterPageInput(string inputText)
@@ -160,16 +152,92 @@ public class LeaderboardPageController : MonoBehaviour
             return;
         }
 
-        string filteredText = GetDigitsOnly(inputText);
+        string filteredText = GetValidPageInputText(inputText);
 
-        if (filteredText == inputText)
+        if (filteredText != inputText)
+        {
+            filteringInput = true;
+            pageInputField.SetTextWithoutNotify(filteredText);
+            filteringInput = false;
+        }
+
+        StartPageInputSubmitDelay(filteredText);
+    }
+
+    private void StartPageInputSubmitDelay(string inputText)
+    {
+        StopPageInputSubmitDelay();
+
+        if (string.IsNullOrWhiteSpace(inputText))
         {
             return;
         }
 
-        filteringInput = true;
-        pageInputField.SetTextWithoutNotify(filteredText);
-        filteringInput = false;
+        pageInputSubmitCoroutine = StartCoroutine(PageInputSubmitDelayRoutine());
+    }
+
+    private void StopPageInputSubmitDelay()
+    {
+        if (pageInputSubmitCoroutine == null)
+        {
+            return;
+        }
+
+        StopCoroutine(pageInputSubmitCoroutine);
+        pageInputSubmitCoroutine = null;
+    }
+
+    private IEnumerator PageInputSubmitDelayRoutine()
+    {
+        yield return new WaitForSeconds(pageInputSubmitDelay);
+
+        pageInputSubmitCoroutine = null;
+
+        if (pageInputField == null)
+        {
+            yield break;
+        }
+
+        SubmitPageInput(pageInputField.text);
+    }
+
+    private void SubmitPageInput(string inputText)
+    {
+        if (pageInputField == null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(inputText))
+        {
+            pageInputField.SetTextWithoutNotify(currentPage.ToString());
+            return;
+        }
+
+        if (!int.TryParse(inputText, out int requestedPage))
+        {
+            pageInputField.SetTextWithoutNotify(currentPage.ToString());
+            return;
+        }
+
+        requestedPage = Mathf.Clamp(requestedPage, 1, totalPages);
+
+        pageInputField.SetTextWithoutNotify(requestedPage.ToString());
+
+        PageRequested?.Invoke(requestedPage);
+    }
+
+    private string GetValidPageInputText(string inputText)
+    {
+        string digitsOnly = GetDigitsOnly(inputText);
+        int maxDigitCount = GetDigitCount(totalPages);
+
+        if (digitsOnly.Length > maxDigitCount)
+        {
+            digitsOnly = digitsOnly.Substring(0, maxDigitCount);
+        }
+
+        return digitsOnly;
     }
 
     private string GetDigitsOnly(string inputText)

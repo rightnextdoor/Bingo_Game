@@ -1,7 +1,8 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
-public class UserManager : MonoBehaviour, ISaveManager
+public class UserManager : MonoBehaviour
 {
     public static UserManager instance;
 
@@ -48,6 +49,21 @@ public class UserManager : MonoBehaviour, ISaveManager
         instance = this;
     }
 
+    private void OnEnable()
+    {
+        UserDatabase.UserDatabaseChanged += RefreshCurrentUserFromDatabase;
+    }
+
+    private void OnDisable()
+    {
+        UserDatabase.UserDatabaseChanged -= RefreshCurrentUserFromDatabase;
+    }
+
+    private void Start()
+    {
+        RefreshCurrentUserFromDatabase();
+    }
+
     private void OnDestroy()
     {
         if (instance == this)
@@ -70,12 +86,12 @@ public class UserManager : MonoBehaviour, ISaveManager
         }
 
         CurrentUser.CreateUser(playerName, iconId);
+        CurrentUser.userTag = UserTag.Player;
 
-        SaveManager.instance?.SaveGame();
+        AddOrUpdateCurrentUser();
 
         UserChanged?.Invoke();
     }
-
 
     public void ChangePlayerName(string playerName)
     {
@@ -86,17 +102,16 @@ public class UserManager : MonoBehaviour, ISaveManager
 
         CurrentUser.playerName = playerName.Trim();
 
-        SaveManager.instance?.SaveGame();
+        AddOrUpdateCurrentUser();
 
         UserChanged?.Invoke();
     }
-
 
     public void ChangeIcon(string iconId)
     {
         CurrentUser.SetIcon(iconId);
 
-        SaveManager.instance?.SaveGame();
+        AddOrUpdateCurrentUser();
 
         UserChanged?.Invoke();
     }
@@ -105,7 +120,7 @@ public class UserManager : MonoBehaviour, ISaveManager
     {
         CurrentUser.lastGameId = string.IsNullOrWhiteSpace(gameId) ? string.Empty : gameId.Trim();
 
-        SaveManager.instance?.SaveGame();
+        AddOrUpdateCurrentUser();
 
         UserChanged?.Invoke();
     }
@@ -114,7 +129,7 @@ public class UserManager : MonoBehaviour, ISaveManager
     {
         CurrentUser.lastGameId = string.Empty;
 
-        SaveManager.instance?.SaveGame();
+        AddOrUpdateCurrentUser();
 
         UserChanged?.Invoke();
     }
@@ -123,7 +138,7 @@ public class UserManager : MonoBehaviour, ISaveManager
     {
         CurrentUser.stats.AddPoints(amount);
 
-        SaveManager.instance?.SaveGame();
+        AddOrUpdateCurrentUser();
 
         UserChanged?.Invoke();
     }
@@ -132,33 +147,189 @@ public class UserManager : MonoBehaviour, ISaveManager
     {
         CurrentUser.stats.RemovePoints(amount);
 
-        SaveManager.instance?.SaveGame();
+        AddOrUpdateCurrentUser();
 
         UserChanged?.Invoke();
     }
 
-    public void LoadData(GameData data)
+    private void AddOrUpdateCurrentUser()
     {
-        if (data.userData == null)
+        if (UserDatabase.instance == null)
         {
-            data.userData = new UserData();
+            Debug.LogWarning("Cannot save current user because UserDatabase instance was not found.");
+            return;
         }
 
-        currentUser = data.userData;
+        UserDatabase.instance.AddOrUpdateCurrentUser(CurrentUser);
+    }
+
+    public void RemoveUser(string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return;
+        }
+
+        if (UserDatabase.instance == null)
+        {
+            Debug.LogWarning("Cannot remove user because UserDatabase instance was not found.");
+            return;
+        }
+
+        UserDatabase.instance.RemoveUser(userId);
+
+        if (CurrentUser.userId == userId)
+        {
+            currentUser = new UserData();
+        }
+
+        UserChanged?.Invoke();
+    }
+
+    public UserData GetUser(string userId)
+    {
+        if (UserDatabase.instance == null)
+        {
+            return null;
+        }
+
+        return UserDatabase.instance.GetUser(userId);
+    }
+
+    public List<UserData> GetAllUsers()
+    {
+        if (UserDatabase.instance == null)
+        {
+            return new List<UserData>();
+        }
+
+        return UserDatabase.instance.GetAllUsers();
+    }
+
+    public List<UserData> GetBotUsers()
+    {
+        if (UserDatabase.instance == null)
+        {
+            return new List<UserData>();
+        }
+
+        return UserDatabase.instance.GetUsersByTag(UserTag.Bot);
+    }
+
+    public List<UserData> GetPlayerUsers()
+    {
+        if (UserDatabase.instance == null)
+        {
+            return new List<UserData>();
+        }
+
+        return UserDatabase.instance.GetUsersByTag(UserTag.Player);
+    }
+
+    private void RefreshCurrentUserFromDatabase()
+    {
+        if (UserDatabase.instance == null)
+        {
+            return;
+        }
+
+        UserData savedCurrentUser = UserDatabase.instance.GetCurrentUser();
+
+        if (savedCurrentUser == null)
+        {
+            currentUser = new UserData();
+            UserChanged?.Invoke();
+            return;
+        }
+
+        currentUser = savedCurrentUser;
         currentUser.RepairData();
 
         UserChanged?.Invoke();
     }
 
-    public void SaveData(ref GameData data)
+    #region Bot players
+
+    public void AddOrUpdateUser(UserData userData)
     {
-        if (data.userData == null)
+        if (userData == null)
         {
-            data.userData = new UserData();
+            return;
         }
 
-        CurrentUser.RepairData();
+        userData.RepairData();
 
-        data.userData = CurrentUser;
+        if (UserDatabase.instance == null)
+        {
+            Debug.LogWarning("Cannot add or update user because UserDatabase instance was not found.");
+            return;
+        }
+
+        UserDatabase.instance.AddOrUpdateUser(userData);
+
+        UserChanged?.Invoke();
     }
+
+    public void CreateBotUser(BotUserEntry botEntry, string iconId)
+    {
+        if (botEntry == null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(botEntry.UserId))
+        {
+            Debug.LogWarning("Cannot create bot user because bot entry userId is empty.");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(botEntry.PlayerName))
+        {
+            Debug.LogWarning("Cannot create bot user because bot entry player name is empty.");
+            return;
+        }
+
+        UserData botUser = new UserData();
+
+        botUser.CreateUser(botEntry.PlayerName, iconId);
+        botUser.userId = botEntry.UserId;
+        botUser.userTag = UserTag.Bot;
+        botUser.stats = CloneUserStats(botEntry.DefaultStats);
+
+        AddOrUpdateUser(botUser);
+    }
+
+    public void UpdateUserName(string userId, string playerName)
+    {
+        if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(playerName))
+        {
+            return;
+        }
+
+        UserData user = GetUser(userId);
+
+        if (user == null)
+        {
+            return;
+        }
+
+        user.playerName = playerName.Trim();
+
+        AddOrUpdateUser(user);
+    }
+
+    private UserStats CloneUserStats(UserStats source)
+    {
+        if (source == null)
+        {
+            return new UserStats();
+        }
+
+        string json = JsonUtility.ToJson(source);
+        UserStats clone = JsonUtility.FromJson<UserStats>(json);
+
+        return clone ?? new UserStats();
+    }
+
+    #endregion
 }

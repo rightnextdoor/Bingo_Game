@@ -1,9 +1,16 @@
 using System;
 
+public enum UserTag
+{
+    Player,
+    Bot
+}
+
 [Serializable]
 public class UserData
 {
     public string userId;
+    public UserTag userTag;
     public string playerName;
     public string iconId;
     public string lastGameId;
@@ -22,6 +29,7 @@ public class UserData
     public UserData()
     {
         userId = string.Empty;
+        userTag = UserTag.Player;
         playerName = string.Empty;
         iconId = string.Empty;
         lastGameId = string.Empty;
@@ -36,6 +44,7 @@ public class UserData
     public void CreateUser(string newPlayerName, string newIconId)
     {
         userId = Guid.NewGuid().ToString("N");
+        userTag = UserTag.Player;
         playerName = newPlayerName.Trim();
         iconId = string.IsNullOrWhiteSpace(newIconId) ? string.Empty : newIconId.Trim();
         lastGameId = string.Empty;

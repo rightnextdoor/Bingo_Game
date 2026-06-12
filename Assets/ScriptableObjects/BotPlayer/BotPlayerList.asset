@@ -1,0 +1,213 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3cf078ed23862df4d95f44f7704a22e2, type: 3}
+  m_Name: BotPlayerList
+  m_EditorClassIdentifier: Assembly-CSharp::BotUserListData
+  botUsers:
+  - userId: c201535e0e174317aa95a899a2728e55
+    userTag: 1
+    playerName: Kevin
+    defaultStats:
+      points: 7050
+      gamesPlayed: 0
+      wins: 0
+      losses: 0
+      bingosCalled: 0
+  - userId: 34d352248ff0428c8e06fadd8fa0c3f1
+    userTag: 1
+    playerName: Rhea
+    defaultStats:
+      points: 6320
+      gamesPlayed: 0
+      wins: 0
+      losses: 0
+      bingosCalled: 0
+  - userId: 96b985e527a945fabfc45013706f2c90
+    userTag: 1
+    playerName: PixelRook
+    defaultStats:
+      points: 4020
+      gamesPlayed: 0
+      wins: 0
+      losses: 0
+      bingosCalled: 0
+  - userId: 058169fd2dd94639851ecf9f14d2ff8c
+    userTag: 1
+    playerName: BlueOrbit
+    defaultStats:
+      points: 3200
+      gamesPlayed: 0
+      wins: 0
+      losses: 0
+      bingosCalled: 0
+  - userId: 15d183f6ddfd4b75a68558ac59cf7e98
+    userTag: 1
+    playerName: NovaRunner
+    defaultStats:
+      points: 500
+      gamesPlayed: 0
+      wins: 0
+      losses: 0
+      bingosCalled: 0
+  - userId: 7e49b16a28b245bf8ff6864b5ffea501
+    userTag: 1
+    playerName: SkyByte
+    defaultStats:
+      points: 1000
+      gamesPlayed: 0
+      wins: 0
+      losses: 0
+      bingosCalled: 0
+  - userId: 897fa915d8584e4999d75a71d7d83aa0
+    userTag: 1
+    playerName: ShadowMint
+    defaultStats:
+      points: 4000
+      gamesPlayed: 0
+      wins: 0
+      losses: 0
+      bingosCalled: 0
+  - userId: bcb486a3b0f54a18a2483c9f40c55c7f
+    userTag: 1
+    playerName: EchoWolf
+    defaultStats:
+      points: 3500
+      gamesPlayed: 0
+      wins: 0
+      losses: 0
+      bingosCalled: 0
+  - userId: 89233978b1d74d3f89263945c17d1252
+    userTag: 1
+    playerName: CopperFox
+    defaultStats:
+      points: 200
+      gamesPlayed: 0
+      wins: 0
+      losses: 0
+      bingosCalled: 0
+  - userId: cc3010b94973494da17323081387e8fd
+    userTag: 1
+    playerName: AmberDash
+    defaultStats:
+      points: 600
+      gamesPlayed: 0
+      wins: 0
+      losses: 0
+      bingosCalled: 0
+  - userId: 2a09861d10ee4424ad429859900868b2
+    userTag: 1
+    playerName: TinyComet
+    defaultStats:
+      points: 850
+      gamesPlayed: 0
+      wins: 0
+      losses: 0
+      bingosCalled: 0
+  - userId: 6f01dcf080e34de4a8a52badb3dd8c3a
+    userTag: 1
+    playerName: FrostPixel
+    defaultStats:
+      points: 960
+      gamesPlayed: 0
+      wins: 0
+      losses: 0
+      bingosCalled: 0
+  - userId: c0fc243b5cc14cacb6b77139d4cc51fa
+    userTag: 1
+    playerName: IronEcho
+    defaultStats:
+      points: 700
+      gamesPlayed: 0
+      wins: 0
+      losses: 0
+      bingosCalled: 0
+  - userId: 9d69fad0a986499a8eb4a0c568f25af8
+    userTag: 1
+    playerName: RapidKoala
+    defaultStats:
+      points: 800
+      gamesPlayed: 0
+      wins: 0
+      losses: 0
+      bingosCalled: 0
+  - userId: 4bf3e54169764ccba33d2681cfee600e
+    userTag: 1
+    playerName: MoonCrate
+    defaultStats:
+      points: 470
+      gamesPlayed: 0
+      wins: 0
+      losses: 0
+      bingosCalled: 0
+  - userId: 08545d7ed24d449a8b4270e4b29185e9
+    userTag: 1
+    playerName: NeonRiver
+    defaultStats:
+      points: 900
+      gamesPlayed: 0
+      wins: 0
+      losses: 0
+      bingosCalled: 0
+  - userId: 5122cc8bb44849fb9f2064b776eb3dcf
+    userTag: 1
+    playerName: CloudRider
+    defaultStats:
+      points: 1200
+      gamesPlayed: 0
+      wins: 0
+      losses: 0
+      bingosCalled: 0
+  - userId: 7f4b6cdeb7364376ac441f49ce8b2a83
+    userTag: 1
+    playerName: SilverPanda
+    defaultStats:
+      points: 1350
+      gamesPlayed: 0
+      wins: 0
+      losses: 0
+      bingosCalled: 0
+  - userId: fbe7f77d7bb147ad9585fb2317748f2b
+    userTag: 1
+    playerName: NightPebble
+    defaultStats:
+      points: 3340
+      gamesPlayed: 0
+      wins: 0
+      losses: 0
+      bingosCalled: 0
+  - userId: 835a471e53bf440dbc2fdbbbd16ddd2b
+    userTag: 1
+    playerName: StormyKit
+    defaultStats:
+      points: 2600
+      gamesPlayed: 0
+      wins: 0
+      losses: 0
+      bingosCalled: 0
+  - userId: ce41cd662e4d4b2dbae438ecb43c5f6f
+    userTag: 1
+    playerName: OrbitMango
+    defaultStats:
+      points: 4500
+      gamesPlayed: 0
+      wins: 0
+      losses: 0
+      bingosCalled: 0
+  - userId: 117e44cc975340e386563c1985cef2c6
+    userTag: 1
+    playerName: QuietRocket
+    defaultStats:
+      points: 5000
+      gamesPlayed: 0
+      wins: 0
+      losses: 0
+      bingosCalled: 0

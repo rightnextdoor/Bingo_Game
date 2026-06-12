@@ -21,7 +21,9 @@ public enum UIThemeBackgroundType
 {
     Main,
     Header,
-    Secondary
+    Secondary,
+    LeaderboardRow,
+    LeaderboardRowHighlight
 }
 
 public enum UIThemeButtonType
@@ -36,7 +38,10 @@ public enum UIThemeTextType
     Default,
     Title,
     Subtitle,
-    Error
+    Error,
+    LeaderboardTitle,
+    LeaderboardHeader,
+    LeaderboardCell
 }
 
 public enum UIThemeInputType

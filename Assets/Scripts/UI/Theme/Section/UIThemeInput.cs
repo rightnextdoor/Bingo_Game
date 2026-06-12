@@ -12,8 +12,8 @@ public class UIThemeInput : MonoBehaviour, IUIThemeTarget
     [SerializeField] private Selectable selectable;
 
     [Header("Text Components")]
-    [SerializeField] private TMP_Text inputText;
     [SerializeField] private TMP_Text placeholderText;
+    [SerializeField] private TMP_Text inputText;
 
     private void OnEnable()
     {

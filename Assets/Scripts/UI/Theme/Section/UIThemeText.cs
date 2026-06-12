@@ -46,6 +46,12 @@ public class UIThemeText : MonoBehaviour, IUIThemeTarget
         UIThemeManager.Instance.Register(this);
     }
 
+    public void SetTextType(UIThemeTextType newTextType)
+    {
+        textType = newTextType;
+        ReapplyTheme();
+    }
+
     public void ReapplyTheme()
     {
         if (UIThemeManager.Instance == null)

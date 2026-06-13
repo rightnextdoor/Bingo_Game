@@ -55,6 +55,18 @@ public class LeaderboardUIManager : MonoBehaviour
 
     #endregion
 
+    #region Search Setup Fields
+
+    private const int MinimumSearchCharacters = 3;
+
+    private readonly List<LeaderboardUserRankData> displayRankedUsers = new();
+
+    private bool searchActive;
+    private string currentSearchText = string.Empty;
+    private string selectedUserId = string.Empty;
+
+    #endregion
+
     #region Unity Methods
 
     private void OnEnable()
@@ -123,6 +135,14 @@ public class LeaderboardUIManager : MonoBehaviour
 
     private void RegisterControllerEvents()
     {
+        if (searchController != null)
+        {
+            searchController.SearchButtonRequested += HandleSearchButtonRequested;
+            searchController.SearchInputSubmitted += HandleSearchInputSubmitted;
+            searchController.ClearSearchRequested += ClearSearch;
+            searchController.FindMeRequested += FindCurrentUser;
+        }
+
         if (filterController != null)
         {
             filterController.GameModeChanged += SetLeaderboardMode;
@@ -139,6 +159,14 @@ public class LeaderboardUIManager : MonoBehaviour
 
     private void UnregisterControllerEvents()
     {
+        if (searchController != null)
+        {
+            searchController.SearchButtonRequested -= HandleSearchButtonRequested;
+            searchController.SearchInputSubmitted -= HandleSearchInputSubmitted;
+            searchController.ClearSearchRequested -= ClearSearch;
+            searchController.FindMeRequested -= FindCurrentUser;
+        }
+
         if (filterController != null)
         {
             filterController.GameModeChanged -= SetLeaderboardMode;
@@ -347,6 +375,355 @@ public class LeaderboardUIManager : MonoBehaviour
 
     #endregion
 
+    #region Search Setup
+
+    #region Search Setup Entry
+
+    private void HandleSearchButtonRequested(string searchText)
+    {
+        if (string.IsNullOrWhiteSpace(searchText))
+        {
+            ClearSearch();
+            return;
+        }
+
+        SearchUsers(searchText);
+    }
+
+    private void HandleSearchInputSubmitted(string searchText)
+    {
+        if (string.IsNullOrWhiteSpace(searchText))
+        {
+            return;
+        }
+
+        SearchUsers(searchText);
+    }
+
+    private void ClearSearch()
+    {
+        searchActive = false;
+        currentSearchText = string.Empty;
+        selectedUserId = string.Empty;
+
+        if (searchController != null)
+        {
+            searchController.SetSearchActive(false);
+            searchController.HideError();
+        }
+
+        RebuildPagesAndDisplayPage(1);
+    }
+
+    private void FindCurrentUser()
+    {
+        RefreshUserData();
+
+        UserData userToFind = GetCurrentUserForFindMe();
+
+        if (userToFind == null || string.IsNullOrWhiteSpace(userToFind.userId))
+        {
+            ShowSearchError("Current user was not found.");
+            return;
+        }
+
+        AddUserToAllUsersIfMissing(userToFind);
+
+        searchActive = false;
+        currentSearchText = string.Empty;
+        selectedUserId = userToFind.userId;
+
+        if (searchController != null)
+        {
+            searchController.SetSearchActive(false);
+            searchController.HideError();
+        }
+
+        RebuildPagesAndDisplayUser(userToFind.userId);
+    }
+
+    #endregion
+
+    #region Search Build Methods
+
+    private void SearchUsers(string searchText)
+    {
+        searchText = searchText.Trim();
+
+        if (searchText.Length < MinimumSearchCharacters)
+        {
+            ShowSearchError($"Search needs {MinimumSearchCharacters} or more characters.");
+            return;
+        }
+
+        BuildRankedUsersFromCurrentMode();
+
+        List<LeaderboardUserRankData> searchResults = GetSearchResults(searchText);
+
+        if (searchResults.Count == 0)
+        {
+            ShowSearchError("No users found.");
+            return;
+        }
+
+        searchActive = true;
+        currentSearchText = searchText;
+        selectedUserId = string.Empty;
+
+        displayRankedUsers.Clear();
+
+        for (int i = 0; i < searchResults.Count; i++)
+        {
+            displayRankedUsers.Add(searchResults[i]);
+        }
+
+        BuildPageListsFromDisplayRankedUsers();
+        DisplayPage(1);
+
+        if (searchController != null)
+        {
+            searchController.SetSearchActive(true);
+            searchController.HideError();
+        }
+    }
+
+    private void BuildDisplayRankedUsers()
+    {
+        displayRankedUsers.Clear();
+
+        if (!searchActive || string.IsNullOrWhiteSpace(currentSearchText))
+        {
+            for (int i = 0; i < rankedUsers.Count; i++)
+            {
+                displayRankedUsers.Add(rankedUsers[i]);
+            }
+
+            return;
+        }
+
+        List<LeaderboardUserRankData> searchResults = GetSearchResults(currentSearchText);
+
+        for (int i = 0; i < searchResults.Count; i++)
+        {
+            displayRankedUsers.Add(searchResults[i]);
+        }
+    }
+
+    private List<LeaderboardUserRankData> GetSearchResults(string searchText)
+    {
+        List<LeaderboardUserRankData> searchResults = new();
+
+        for (int i = 0; i < rankedUsers.Count; i++)
+        {
+            LeaderboardUserRankData rankedUser = rankedUsers[i];
+
+            if (rankedUser == null || rankedUser.userData == null)
+            {
+                continue;
+            }
+
+            if (DoesUserMatchSearch(rankedUser.userData, searchText))
+            {
+                searchResults.Add(rankedUser);
+            }
+        }
+
+        return searchResults;
+    }
+
+    #endregion
+
+    #region Find Me Methods
+
+    private void RebuildPagesAndDisplayUser(string userId)
+    {
+        BuildRankedUsersFromCurrentMode();
+        BuildDisplayRankedUsers();
+        BuildPageListsFromDisplayRankedUsers();
+
+        int userPage = GetPageNumberForUser(userId);
+
+        if (userPage <= 0)
+        {
+            ShowSearchError("Current user was not found.");
+            return;
+        }
+
+        selectedUserId = userId;
+
+        DisplayPage(userPage);
+
+        if (listController != null)
+        {
+            listController.SelectUserAndScrollIntoView(userId);
+        }
+    }
+
+    private int GetPageNumberForUser(string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return -1;
+        }
+
+        for (int pageIndex = 0; pageIndex < pageLists.Count; pageIndex++)
+        {
+            List<LeaderboardUserRankData> page = pageLists[pageIndex];
+
+            for (int i = 0; i < page.Count; i++)
+            {
+                if (page[i] == null || page[i].userData == null)
+                {
+                    continue;
+                }
+
+                if (IsSameUserId(page[i].userData.userId, userId))
+                {
+                    return pageIndex + 1;
+                }
+            }
+        }
+
+        return -1;
+    }
+
+    #endregion
+
+    #region Search Helpers
+
+    private bool DoesUserMatchSearch(UserData userData, string searchText)
+    {
+        if (userData == null || string.IsNullOrWhiteSpace(searchText))
+        {
+            return false;
+        }
+
+        searchText = searchText.Trim();
+
+        string playerName = GetUserName(userData);
+        string userId = string.IsNullOrWhiteSpace(userData.userId) ? string.Empty : userData.userId.Trim();
+        string shortId = GetShortUserId(userId);
+        string displayName = GetPlayerNameWithShortId(userData);
+
+        return ContainsSearchPattern(playerName, searchText) ||
+               ContainsSearchPattern(userId, searchText) ||
+               ContainsSearchPattern(shortId, searchText) ||
+               ContainsSearchPattern(displayName, searchText);
+    }
+
+    private bool ContainsSearchPattern(string sourceText, string searchText)
+    {
+        if (string.IsNullOrWhiteSpace(sourceText) || string.IsNullOrWhiteSpace(searchText))
+        {
+            return false;
+        }
+
+        return sourceText.IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    private string GetPlayerNameWithShortId(UserData userData)
+    {
+        if (userData == null)
+        {
+            return string.Empty;
+        }
+
+        string playerName = GetUserName(userData);
+        string shortId = GetShortUserId(userData.userId);
+
+        if (string.IsNullOrWhiteSpace(shortId))
+        {
+            return playerName;
+        }
+
+        return $"{playerName} #{shortId}";
+    }
+
+    private string GetShortUserId(string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return string.Empty;
+        }
+
+        userId = userId.Trim();
+
+        if (userId.Length <= 4)
+        {
+            return userId;
+        }
+
+        return userId.Substring(0, 4);
+    }
+
+    private void ShowSearchError(string message)
+    {
+        if (searchController == null)
+        {
+            return;
+        }
+
+        searchController.ShowError(message);
+    }
+
+    private UserData GetCurrentUserForFindMe()
+    {
+        if (currentUser != null && !string.IsNullOrWhiteSpace(currentUser.userId))
+        {
+            return currentUser;
+        }
+
+        if (UserManager.instance == null)
+        {
+            return null;
+        }
+
+        currentUser = UserManager.instance.CurrentUser;
+
+        return currentUser;
+    }
+
+    private void AddUserToAllUsersIfMissing(UserData userData)
+    {
+        if (userData == null || string.IsNullOrWhiteSpace(userData.userId))
+        {
+            return;
+        }
+
+        for (int i = 0; i < allUsers.Count; i++)
+        {
+            if (allUsers[i] == null)
+            {
+                continue;
+            }
+
+            if (IsSameUserId(allUsers[i].userId, userData.userId))
+            {
+                return;
+            }
+        }
+
+        allUsers.Add(userData);
+    }
+
+    private bool IsSameUserId(string firstUserId, string secondUserId)
+    {
+        if (string.IsNullOrWhiteSpace(firstUserId) || string.IsNullOrWhiteSpace(secondUserId))
+        {
+            return false;
+        }
+
+        return string.Equals(
+            firstUserId.Trim(),
+            secondUserId.Trim(),
+            StringComparison.OrdinalIgnoreCase
+        );
+    }
+
+    #endregion
+
+    #endregion
+
     #region Page Setup
 
     #region Page Setup Entry
@@ -397,7 +774,8 @@ public class LeaderboardUIManager : MonoBehaviour
     private void RebuildPagesAndDisplayPage(int pageNumber)
     {
         BuildRankedUsersFromCurrentMode();
-        BuildPageListsFromRankedUsers();
+        BuildDisplayRankedUsers();
+        BuildPageListsFromDisplayRankedUsers();
         DisplayPage(pageNumber);
     }
 
@@ -438,19 +816,19 @@ public class LeaderboardUIManager : MonoBehaviour
         }
     }
 
-    private void BuildPageListsFromRankedUsers()
+    private void BuildPageListsFromDisplayRankedUsers()
     {
         pageLists.Clear();
 
         currentPageSize = Mathf.Max(1, currentPageSize);
-        totalPages = Mathf.Max(1, Mathf.CeilToInt(rankedUsers.Count / (float)currentPageSize));
+        totalPages = Mathf.Max(1, Mathf.CeilToInt(displayRankedUsers.Count / (float)currentPageSize));
 
         for (int i = 0; i < totalPages; i++)
         {
             pageLists.Add(new List<LeaderboardUserRankData>());
         }
 
-        for (int i = 0; i < rankedUsers.Count; i++)
+        for (int i = 0; i < displayRankedUsers.Count; i++)
         {
             int pageIndex = i / currentPageSize;
 
@@ -459,7 +837,7 @@ public class LeaderboardUIManager : MonoBehaviour
                 continue;
             }
 
-            pageLists[pageIndex].Add(rankedUsers[i]);
+            pageLists[pageIndex].Add(displayRankedUsers[i]);
         }
     }
 
@@ -471,7 +849,7 @@ public class LeaderboardUIManager : MonoBehaviour
     {
         if (pageLists.Count == 0)
         {
-            BuildPageListsFromRankedUsers();
+            BuildPageListsFromDisplayRankedUsers();
         }
 
         currentPage = Mathf.Clamp(pageNumber, 1, totalPages);
@@ -489,7 +867,7 @@ public class LeaderboardUIManager : MonoBehaviour
 
         IReadOnlyList<LeaderboardUserRankData> pageData = GetPageData(currentPage);
 
-        listController.SetRankedUserRows(pageData, string.Empty);
+        listController.SetRankedUserRows(pageData, selectedUserId);
     }
 
     private void UpdatePageControllerDisplay()

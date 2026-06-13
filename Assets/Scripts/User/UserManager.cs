@@ -111,9 +111,40 @@ public class UserManager : MonoBehaviour
     {
         CurrentUser.SetIcon(iconId);
 
+        RepairUserIconIfMissing(CurrentUser);
+
         AddOrUpdateCurrentUser();
 
         UserChanged?.Invoke();
+    }
+
+    public bool RepairUserIconIfMissing(UserData userData)
+    {
+        if (userData == null || UIIconManager.instance == null)
+        {
+            return false;
+        }
+
+        if (UIIconManager.instance.HasValidPlayerIconId(userData.iconId))
+        {
+            return false;
+        }
+
+        string fallbackIconId = UIIconManager.instance.GetFirstPlayerIconId();
+
+        if (string.IsNullOrWhiteSpace(fallbackIconId))
+        {
+            return false;
+        }
+
+        userData.SetIcon(fallbackIconId);
+
+        if (UserDatabase.instance != null)
+        {
+            UserDatabase.instance.AddOrUpdateUser(userData);
+        }
+
+        return true;
     }
 
     public void SetLastGameId(string gameId)
@@ -193,7 +224,14 @@ public class UserManager : MonoBehaviour
             return null;
         }
 
-        return UserDatabase.instance.GetUser(userId);
+        UserData user = UserDatabase.instance.GetUser(userId);
+
+        if (RepairUserIconIfMissing(user))
+        {
+            UserChanged?.Invoke();
+        }
+
+        return user;
     }
 
     public List<UserData> GetAllUsers()
@@ -203,7 +241,24 @@ public class UserManager : MonoBehaviour
             return new List<UserData>();
         }
 
-        return UserDatabase.instance.GetAllUsers();
+        List<UserData> users = UserDatabase.instance.GetAllUsers();
+
+        bool repairedAnyIcon = false;
+
+        for (int i = 0; i < users.Count; i++)
+        {
+            if (RepairUserIconIfMissing(users[i]))
+            {
+                repairedAnyIcon = true;
+            }
+        }
+
+        if (repairedAnyIcon)
+        {
+            UserChanged?.Invoke();
+        }
+
+        return users;
     }
 
     public List<UserData> GetBotUsers()
@@ -244,6 +299,8 @@ public class UserManager : MonoBehaviour
 
         currentUser = savedCurrentUser;
         currentUser.RepairData();
+
+        RepairUserIconIfMissing(currentUser);
 
         UserChanged?.Invoke();
     }

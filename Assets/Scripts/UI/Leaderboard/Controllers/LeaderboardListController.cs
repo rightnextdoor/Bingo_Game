@@ -92,10 +92,7 @@ public class LeaderboardListController : MonoBehaviour
 
     public void SetRows(IReadOnlyList<LeaderboardRowData> rows, string selectedUserId)
     {
-        if (!string.IsNullOrWhiteSpace(selectedUserId))
-        {
-            this.selectedUserId = selectedUserId;
-        }
+        this.selectedUserId = selectedUserId ?? string.Empty;
 
         ClearRows();
 
@@ -212,6 +209,25 @@ public class LeaderboardListController : MonoBehaviour
 
             row.SetHighlighted(isHighlighted);
         }
+    }
+
+    public void SelectUserAndScrollIntoView(string userId)
+    {
+        SetSelectedUser(userId);
+
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return;
+        }
+
+        LeaderboardRowUI selectedRow = GetSelectedRow();
+
+        if (selectedRow == null)
+        {
+            return;
+        }
+
+        ScrollRowIntoView(selectedRow);
     }
 
     private void HandleArrowKeySelection()

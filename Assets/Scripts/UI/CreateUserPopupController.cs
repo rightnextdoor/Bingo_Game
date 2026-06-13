@@ -21,6 +21,9 @@ public class CreateUserPopupController : MonoBehaviour
     [Header("Icon Preview")]
     [SerializeField] private Image selectedIconImage;
 
+    private const int MinPlayerNameCharacters = 3;
+    private const int MaxPlayerNameCharacters = 20;
+
     private string selectedIconId = string.Empty;
 
     private void OnEnable()
@@ -47,6 +50,7 @@ public class CreateUserPopupController : MonoBehaviour
         if (nameInputField != null)
         {
             nameInputField.lineType = TMP_InputField.LineType.SingleLine;
+            nameInputField.characterLimit = MaxPlayerNameCharacters;
             nameInputField.onValueChanged.AddListener(OnNameInputChanged);
             nameInputField.onSubmit.AddListener(OnNameInputSubmit);
             nameInputField.Select();
@@ -113,9 +117,9 @@ public class CreateUserPopupController : MonoBehaviour
 
         string playerName = nameInputField != null ? nameInputField.text.Trim() : string.Empty;
 
-        if (string.IsNullOrWhiteSpace(playerName))
+        if (!IsValidPlayerName(playerName))
         {
-            ShowError("Enter a player name.");
+            ShowError(GetPlayerNameErrorMessage());
             return;
         }
 
@@ -205,6 +209,24 @@ public class CreateUserPopupController : MonoBehaviour
         {
             popupManager.CloseActivePopup();
         }
+    }
+
+    private bool IsValidPlayerName(string playerName)
+    {
+        if (string.IsNullOrWhiteSpace(playerName))
+        {
+            return false;
+        }
+
+        playerName = playerName.Trim();
+
+        return playerName.Length >= MinPlayerNameCharacters &&
+               playerName.Length <= MaxPlayerNameCharacters;
+    }
+
+    private string GetPlayerNameErrorMessage()
+    {
+        return $"Player name must be {MinPlayerNameCharacters}-{MaxPlayerNameCharacters} characters.";
     }
 
     private void ShowError(string message)

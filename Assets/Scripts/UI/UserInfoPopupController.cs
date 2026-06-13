@@ -32,6 +32,9 @@ public class UserInfoPopupController : MonoBehaviour
     [Header("Bottom Buttons")]
     [SerializeField] private Button closeButton;
 
+    private const int MinPlayerNameCharacters = 3;
+    private const int MaxPlayerNameCharacters = 20;
+
     private void OnEnable()
     {
         SetNameEditMode(false);
@@ -66,6 +69,7 @@ public class UserInfoPopupController : MonoBehaviour
         if (nameInputField != null)
         {
             nameInputField.lineType = TMP_InputField.LineType.SingleLine;
+            nameInputField.characterLimit = MaxPlayerNameCharacters;
             nameInputField.onValueChanged.AddListener(OnNameInputChanged);
             nameInputField.onSubmit.AddListener(OnNameInputSubmit);
         }
@@ -205,9 +209,9 @@ public class UserInfoPopupController : MonoBehaviour
 
         string newPlayerName = nameInputField != null ? nameInputField.text.Trim() : string.Empty;
 
-        if (string.IsNullOrWhiteSpace(newPlayerName))
+        if (!IsValidPlayerName(newPlayerName))
         {
-            ShowNameError("Enter a player name.");
+            ShowNameError(GetPlayerNameErrorMessage());
             return;
         }
 
@@ -364,6 +368,24 @@ public class UserInfoPopupController : MonoBehaviour
         {
             nameEditGroup.SetActive(editing);
         }
+    }
+
+    private bool IsValidPlayerName(string playerName)
+    {
+        if (string.IsNullOrWhiteSpace(playerName))
+        {
+            return false;
+        }
+
+        playerName = playerName.Trim();
+
+        return playerName.Length >= MinPlayerNameCharacters &&
+               playerName.Length <= MaxPlayerNameCharacters;
+    }
+
+    private string GetPlayerNameErrorMessage()
+    {
+        return $"Player name must be {MinPlayerNameCharacters}-{MaxPlayerNameCharacters} characters.";
     }
 
     private void ShowNameError(string message)

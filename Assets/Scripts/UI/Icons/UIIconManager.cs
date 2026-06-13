@@ -32,13 +32,33 @@ public class UIIconManager : MonoBehaviour
         {
             UserIconData iconData = playerIcons[i];
 
-            if (iconData != null && iconData.IconId == iconId)
+            if (iconData != null && iconData.IsValid() && iconData.IconId == iconId)
             {
                 return iconData;
             }
         }
 
         return GetFirstPlayerIcon();
+    }
+
+    public bool HasValidPlayerIconId(string iconId)
+    {
+        if (string.IsNullOrWhiteSpace(iconId))
+        {
+            return false;
+        }
+
+        for (int i = 0; i < playerIcons.Count; i++)
+        {
+            UserIconData iconData = playerIcons[i];
+
+            if (iconData != null && iconData.IsValid() && iconData.IconId == iconId)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public UserIconData GetFirstPlayerIcon()

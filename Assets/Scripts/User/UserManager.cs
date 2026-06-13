@@ -2,9 +2,10 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class UserManager : MonoBehaviour
+public class UserManager : MonoBehaviour, ISceneReadyCheck
 {
     public static UserManager instance;
+    private bool isReady;
 
     public static event Action UserChanged;
 
@@ -26,6 +27,9 @@ public class UserManager : MonoBehaviour
             return currentUser;
         }
     }
+
+    public string ReadyName => "User Manager";
+    public bool IsReady => isReady;
 
     public bool HasUser => CurrentUser.HasUser;
 
@@ -50,6 +54,7 @@ public class UserManager : MonoBehaviour
         }
 
         instance = this;
+        isReady = false;
     }
 
     private void OnEnable()
@@ -64,16 +69,46 @@ public class UserManager : MonoBehaviour
 
     private void Start()
     {
+        RegisterReadyCheck();
+
         RefreshCurrentUserFromDatabase();
+
+        isReady = true;
     }
 
     private void OnDestroy()
     {
+        UnregisterReadyCheck();
+
         if (instance == this)
         {
             instance = null;
         }
     }
+
+    #region Ready Check
+
+    private void RegisterReadyCheck()
+    {
+        if (SceneReadyController.instance == null)
+        {
+            return;
+        }
+
+        SceneReadyController.instance.RegisterReadyCheck(this, true);
+    }
+
+    private void UnregisterReadyCheck()
+    {
+        if (SceneReadyController.instance == null)
+        {
+            return;
+        }
+
+        SceneReadyController.instance.UnregisterReadyCheck(this);
+    }
+
+    #endregion
 
     #region Users
 

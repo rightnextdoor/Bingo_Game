@@ -1,9 +1,13 @@
 using System.Collections;
 using UnityEngine;
 
-public class BotManager : MonoBehaviour
+public class BotManager : MonoBehaviour, ISceneReadyCheck
 {
     public static BotManager instance;
+    private bool isReady;
+
+    public string ReadyName => "Bot Manager";
+    public bool IsReady => isReady;
 
     [Header("Bot Data")]
     [SerializeField] private BotUserListData botUserListData;
@@ -24,22 +28,53 @@ public class BotManager : MonoBehaviour
         }
 
         instance = this;
+        isReady = false;
     }
 
     private IEnumerator Start()
     {
+        RegisterReadyCheck();
+
         yield return null;
 
         SyncBotUsers();
+
+        isReady = true;
     }
 
     private void OnDestroy()
     {
+        UnregisterReadyCheck();
+
         if (instance == this)
         {
             instance = null;
         }
     }
+
+    #region Ready Check
+
+    private void RegisterReadyCheck()
+    {
+        if (SceneReadyController.instance == null)
+        {
+            return;
+        }
+
+        SceneReadyController.instance.RegisterReadyCheck(this, true);
+    }
+
+    private void UnregisterReadyCheck()
+    {
+        if (SceneReadyController.instance == null)
+        {
+            return;
+        }
+
+        SceneReadyController.instance.UnregisterReadyCheck(this);
+    }
+
+    #endregion
 
     public void SyncBotUsers()
     {

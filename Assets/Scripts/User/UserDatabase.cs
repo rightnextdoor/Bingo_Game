@@ -58,6 +58,95 @@ public class UserDatabase : MonoBehaviour, ISaveManager
         return GetUser(databaseData.currentUserId);
     }
 
+    public void SetCurrentUser(string userId)
+    {
+        EnsureDatabaseData();
+
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            databaseData.currentUserId = string.Empty;
+        }
+        else
+        {
+            databaseData.currentUserId = userId.Trim();
+        }
+
+        UserDatabaseChanged?.Invoke();
+        SaveDatabase();
+    }
+
+    public UserData GetUser(string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return null;
+        }
+
+        EnsureDatabaseData();
+
+        for (int i = 0; i < databaseData.users.Count; i++)
+        {
+            UserData user = databaseData.users[i];
+
+            if (user == null)
+            {
+                continue;
+            }
+
+            if (user.userId == userId)
+            {
+                return user;
+            }
+        }
+
+        return null;
+    }
+
+    public List<UserData> GetUsersByTag(UserTag userTag)
+    {
+        EnsureDatabaseData();
+
+        List<UserData> usersWithTag = new();
+
+        for (int i = 0; i < databaseData.users.Count; i++)
+        {
+            UserData user = databaseData.users[i];
+
+            if (user == null)
+            {
+                continue;
+            }
+
+            if (user.userTag == userTag)
+            {
+                usersWithTag.Add(user);
+            }
+        }
+
+        return usersWithTag;
+    }
+
+    public List<UserData> GetAllUsers()
+    {
+        EnsureDatabaseData();
+
+        List<UserData> users = new();
+
+        for (int i = 0; i < databaseData.users.Count; i++)
+        {
+            UserData user = databaseData.users[i];
+
+            if (user == null)
+            {
+                continue;
+            }
+
+            users.Add(user);
+        }
+
+        return users;
+    }
+
     public void AddOrUpdateCurrentUser(UserData userData)
     {
         if (userData == null)
@@ -85,23 +174,6 @@ public class UserDatabase : MonoBehaviour, ISaveManager
         else
         {
             databaseData.users.Add(userData);
-        }
-
-        UserDatabaseChanged?.Invoke();
-        SaveDatabase();
-    }
-
-    public void SetCurrentUser(string userId)
-    {
-        EnsureDatabaseData();
-
-        if (string.IsNullOrWhiteSpace(userId))
-        {
-            databaseData.currentUserId = string.Empty;
-        }
-        else
-        {
-            databaseData.currentUserId = userId.Trim();
         }
 
         UserDatabaseChanged?.Invoke();
@@ -186,76 +258,110 @@ public class UserDatabase : MonoBehaviour, ISaveManager
         }
     }
 
-    public UserData GetUser(string userId)
+    public bool ApplyBotUserSync(List<UserData> usersToAddOrUpdate, List<string> userIdsToRemove)
     {
-        if (string.IsNullOrWhiteSpace(userId))
+        EnsureDatabaseData();
+
+        bool databaseChanged = false;
+
+        HashSet<string> removeUserIdSet = new();
+
+        if (userIdsToRemove != null)
         {
-            return null;
+            for (int i = 0; i < userIdsToRemove.Count; i++)
+            {
+                if (string.IsNullOrWhiteSpace(userIdsToRemove[i]))
+                {
+                    continue;
+                }
+
+                removeUserIdSet.Add(userIdsToRemove[i].Trim());
+            }
         }
 
-        EnsureDatabaseData();
+        if (removeUserIdSet.Count > 0)
+        {
+            for (int i = databaseData.users.Count - 1; i >= 0; i--)
+            {
+                UserData user = databaseData.users[i];
+
+                if (user == null || string.IsNullOrWhiteSpace(user.userId))
+                {
+                    continue;
+                }
+
+                if (!removeUserIdSet.Contains(user.userId))
+                {
+                    continue;
+                }
+
+                databaseData.users.RemoveAt(i);
+                databaseChanged = true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(databaseData.currentUserId) &&
+                removeUserIdSet.Contains(databaseData.currentUserId))
+            {
+                databaseData.currentUserId = string.Empty;
+                databaseChanged = true;
+            }
+        }
+
+        Dictionary<string, int> userIndexById = new();
 
         for (int i = 0; i < databaseData.users.Count; i++)
         {
             UserData user = databaseData.users[i];
 
-            if (user == null)
+            if (user == null || string.IsNullOrWhiteSpace(user.userId))
             {
                 continue;
             }
 
-            if (user.userId == userId)
-            {
-                return user;
-            }
+            userIndexById[user.userId] = i;
         }
 
-        return null;
-    }
-
-    public List<UserData> GetUsersByTag(UserTag userTag)
-    {
-        EnsureDatabaseData();
-
-        List<UserData> usersWithTag = new();
-
-        for (int i = 0; i < databaseData.users.Count; i++)
+        if (usersToAddOrUpdate != null)
         {
-            UserData user = databaseData.users[i];
-
-            if (user == null)
+            for (int i = 0; i < usersToAddOrUpdate.Count; i++)
             {
-                continue;
-            }
+                UserData userData = usersToAddOrUpdate[i];
 
-            if (user.userTag == userTag)
-            {
-                usersWithTag.Add(user);
+                if (userData == null)
+                {
+                    continue;
+                }
+
+                userData.RepairData();
+
+                if (string.IsNullOrWhiteSpace(userData.userId))
+                {
+                    continue;
+                }
+
+                if (userIndexById.TryGetValue(userData.userId, out int userIndex))
+                {
+                    databaseData.users[userIndex] = userData;
+                }
+                else
+                {
+                    databaseData.users.Add(userData);
+                    userIndexById[userData.userId] = databaseData.users.Count - 1;
+                }
+
+                databaseChanged = true;
             }
         }
 
-        return usersWithTag;
-    }
-
-    public List<UserData> GetAllUsers()
-    {
-        EnsureDatabaseData();
-
-        List<UserData> users = new();
-
-        for (int i = 0; i < databaseData.users.Count; i++)
+        if (!databaseChanged)
         {
-            UserData user = databaseData.users[i];
-
-            if (user == null)
-            {
-                continue;
-            }
-
-            users.Add(user);
+            return false;
         }
 
-        return users;
+        UserDatabaseChanged?.Invoke();
+        SaveDatabase();
+
+        return true;
     }
 
     public void SaveDatabase()

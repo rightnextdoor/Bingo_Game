@@ -21,13 +21,8 @@ public class LeaderboardUIManager : MonoBehaviour
 
     #region Shared Cell Setup Values
 
-    [SerializeField] private float rankCellWidth = 65f;
-    [SerializeField] private float userIconCellWidth = 40f;
-    [SerializeField] private float playerNameCellFlexibleWidth = 1f;
-    [SerializeField] private float scoreCellWidth = 165f;
-
-    [SerializeField] private int maxScoreDigits = 9;
-    [SerializeField] private int maxPlayerNameCharacters = 40;
+    private int maxScoreDigits = 9;
+    private int maxPlayerNameCharacters = 20;
 
     #endregion
 
@@ -188,6 +183,10 @@ public class LeaderboardUIManager : MonoBehaviour
                 SetupOverallMode();
                 break;
 
+            case LeaderboardGameModeType.Play:
+                SetupPlayMode();
+                break;
+
             default:
                 currentMode = LeaderboardGameModeType.Overall;
                 SetupOverallMode();
@@ -207,6 +206,11 @@ public class LeaderboardUIManager : MonoBehaviour
         currentHeaderCells.Clear();
         currentRowBlueprint.Clear();
 
+        float rankCellWidth = 80f;
+        float userIconCellWidth = 44f;
+        float playerNameCellFlexibleWidth = 1f;
+        float scoreCellWidth = 190f;
+
         currentHeaderCells.Add(CreateHeaderTextCell("Rank", rankCellWidth, 0f, 18f, TextAlignmentOptions.Center));
         currentHeaderCells.Add(CreateHeaderTextCell("Player", 0f, playerNameCellFlexibleWidth, 18f, TextAlignmentOptions.Left));
         currentHeaderCells.Add(CreateHeaderTextCell("Score", scoreCellWidth, 0f, 18f, TextAlignmentOptions.Right));
@@ -215,6 +219,29 @@ public class LeaderboardUIManager : MonoBehaviour
         currentRowBlueprint.Add(CreateRowImageCellSetup(LeaderboardRowCellValueType.UserIcon, userIconCellWidth, 0f));
         currentRowBlueprint.Add(CreateRowTextCellSetup(LeaderboardRowCellValueType.PlayerNameWithShortId, 0f, playerNameCellFlexibleWidth, 16f, TextAlignmentOptions.Left, maxPlayerNameCharacters, 0));
         currentRowBlueprint.Add(CreateRowTextCellSetup(LeaderboardRowCellValueType.Score, scoreCellWidth, 0f, 16f, TextAlignmentOptions.Right, 0, maxScoreDigits));
+
+        ApplyModeSetup();
+    }
+
+    private void SetupPlayMode()
+    {
+        currentModeTitleText = "Play Leaderboard";
+        currentSortType = LeaderboardSortType.ScoreHighest;
+
+        currentHeaderCells.Clear();
+        currentRowBlueprint.Clear();
+
+        float rankCellWidth = 90f;
+        float scoreCellWidth = 210f;
+        float playerNameCellFlexibleWidth = 1f;
+
+        currentHeaderCells.Add(CreateHeaderTextCell("Rank", rankCellWidth, 0f, 18f, TextAlignmentOptions.Center));
+        currentHeaderCells.Add(CreateHeaderTextCell("Score", scoreCellWidth, 0f, 18f, TextAlignmentOptions.Right));
+        currentHeaderCells.Add(CreateHeaderTextCell("Player", 0f, playerNameCellFlexibleWidth, 18f, TextAlignmentOptions.Left));
+
+        currentRowBlueprint.Add(CreateRowTextCellSetup(LeaderboardRowCellValueType.Rank, rankCellWidth, 0f, 16f, TextAlignmentOptions.Center));
+        currentRowBlueprint.Add(CreateRowTextCellSetup(LeaderboardRowCellValueType.Score, scoreCellWidth, 0f, 16f, TextAlignmentOptions.Right, 0, maxScoreDigits));
+        currentRowBlueprint.Add(CreateRowTextCellSetup(LeaderboardRowCellValueType.PlayerNameWithShortId, 0f, playerNameCellFlexibleWidth, 16f, TextAlignmentOptions.Left, maxPlayerNameCharacters, 0));
 
         ApplyModeSetup();
     }

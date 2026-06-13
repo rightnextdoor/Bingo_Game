@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 [Serializable]
@@ -19,11 +20,20 @@ public class LeaderboardListController : MonoBehaviour
     [Header("Layout")]
     [SerializeField] private VerticalLayoutGroup verticalLayoutGroup;
     [SerializeField] private ContentSizeFitter contentSizeFitter;
+    [SerializeField] private ScrollRect scrollRect;
 
     public event Action<string> RowClicked;
 
     private readonly List<LeaderboardRowUI> spawnedRows = new();
     private readonly List<LeaderboardRowCellSetup> rowBlueprint = new();
+
+    private string selectedUserId;
+
+    private const float ArrowKeyInitialRepeatDelay = 0.35f;
+    private const float ArrowKeyRepeatRate = 0.08f;
+
+    private int heldArrowDirection;
+    private float nextArrowMoveTime;
 
     private void Awake()
     {
@@ -42,7 +52,17 @@ public class LeaderboardListController : MonoBehaviour
             contentSizeFitter = GetComponent<ContentSizeFitter>();
         }
 
+        if (scrollRect == null)
+        {
+            scrollRect = GetComponentInParent<ScrollRect>();
+        }
+
         ClearRows();
+    }
+
+    private void Update()
+    {
+        HandleArrowKeySelection();
     }
 
     public void SetRowBlueprint(IReadOnlyList<LeaderboardRowCellSetup> blueprint)
@@ -72,6 +92,11 @@ public class LeaderboardListController : MonoBehaviour
 
     public void SetRows(IReadOnlyList<LeaderboardRowData> rows, string selectedUserId)
     {
+        if (!string.IsNullOrWhiteSpace(selectedUserId))
+        {
+            this.selectedUserId = selectedUserId;
+        }
+
         ClearRows();
 
         if (rowParent == null || rowPrefab == null || rows == null)
@@ -91,8 +116,8 @@ public class LeaderboardListController : MonoBehaviour
             LeaderboardRowUI row = Instantiate(rowPrefab, rowParent);
             row.gameObject.SetActive(true);
 
-            bool isHighlighted = !string.IsNullOrWhiteSpace(selectedUserId) &&
-                                 rowData.userId == selectedUserId;
+            bool isHighlighted = !string.IsNullOrWhiteSpace(this.selectedUserId) &&
+                     rowData.userId == this.selectedUserId;
 
             row.Setup(
                 rowData.userId,
@@ -171,6 +196,8 @@ public class LeaderboardListController : MonoBehaviour
 
     public void SetSelectedUser(string selectedUserId)
     {
+        this.selectedUserId = selectedUserId;
+
         for (int i = 0; i < spawnedRows.Count; i++)
         {
             LeaderboardRowUI row = spawnedRows[i];
@@ -180,11 +207,205 @@ public class LeaderboardListController : MonoBehaviour
                 continue;
             }
 
-            bool isHighlighted = !string.IsNullOrWhiteSpace(selectedUserId) &&
-                                 row.UserId == selectedUserId;
+            bool isHighlighted = !string.IsNullOrWhiteSpace(this.selectedUserId) &&
+                                 row.UserId == this.selectedUserId;
 
             row.SetHighlighted(isHighlighted);
         }
+    }
+
+    private void HandleArrowKeySelection()
+    {
+        if (string.IsNullOrWhiteSpace(selectedUserId) || Keyboard.current == null)
+        {
+            ResetArrowHold();
+            return;
+        }
+
+        int direction = 0;
+        bool pressedThisFrame = false;
+
+        if (Keyboard.current.upArrowKey.isPressed)
+        {
+            direction = -1;
+            pressedThisFrame = Keyboard.current.upArrowKey.wasPressedThisFrame;
+        }
+        else if (Keyboard.current.downArrowKey.isPressed)
+        {
+            direction = 1;
+            pressedThisFrame = Keyboard.current.downArrowKey.wasPressedThisFrame;
+        }
+
+        if (direction == 0)
+        {
+            ResetArrowHold();
+            return;
+        }
+
+        if (pressedThisFrame || heldArrowDirection != direction)
+        {
+            heldArrowDirection = direction;
+            nextArrowMoveTime = Time.unscaledTime + ArrowKeyInitialRepeatDelay;
+            MoveSelectedRow(direction);
+            return;
+        }
+
+        if (Time.unscaledTime < nextArrowMoveTime)
+        {
+            return;
+        }
+
+        nextArrowMoveTime = Time.unscaledTime + ArrowKeyRepeatRate;
+        MoveSelectedRow(direction);
+    }
+
+    private void ResetArrowHold()
+    {
+        heldArrowDirection = 0;
+        nextArrowMoveTime = 0f;
+    }
+
+    private void MoveSelectedRow(int direction)
+    {
+        int selectedIndex = GetSelectedRowIndex();
+
+        if (selectedIndex < 0)
+        {
+            return;
+        }
+
+        int nextIndex = Mathf.Clamp(selectedIndex + direction, 0, spawnedRows.Count - 1);
+
+        if (nextIndex == selectedIndex)
+        {
+            return;
+        }
+
+        LeaderboardRowUI nextRow = spawnedRows[nextIndex];
+
+        if (nextRow == null)
+        {
+            return;
+        }
+
+        SetSelectedUser(nextRow.UserId);
+        ScrollRowIntoView(nextRow);
+
+        RowClicked?.Invoke(nextRow.UserId);
+    }
+
+    private LeaderboardRowUI GetSelectedRow()
+    {
+        int selectedIndex = GetSelectedRowIndex();
+
+        if (selectedIndex < 0 || selectedIndex >= spawnedRows.Count)
+        {
+            return null;
+        }
+
+        return spawnedRows[selectedIndex];
+    }
+
+    private void ScrollRowIntoView(LeaderboardRowUI row)
+    {
+        if (row == null || scrollRect == null || scrollRect.content == null)
+        {
+            return;
+        }
+
+        RectTransform contentRect = scrollRect.content;
+        RectTransform viewportRect = scrollRect.viewport;
+
+        if (viewportRect == null)
+        {
+            viewportRect = scrollRect.GetComponent<RectTransform>();
+        }
+
+        RectTransform rowRect = row.GetComponent<RectTransform>();
+
+        if (rowRect == null || viewportRect == null)
+        {
+            return;
+        }
+
+        Canvas.ForceUpdateCanvases();
+
+        float contentHeight = contentRect.rect.height;
+        float viewportHeight = viewportRect.rect.height;
+
+        if (contentHeight <= viewportHeight)
+        {
+            return;
+        }
+
+        float rowTop = GetRowTopFromContentTop(rowRect);
+        float rowBottom = rowTop + rowRect.rect.height;
+
+        float viewTop = contentRect.anchoredPosition.y;
+        float viewBottom = viewTop + viewportHeight;
+
+        float targetY = contentRect.anchoredPosition.y;
+
+        if (rowTop < viewTop)
+        {
+            targetY = rowTop;
+        }
+        else if (rowBottom > viewBottom)
+        {
+            targetY = rowBottom - viewportHeight;
+        }
+
+        float maxY = Mathf.Max(0f, contentHeight - viewportHeight);
+        targetY = Mathf.Clamp(targetY, 0f, maxY);
+
+        int rowIndex = spawnedRows.IndexOf(row);
+
+        if (rowIndex == 0)
+        {
+            targetY = 0f;
+        }
+        else if (rowIndex == spawnedRows.Count - 1)
+        {
+            targetY = maxY;
+        }
+
+        contentRect.anchoredPosition = new Vector2(contentRect.anchoredPosition.x, targetY);
+        scrollRect.StopMovement();
+
+        if (rowIndex == 0)
+        {
+            scrollRect.verticalNormalizedPosition = 1f;
+        }
+        else if (rowIndex == spawnedRows.Count - 1)
+        {
+            scrollRect.verticalNormalizedPosition = 0f;
+        }
+
+    }
+
+    private float GetRowTopFromContentTop(RectTransform rowRect)
+    {
+        return -rowRect.anchoredPosition.y - ((1f - rowRect.pivot.y) * rowRect.rect.height);
+    }
+
+    private int GetSelectedRowIndex()
+    {
+        for (int i = 0; i < spawnedRows.Count; i++)
+        {
+            LeaderboardRowUI row = spawnedRows[i];
+
+            if (row == null)
+            {
+                continue;
+            }
+
+            if (row.UserId == selectedUserId)
+            {
+                return i;
+            }
+        }
+
+        return -1;
     }
 
     public void SetListSpacing(float spacing)
@@ -404,6 +625,19 @@ public class LeaderboardListController : MonoBehaviour
 
     private void OnRowClicked(string userId)
     {
+        if (!string.IsNullOrWhiteSpace(selectedUserId) && selectedUserId == userId)
+        {
+            SetSelectedUser(string.Empty);
+
+            RowClicked?.Invoke(string.Empty);
+            return;
+        }
+
+        SetSelectedUser(userId);
+
+        LeaderboardRowUI selectedRow = GetSelectedRow();
+        ScrollRowIntoView(selectedRow);
+
         RowClicked?.Invoke(userId);
     }
 }

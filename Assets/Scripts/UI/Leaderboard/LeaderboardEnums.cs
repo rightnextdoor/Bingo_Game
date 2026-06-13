@@ -3,7 +3,8 @@ using TMPro;
 
 public enum LeaderboardGameModeType
 {
-    Overall
+    Overall,
+    Play
 }
 
 public enum LeaderboardPageSizeType

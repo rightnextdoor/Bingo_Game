@@ -9,16 +9,22 @@ public class LoadingFaderManager : MonoBehaviour
     #region Inspector Fields
 
     [Header("Overlay")]
+    [SerializeField] private Canvas overlayCanvas;
     [SerializeField] private GameObject overlayRoot;
     [SerializeField] private CanvasGroup overlayCanvasGroup;
     [SerializeField] private TMP_Text loadingText;
+    [SerializeField] private GameObject loadingBallRenderWorld;
+
+    [Header("Overlay Sorting")]
+    [SerializeField] private bool forceOverlayToTop = true;
+    [SerializeField] private int overlaySortingOrder = 5000;
 
     [Header("Text")]
-    [SerializeField] private string loadingTextValue = "Loading...";
+    [SerializeField] private string loadingTextValue = "Loading";
 
     [Header("Timing")]
-    [SerializeField] private float minimumShowTime = 2f;
-    [SerializeField] private float fadeOutTime = 0.5f;
+    [SerializeField] private float minimumShowTime = 7f;
+    [SerializeField] private float fadeOutTime = 1f;
     [SerializeField] private bool hideOnAwake = true;
 
     #endregion
@@ -26,10 +32,14 @@ public class LoadingFaderManager : MonoBehaviour
     #region Private Fields
 
     private float loadingStartTime;
+    private bool isShowing;
+    private bool hasAppliedFadeStartAudio;
 
     #endregion
 
     #region Properties
+
+    public bool IsShowing => isShowing;
 
     public bool HasMinimumShowTimePassed
     {
@@ -71,18 +81,12 @@ public class LoadingFaderManager : MonoBehaviour
         ResolveReferences();
 
         loadingStartTime = Time.unscaledTime;
+        isShowing = true;
+        hasAppliedFadeStartAudio = false;
 
-        if (overlayRoot != null)
-        {
-            overlayRoot.SetActive(true);
-        }
-
-        if (loadingText != null)
-        {
-            loadingText.text = string.IsNullOrWhiteSpace(loadingTextValue)
-                ? "Loading..."
-                : loadingTextValue;
-        }
+        SetOverlayObjectsActive(true);
+        ForceOverlayCanvasToTop();
+        SetLoadingText();
 
         if (overlayCanvasGroup != null)
         {
@@ -90,25 +94,36 @@ public class LoadingFaderManager : MonoBehaviour
             overlayCanvasGroup.blocksRaycasts = true;
             overlayCanvasGroup.interactable = true;
         }
+
+        Canvas.ForceUpdateCanvases();
     }
 
     public IEnumerator FadeOut()
     {
         ResolveReferences();
 
+        while (!HasMinimumShowTimePassed)
+        {
+            yield return null;
+        }
+
+        ApplyFadeStartAudio();
+
         if (overlayCanvasGroup == null)
         {
+            HideInstant();
             yield break;
         }
 
         float timer = 0f;
         float startAlpha = overlayCanvasGroup.alpha;
+        float duration = Mathf.Max(0.01f, fadeOutTime);
 
-        while (timer < fadeOutTime)
+        while (timer < duration)
         {
             timer += Time.unscaledDeltaTime;
 
-            float percent = fadeOutTime <= 0f ? 1f : timer / fadeOutTime;
+            float percent = Mathf.Clamp01(timer / duration);
             overlayCanvasGroup.alpha = Mathf.Lerp(startAlpha, 0f, percent);
 
             yield return null;
@@ -121,6 +136,8 @@ public class LoadingFaderManager : MonoBehaviour
     {
         ResolveReferences();
 
+        isShowing = false;
+
         if (overlayCanvasGroup != null)
         {
             overlayCanvasGroup.alpha = 0f;
@@ -128,10 +145,47 @@ public class LoadingFaderManager : MonoBehaviour
             overlayCanvasGroup.interactable = false;
         }
 
+        SetOverlayObjectsActive(false);
+    }
+
+    #endregion
+
+    #region Setup
+
+    private void SetOverlayObjectsActive(bool active)
+    {
         if (overlayRoot != null)
         {
-            overlayRoot.SetActive(false);
+            overlayRoot.SetActive(active);
         }
+
+        if (loadingBallRenderWorld != null)
+        {
+            loadingBallRenderWorld.SetActive(active);
+        }
+    }
+
+    private void SetLoadingText()
+    {
+        if (loadingText == null)
+        {
+            return;
+        }
+
+        loadingText.text = string.IsNullOrWhiteSpace(loadingTextValue)
+            ? "Loading..."
+            : loadingTextValue;
+    }
+
+    private void ForceOverlayCanvasToTop()
+    {
+        if (!forceOverlayToTop || overlayCanvas == null)
+        {
+            return;
+        }
+
+        overlayCanvas.overrideSorting = true;
+        overlayCanvas.sortingOrder = overlaySortingOrder;
     }
 
     #endregion
@@ -140,15 +194,42 @@ public class LoadingFaderManager : MonoBehaviour
 
     private void ResolveReferences()
     {
-        if (overlayRoot == null)
+        if (overlayCanvasGroup == null && overlayRoot != null)
         {
-            overlayRoot = gameObject;
+            overlayCanvasGroup = overlayRoot.GetComponent<CanvasGroup>();
+
+            if (overlayCanvasGroup == null)
+            {
+                overlayCanvasGroup = overlayRoot.AddComponent<CanvasGroup>();
+            }
         }
 
-        if (overlayCanvasGroup == null)
+        if (overlayRoot == null && overlayCanvasGroup != null)
         {
-            overlayCanvasGroup = GetComponentInChildren<CanvasGroup>(true);
+            overlayRoot = overlayCanvasGroup.gameObject;
         }
+
+        if (overlayCanvas == null && overlayRoot != null)
+        {
+            overlayCanvas = overlayRoot.GetComponentInParent<Canvas>(true);
+        }
+    }
+
+    private void ApplyFadeStartAudio()
+    {
+        if (hasAppliedFadeStartAudio)
+        {
+            return;
+        }
+
+        hasAppliedFadeStartAudio = true;
+
+        if (AudioManager.instance == null)
+        {
+            return;
+        }
+
+        AudioManager.instance.ApplyZoneMusicForCurrentScene();
     }
 
     #endregion

@@ -1380,8 +1380,8 @@ MonoBehaviour:
     sceneAsset: {fileID: 102900000, guid: 1f4320dfca47dc24abaf4b85e2e72f9d, type: 3}
     sceneName: Lobby
   gameScene:
-    sceneAsset: {fileID: 102900000, guid: 45a1971f6e8522b4e96d016d3deaf840, type: 3}
-    sceneName: Game
+    sceneAsset: {fileID: 102900000, guid: 8c9cfa26abfee488c85f1582747f6a02, type: 3}
+    sceneName: MainMenu
 --- !u!114 &1576835345
 MonoBehaviour:
   m_ObjectHideFlags: 0

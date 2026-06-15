@@ -22,7 +22,6 @@ public class BotManager : MonoBehaviour, ISceneReadyCheck
     {
         if (instance != null && instance != this)
         {
-            Debug.LogWarning($"Duplicate BotManager found on {gameObject.name}. Removing duplicate BotManager component.");
             Destroy(this);
             return;
         }

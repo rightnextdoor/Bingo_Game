@@ -32,7 +32,6 @@ public class GameManager : MonoBehaviour, ISceneReadyCheck
     {
         if (instance != null && instance != this)
         {
-            Debug.LogWarning($"Duplicate GameManager found on {gameObject.name}. Destroying duplicate.");
             Destroy(gameObject);
             return;
         }

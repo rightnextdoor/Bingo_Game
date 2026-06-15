@@ -15,9 +15,7 @@ public class ToolTipManager : MonoBehaviour
     {
         if (instance != null && instance != this)
         {
-            Debug.LogWarning("Duplicate ToolTipManager found. Disabling this duplicate.");
-            enabled = false;
-            return;
+            Debug.LogWarning("Replacing ToolTipManager instance with current scene instance.");
         }
 
         instance = this;

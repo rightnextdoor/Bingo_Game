@@ -116,6 +116,8 @@ public class SceneChangeTestController : MonoBehaviour
             return;
         }
 
+        AudioManager.instance.PlaySFX("Button");
+
         GameSceneType sceneType = GetCurrentSceneType();
 
         switch (sceneType)

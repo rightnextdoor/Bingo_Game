@@ -30,7 +30,6 @@ public class UserDatabase : MonoBehaviour, ISaveManager
     {
         if (instance != null && instance != this)
         {
-            Debug.LogWarning($"Duplicate UserDatabase found on {gameObject.name}. Removing duplicate UserDatabase component.");
             Destroy(this);
             return;
         }

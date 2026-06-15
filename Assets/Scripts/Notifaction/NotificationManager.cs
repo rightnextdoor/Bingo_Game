@@ -36,9 +36,7 @@ public class NotificationManager : MonoBehaviour
     {
         if (instance != null && instance != this)
         {
-            Debug.LogWarning("Duplicate NotificationManager found. Disabling this duplicate.");
-            enabled = false;
-            return;
+            Debug.LogWarning("Replacing NotificationManager instance with current scene instance.");
         }
 
         instance = this;

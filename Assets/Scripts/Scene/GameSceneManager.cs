@@ -21,7 +21,6 @@ public class GameSceneManager : MonoBehaviour
     #region Inspector Fields
 
     [Header("Managers")]
-    [SerializeField] private LoadingFaderManager loadingFaderManager;
     [SerializeField] private SceneReadyController sceneReadyController;
 
     [Header("Startup")]
@@ -132,9 +131,11 @@ public class GameSceneManager : MonoBehaviour
             sceneReadyController.ClearSceneReadyChecks();
         }
 
-        if (loadingFaderManager != null)
+        LoadingFaderManager loader = CurrentLoader;
+
+        if (loader != null)
         {
-            loadingFaderManager.ShowLoading();
+            loader.ShowLoading();
         }
 
         yield return null;
@@ -157,9 +158,11 @@ public class GameSceneManager : MonoBehaviour
 
         yield return WaitUntilSceneCanStart();
 
-        if (loadingFaderManager != null)
+        loader = CurrentLoader;
+
+        if (loader != null)
         {
-            yield return loadingFaderManager.FadeOut();
+            yield return loader.FadeOut();
         }
 
         isLoadingScene = false;
@@ -176,16 +179,20 @@ public class GameSceneManager : MonoBehaviour
         ResolveReferences();
 
 
-        if (loadingFaderManager != null)
+        LoadingFaderManager loader = CurrentLoader;
+
+        if (loader != null)
         {
-            loadingFaderManager.ShowLoading();
+            loader.ShowLoading();
         }
 
         yield return WaitUntilSceneCanStart();
 
-        if (loadingFaderManager != null)
+        loader = CurrentLoader;
+
+        if (loader != null)
         {
-            yield return loadingFaderManager.FadeOut();
+            yield return loader.FadeOut();
         }
 
         isLoadingScene = false;
@@ -210,7 +217,9 @@ public class GameSceneManager : MonoBehaviour
 
     private bool CanStartScene()
     {
-        bool minimumTimeDone = loadingFaderManager == null || loadingFaderManager.HasMinimumShowTimePassed;
+        LoadingFaderManager loader = CurrentLoader;
+
+        bool minimumTimeDone = loader == null || loader.HasMinimumShowTimePassed;
         bool sceneReady = sceneReadyController == null || sceneReadyController.AreAllReady();
 
         return minimumTimeDone && sceneReady;
@@ -244,14 +253,17 @@ public class GameSceneManager : MonoBehaviour
 
     private void ResolveReferences()
     {
-        if (loadingFaderManager == null)
-        {
-            loadingFaderManager = LoadingFaderManager.instance;
-        }
-
         if (sceneReadyController == null)
         {
             sceneReadyController = SceneReadyController.instance;
+        }
+    }
+
+    private LoadingFaderManager CurrentLoader
+    {
+        get
+        {
+            return LoadingFaderManager.instance;
         }
     }
 

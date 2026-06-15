@@ -126,6 +126,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 5376826884602316283}
+  - component: {fileID: 6831538325597855552}
   m_Layer: 0
   m_Name: LoadingOverlay
   m_TagString: Untagged
@@ -150,6 +151,29 @@ Transform:
   - {fileID: 7826512316888480092}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &6831538325597855552
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 989408339628007082}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: df117dc1f07d38e48b9cabdc28987ec1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LoadingFaderManager
+  overlayCanvas: {fileID: 5175230307079064678}
+  overlayRoot: {fileID: 5400627947234070734}
+  overlayCanvasGroup: {fileID: 2860181876565763355}
+  loadingText: {fileID: 5994088203957501829}
+  loadingBallRenderWorld: {fileID: 2740271827071807130}
+  forceOverlayToTop: 1
+  overlaySortingOrder: 5000
+  loadingTextValue: Loading
+  minimumShowTime: 7
+  fadeOutTime: 1
+  hideOnAwake: 1
 --- !u!1 &1026518371683795238
 GameObject:
   m_ObjectHideFlags: 0

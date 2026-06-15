@@ -31,7 +31,6 @@ public class SaveManager : MonoBehaviour
     {
         if (instance != null && instance != this)
         {
-            Debug.LogWarning($"Duplicate SaveManager found on {gameObject.name}. Removing duplicate SaveManager component.");
             Destroy(this);
             return;
         }

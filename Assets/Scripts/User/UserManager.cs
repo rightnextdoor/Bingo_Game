@@ -48,7 +48,6 @@ public class UserManager : MonoBehaviour, ISceneReadyCheck
     {
         if (instance != null && instance != this)
         {
-            Debug.LogWarning($"Duplicate UserManager found on {gameObject.name}. Removing duplicate UserManager component.");
             Destroy(this);
             return;
         }

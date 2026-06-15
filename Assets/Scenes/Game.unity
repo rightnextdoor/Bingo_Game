@@ -295,33 +295,6 @@ PrefabInstance:
       addedObject: {fileID: 1789329512}
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 07078df8efaff514a860b0ec82f1ecc6, type: 3}
---- !u!114 &68245324 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 6196616808410524353, guid: 07078df8efaff514a860b0ec82f1ecc6, type: 3}
-  m_PrefabInstance: {fileID: 68245323}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f4688fdb7df04437aeb418b961361dc5, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI
---- !u!114 &68245325 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 1089030302421625490, guid: 07078df8efaff514a860b0ec82f1ecc6, type: 3}
-  m_PrefabInstance: {fileID: 68245323}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
---- !u!225 &68245326 stripped
-CanvasGroup:
-  m_CorrespondingSourceObject: {fileID: 4774580399742427496, guid: 07078df8efaff514a860b0ec82f1ecc6, type: 3}
-  m_PrefabInstance: {fileID: 68245323}
-  m_PrefabAsset: {fileID: 0}
 --- !u!1 &68669349
 GameObject:
   m_ObjectHideFlags: 0
@@ -759,16 +732,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &640650868 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 2740271827071807130, guid: f405dd3864b1d7241b138db31eed7538, type: 3}
-  m_PrefabInstance: {fileID: 7626225034656011717}
-  m_PrefabAsset: {fileID: 0}
---- !u!223 &731647054 stripped
-Canvas:
-  m_CorrespondingSourceObject: {fileID: 5175230307079064678, guid: f405dd3864b1d7241b138db31eed7538, type: 3}
-  m_PrefabInstance: {fileID: 7626225034656011717}
-  m_PrefabAsset: {fileID: 0}
 --- !u!1 &967831861
 GameObject:
   m_ObjectHideFlags: 0
@@ -890,17 +853,6 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 967831861}
   m_CullTransparentMesh: 1
---- !u!114 &1120621901 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 5994088203957501829, guid: f405dd3864b1d7241b138db31eed7538, type: 3}
-  m_PrefabInstance: {fileID: 7626225034656011717}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f4688fdb7df04437aeb418b961361dc5, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI
 --- !u!1 &1173263597
 GameObject:
   m_ObjectHideFlags: 0
@@ -1178,12 +1130,9 @@ GameObject:
   - component: {fileID: 1576835344}
   - component: {fileID: 1576835345}
   - component: {fileID: 1576835334}
-  - component: {fileID: 1576835337}
-  - component: {fileID: 1576835338}
   - component: {fileID: 1576835339}
   - component: {fileID: 1576835340}
   - component: {fileID: 1576835341}
-  - component: {fileID: 1576835343}
   - component: {fileID: 1576835342}
   m_Layer: 0
   m_Name: GameManager
@@ -1249,35 +1198,6 @@ MonoBehaviour:
   dontDestroyOnLoad: 1
   saveManager: {fileID: 1576835335}
   userManager: {fileID: 1576835334}
---- !u!114 &1576835337
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1576835332}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: dd80554141380f747a9c40651f82ffab, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::NotificationManager
-  notificationAreaCanvasGroup: {fileID: 68245326}
-  notificationBackground: {fileID: 68245325}
-  notificationText: {fileID: 68245324}
-  delayBetweenMessages: 0.35
---- !u!114 &1576835338
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1576835332}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 349584082b318f243923727710ae7ed1, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ToolTipManager
-  toolTipUI: {fileID: 1710281324}
 --- !u!114 &1576835339
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1334,29 +1254,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b1b4d0f686ff34648846deef750dc2e6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SceneReadyController
---- !u!114 &1576835343
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1576835332}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: df117dc1f07d38e48b9cabdc28987ec1, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::LoadingFaderManager
-  overlayCanvas: {fileID: 731647054}
-  overlayRoot: {fileID: 2098704080}
-  overlayCanvasGroup: {fileID: 2098704082}
-  loadingText: {fileID: 1120621901}
-  loadingBallRenderWorld: {fileID: 640650868}
-  forceOverlayToTop: 1
-  overlaySortingOrder: 5000
-  loadingTextValue: Loading
-  minimumShowTime: 7
-  fadeOutTime: 0.5
-  hideOnAwake: 1
 --- !u!114 &1576835344
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1369,7 +1266,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 777b6c73b344cdb4fb1a706550ab1b86, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GameSceneManager
-  loadingFaderManager: {fileID: 1576835343}
+  loadingFaderManager: {fileID: 0}
   sceneReadyController: {fileID: 1576835342}
   showLoadingOnStart: 1
   startingSceneType: 0
@@ -1404,17 +1301,6 @@ MonoBehaviour:
   zoneSceneMapping:
   - {fileID: 11400000, guid: 6fc2d81d919ac3d4291bfa61b9d12f68, type: 2}
   - {fileID: 11400000, guid: 065e71b3e741b704883e55ecd3e3e515, type: 2}
---- !u!114 &1710281324 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 3766192665535024866, guid: 07078df8efaff514a860b0ec82f1ecc6, type: 3}
-  m_PrefabInstance: {fileID: 68245323}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f85d32a53d7efc140bc42fff90ab6665, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::UI_ToolTip
 --- !u!1 &1789329511
 GameObject:
   m_ObjectHideFlags: 0
@@ -1469,16 +1355,6 @@ MonoBehaviour:
   secondaryButton: {fileID: 1173263599}
   primaryButtonText: {fileID: 444274123}
   secondaryButtonText: {fileID: 1555164508}
---- !u!1 &2098704080 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 5400627947234070734, guid: f405dd3864b1d7241b138db31eed7538, type: 3}
-  m_PrefabInstance: {fileID: 7626225034656011717}
-  m_PrefabAsset: {fileID: 0}
---- !u!225 &2098704082 stripped
-CanvasGroup:
-  m_CorrespondingSourceObject: {fileID: 2860181876565763355, guid: f405dd3864b1d7241b138db31eed7538, type: 3}
-  m_PrefabInstance: {fileID: 7626225034656011717}
-  m_PrefabAsset: {fileID: 0}
 --- !u!1001 &7626225034656011717
 PrefabInstance:
   m_ObjectHideFlags: 0

@@ -27,8 +27,10 @@ public class UIThemeManager : MonoBehaviour
     private readonly List<UIThemeInputStyle> activeInputStyles = new();
     private readonly List<UIThemeDropdownStyle> activeDropdownStyles = new();
     private readonly List<UIThemeScrollStyle> activeScrollStyles = new();
+    private readonly List<UIThemeSliderStyle> activeSliderStyles = new();
+    private readonly List<UIThemeToggleStyle> activeToggleStyles = new();
 
-    public UIThemeType SelectedThemeType => selectedThemeType;
+
 
     private void Awake()
     {
@@ -61,6 +63,32 @@ public class UIThemeManager : MonoBehaviour
         }
     }
 #endif
+
+    public UIThemeType SelectedThemeType => selectedThemeType;
+
+    public IReadOnlyList<UIThemeData> GetThemeDataList()
+    {
+        return themeDataList;
+    }
+
+    public UIThemeType ValidateAndSetTheme(UIThemeType requestedThemeType)
+    {
+        UIThemeData resolvedThemeData = FindThemeDataWithoutWarning(requestedThemeType);
+
+        if (resolvedThemeData == null)
+        {
+            resolvedThemeData = FindFirstValidThemeData();
+        }
+
+        if (resolvedThemeData == null)
+        {
+            Debug.LogWarning("UIThemeManager could not validate theme because no valid theme data exists.");
+            return selectedThemeType;
+        }
+
+        SetTheme(resolvedThemeData.ThemeType);
+        return selectedThemeType;
+    }
 
     public void Register(IUIThemeTarget target)
     {
@@ -128,6 +156,12 @@ public class UIThemeManager : MonoBehaviour
             case UIThemeSectionType.Scroll:
                 return FindScrollStyle(styleType);
 
+            case UIThemeSectionType.Slider:
+                return FindSliderStyle(styleType);
+
+            case UIThemeSectionType.Toggle:
+                return FindToggleStyle(styleType);
+
             default:
                 Debug.LogWarning($"UIThemeManager does not support section type: {sectionType}");
                 return null;
@@ -155,6 +189,43 @@ public class UIThemeManager : MonoBehaviour
         return null;
     }
 
+    private UIThemeData FindThemeDataWithoutWarning(UIThemeType themeType)
+    {
+        for (int i = 0; i < themeDataList.Count; i++)
+        {
+            UIThemeData themeData = themeDataList[i];
+
+            if (themeData == null)
+            {
+                continue;
+            }
+
+            if (themeData.ThemeType == themeType)
+            {
+                return themeData;
+            }
+        }
+
+        return null;
+    }
+
+    private UIThemeData FindFirstValidThemeData()
+    {
+        for (int i = 0; i < themeDataList.Count; i++)
+        {
+            UIThemeData themeData = themeDataList[i];
+
+            if (themeData == null)
+            {
+                continue;
+            }
+
+            return themeData;
+        }
+
+        return null;
+    }
+
     private void RebuildActiveThemeLists()
     {
         ClearActiveThemeLists();
@@ -170,6 +241,8 @@ public class UIThemeManager : MonoBehaviour
         activeInputStyles.AddRange(activeThemeData.InputStyles);
         activeDropdownStyles.AddRange(activeThemeData.DropdownStyles);
         activeScrollStyles.AddRange(activeThemeData.ScrollStyles);
+        activeSliderStyles.AddRange(activeThemeData.SliderStyles);
+        activeToggleStyles.AddRange(activeThemeData.ToggleStyles);
     }
 
     private void ClearActiveThemeLists()
@@ -180,6 +253,8 @@ public class UIThemeManager : MonoBehaviour
         activeInputStyles.Clear();
         activeDropdownStyles.Clear();
         activeScrollStyles.Clear();
+        activeSliderStyles.Clear();
+        activeToggleStyles.Clear();
     }
 
     private void ReapplyThemeToRegisteredTargets()
@@ -199,6 +274,8 @@ public class UIThemeManager : MonoBehaviour
             target.ReapplyTheme();
         }
     }
+
+    #region Find Style
 
     private UIThemeStyle FindBackgroundStyle(Enum styleType)
     {
@@ -416,6 +493,80 @@ public class UIThemeManager : MonoBehaviour
         return null;
     }
 
+    private UIThemeSliderStyle FindSliderStyle(Enum styleType)
+    {
+        UIThemeSliderType sliderType;
+
+        if (!TryGetEnumType(styleType, out sliderType))
+        {
+            Debug.LogWarning("UIThemeManager received invalid slider type.");
+            return null;
+        }
+
+        for (int i = 0; i < activeSliderStyles.Count; i++)
+        {
+            UIThemeSliderStyle style = activeSliderStyles[i];
+
+            if (style == null)
+            {
+                continue;
+            }
+
+            if (style.SliderType == sliderType)
+            {
+                return style;
+            }
+        }
+
+        UIThemeSliderStyle defaultStyle = FindDefaultSliderStyle(sliderType);
+
+        if (defaultStyle != null)
+        {
+            return defaultStyle;
+        }
+
+        Debug.LogWarning($"UIThemeManager could not find slider style: {sliderType}");
+        return null;
+    }
+
+    private UIThemeToggleStyle FindToggleStyle(Enum styleType)
+    {
+        UIThemeToggleType toggleType;
+
+        if (!TryGetEnumType(styleType, out toggleType))
+        {
+            Debug.LogWarning("UIThemeManager received invalid toggle type.");
+            return null;
+        }
+
+        for (int i = 0; i < activeToggleStyles.Count; i++)
+        {
+            UIThemeToggleStyle style = activeToggleStyles[i];
+
+            if (style == null)
+            {
+                continue;
+            }
+
+            if (style.ToggleType == toggleType)
+            {
+                return style;
+            }
+        }
+
+        UIThemeToggleStyle defaultStyle = FindDefaultToggleStyle(toggleType);
+
+        if (defaultStyle != null)
+        {
+            return defaultStyle;
+        }
+
+        Debug.LogWarning($"UIThemeManager could not find toggle style: {toggleType}");
+        return null;
+    }
+
+    #endregion
+
     private bool TryGetEnumType<TEnum>(Enum styleType, out TEnum typedValue)
         where TEnum : struct, Enum
     {
@@ -445,6 +596,8 @@ public class UIThemeManager : MonoBehaviour
         Instance.RebuildActiveThemeLists();
         Instance.ReapplyThemeToRegisteredTargets();
     }
+
+    #region Find Default
 
     private UIThemeStyle FindDefaultBackgroundStyle(UIThemeBackgroundType backgroundType)
     {
@@ -565,6 +718,48 @@ public class UIThemeManager : MonoBehaviour
 
         return null;
     }
+
+    private UIThemeSliderStyle FindDefaultSliderStyle(UIThemeSliderType sliderType)
+    {
+        if (defaultThemeData == null)
+        {
+            return null;
+        }
+
+        for (int i = 0; i < defaultThemeData.SliderStyles.Count; i++)
+        {
+            UIThemeSliderStyle style = defaultThemeData.SliderStyles[i];
+
+            if (style != null && style.SliderType == sliderType)
+            {
+                return style;
+            }
+        }
+
+        return null;
+    }
+
+    private UIThemeToggleStyle FindDefaultToggleStyle(UIThemeToggleType toggleType)
+    {
+        if (defaultThemeData == null)
+        {
+            return null;
+        }
+
+        for (int i = 0; i < defaultThemeData.ToggleStyles.Count; i++)
+        {
+            UIThemeToggleStyle style = defaultThemeData.ToggleStyles[i];
+
+            if (style != null && style.ToggleType == toggleType)
+            {
+                return style;
+            }
+        }
+
+        return null;
+    }
+
+    #endregion
 
 #if UNITY_EDITOR
 

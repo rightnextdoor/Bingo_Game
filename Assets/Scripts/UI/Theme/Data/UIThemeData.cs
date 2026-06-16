@@ -24,6 +24,12 @@ public class UIThemeData : ScriptableObject
     [Header("Scroll Section")]
     [SerializeField] private List<UIThemeScrollStyle> scrollStyles = new();
 
+    [Header("Slider Section")]
+    [SerializeField] private List<UIThemeSliderStyle> sliderStyles = new();
+
+    [Header("Toggle Section")]
+    [SerializeField] private List<UIThemeToggleStyle> toggleStyles = new();
+
     public UIThemeType ThemeType => themeType;
 
     public IReadOnlyList<UIThemeBackgroundStyle> BackgroundStyles => backgroundStyles;
@@ -32,6 +38,8 @@ public class UIThemeData : ScriptableObject
     public IReadOnlyList<UIThemeInputStyle> InputStyles => inputStyles;
     public IReadOnlyList<UIThemeDropdownStyle> DropdownStyles => dropdownStyles;
     public IReadOnlyList<UIThemeScrollStyle> ScrollStyles => scrollStyles;
+    public IReadOnlyList<UIThemeSliderStyle> SliderStyles => sliderStyles;
+    public IReadOnlyList<UIThemeToggleStyle> ToggleStyles => toggleStyles;
 
 #if UNITY_EDITOR
     private void OnValidate()

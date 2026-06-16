@@ -16,6 +16,8 @@ public class UIThemeDataEditor : Editor
     private bool inputSectionExpanded = false;
     private bool dropdownSectionExpanded = false;
     private bool scrollSectionExpanded = false;
+    private bool sliderSectionExpanded = false;
+    private bool toggleSectionExpanded = false;
 
     private SerializedProperty backgroundStylesProperty;
     private SerializedProperty buttonStylesProperty;
@@ -23,6 +25,8 @@ public class UIThemeDataEditor : Editor
     private SerializedProperty inputStylesProperty;
     private SerializedProperty dropdownStylesProperty;
     private SerializedProperty scrollStylesProperty;
+    private SerializedProperty sliderStylesProperty;
+    private SerializedProperty toggleStylesProperty;
 
     private void OnEnable()
     {
@@ -34,6 +38,8 @@ public class UIThemeDataEditor : Editor
         inputStylesProperty = serializedObject.FindProperty("inputStyles");
         dropdownStylesProperty = serializedObject.FindProperty("dropdownStyles");
         scrollStylesProperty = serializedObject.FindProperty("scrollStyles");
+        sliderStylesProperty = serializedObject.FindProperty("sliderStyles");
+        toggleStylesProperty = serializedObject.FindProperty("toggleStyles");
     }
 
     public override void OnInspectorGUI()
@@ -52,6 +58,8 @@ public class UIThemeDataEditor : Editor
         DrawInputSection();
         DrawDropdownSection();
         DrawScrollSection();
+        DrawSliderSection();
+        DrawToggleSection();
 
         bool changed = EditorGUI.EndChangeCheck();
 
@@ -158,6 +166,42 @@ public class UIThemeDataEditor : Editor
             scrollStylesProperty,
             "Scroll",
             DrawScrollStyleEntry
+        );
+    }
+
+    private void DrawSliderSection()
+    {
+        EditorGUILayout.Space(6);
+
+        sliderSectionExpanded = DrawRememberedSectionFoldout("Slider Section", sliderSectionExpanded);
+
+        if (!sliderSectionExpanded)
+        {
+            return;
+        }
+
+        DrawList(
+            sliderStylesProperty,
+            "Slider",
+            DrawSliderStyleEntry
+        );
+    }
+
+    private void DrawToggleSection()
+    {
+        EditorGUILayout.Space(6);
+
+        toggleSectionExpanded = DrawRememberedSectionFoldout("Toggle Section", toggleSectionExpanded);
+
+        if (!toggleSectionExpanded)
+        {
+            return;
+        }
+
+        DrawList(
+            toggleStylesProperty,
+            "Toggle",
+            DrawToggleStyleEntry
         );
     }
 
@@ -497,6 +541,92 @@ public class UIThemeDataEditor : Editor
         DrawFixedStyle(
             "Vertical Handle Image",
             scrollProperty.FindPropertyRelative("verticalHandleImage"),
+            DrawImageComponentFields
+        );
+    }
+
+    private void DrawSliderStyleEntry(SerializedProperty sliderProperty)
+    {
+        EditorGUILayout.PropertyField(
+            sliderProperty.FindPropertyRelative("sliderType"),
+            new GUIContent("Type")
+        );
+
+        EditorGUILayout.Space(6);
+
+        EditorGUILayout.LabelField("Slider Root", EditorStyles.boldLabel);
+
+        DrawFixedStyle(
+            "Slider Visual",
+            sliderProperty.FindPropertyRelative("sliderVisual"),
+            DrawSelectableVisualFields
+        );
+
+        EditorGUILayout.Space(6);
+
+        EditorGUILayout.LabelField("Background", EditorStyles.boldLabel);
+
+        DrawFixedStyle(
+            "Background Image",
+            sliderProperty.FindPropertyRelative("backgroundImage"),
+            DrawImageComponentFields
+        );
+
+        EditorGUILayout.Space(6);
+
+        EditorGUILayout.LabelField("Fill", EditorStyles.boldLabel);
+
+        DrawFixedStyle(
+            "Fill Image",
+            sliderProperty.FindPropertyRelative("fillImage"),
+            DrawImageComponentFields
+        );
+
+        EditorGUILayout.Space(6);
+
+        EditorGUILayout.LabelField("Handle", EditorStyles.boldLabel);
+
+        DrawFixedStyle(
+            "Handle Image",
+            sliderProperty.FindPropertyRelative("handleImage"),
+            DrawImageComponentFields
+        );
+    }
+
+    private void DrawToggleStyleEntry(SerializedProperty toggleProperty)
+    {
+        EditorGUILayout.PropertyField(
+            toggleProperty.FindPropertyRelative("toggleType"),
+            new GUIContent("Type")
+        );
+
+        EditorGUILayout.Space(6);
+
+        EditorGUILayout.LabelField("Toggle Root", EditorStyles.boldLabel);
+
+        DrawFixedStyle(
+            "Toggle Visual",
+            toggleProperty.FindPropertyRelative("toggleVisual"),
+            DrawSelectableVisualFields
+        );
+
+        EditorGUILayout.Space(6);
+
+        EditorGUILayout.LabelField("Background", EditorStyles.boldLabel);
+
+        DrawFixedStyle(
+            "Background Image",
+            toggleProperty.FindPropertyRelative("backgroundImage"),
+            DrawImageComponentFields
+        );
+
+        EditorGUILayout.Space(6);
+
+        EditorGUILayout.LabelField("Checkmark", EditorStyles.boldLabel);
+
+        DrawFixedStyle(
+            "Checkmark Image",
+            toggleProperty.FindPropertyRelative("checkmarkImage"),
             DrawImageComponentFields
         );
     }

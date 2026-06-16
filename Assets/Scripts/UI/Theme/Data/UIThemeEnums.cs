@@ -14,7 +14,9 @@ public enum UIThemeSectionType
     Text,
     Input,
     Dropdown,
-    Scroll
+    Scroll,
+    Slider,
+    Toggle
 }
 
 public enum UIThemeBackgroundType
@@ -57,4 +59,14 @@ public enum UIThemeDropdownType
 public enum UIThemeScrollType
 {
     Default
+}
+
+public enum UIThemeSliderType
+{
+    Default
+}
+
+public enum UIThemeToggleType
+{
+    RadioButton
 }

@@ -7,7 +7,7 @@ public class UserInfoPopupController : MonoBehaviour
     [Header("Managers")]
     private PopupManager popupManager;
     private UserManager userManager;
-    [SerializeField] private UIIconManager iconManager;
+    private UIIconManager iconManager;
     [SerializeField] private IconSelectPopupController iconSelectPopupController;
 
     [Header("Icon Section")]

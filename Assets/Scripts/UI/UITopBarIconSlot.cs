@@ -26,6 +26,7 @@ public class UITopBarIconSlot : MonoBehaviour,
     [SerializeField] private float pressedScale = 0.92f;
 
     private UIMessageData tooltipMessageData;
+    private ToolTipManager toolTipManager;
 
     private Action clickCallback;
 
@@ -36,13 +37,14 @@ public class UITopBarIconSlot : MonoBehaviour,
     private void Awake()
     {
         FindMissingReferences();
+        CacheToolTipManager();
     }
 
     private void OnDisable()
     {
-        if (isHovering && ToolTipManager.instance != null)
+        if (isHovering && CacheToolTipManager())
         {
-            ToolTipManager.instance.HideToolTip();
+            toolTipManager.HideToolTip();
         }
 
         isHovering = false;
@@ -86,9 +88,9 @@ public class UITopBarIconSlot : MonoBehaviour,
         isHovering = true;
         ApplyVisualState();
 
-        if (tooltipMessageData != null && ToolTipManager.instance != null)
+        if (tooltipMessageData != null && CacheToolTipManager())
         {
-            ToolTipManager.instance.ShowToolTip(tooltipMessageData, GetComponent<RectTransform>());
+            toolTipManager.ShowToolTip(tooltipMessageData, GetComponent<RectTransform>());
         }
     }
 
@@ -98,9 +100,9 @@ public class UITopBarIconSlot : MonoBehaviour,
         isPressed = false;
         ApplyVisualState();
 
-        if (ToolTipManager.instance != null)
+        if (CacheToolTipManager())
         {
-            ToolTipManager.instance.HideToolTip();
+            toolTipManager.HideToolTip();
         }
     }
 
@@ -128,9 +130,9 @@ public class UITopBarIconSlot : MonoBehaviour,
             return;
         }
 
-        if (ToolTipManager.instance != null)
+        if (CacheToolTipManager())
         {
-            ToolTipManager.instance.HideToolTip();
+            toolTipManager.HideToolTip();
         }
 
         clickCallback?.Invoke();
@@ -178,5 +180,15 @@ public class UITopBarIconSlot : MonoBehaviour,
         {
             iconImage = GetComponentInChildren<Image>(true);
         }
+    }
+
+    private bool CacheToolTipManager()
+    {
+        if (toolTipManager == null)
+        {
+            toolTipManager = ToolTipManager.instance;
+        }
+
+        return toolTipManager != null;
     }
 }

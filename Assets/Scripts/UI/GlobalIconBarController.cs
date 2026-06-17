@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -38,7 +39,7 @@ public class GlobalIconBarController : MonoBehaviour
     [Header("Managers")]
     private PopupManager popupManager;
     private UserManager userManager;
-    [SerializeField] private UIIconManager iconManager;
+    private UIIconManager iconManager;
     [SerializeField] private IconSelectPopupController iconSelectPopupController;
 
     [Header("Top Icon Bar")]
@@ -50,6 +51,8 @@ public class GlobalIconBarController : MonoBehaviour
 
     private readonly List<RuntimeTopBarIcon> runtimeIcons = new List<RuntimeTopBarIcon>();
 
+    private Coroutine delayedRefreshRoutine;
+
     private void OnEnable()
     {
         CacheManagers();
@@ -60,30 +63,44 @@ public class GlobalIconBarController : MonoBehaviour
         SaveManager.SaveDataChanged += RefreshTopBarIcons;
 
         RefreshTopBarIcons();
+        QueueDelayedRefresh();
     }
 
     private void OnDisable()
     {
+        if (delayedRefreshRoutine != null)
+        {
+            StopCoroutine(delayedRefreshRoutine);
+            delayedRefreshRoutine = null;
+        }
+
         UserManager.UserChanged -= RefreshTopBarIcons;
         SaveManager.SaveDataChanged -= RefreshTopBarIcons;
     }
 
+    private void QueueDelayedRefresh()
+    {
+        if (delayedRefreshRoutine != null)
+        {
+            StopCoroutine(delayedRefreshRoutine);
+        }
+
+        delayedRefreshRoutine = StartCoroutine(DelayedRefreshTopBarIcons());
+    }
+
+    private IEnumerator DelayedRefreshTopBarIcons()
+    {
+        yield return null;
+
+        delayedRefreshRoutine = null;
+
+        CacheManagers();
+        RefreshTopBarIcons();
+    }
+
     private void CacheManagers()
     {
-        if (popupManager == null)
-        {
-            popupManager = PopupManager.instance;
-        }
-
-        if (userManager == null)
-        {
-            userManager = UserManager.instance;
-        }
-
-        if (iconManager == null)
-        {
-            iconManager = UIIconManager.instance;
-        }
+        FindMissingReferences();
     }
 
     public void BuildTopIconBar()
@@ -177,6 +194,8 @@ public class GlobalIconBarController : MonoBehaviour
 
     private void ToggleUserPopup()
     {
+        CacheManagers();
+
         if (userManager != null && userManager.HasUser)
         {
             popupManager.TogglePopup(PopupId.UserInfo);
@@ -227,6 +246,8 @@ public class GlobalIconBarController : MonoBehaviour
 
     private Sprite GetSavedUserIconSprite()
     {
+        CacheManagers();
+
         if (userManager == null || !userManager.HasUser)
         {
             return null;
@@ -237,11 +258,6 @@ public class GlobalIconBarController : MonoBehaviour
         if (string.IsNullOrWhiteSpace(iconId))
         {
             return null;
-        }
-
-        if (iconManager == null)
-        {
-            iconManager = UIIconManager.instance;
         }
 
         if (iconManager == null)
@@ -286,6 +302,16 @@ public class GlobalIconBarController : MonoBehaviour
 
     private void FindMissingReferences()
     {
+        if (popupManager == null)
+        {
+            popupManager = PopupManager.instance;
+        }
+
+        if (userManager == null)
+        {
+            userManager = UserManager.instance;
+        }
+
         if (iconManager == null)
         {
             iconManager = UIIconManager.instance;

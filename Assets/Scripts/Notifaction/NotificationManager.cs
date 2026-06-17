@@ -32,11 +32,18 @@ public class NotificationManager : MonoBehaviour
     private Coroutine notificationRoutine;
     private bool isPlayingNotification;
 
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetStaticState()
+    {
+        instance = null;
+    }
+
     private void Awake()
     {
         if (instance != null && instance != this)
         {
-            Debug.LogWarning("Replacing NotificationManager instance with current scene instance.");
+            Destroy(this);
+            return;
         }
 
         instance = this;

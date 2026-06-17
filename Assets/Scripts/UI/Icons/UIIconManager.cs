@@ -10,6 +10,12 @@ public class UIIconManager : MonoBehaviour
 
     public IReadOnlyList<UserIconData> PlayerIcons => playerIcons;
 
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetStaticState()
+    {
+        instance = null;
+    }
+
     private void Awake()
     {
         if (instance != null && instance != this)
@@ -19,6 +25,14 @@ public class UIIconManager : MonoBehaviour
         }
 
         instance = this;
+    }
+
+    private void OnDestroy()
+    {
+        if (instance == this)
+        {
+            instance = null;
+        }
     }
 
     public UserIconData GetPlayerIconById(string iconId)

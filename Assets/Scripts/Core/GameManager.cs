@@ -11,12 +11,11 @@ public class GameManager : MonoBehaviour, ISceneReadyCheck
     [Header("Lifetime")]
     [SerializeField] private bool dontDestroyOnLoad = true;
 
-    [Header("Managers")]
-    [SerializeField] private SaveManager saveManager;
-    [SerializeField] private UserManager userManager;
+    private SaveManager saveManager;
+    private UserManager userManager;
 
-    public SaveManager SaveManager => saveManager;
-    public UserManager UserManager => userManager;
+    public SaveManager Save => saveManager;
+    public UserManager User => userManager;
 
     public string ReadyName => "Game Manager";
     public bool IsReady => isReady;
@@ -38,10 +37,6 @@ public class GameManager : MonoBehaviour, ISceneReadyCheck
 
         instance = this;
 
-        FindManagersOnGameObject();
-
-        isReady = HasSaveManager() && HasUserManager();
-
         if (dontDestroyOnLoad)
         {
             if (transform.parent != null)
@@ -57,12 +52,11 @@ public class GameManager : MonoBehaviour, ISceneReadyCheck
 
     private void Start()
     {
-        RegisterReadyCheck();
-    }
+        CacheManagerInstances();
 
-    private void OnValidate()
-    {
-        FindManagersOnGameObject();
+        isReady = HasSaveManager() && HasUserManager();
+
+        RegisterReadyCheck();
     }
 
     private void OnDestroy()
@@ -72,6 +66,19 @@ public class GameManager : MonoBehaviour, ISceneReadyCheck
         if (instance == this)
         {
             instance = null;
+        }
+    }
+
+    private void CacheManagerInstances()
+    {
+        if (saveManager == null)
+        {
+            saveManager = SaveManager.instance;
+        }
+
+        if (userManager == null)
+        {
+            userManager = UserManager.instance;
         }
     }
 
@@ -99,26 +106,23 @@ public class GameManager : MonoBehaviour, ISceneReadyCheck
 
     #endregion
 
-    private void FindManagersOnGameObject()
+    public bool HasSaveManager()
     {
         if (saveManager == null)
         {
-            saveManager = GetComponent<SaveManager>();
+            saveManager = SaveManager.instance;
         }
 
-        if (userManager == null)
-        {
-            userManager = GetComponent<UserManager>();
-        }
-    }
-
-    public bool HasSaveManager()
-    {
         return saveManager != null;
     }
 
     public bool HasUserManager()
     {
+        if (userManager == null)
+        {
+            userManager = UserManager.instance;
+        }
+
         return userManager != null;
     }
 }

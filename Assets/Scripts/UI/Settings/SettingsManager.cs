@@ -78,6 +78,8 @@ public class SettingsManager : MonoBehaviour, ISaveManager, ISceneReadyCheck
 
     private void OnDestroy()
     {
+        UnregisterReadyCheck();
+
         if (instance == this)
         {
             instance = null;

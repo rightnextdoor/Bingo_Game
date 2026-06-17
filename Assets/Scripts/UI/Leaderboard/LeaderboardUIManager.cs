@@ -6,6 +6,8 @@ using UnityEngine;
 
 public class LeaderboardUIManager : MonoBehaviour
 {
+    public static LeaderboardUIManager instance;
+
     #region Inspector Fields
 
     [Header("Title")]
@@ -128,6 +130,31 @@ public class LeaderboardUIManager : MonoBehaviour
     }
 
     #endregion
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetStaticState()
+    {
+        instance = null;
+    }
+
+    private void Awake()
+    {
+        if (instance != null && instance != this)
+        {
+            Destroy(this);
+            return;
+        }
+
+        instance = this;
+    }
+
+    private void OnDestroy()
+    {
+        if (instance == this)
+        {
+            instance = null;
+        }
+    }
 
     #region User Setup
 

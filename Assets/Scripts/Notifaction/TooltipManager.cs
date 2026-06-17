@@ -11,11 +11,18 @@ public class ToolTipManager : MonoBehaviour
     private UIMessageData currentMessageData;
     private RectTransform currentTargetRect;
 
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetStaticState()
+    {
+        instance = null;
+    }
+
     private void Awake()
     {
         if (instance != null && instance != this)
         {
-            Debug.LogWarning("Replacing ToolTipManager instance with current scene instance.");
+            Destroy(this);
+            return;
         }
 
         instance = this;

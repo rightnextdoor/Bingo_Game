@@ -20,8 +20,7 @@ public class GameSceneManager : MonoBehaviour
 
     #region Inspector Fields
 
-    [Header("Managers")]
-    [SerializeField] private SceneReadyController sceneReadyController;
+    private SceneReadyController sceneReadyController;
 
     [Header("Startup")]
     [SerializeField] private bool showLoadingOnStart = true;
@@ -51,11 +50,17 @@ public class GameSceneManager : MonoBehaviour
 
     #region Unity Methods
 
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetStaticState()
+    {
+        instance = null;
+    }
+
     private void Awake()
     {
         if (instance != null && instance != this)
         {
-            Destroy(gameObject);
+            Destroy(this);
             return;
         }
 
@@ -63,6 +68,14 @@ public class GameSceneManager : MonoBehaviour
         DontDestroyOnLoad(gameObject);
 
         ResolveReferences();
+    }
+
+    private void OnDestroy()
+    {
+        if (instance == this)
+        {
+            instance = null;
+        }
     }
 
     private void Start()
@@ -177,7 +190,6 @@ public class GameSceneManager : MonoBehaviour
         currentSceneType = sceneType;
 
         ResolveReferences();
-
 
         LoadingFaderManager loader = CurrentLoader;
 

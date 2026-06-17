@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Threading.Tasks;
 using UnityEngine;
 
 public class FileDataHandler
@@ -10,6 +11,8 @@ public class FileDataHandler
     private readonly bool encryptData;
     private readonly string codeWord = "bingo-save-key-2026";
 
+    private readonly object fileLock = new object();
+
     public FileDataHandler(string dataDirPath, string dataFileName, bool encryptData)
     {
         this.dataDirPath = dataDirPath;
@@ -19,86 +22,149 @@ public class FileDataHandler
 
     public void Save(GameData data)
     {
-        string fullPath = Path.Combine(dataDirPath, dataFileName);
-
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(fullPath));
+            string jsonData = JsonUtility.ToJson(data, true);
+            SaveJson(jsonData);
+        }
+        catch (Exception exception)
+        {
+            Debug.LogError($"Error trying to save data.\n{exception}");
+        }
+    }
 
-            string dataToStore = JsonUtility.ToJson(data, true);
+    public Task SaveJsonAsync(string jsonData)
+    {
+        return Task.Run(() => SaveJson(jsonData));
+    }
+
+    public void SaveJson(string jsonData)
+    {
+        string fullPath = GetFullPath();
+        string tempPath = $"{fullPath}.tmp";
+
+        lock (fileLock)
+        {
+            Directory.CreateDirectory(dataDirPath);
+
+            string dataToStore = jsonData;
 
             if (encryptData)
             {
                 dataToStore = EncryptDecrypt(dataToStore);
             }
 
-            using FileStream stream = new FileStream(fullPath, FileMode.Create);
-            using StreamWriter writer = new StreamWriter(stream);
+            File.WriteAllText(tempPath, dataToStore);
 
-            writer.Write(dataToStore);
-        }
-        catch (Exception exception)
-        {
-            Debug.LogError($"Error trying to save data to file: {fullPath}\n{exception}");
+            if (File.Exists(fullPath))
+            {
+                File.Delete(fullPath);
+            }
+
+            File.Move(tempPath, fullPath);
         }
     }
 
     public GameData Load()
     {
-        string fullPath = Path.Combine(dataDirPath, dataFileName);
-
-        if (!File.Exists(fullPath))
-        {
-            return null;
-        }
-
         try
         {
-            string dataToLoad;
+            string jsonData = LoadJson();
 
-            using FileStream stream = new FileStream(fullPath, FileMode.Open);
-            using StreamReader reader = new StreamReader(stream);
+            if (string.IsNullOrEmpty(jsonData))
+            {
+                return null;
+            }
 
-            dataToLoad = reader.ReadToEnd();
+            return JsonUtility.FromJson<GameData>(jsonData);
+        }
+        catch (Exception exception)
+        {
+            Debug.LogError($"Error trying to load data.\n{exception}");
+            return null;
+        }
+    }
+
+    public Task<string> LoadJsonAsync()
+    {
+        return Task.Run(LoadJson);
+    }
+
+    public string LoadJson()
+    {
+        string fullPath = GetFullPath();
+
+        lock (fileLock)
+        {
+            if (!File.Exists(fullPath))
+            {
+                return null;
+            }
+
+            string dataToLoad = File.ReadAllText(fullPath);
 
             if (encryptData)
             {
                 dataToLoad = EncryptDecrypt(dataToLoad);
             }
 
-            return JsonUtility.FromJson<GameData>(dataToLoad);
+            return dataToLoad;
         }
-        catch (Exception exception)
+    }
+
+    public bool Exists()
+    {
+        string fullPath = GetFullPath();
+
+        lock (fileLock)
         {
-            Debug.LogError($"Error trying to load data from file: {fullPath}\n{exception}");
-            return null;
+            return File.Exists(fullPath);
         }
     }
 
     public void Delete()
     {
-        string fullPath = Path.Combine(dataDirPath, dataFileName);
+        string fullPath = GetFullPath();
+        string tempPath = $"{fullPath}.tmp";
 
-        if (File.Exists(fullPath))
+        lock (fileLock)
         {
-            File.Delete(fullPath);
-            Debug.Log($"Deleted save file: {fullPath}");
+            if (File.Exists(tempPath))
+            {
+                File.Delete(tempPath);
+            }
+
+            if (File.Exists(fullPath))
+            {
+                File.Delete(fullPath);
+                Debug.Log($"Deleted save file: {fullPath}");
+            }
+            else
+            {
+                Debug.Log($"No save file found to delete: {fullPath}");
+            }
         }
-        else
-        {
-            Debug.Log($"No save file found to delete: {fullPath}");
-        }
+    }
+
+    private string GetFullPath()
+    {
+        return Path.Combine(dataDirPath, dataFileName);
     }
 
     private string EncryptDecrypt(string data)
     {
-        string modifiedData = string.Empty;
+        if (string.IsNullOrEmpty(data))
+        {
+            return data;
+        }
+
+        char[] modifiedData = new char[data.Length];
 
         for (int i = 0; i < data.Length; i++)
         {
-            modifiedData += (char)(data[i] ^ codeWord[i % codeWord.Length]);
+            modifiedData[i] = (char)(data[i] ^ codeWord[i % codeWord.Length]);
         }
 
-        return modifiedData;
+        return new string(modifiedData);
     }
 }

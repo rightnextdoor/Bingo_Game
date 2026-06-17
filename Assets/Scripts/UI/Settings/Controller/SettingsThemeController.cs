@@ -36,6 +36,7 @@ public class SettingsThemeController : MonoBehaviour
 
     private void Awake()
     {
+        FindMissingReferences();
         ClearThemeOptions();
     }
 
@@ -45,18 +46,29 @@ public class SettingsThemeController : MonoBehaviour
 
     public void BuildThemeOptions(IReadOnlyList<UIThemeData> themeDataList, UIThemeType selectedThemeType)
     {
+        FindMissingReferences();
+
         isBuilding = true;
 
         ClearThemeOptions();
 
-        if (themeOptionPrefab == null || themeContent == null)
+        if (themeOptionPrefab == null)
         {
+            Debug.LogWarning("SettingsThemeController needs a Theme Option Prefab.");
+            isBuilding = false;
+            return;
+        }
+
+        if (themeContent == null)
+        {
+            Debug.LogWarning("SettingsThemeController needs Theme Content assigned.");
             isBuilding = false;
             return;
         }
 
         if (themeDataList == null || themeDataList.Count == 0)
         {
+            Debug.LogWarning("SettingsThemeController received no theme data to build.");
             isBuilding = false;
             return;
         }
@@ -90,11 +102,22 @@ public class SettingsThemeController : MonoBehaviour
             }
         }
 
+        Canvas.ForceUpdateCanvases();
+
+        if (themeContent != null)
+        {
+            LayoutRebuilder.ForceRebuildLayoutImmediate(themeContent);
+        }
+
         isBuilding = false;
 
         if (selectedIndex >= 0 && scrollSelectedThemeIntoView)
         {
             ScrollToThemeItem(selectedIndex);
+        }
+        else
+        {
+            ResetScrollPosition();
         }
     }
 
@@ -128,25 +151,6 @@ public class SettingsThemeController : MonoBehaviour
 
     public void ClearThemeOptions()
     {
-        for (int i = spawnedThemeItems.Count - 1; i >= 0; i--)
-        {
-            ThemeOptionItemUI item = spawnedThemeItems[i];
-
-            if (item == null)
-            {
-                continue;
-            }
-
-            if (Application.isPlaying)
-            {
-                Destroy(item.gameObject);
-            }
-            else
-            {
-                DestroyImmediate(item.gameObject);
-            }
-        }
-
         spawnedThemeItems.Clear();
 
         if (themeContent == null)
@@ -163,14 +167,29 @@ public class SettingsThemeController : MonoBehaviour
                 continue;
             }
 
-            if (Application.isPlaying)
-            {
-                Destroy(child.gameObject);
-            }
-            else
-            {
-                DestroyImmediate(child.gameObject);
-            }
+            Destroy(child.gameObject);
+        }
+    }
+
+    #endregion
+
+    #region Setup Helpers
+
+    private void FindMissingReferences()
+    {
+        if (themeScrollRect == null)
+        {
+            themeScrollRect = GetComponentInChildren<ScrollRect>(true);
+        }
+
+        if (themeScrollRect != null && themeContent == null)
+        {
+            themeContent = themeScrollRect.content;
+        }
+
+        if (themeContent != null && themeToggleGroup == null)
+        {
+            themeToggleGroup = themeContent.GetComponent<ToggleGroup>();
         }
     }
 
@@ -192,6 +211,17 @@ public class SettingsThemeController : MonoBehaviour
 
     #region Scroll
 
+    private void ResetScrollPosition()
+    {
+        if (themeScrollRect == null)
+        {
+            return;
+        }
+
+        themeScrollRect.horizontalNormalizedPosition = 0f;
+        themeScrollRect.verticalNormalizedPosition = 1f;
+    }
+
     private void ScrollToThemeItem(int selectedIndex)
     {
         if (themeScrollRect == null || themeContent == null)
@@ -205,6 +235,7 @@ public class SettingsThemeController : MonoBehaviour
         }
 
         Canvas.ForceUpdateCanvases();
+        LayoutRebuilder.ForceRebuildLayoutImmediate(themeContent);
 
         RectTransform viewport = themeScrollRect.viewport;
 
@@ -220,6 +251,19 @@ public class SettingsThemeController : MonoBehaviour
             return;
         }
 
+        if (themeScrollRect.horizontal)
+        {
+            ScrollToThemeItemHorizontal(selectedItemRect, viewport);
+        }
+
+        if (themeScrollRect.vertical)
+        {
+            ScrollToThemeItemVertical(selectedItemRect, viewport);
+        }
+    }
+
+    private void ScrollToThemeItemHorizontal(RectTransform selectedItemRect, RectTransform viewport)
+    {
         float contentWidth = themeContent.rect.width;
         float viewportWidth = viewport.rect.width;
         float overflowWidth = contentWidth - viewportWidth;
@@ -239,7 +283,29 @@ public class SettingsThemeController : MonoBehaviour
         float normalizedPosition = Mathf.Clamp01(-targetContentX / overflowWidth);
 
         themeScrollRect.horizontalNormalizedPosition = normalizedPosition;
-        themeScrollRect.verticalNormalizedPosition = 1f;
+    }
+
+    private void ScrollToThemeItemVertical(RectTransform selectedItemRect, RectTransform viewport)
+    {
+        float contentHeight = themeContent.rect.height;
+        float viewportHeight = viewport.rect.height;
+        float overflowHeight = contentHeight - viewportHeight;
+
+        if (overflowHeight <= 0f)
+        {
+            themeScrollRect.verticalNormalizedPosition = 1f;
+            return;
+        }
+
+        float itemTop = -selectedItemRect.anchoredPosition.y - selectedItemRect.rect.height * (1f - selectedItemRect.pivot.y);
+        float itemCenter = itemTop + selectedItemRect.rect.height * 0.5f;
+
+        float targetContentY = viewportHeight * 0.5f - itemCenter;
+        targetContentY = Mathf.Clamp(targetContentY, -overflowHeight, 0f);
+
+        float normalizedPosition = Mathf.Clamp01(1f + targetContentY / overflowHeight);
+
+        themeScrollRect.verticalNormalizedPosition = normalizedPosition;
     }
 
     #endregion

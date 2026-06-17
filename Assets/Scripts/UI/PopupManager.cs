@@ -29,6 +29,8 @@ public class PopupManager : MonoBehaviour
     [Header("Popups")]
     [SerializeField] private List<PopupBinding> popups = new();
 
+    public event Action<PopupId> PopupClosed;
+
     private PopupId activePopupId = PopupId.None;
 
     public PopupId ActivePopupId => activePopupId;
@@ -84,6 +86,8 @@ public class PopupManager : MonoBehaviour
             return;
         }
 
+        PopupId closedPopupId = activePopupId;
+
         GameObject popup = GetPopupObject(activePopupId);
 
         if (popup != null)
@@ -97,10 +101,14 @@ public class PopupManager : MonoBehaviour
         {
             popupOverlay.SetActive(false);
         }
+
+        PopupClosed?.Invoke(closedPopupId);
     }
 
     public void CloseAllPopups()
     {
+        PopupId closedPopupId = activePopupId;
+
         foreach (PopupBinding binding in popups)
         {
             if (binding.popupObject != null)
@@ -114,6 +122,11 @@ public class PopupManager : MonoBehaviour
         if (popupOverlay != null)
         {
             popupOverlay.SetActive(false);
+        }
+
+        if (closedPopupId != PopupId.None)
+        {
+            PopupClosed?.Invoke(closedPopupId);
         }
     }
 

@@ -8,6 +8,7 @@ public class UIThemeBackground : MonoBehaviour, IUIThemeTarget
 
     [Header("Components")]
     [SerializeField] private Image backgroundImage;
+    private UIThemeManager themeManager;
 
     private void OnEnable()
     {
@@ -21,12 +22,11 @@ public class UIThemeBackground : MonoBehaviour, IUIThemeTarget
 
     private void OnDisable()
     {
-        if (UIThemeManager.instance == null)
+        if (themeManager != null)
         {
-            return;
+            themeManager.Unregister(this);
+            themeManager = null;
         }
-
-        UIThemeManager.instance.Unregister(this);
     }
 
 #if UNITY_EDITOR
@@ -38,22 +38,32 @@ public class UIThemeBackground : MonoBehaviour, IUIThemeTarget
 
     private void RegisterWithManager()
     {
-        if (UIThemeManager.instance == null)
+        if (!CacheThemeManager())
         {
             return;
         }
 
-        UIThemeManager.instance.Register(this);
+        themeManager.Register(this);
+    }
+
+    private bool CacheThemeManager()
+    {
+        if (themeManager == null)
+        {
+            themeManager = UIThemeManager.instance;
+        }
+
+        return themeManager != null;
     }
 
     public void ReapplyTheme()
     {
-        if (UIThemeManager.instance == null)
+        if (!CacheThemeManager())
         {
             return;
         }
 
-        UIThemeStyle style = UIThemeManager.instance.ApplyTheme(
+        UIThemeStyle style = themeManager.ApplyTheme(
             UIThemeSectionType.Background,
             backgroundType
         ) as UIThemeStyle;

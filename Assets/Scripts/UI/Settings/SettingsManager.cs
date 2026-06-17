@@ -45,6 +45,8 @@ public class SettingsManager : MonoBehaviour, ISaveManager, ISceneReadyCheck
 
     #region Private Fields
 
+    private UIThemeManager themeManager;
+
     private SettingsData settingsData;
 
     private readonly List<ResolutionOption> resolutionOptions = new();
@@ -91,10 +93,24 @@ public class SettingsManager : MonoBehaviour, ISaveManager, ISceneReadyCheck
     private void Start()
     {
         if (PopupManager.instance != null)
+        {
             popupManager = PopupManager.instance;
+        }
+
+        CacheThemeManager();
 
         RegisterReadyCheck();
         TryLoadFromCurrentSaveData();
+    }
+
+    private bool CacheThemeManager()
+    {
+        if (themeManager == null)
+        {
+            themeManager = UIThemeManager.instance;
+        }
+
+        return themeManager != null;
     }
 
     private void OnDisable()
@@ -313,13 +329,13 @@ public class SettingsManager : MonoBehaviour, ISaveManager, ISceneReadyCheck
     {
         EnsureSettingsData();
 
-        if (UIThemeManager.instance == null)
+        if (!CacheThemeManager())
         {
             Debug.LogWarning("SettingsManager could not apply theme because UIThemeManager.instance is missing.");
             return;
         }
 
-        UIThemeType finalThemeType = UIThemeManager.instance.ValidateAndSetTheme(selectedThemeType);
+        UIThemeType finalThemeType = themeManager.ValidateAndSetTheme(selectedThemeType);
 
         settingsData.selectedThemeType = finalThemeType;
 
@@ -411,12 +427,12 @@ public class SettingsManager : MonoBehaviour, ISaveManager, ISceneReadyCheck
             return;
         }
 
-        if (UIThemeManager.instance == null)
+        if (!CacheThemeManager())
         {
             return;
         }
 
-        UIThemeType finalThemeType = UIThemeManager.instance.ValidateAndSetTheme(settingsData.selectedThemeType);
+        UIThemeType finalThemeType = themeManager.ValidateAndSetTheme(settingsData.selectedThemeType);
         settingsData.selectedThemeType = finalThemeType;
     }
 
@@ -471,13 +487,13 @@ public class SettingsManager : MonoBehaviour, ISaveManager, ISceneReadyCheck
 
     private bool ValidateThemeSettings()
     {
-        if (UIThemeManager.instance == null)
+        if (!CacheThemeManager())
         {
             return false;
         }
 
         UIThemeType beforeThemeType = settingsData.selectedThemeType;
-        UIThemeType finalThemeType = UIThemeManager.instance.ValidateAndSetTheme(beforeThemeType);
+        UIThemeType finalThemeType = themeManager.ValidateAndSetTheme(beforeThemeType);
 
         settingsData.selectedThemeType = finalThemeType;
 
@@ -541,14 +557,14 @@ public class SettingsManager : MonoBehaviour, ISaveManager, ISceneReadyCheck
             return;
         }
 
-        if (UIThemeManager.instance == null)
+        if (!CacheThemeManager())
         {
             themeController.InitializeThemeOptions(null, settingsData.selectedThemeType);
             return;
         }
 
         themeController.InitializeThemeOptions(
-            UIThemeManager.instance.GetThemeDataList(),
+            themeManager.GetThemeDataList(),
             settingsData.selectedThemeType
         );
     }

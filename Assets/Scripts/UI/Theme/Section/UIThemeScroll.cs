@@ -5,6 +5,7 @@ using UnityEngine.UI;
 public class UIThemeScroll : MonoBehaviour, IUIThemeTarget
 {
     [SerializeField] private UIThemeScrollType scrollType;
+    private UIThemeManager themeManager;
 
     [Header("Root")]
     [SerializeField] private Image rootImage;
@@ -34,12 +35,11 @@ public class UIThemeScroll : MonoBehaviour, IUIThemeTarget
 
     private void OnDisable()
     {
-        if (UIThemeManager.instance == null)
+        if (themeManager != null)
         {
-            return;
+            themeManager.Unregister(this);
+            themeManager = null;
         }
-
-        UIThemeManager.instance.Unregister(this);
     }
 
 #if UNITY_EDITOR
@@ -51,22 +51,32 @@ public class UIThemeScroll : MonoBehaviour, IUIThemeTarget
 
     private void RegisterWithManager()
     {
-        if (UIThemeManager.instance == null)
+        if (!CacheThemeManager())
         {
             return;
         }
 
-        UIThemeManager.instance.Register(this);
+        themeManager.Register(this);
+    }
+
+    private bool CacheThemeManager()
+    {
+        if (themeManager == null)
+        {
+            themeManager = UIThemeManager.instance;
+        }
+
+        return themeManager != null;
     }
 
     public void ReapplyTheme()
     {
-        if (UIThemeManager.instance == null)
+        if (!CacheThemeManager())
         {
             return;
         }
 
-        UIThemeScrollStyle style = UIThemeManager.instance.ApplyTheme(
+        UIThemeScrollStyle style = themeManager.ApplyTheme(
             UIThemeSectionType.Scroll,
             scrollType
         ) as UIThemeScrollStyle;

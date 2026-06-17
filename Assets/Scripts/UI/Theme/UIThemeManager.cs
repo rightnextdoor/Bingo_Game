@@ -30,13 +30,21 @@ public class UIThemeManager : MonoBehaviour
     private readonly List<UIThemeSliderStyle> activeSliderStyles = new();
     private readonly List<UIThemeToggleStyle> activeToggleStyles = new();
 
-
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetStaticState()
+    {
+        instance = null;
+    }
 
     private void Awake()
     {
         if (instance != null && instance != this)
         {
-            Destroy(this);
+            if (Application.isPlaying)
+            {
+                Destroy(this);
+            }
+
             return;
         }
 
@@ -55,7 +63,10 @@ public class UIThemeManager : MonoBehaviour
 #if UNITY_EDITOR
     private void OnValidate()
     {
-        instance = this;
+        if (instance != null && instance != this)
+        {
+            return;
+        }
 
         SetTheme(selectedThemeType);
 

@@ -7,6 +7,8 @@ public class UIThemeDropdown : MonoBehaviour, IUIThemeTarget
 {
     [SerializeField] private UIThemeDropdownType dropdownType;
 
+    private UIThemeManager themeManager;
+
     [Header("Dropdown Root")]
     [SerializeField] private Image dropdownImage;
     [SerializeField] private Selectable dropdownSelectable;
@@ -46,12 +48,11 @@ public class UIThemeDropdown : MonoBehaviour, IUIThemeTarget
 
     private void OnDisable()
     {
-        if (UIThemeManager.instance == null)
+        if (themeManager != null)
         {
-            return;
+            themeManager.Unregister(this);
+            themeManager = null;
         }
-
-        UIThemeManager.instance.Unregister(this);
     }
 
 #if UNITY_EDITOR
@@ -63,22 +64,32 @@ public class UIThemeDropdown : MonoBehaviour, IUIThemeTarget
 
     private void RegisterWithManager()
     {
-        if (UIThemeManager.instance == null)
+        if (!CacheThemeManager())
         {
             return;
         }
 
-        UIThemeManager.instance.Register(this);
+        themeManager.Register(this);
+    }
+
+    private bool CacheThemeManager()
+    {
+        if (themeManager == null)
+        {
+            themeManager = UIThemeManager.instance;
+        }
+
+        return themeManager != null;
     }
 
     public void ReapplyTheme()
     {
-        if (UIThemeManager.instance == null)
+        if (!CacheThemeManager())
         {
             return;
         }
 
-        UIThemeDropdownStyle style = UIThemeManager.instance.ApplyTheme(
+        UIThemeDropdownStyle style = themeManager.ApplyTheme(
             UIThemeSectionType.Dropdown,
             dropdownType
         ) as UIThemeDropdownStyle;

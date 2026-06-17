@@ -6,6 +6,8 @@ public class UIThemeText : MonoBehaviour, IUIThemeTarget
 {
     [SerializeField] private UIThemeTextType textType;
 
+    private UIThemeManager themeManager;
+
     [Header("Components")]
     [SerializeField] private TMP_Text text;
 
@@ -21,12 +23,11 @@ public class UIThemeText : MonoBehaviour, IUIThemeTarget
 
     private void OnDisable()
     {
-        if (UIThemeManager.instance == null)
+        if (themeManager != null)
         {
-            return;
+            themeManager.Unregister(this);
+            themeManager = null;
         }
-
-        UIThemeManager.instance.Unregister(this);
     }
 
 #if UNITY_EDITOR
@@ -38,12 +39,22 @@ public class UIThemeText : MonoBehaviour, IUIThemeTarget
 
     private void RegisterWithManager()
     {
-        if (UIThemeManager.instance == null)
+        if (!CacheThemeManager())
         {
             return;
         }
 
-        UIThemeManager.instance.Register(this);
+        themeManager.Register(this);
+    }
+
+    private bool CacheThemeManager()
+    {
+        if (themeManager == null)
+        {
+            themeManager = UIThemeManager.instance;
+        }
+
+        return themeManager != null;
     }
 
     public void SetTextType(UIThemeTextType newTextType)
@@ -54,12 +65,12 @@ public class UIThemeText : MonoBehaviour, IUIThemeTarget
 
     public void ReapplyTheme()
     {
-        if (UIThemeManager.instance == null)
+        if (!CacheThemeManager())
         {
             return;
         }
 
-        UIThemeStyle style = UIThemeManager.instance.ApplyTheme(
+        UIThemeStyle style = themeManager.ApplyTheme(
             UIThemeSectionType.Text,
             textType
         ) as UIThemeStyle;

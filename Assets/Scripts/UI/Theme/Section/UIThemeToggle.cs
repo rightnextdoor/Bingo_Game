@@ -6,6 +6,8 @@ public class UIThemeToggle : MonoBehaviour, IUIThemeTarget
 {
     [SerializeField] private UIThemeToggleType toggleType = UIThemeToggleType.RadioButton;
 
+    private UIThemeManager themeManager;
+
     [Header("Toggle Root")]
     [SerializeField] private Toggle toggle;
 
@@ -25,12 +27,11 @@ public class UIThemeToggle : MonoBehaviour, IUIThemeTarget
 
     private void OnDisable()
     {
-        if (UIThemeManager.instance == null)
+        if (themeManager != null)
         {
-            return;
+            themeManager.Unregister(this);
+            themeManager = null;
         }
-
-        UIThemeManager.instance.Unregister(this);
     }
 
 #if UNITY_EDITOR
@@ -42,22 +43,32 @@ public class UIThemeToggle : MonoBehaviour, IUIThemeTarget
 
     private void RegisterWithManager()
     {
-        if (UIThemeManager.instance == null)
+        if (!CacheThemeManager())
         {
             return;
         }
 
-        UIThemeManager.instance.Register(this);
+        themeManager.Register(this);
+    }
+
+    private bool CacheThemeManager()
+    {
+        if (themeManager == null)
+        {
+            themeManager = UIThemeManager.instance;
+        }
+
+        return themeManager != null;
     }
 
     public void ReapplyTheme()
     {
-        if (UIThemeManager.instance == null)
+        if (!CacheThemeManager())
         {
             return;
         }
 
-        UIThemeToggleStyle style = UIThemeManager.instance.ApplyTheme(
+        UIThemeToggleStyle style = themeManager.ApplyTheme(
             UIThemeSectionType.Toggle,
             toggleType
         ) as UIThemeToggleStyle;

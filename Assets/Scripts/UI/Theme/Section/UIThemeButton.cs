@@ -7,6 +7,8 @@ public class UIThemeButton : MonoBehaviour, IUIThemeTarget
 {
     [SerializeField] private UIThemeButtonType buttonType;
 
+    private UIThemeManager themeManager;
+
     [Header("Components")]
     [SerializeField] private Image buttonImage;
     [SerializeField] private Selectable selectable;
@@ -24,12 +26,11 @@ public class UIThemeButton : MonoBehaviour, IUIThemeTarget
 
     private void OnDisable()
     {
-        if (UIThemeManager.instance == null)
+        if (themeManager != null)
         {
-            return;
+            themeManager.Unregister(this);
+            themeManager = null;
         }
-
-        UIThemeManager.instance.Unregister(this);
     }
 
 #if UNITY_EDITOR
@@ -41,22 +42,32 @@ public class UIThemeButton : MonoBehaviour, IUIThemeTarget
 
     private void RegisterWithManager()
     {
-        if (UIThemeManager.instance == null)
+        if (!CacheThemeManager())
         {
             return;
         }
 
-        UIThemeManager.instance.Register(this);
+        themeManager.Register(this);
+    }
+
+    private bool CacheThemeManager()
+    {
+        if (themeManager == null)
+        {
+            themeManager = UIThemeManager.instance;
+        }
+
+        return themeManager != null;
     }
 
     public void ReapplyTheme()
     {
-        if (UIThemeManager.instance == null)
+        if (!CacheThemeManager())
         {
             return;
         }
 
-        UIThemeStyle style = UIThemeManager.instance.ApplyTheme(
+        UIThemeStyle style = themeManager.ApplyTheme(
             UIThemeSectionType.Button,
             buttonType
         ) as UIThemeStyle;

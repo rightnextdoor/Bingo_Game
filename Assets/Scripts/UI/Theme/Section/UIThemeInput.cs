@@ -7,6 +7,8 @@ public class UIThemeInput : MonoBehaviour, IUIThemeTarget
 {
     [SerializeField] private UIThemeInputType inputType;
 
+    private UIThemeManager themeManager;
+
     [Header("Field Components")]
     [SerializeField] private Image fieldImage;
     [SerializeField] private Selectable selectable;
@@ -27,12 +29,11 @@ public class UIThemeInput : MonoBehaviour, IUIThemeTarget
 
     private void OnDisable()
     {
-        if (UIThemeManager.instance == null)
+        if (themeManager != null)
         {
-            return;
+            themeManager.Unregister(this);
+            themeManager = null;
         }
-
-        UIThemeManager.instance.Unregister(this);
     }
 
 #if UNITY_EDITOR
@@ -44,22 +45,32 @@ public class UIThemeInput : MonoBehaviour, IUIThemeTarget
 
     private void RegisterWithManager()
     {
-        if (UIThemeManager.instance == null)
+        if (!CacheThemeManager())
         {
             return;
         }
 
-        UIThemeManager.instance.Register(this);
+        themeManager.Register(this);
+    }
+
+    private bool CacheThemeManager()
+    {
+        if (themeManager == null)
+        {
+            themeManager = UIThemeManager.instance;
+        }
+
+        return themeManager != null;
     }
 
     public void ReapplyTheme()
     {
-        if (UIThemeManager.instance == null)
+        if (!CacheThemeManager())
         {
             return;
         }
 
-        UIThemeInputStyle style = UIThemeManager.instance.ApplyTheme(
+        UIThemeInputStyle style = themeManager.ApplyTheme(
             UIThemeSectionType.Input,
             inputType
         ) as UIThemeInputStyle;

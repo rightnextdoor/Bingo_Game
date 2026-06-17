@@ -6,6 +6,8 @@ public class UIThemeSlider : MonoBehaviour, IUIThemeTarget
 {
     [SerializeField] private UIThemeSliderType sliderType;
 
+    private UIThemeManager themeManager;
+
     [Header("Slider Root")]
     [SerializeField] private Slider slider;
 
@@ -26,12 +28,11 @@ public class UIThemeSlider : MonoBehaviour, IUIThemeTarget
 
     private void OnDisable()
     {
-        if (UIThemeManager.instance == null)
+        if (themeManager != null)
         {
-            return;
+            themeManager.Unregister(this);
+            themeManager = null;
         }
-
-        UIThemeManager.instance.Unregister(this);
     }
 
 #if UNITY_EDITOR
@@ -43,22 +44,32 @@ public class UIThemeSlider : MonoBehaviour, IUIThemeTarget
 
     private void RegisterWithManager()
     {
-        if (UIThemeManager.instance == null)
+        if (!CacheThemeManager())
         {
             return;
         }
 
-        UIThemeManager.instance.Register(this);
+        themeManager.Register(this);
+    }
+
+    private bool CacheThemeManager()
+    {
+        if (themeManager == null)
+        {
+            themeManager = UIThemeManager.instance;
+        }
+
+        return themeManager != null;
     }
 
     public void ReapplyTheme()
     {
-        if (UIThemeManager.instance == null)
+        if (!CacheThemeManager())
         {
             return;
         }
 
-        UIThemeSliderStyle style = UIThemeManager.instance.ApplyTheme(
+        UIThemeSliderStyle style = themeManager.ApplyTheme(
             UIThemeSectionType.Slider,
             sliderType
         ) as UIThemeSliderStyle;

@@ -28,6 +28,8 @@ public class SettingsThemeController : MonoBehaviour
 
     private readonly List<ThemeOptionItemUI> spawnedThemeItems = new();
 
+    private bool hasInitializedContent;
+    private bool hasBuiltThemeOptions;
     private bool isBuilding;
 
     #endregion
@@ -36,42 +38,42 @@ public class SettingsThemeController : MonoBehaviour
 
     private void Awake()
     {
-        FindMissingReferences();
-        ClearThemeOptions();
+        InitializeContentOnce();
     }
 
     #endregion
 
     #region Public Methods
 
-    public void BuildThemeOptions(IReadOnlyList<UIThemeData> themeDataList, UIThemeType selectedThemeType)
+    public void InitializeThemeOptions(IReadOnlyList<UIThemeData> themeDataList, UIThemeType selectedThemeType)
     {
-        FindMissingReferences();
+        InitializeContentOnce();
 
-        isBuilding = true;
-
-        ClearThemeOptions();
+        if (hasBuiltThemeOptions)
+        {
+            UpdateSelectedTheme(selectedThemeType, false);
+            return;
+        }
 
         if (themeOptionPrefab == null)
         {
-            Debug.LogWarning("SettingsThemeController needs a Theme Option Prefab.");
-            isBuilding = false;
+            Debug.LogWarning("SettingsThemeController needs a Theme Option Prefab.", this);
             return;
         }
 
         if (themeContent == null)
         {
-            Debug.LogWarning("SettingsThemeController needs Theme Content assigned.");
-            isBuilding = false;
+            Debug.LogWarning("SettingsThemeController needs Theme Content assigned.", this);
             return;
         }
 
         if (themeDataList == null || themeDataList.Count == 0)
         {
-            Debug.LogWarning("SettingsThemeController received no theme data to build.");
-            isBuilding = false;
+            Debug.LogWarning("SettingsThemeController received no theme data to build.", this);
             return;
         }
+
+        isBuilding = true;
 
         int selectedIndex = -1;
 
@@ -86,6 +88,7 @@ public class SettingsThemeController : MonoBehaviour
 
             ThemeOptionItemUI item = Instantiate(themeOptionPrefab, themeContent);
             item.gameObject.SetActive(true);
+            item.name = $"ThemeOption_{themeData.ThemeType}";
 
             item.Setup(
                 themeData,
@@ -102,14 +105,11 @@ public class SettingsThemeController : MonoBehaviour
             }
         }
 
-        Canvas.ForceUpdateCanvases();
-
-        if (themeContent != null)
-        {
-            LayoutRebuilder.ForceRebuildLayoutImmediate(themeContent);
-        }
-
+        hasBuiltThemeOptions = true;
         isBuilding = false;
+
+        Canvas.ForceUpdateCanvases();
+        LayoutRebuilder.ForceRebuildLayoutImmediate(themeContent);
 
         if (selectedIndex >= 0 && scrollSelectedThemeIntoView)
         {
@@ -121,7 +121,7 @@ public class SettingsThemeController : MonoBehaviour
         }
     }
 
-    public void SetSelectedTheme(UIThemeType selectedThemeType, bool moveIntoView)
+    public void UpdateSelectedTheme(UIThemeType selectedThemeType, bool moveIntoView)
     {
         int selectedIndex = -1;
 
@@ -149,7 +149,42 @@ public class SettingsThemeController : MonoBehaviour
         }
     }
 
-    public void ClearThemeOptions()
+    #endregion
+
+    #region Setup Helpers
+
+    private void InitializeContentOnce()
+    {
+        if (hasInitializedContent)
+        {
+            return;
+        }
+
+        FindMissingReferences();
+        ClearStarterChildrenOnce();
+
+        hasInitializedContent = true;
+    }
+
+    private void FindMissingReferences()
+    {
+        if (themeScrollRect == null)
+        {
+            themeScrollRect = GetComponentInChildren<ScrollRect>(true);
+        }
+
+        if (themeScrollRect != null && themeContent == null)
+        {
+            themeContent = themeScrollRect.content;
+        }
+
+        if (themeContent != null && themeToggleGroup == null)
+        {
+            themeToggleGroup = themeContent.GetComponent<ToggleGroup>();
+        }
+    }
+
+    private void ClearStarterChildrenOnce()
     {
         spawnedThemeItems.Clear();
 
@@ -167,29 +202,8 @@ public class SettingsThemeController : MonoBehaviour
                 continue;
             }
 
+            child.gameObject.SetActive(false);
             Destroy(child.gameObject);
-        }
-    }
-
-    #endregion
-
-    #region Setup Helpers
-
-    private void FindMissingReferences()
-    {
-        if (themeScrollRect == null)
-        {
-            themeScrollRect = GetComponentInChildren<ScrollRect>(true);
-        }
-
-        if (themeScrollRect != null && themeContent == null)
-        {
-            themeContent = themeScrollRect.content;
-        }
-
-        if (themeContent != null && themeToggleGroup == null)
-        {
-            themeToggleGroup = themeContent.GetComponent<ToggleGroup>();
         }
     }
 

@@ -305,7 +305,7 @@ public class SettingsManager : MonoBehaviour, ISaveManager, ISceneReadyCheck
 
         if (themeController != null)
         {
-            themeController.SetSelectedTheme(finalThemeType, true);
+            themeController.UpdateSelectedTheme(finalThemeType, true);
         }
 
         MarkSettingsDirty();
@@ -523,11 +523,11 @@ public class SettingsManager : MonoBehaviour, ISaveManager, ISceneReadyCheck
 
         if (UIThemeManager.Instance == null)
         {
-            themeController.BuildThemeOptions(null, settingsData.selectedThemeType);
+            themeController.InitializeThemeOptions(null, settingsData.selectedThemeType);
             return;
         }
 
-        themeController.BuildThemeOptions(
+        themeController.InitializeThemeOptions(
             UIThemeManager.Instance.GetThemeDataList(),
             settingsData.selectedThemeType
         );

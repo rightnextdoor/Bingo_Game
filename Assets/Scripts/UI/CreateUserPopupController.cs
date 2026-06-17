@@ -5,7 +5,7 @@ using UnityEngine.UI;
 public class CreateUserPopupController : MonoBehaviour
 {
     [Header("Managers")]
-    [SerializeField] private PopupManager popupManager;
+    private PopupManager popupManager;
     [SerializeField] private UIIconManager iconManager;
     [SerializeField] private IconSelectPopupController iconSelectPopupController;
 
@@ -82,6 +82,12 @@ public class CreateUserPopupController : MonoBehaviour
         }
 
         ClearError();
+    }
+
+    private void Start()
+    {
+        if (PopupManager.instance != null)
+            popupManager = PopupManager.instance;
     }
 
     public void OpenIconSelectPopup()

@@ -81,24 +81,18 @@ public class SaveManager : MonoBehaviour
         pendingSaveJson = null;
         saveRequestedDuringLoad = false;
 
-        if (activeLoadRoutine != null)
-        {
-            StopCoroutine(activeLoadRoutine);
-            activeLoadRoutine = null;
-        }
+        activeLoadRoutine = null;
+        activeSaveRoutine = null;
 
         isLoading = false;
+        isSaving = false;
+        hasLoadedData = false;
 
         dataHandler.Delete();
 
         gameData = new GameData();
-        hasLoadedData = true;
 
-        LoadAllSaveManagers();
-
-        SaveDataChanged?.Invoke();
-
-        Debug.Log("Deleted save file and reset runtime data back to default.");
+        Debug.Log("Deleted save file. Runtime managers were not refreshed.");
     }
 
     public void NewGame()

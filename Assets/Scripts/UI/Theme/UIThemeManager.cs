@@ -8,7 +8,7 @@ using UnityEditor;
 [ExecuteAlways]
 public class UIThemeManager : MonoBehaviour
 {
-    public static UIThemeManager Instance { get; private set; }
+    public static UIThemeManager instance;
 
     [Header("Theme Selection")]
     [SerializeField] private UIThemeType selectedThemeType = UIThemeType.Default;
@@ -34,17 +34,19 @@ public class UIThemeManager : MonoBehaviour
 
     private void Awake()
     {
-        Instance = this;
+        if (instance != null && instance != this)
+        {
+            Destroy(this);
+            return;
+        }
+
+        instance = this;
 
         SetTheme(selectedThemeType);
     }
 
     private void OnEnable()
     {
-        Instance = this;
-
-        SetTheme(selectedThemeType);
-
 #if UNITY_EDITOR
         ReconnectActiveThemeTargetsInEditor();
 #endif
@@ -53,7 +55,7 @@ public class UIThemeManager : MonoBehaviour
 #if UNITY_EDITOR
     private void OnValidate()
     {
-        Instance = this;
+        instance = this;
 
         SetTheme(selectedThemeType);
 
@@ -63,6 +65,14 @@ public class UIThemeManager : MonoBehaviour
         }
     }
 #endif
+
+    private void OnDestroy()
+    {
+        if (instance == this)
+        {
+            instance = null;
+        }
+    }
 
     public UIThemeType SelectedThemeType => selectedThemeType;
 
@@ -582,19 +592,19 @@ public class UIThemeManager : MonoBehaviour
 
     public static void RefreshThemeData(UIThemeData changedThemeData)
     {
-        if (Instance == null || changedThemeData == null)
+        if (instance == null || changedThemeData == null)
         {
             return;
         }
 
-        if (Instance.selectedThemeType != changedThemeData.ThemeType)
+        if (instance.selectedThemeType != changedThemeData.ThemeType)
         {
             return;
         }
 
-        Instance.activeThemeData = changedThemeData;
-        Instance.RebuildActiveThemeLists();
-        Instance.ReapplyThemeToRegisteredTargets();
+        instance.activeThemeData = changedThemeData;
+        instance.RebuildActiveThemeLists();
+        instance.ReapplyThemeToRegisteredTargets();
     }
 
     #region Find Default

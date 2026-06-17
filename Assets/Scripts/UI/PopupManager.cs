@@ -23,6 +23,8 @@ public class PopupBinding
 
 public class PopupManager : MonoBehaviour
 {
+    public static PopupManager instance;
+
     [Header("Overlay")]
     [SerializeField] private GameObject popupOverlay;
 
@@ -38,7 +40,23 @@ public class PopupManager : MonoBehaviour
 
     private void Awake()
     {
+        if (instance != null && instance != this)
+        {
+            Destroy(this);
+            return;
+        }
+
+        instance = this;
+
         CloseAllPopups();
+    }
+
+    private void OnDestroy()
+    {
+        if (instance == this)
+        {
+            instance = null;
+        }
     }
 
     public void TogglePopup(PopupId popupId)

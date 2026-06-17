@@ -36,7 +36,8 @@ public class GlobalIconBarController : MonoBehaviour
     }
 
     [Header("Managers")]
-    [SerializeField] private PopupManager popupManager;
+    private PopupManager popupManager;
+    private UserManager userManager;
     [SerializeField] private UIIconManager iconManager;
     [SerializeField] private IconSelectPopupController iconSelectPopupController;
 
@@ -51,6 +52,8 @@ public class GlobalIconBarController : MonoBehaviour
 
     private void OnEnable()
     {
+        CacheManagers();
+
         BuildTopIconBar();
 
         UserManager.UserChanged += RefreshTopBarIcons;
@@ -63,6 +66,24 @@ public class GlobalIconBarController : MonoBehaviour
     {
         UserManager.UserChanged -= RefreshTopBarIcons;
         SaveManager.SaveDataChanged -= RefreshTopBarIcons;
+    }
+
+    private void CacheManagers()
+    {
+        if (popupManager == null)
+        {
+            popupManager = PopupManager.instance;
+        }
+
+        if (userManager == null)
+        {
+            userManager = UserManager.instance;
+        }
+
+        if (iconManager == null)
+        {
+            iconManager = UIIconManager.instance;
+        }
     }
 
     public void BuildTopIconBar()
@@ -128,11 +149,13 @@ public class GlobalIconBarController : MonoBehaviour
 
     private void HandleTopBarAction(TopBarAction action)
     {
+        CacheManagers();
+
         CloseIconSelectPopupIfOpen();
 
         if (popupManager == null)
         {
-            Debug.LogWarning("GlobalIconBarController needs PopupManager assigned.");
+            Debug.LogWarning("GlobalIconBarController could not find PopupManager.instance.");
             return;
         }
 
@@ -149,17 +172,11 @@ public class GlobalIconBarController : MonoBehaviour
             case TopBarAction.Settings:
                 popupManager.TogglePopup(PopupId.Settings);
                 break;
-
-            default:
-                Debug.LogWarning($"Unhandled top bar action: {action}");
-                break;
         }
     }
 
     private void ToggleUserPopup()
     {
-        UserManager userManager = UserManager.instance;
-
         if (userManager != null && userManager.HasUser)
         {
             popupManager.TogglePopup(PopupId.UserInfo);
@@ -172,7 +189,7 @@ public class GlobalIconBarController : MonoBehaviour
 
     private void RefreshTopBarIcons()
     {
-        FindMissingReferences();
+        CacheManagers();
 
         for (int i = 0; i < runtimeIcons.Count; i++)
         {
@@ -210,8 +227,6 @@ public class GlobalIconBarController : MonoBehaviour
 
     private Sprite GetSavedUserIconSprite()
     {
-        UserManager userManager = UserManager.instance;
-
         if (userManager == null || !userManager.HasUser)
         {
             return null;

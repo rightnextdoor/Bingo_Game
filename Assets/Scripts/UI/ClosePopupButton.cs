@@ -3,7 +3,7 @@ using UnityEngine.UI;
 
 public class ClosePopupButton : MonoBehaviour
 {
-    [SerializeField] private PopupManager popupManager;
+    private PopupManager popupManager;
     [SerializeField] private Button closeButton;
 
     private void OnEnable()
@@ -20,6 +20,12 @@ public class ClosePopupButton : MonoBehaviour
         {
             closeButton.onClick.RemoveListener(ClosePopup);
         }
+    }
+
+    private void Start()
+    {
+        if (PopupManager.instance != null)
+            popupManager = PopupManager.instance;
     }
 
     private void ClosePopup()

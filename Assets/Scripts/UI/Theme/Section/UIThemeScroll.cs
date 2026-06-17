@@ -34,12 +34,12 @@ public class UIThemeScroll : MonoBehaviour, IUIThemeTarget
 
     private void OnDisable()
     {
-        if (UIThemeManager.Instance == null)
+        if (UIThemeManager.instance == null)
         {
             return;
         }
 
-        UIThemeManager.Instance.Unregister(this);
+        UIThemeManager.instance.Unregister(this);
     }
 
 #if UNITY_EDITOR
@@ -51,22 +51,22 @@ public class UIThemeScroll : MonoBehaviour, IUIThemeTarget
 
     private void RegisterWithManager()
     {
-        if (UIThemeManager.Instance == null)
+        if (UIThemeManager.instance == null)
         {
             return;
         }
 
-        UIThemeManager.Instance.Register(this);
+        UIThemeManager.instance.Register(this);
     }
 
     public void ReapplyTheme()
     {
-        if (UIThemeManager.Instance == null)
+        if (UIThemeManager.instance == null)
         {
             return;
         }
 
-        UIThemeScrollStyle style = UIThemeManager.Instance.ApplyTheme(
+        UIThemeScrollStyle style = UIThemeManager.instance.ApplyTheme(
             UIThemeSectionType.Scroll,
             scrollType
         ) as UIThemeScrollStyle;

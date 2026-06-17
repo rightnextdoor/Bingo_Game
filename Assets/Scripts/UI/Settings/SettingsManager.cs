@@ -6,6 +6,8 @@ using UnityEngine.Audio;
 
 public class SettingsManager : MonoBehaviour, ISaveManager, ISceneReadyCheck
 {
+    public static SettingsManager instance;
+
     #region Inspector Fields
 
     [Header("Controllers")]
@@ -13,8 +15,7 @@ public class SettingsManager : MonoBehaviour, ISaveManager, ISceneReadyCheck
     [SerializeField] private SettingsGraphicsController graphicsController;
     [SerializeField] private SettingsThemeController themeController;
 
-    [Header("Popup")]
-    [SerializeField] private PopupManager popupManager;
+    private PopupManager popupManager;
 
     [Header("Audio Mixer")]
     [SerializeField] private AudioMixer audioMixer;
@@ -61,8 +62,24 @@ public class SettingsManager : MonoBehaviour, ISaveManager, ISceneReadyCheck
 
     private void Awake()
     {
+        if (instance != null && instance != this)
+        {
+            Destroy(this);
+            return;
+        }
+
+        instance = this;
+
         BuildScreenModeOptions();
         RebuildResolutionOptions();
+    }
+
+    private void OnDestroy()
+    {
+        if (instance == this)
+        {
+            instance = null;
+        }
     }
 
     private void OnEnable()
@@ -73,6 +90,9 @@ public class SettingsManager : MonoBehaviour, ISaveManager, ISceneReadyCheck
 
     private void Start()
     {
+        if (PopupManager.instance != null)
+            popupManager = PopupManager.instance;
+
         RegisterReadyCheck();
         TryLoadFromCurrentSaveData();
     }
@@ -293,13 +313,13 @@ public class SettingsManager : MonoBehaviour, ISaveManager, ISceneReadyCheck
     {
         EnsureSettingsData();
 
-        if (UIThemeManager.Instance == null)
+        if (UIThemeManager.instance == null)
         {
-            Debug.LogWarning("SettingsManager could not apply theme because UIThemeManager.Instance is missing.");
+            Debug.LogWarning("SettingsManager could not apply theme because UIThemeManager.instance is missing.");
             return;
         }
 
-        UIThemeType finalThemeType = UIThemeManager.Instance.ValidateAndSetTheme(selectedThemeType);
+        UIThemeType finalThemeType = UIThemeManager.instance.ValidateAndSetTheme(selectedThemeType);
 
         settingsData.selectedThemeType = finalThemeType;
 
@@ -391,12 +411,12 @@ public class SettingsManager : MonoBehaviour, ISaveManager, ISceneReadyCheck
             return;
         }
 
-        if (UIThemeManager.Instance == null)
+        if (UIThemeManager.instance == null)
         {
             return;
         }
 
-        UIThemeType finalThemeType = UIThemeManager.Instance.ValidateAndSetTheme(settingsData.selectedThemeType);
+        UIThemeType finalThemeType = UIThemeManager.instance.ValidateAndSetTheme(settingsData.selectedThemeType);
         settingsData.selectedThemeType = finalThemeType;
     }
 
@@ -451,13 +471,13 @@ public class SettingsManager : MonoBehaviour, ISaveManager, ISceneReadyCheck
 
     private bool ValidateThemeSettings()
     {
-        if (UIThemeManager.Instance == null)
+        if (UIThemeManager.instance == null)
         {
             return false;
         }
 
         UIThemeType beforeThemeType = settingsData.selectedThemeType;
-        UIThemeType finalThemeType = UIThemeManager.Instance.ValidateAndSetTheme(beforeThemeType);
+        UIThemeType finalThemeType = UIThemeManager.instance.ValidateAndSetTheme(beforeThemeType);
 
         settingsData.selectedThemeType = finalThemeType;
 
@@ -521,14 +541,14 @@ public class SettingsManager : MonoBehaviour, ISaveManager, ISceneReadyCheck
             return;
         }
 
-        if (UIThemeManager.Instance == null)
+        if (UIThemeManager.instance == null)
         {
             themeController.InitializeThemeOptions(null, settingsData.selectedThemeType);
             return;
         }
 
         themeController.InitializeThemeOptions(
-            UIThemeManager.Instance.GetThemeDataList(),
+            UIThemeManager.instance.GetThemeDataList(),
             settingsData.selectedThemeType
         );
     }

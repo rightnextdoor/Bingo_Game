@@ -34,7 +34,7 @@ public class BotManager : MonoBehaviour, ISceneReadyCheck
     {
         RegisterReadyCheck();
 
-        yield return null;
+        yield return WaitForBotSyncDependencies();
 
         SyncBotUsers();
 
@@ -75,6 +75,56 @@ public class BotManager : MonoBehaviour, ISceneReadyCheck
 
     #endregion
 
+    private IEnumerator WaitForBotSyncDependencies()
+    {
+        while (!CanSyncBotUsers())
+        {
+            yield return null;
+        }
+
+        yield return null;
+    }
+
+    private bool CanSyncBotUsers()
+    {
+        if (botUserListData == null)
+        {
+            return true;
+        }
+
+        if (SaveManager.instance == null)
+        {
+            return false;
+        }
+
+        if (SaveManager.instance.Data == null)
+        {
+            return false;
+        }
+
+        if (UserManager.instance == null)
+        {
+            return false;
+        }
+
+        if (!UserManager.instance.IsReady)
+        {
+            return false;
+        }
+
+        if (UserDatabase.instance == null)
+        {
+            return false;
+        }
+
+        if (UIIconManager.instance == null)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
     public void SyncBotUsers()
     {
         if (botUserListData == null)
@@ -86,6 +136,12 @@ public class BotManager : MonoBehaviour, ISceneReadyCheck
         if (UserManager.instance == null)
         {
             Debug.LogWarning("Cannot sync bot users because UserManager instance was not found.");
+            return;
+        }
+
+        if (UserDatabase.instance == null)
+        {
+            Debug.LogWarning("Cannot sync bot users because UserDatabase instance was not found.");
             return;
         }
 

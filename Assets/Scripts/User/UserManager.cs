@@ -503,7 +503,6 @@ public class UserManager : MonoBehaviour, ISceneReadyCheck
                 continue;
             }
 
-
             string botUserId = botEntry.UserId.Trim();
             string botPlayerName = GetValidBotPlayerName(botEntry.PlayerName, botUserId);
 
@@ -564,6 +563,8 @@ public class UserManager : MonoBehaviour, ISceneReadyCheck
         }
 
         UserDatabase.instance.ApplyBotUserSync(usersToAddOrUpdate, userIdsToRemove);
+
+        UserChanged?.Invoke();
     }
 
     private UserStats CloneUserStats(UserStats source)

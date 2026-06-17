@@ -46,12 +46,12 @@ public class UIThemeDropdown : MonoBehaviour, IUIThemeTarget
 
     private void OnDisable()
     {
-        if (UIThemeManager.Instance == null)
+        if (UIThemeManager.instance == null)
         {
             return;
         }
 
-        UIThemeManager.Instance.Unregister(this);
+        UIThemeManager.instance.Unregister(this);
     }
 
 #if UNITY_EDITOR
@@ -63,22 +63,22 @@ public class UIThemeDropdown : MonoBehaviour, IUIThemeTarget
 
     private void RegisterWithManager()
     {
-        if (UIThemeManager.Instance == null)
+        if (UIThemeManager.instance == null)
         {
             return;
         }
 
-        UIThemeManager.Instance.Register(this);
+        UIThemeManager.instance.Register(this);
     }
 
     public void ReapplyTheme()
     {
-        if (UIThemeManager.Instance == null)
+        if (UIThemeManager.instance == null)
         {
             return;
         }
 
-        UIThemeDropdownStyle style = UIThemeManager.Instance.ApplyTheme(
+        UIThemeDropdownStyle style = UIThemeManager.instance.ApplyTheme(
             UIThemeSectionType.Dropdown,
             dropdownType
         ) as UIThemeDropdownStyle;

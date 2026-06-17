@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
@@ -28,6 +29,7 @@ public class LeaderboardUIManager : MonoBehaviour
 
     #region User Setup Fields
 
+    private UserManager userManager;
     private readonly List<UserData> allUsers = new();
     private UserData currentUser;
 
@@ -67,24 +69,60 @@ public class LeaderboardUIManager : MonoBehaviour
 
     #endregion
 
+    private Coroutine initialRefreshRoutine;
+
     #region Unity Methods
 
     private void OnEnable()
     {
+        CacheManagers();
+
         RegisterControllerEvents();
 
         UserManager.UserChanged += RefreshUserDataAndRebuildPages;
+        SaveManager.SaveDataChanged += RefreshUserDataAndRebuildPages;
+
+        QueueInitialRefresh();
     }
 
     private void OnDisable()
     {
+        if (initialRefreshRoutine != null)
+        {
+            StopCoroutine(initialRefreshRoutine);
+            initialRefreshRoutine = null;
+        }
+
         UnregisterControllerEvents();
 
         UserManager.UserChanged -= RefreshUserDataAndRebuildPages;
+        SaveManager.SaveDataChanged -= RefreshUserDataAndRebuildPages;
     }
 
-    private void Start()
+    private void CacheManagers()
     {
+        if (userManager == null)
+        {
+            userManager = UserManager.instance;
+        }
+    }
+
+    private void QueueInitialRefresh()
+    {
+        if (initialRefreshRoutine != null)
+        {
+            StopCoroutine(initialRefreshRoutine);
+        }
+
+        initialRefreshRoutine = StartCoroutine(InitialRefreshNextFrame());
+    }
+
+    private IEnumerator InitialRefreshNextFrame()
+    {
+        yield return null;
+
+        initialRefreshRoutine = null;
+
         RefreshUserData();
         ApplySelectedFilterMode();
     }
@@ -95,17 +133,19 @@ public class LeaderboardUIManager : MonoBehaviour
 
     private void RefreshUserData()
     {
+        CacheManagers();
+
         allUsers.Clear();
         currentUser = null;
 
-        if (UserManager.instance == null)
+        if (userManager == null)
         {
             return;
         }
 
-        currentUser = UserManager.instance.CurrentUser;
+        currentUser = userManager.CurrentUser;
 
-        List<UserData> users = UserManager.instance.GetAllUsers();
+        List<UserData> users = userManager.GetAllUsers();
 
         if (users == null)
         {
@@ -673,12 +713,12 @@ public class LeaderboardUIManager : MonoBehaviour
             return currentUser;
         }
 
-        if (UserManager.instance == null)
+        if (userManager == null)
         {
             return null;
         }
 
-        currentUser = UserManager.instance.CurrentUser;
+        currentUser = userManager.CurrentUser;
 
         return currentUser;
     }

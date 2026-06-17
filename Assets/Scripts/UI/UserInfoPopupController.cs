@@ -5,7 +5,8 @@ using UnityEngine.UI;
 public class UserInfoPopupController : MonoBehaviour
 {
     [Header("Managers")]
-    [SerializeField] private PopupManager popupManager;
+    private PopupManager popupManager;
+    private UserManager userManager;
     [SerializeField] private UIIconManager iconManager;
     [SerializeField] private IconSelectPopupController iconSelectPopupController;
 
@@ -37,9 +38,10 @@ public class UserInfoPopupController : MonoBehaviour
 
     private void OnEnable()
     {
+        CacheManagers();
+
         SetNameEditMode(false);
         ClearNameError();
-        RefreshDisplay();
 
         if (changeIconButton != null)
         {
@@ -76,6 +78,8 @@ public class UserInfoPopupController : MonoBehaviour
 
         UserManager.UserChanged += RefreshDisplay;
         SaveManager.SaveDataChanged += RefreshDisplay;
+
+        RefreshDisplay();
     }
 
     private void OnDisable()
@@ -118,11 +122,27 @@ public class UserInfoPopupController : MonoBehaviour
         SetNameEditMode(false);
     }
 
+    private void CacheManagers()
+    {
+        if (popupManager == null)
+        {
+            popupManager = PopupManager.instance;
+        }
+
+        if (userManager == null)
+        {
+            userManager = UserManager.instance;
+        }
+
+        if (iconManager == null)
+        {
+            iconManager = UIIconManager.instance;
+        }
+    }
+
     public void OpenIconSelectPopup()
     {
         ClearNameError();
-
-        UserManager userManager = UserManager.instance;
 
         if (userManager == null || !userManager.HasUser)
         {
@@ -147,10 +167,7 @@ public class UserInfoPopupController : MonoBehaviour
             return;
         }
 
-        if (UserManager.instance != null)
-        {
-            UserManager.instance.ChangeIcon(iconData.IconId);
-        }
+        userManager.ChangeIcon(iconData.IconId);
 
         RefreshDisplay();
     }
@@ -158,8 +175,6 @@ public class UserInfoPopupController : MonoBehaviour
     private void BeginNameEdit()
     {
         ClearNameError();
-
-        UserManager userManager = UserManager.instance;
 
         if (userManager == null || !userManager.HasUser)
         {
@@ -198,8 +213,6 @@ public class UserInfoPopupController : MonoBehaviour
     private void SaveNameEdit()
     {
         ClearNameError();
-
-        UserManager userManager = UserManager.instance;
 
         if (userManager == null || !userManager.HasUser)
         {
@@ -243,7 +256,7 @@ public class UserInfoPopupController : MonoBehaviour
 
     private void RefreshDisplay()
     {
-        UserManager userManager = UserManager.instance;
+        CacheManagers();
 
         if (userManager == null || !userManager.HasUser)
         {
@@ -414,6 +427,11 @@ public class UserInfoPopupController : MonoBehaviour
     {
         ClearNameError();
         SetNameEditMode(false);
+
+        if (popupManager == null)
+        {
+            popupManager = PopupManager.instance;
+        }
 
         if (popupManager != null)
         {

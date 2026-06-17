@@ -25,12 +25,12 @@ public class UIThemeToggle : MonoBehaviour, IUIThemeTarget
 
     private void OnDisable()
     {
-        if (UIThemeManager.Instance == null)
+        if (UIThemeManager.instance == null)
         {
             return;
         }
 
-        UIThemeManager.Instance.Unregister(this);
+        UIThemeManager.instance.Unregister(this);
     }
 
 #if UNITY_EDITOR
@@ -42,22 +42,22 @@ public class UIThemeToggle : MonoBehaviour, IUIThemeTarget
 
     private void RegisterWithManager()
     {
-        if (UIThemeManager.Instance == null)
+        if (UIThemeManager.instance == null)
         {
             return;
         }
 
-        UIThemeManager.Instance.Register(this);
+        UIThemeManager.instance.Register(this);
     }
 
     public void ReapplyTheme()
     {
-        if (UIThemeManager.Instance == null)
+        if (UIThemeManager.instance == null)
         {
             return;
         }
 
-        UIThemeToggleStyle style = UIThemeManager.Instance.ApplyTheme(
+        UIThemeToggleStyle style = UIThemeManager.instance.ApplyTheme(
             UIThemeSectionType.Toggle,
             toggleType
         ) as UIThemeToggleStyle;

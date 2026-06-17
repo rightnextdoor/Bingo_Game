@@ -27,12 +27,12 @@ public class UIThemeInput : MonoBehaviour, IUIThemeTarget
 
     private void OnDisable()
     {
-        if (UIThemeManager.Instance == null)
+        if (UIThemeManager.instance == null)
         {
             return;
         }
 
-        UIThemeManager.Instance.Unregister(this);
+        UIThemeManager.instance.Unregister(this);
     }
 
 #if UNITY_EDITOR
@@ -44,22 +44,22 @@ public class UIThemeInput : MonoBehaviour, IUIThemeTarget
 
     private void RegisterWithManager()
     {
-        if (UIThemeManager.Instance == null)
+        if (UIThemeManager.instance == null)
         {
             return;
         }
 
-        UIThemeManager.Instance.Register(this);
+        UIThemeManager.instance.Register(this);
     }
 
     public void ReapplyTheme()
     {
-        if (UIThemeManager.Instance == null)
+        if (UIThemeManager.instance == null)
         {
             return;
         }
 
-        UIThemeInputStyle style = UIThemeManager.Instance.ApplyTheme(
+        UIThemeInputStyle style = UIThemeManager.instance.ApplyTheme(
             UIThemeSectionType.Input,
             inputType
         ) as UIThemeInputStyle;

@@ -148,9 +148,14 @@ public class CreateUserPopupController : MonoBehaviour
 
         UserManager.instance.CreateUser(playerName, selectedIconId);
 
+        if (popupManager == null)
+        {
+            popupManager = PopupManager.instance;
+        }
+
         if (popupManager != null)
         {
-            popupManager.OpenPopup(PopupId.UserInfo);
+            popupManager.OpenAfterUserCreatedPopup();
         }
     }
 

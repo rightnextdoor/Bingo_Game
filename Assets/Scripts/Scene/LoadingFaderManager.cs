@@ -11,6 +11,7 @@ public class LoadingFaderManager : MonoBehaviour
     [Header("Overlay")]
     [SerializeField] private Canvas overlayCanvas;
     [SerializeField] private GameObject overlayRoot;
+    [SerializeField] private GameObject loadingLogoArea;
     [SerializeField] private CanvasGroup overlayCanvasGroup;
     [SerializeField] private TMP_Text loadingText;
     [SerializeField] private GameObject loadingBallRenderWorld;
@@ -85,6 +86,7 @@ public class LoadingFaderManager : MonoBehaviour
         hasAppliedFadeStartAudio = false;
 
         SetOverlayObjectsActive(true);
+        SetLoadingLogoActive(true);
         ForceOverlayCanvasToTop();
         SetLoadingText();
 
@@ -108,6 +110,7 @@ public class LoadingFaderManager : MonoBehaviour
         }
 
         ApplyFadeStartAudio();
+        SetLoadingLogoActive(false);
 
         if (overlayCanvasGroup == null)
         {
@@ -137,6 +140,7 @@ public class LoadingFaderManager : MonoBehaviour
         ResolveReferences();
 
         isShowing = false;
+        SetLoadingLogoActive(false);
 
         if (overlayCanvasGroup != null)
         {
@@ -162,6 +166,14 @@ public class LoadingFaderManager : MonoBehaviour
         if (loadingBallRenderWorld != null)
         {
             loadingBallRenderWorld.SetActive(active);
+        }
+    }
+
+    private void SetLoadingLogoActive(bool active)
+    {
+        if (loadingLogoArea != null)
+        {
+            loadingLogoArea.SetActive(active);
         }
     }
 

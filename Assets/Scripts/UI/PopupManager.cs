@@ -34,6 +34,8 @@ public class PopupManager : MonoBehaviour
     public event Action<PopupId> PopupClosed;
 
     private PopupId activePopupId = PopupId.None;
+    private PopupId createUserAfterCreatePopupId = PopupId.None;
+    private Action createUserAfterCreateAction;
 
     public PopupId ActivePopupId => activePopupId;
     public bool HasOpenPopup => activePopupId != PopupId.None;
@@ -78,12 +80,29 @@ public class PopupManager : MonoBehaviour
 
     public void OpenPopup(PopupId popupId)
     {
-        CloseAllPopups();
+        if (popupId == PopupId.CreateUser)
+        {
+            if (createUserAfterCreatePopupId == PopupId.None && createUserAfterCreateAction == null)
+            {
+                createUserAfterCreatePopupId = PopupId.UserInfo;
+            }
+        }
+        else
+        {
+            ClearCreateUserAfterCreateTarget();
+        }
+
+        CloseAllPopups(popupId == PopupId.CreateUser);
 
         GameObject popup = GetPopupObject(popupId);
 
         if (popup == null)
         {
+            if (popupId == PopupId.CreateUser)
+            {
+                ClearCreateUserAfterCreateTarget();
+            }
+
             Debug.LogWarning($"PopupManager could not find popup: {popupId}");
             return;
         }
@@ -95,6 +114,51 @@ public class PopupManager : MonoBehaviour
 
         popup.SetActive(true);
         activePopupId = popupId;
+    }
+
+    public void OpenCreateUserPopup(PopupId afterCreatePopupId)
+    {
+        if (afterCreatePopupId == PopupId.CreateUser)
+        {
+            Debug.LogWarning("Create User cannot use Create User as its after-create popup. Defaulting to User Info.");
+            afterCreatePopupId = PopupId.UserInfo;
+        }
+
+        ClearCreateUserAfterCreateTarget();
+
+        createUserAfterCreatePopupId = afterCreatePopupId;
+        OpenPopup(PopupId.CreateUser);
+    }
+
+    public void OpenCreateUserPopup(Action afterCreateAction)
+    {
+        ClearCreateUserAfterCreateTarget();
+
+        createUserAfterCreateAction = afterCreateAction;
+        OpenPopup(PopupId.CreateUser);
+    }
+
+    public void OpenAfterUserCreatedPopup()
+    {
+        PopupId nextPopupId = createUserAfterCreatePopupId;
+        Action nextAction = createUserAfterCreateAction;
+
+        ClearCreateUserAfterCreateTarget();
+
+        CloseActivePopup();
+
+        if (nextAction != null)
+        {
+            nextAction.Invoke();
+            return;
+        }
+
+        if (nextPopupId == PopupId.None || nextPopupId == PopupId.CreateUser)
+        {
+            return;
+        }
+
+        OpenPopup(nextPopupId);
     }
 
     public void CloseActivePopup()
@@ -115,6 +179,11 @@ public class PopupManager : MonoBehaviour
 
         activePopupId = PopupId.None;
 
+        if (closedPopupId == PopupId.CreateUser)
+        {
+            ClearCreateUserAfterCreateTarget();
+        }
+
         if (popupOverlay != null)
         {
             popupOverlay.SetActive(false);
@@ -124,6 +193,11 @@ public class PopupManager : MonoBehaviour
     }
 
     public void CloseAllPopups()
+    {
+        CloseAllPopups(false);
+    }
+
+    private void CloseAllPopups(bool preserveCreateUserAfterCreateTarget)
     {
         PopupId closedPopupId = activePopupId;
 
@@ -137,6 +211,11 @@ public class PopupManager : MonoBehaviour
 
         activePopupId = PopupId.None;
 
+        if (!preserveCreateUserAfterCreateTarget && closedPopupId == PopupId.CreateUser)
+        {
+            ClearCreateUserAfterCreateTarget();
+        }
+
         if (popupOverlay != null)
         {
             popupOverlay.SetActive(false);
@@ -146,6 +225,12 @@ public class PopupManager : MonoBehaviour
         {
             PopupClosed?.Invoke(closedPopupId);
         }
+    }
+
+    private void ClearCreateUserAfterCreateTarget()
+    {
+        createUserAfterCreatePopupId = PopupId.None;
+        createUserAfterCreateAction = null;
     }
 
     private GameObject GetPopupObject(PopupId popupId)

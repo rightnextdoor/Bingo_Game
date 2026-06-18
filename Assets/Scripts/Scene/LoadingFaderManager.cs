@@ -12,6 +12,7 @@ public class LoadingFaderManager : MonoBehaviour
     [SerializeField] private Canvas overlayCanvas;
     [SerializeField] private GameObject overlayRoot;
     [SerializeField] private GameObject loadingLogoArea;
+    [SerializeField] private CanvasGroup loadingLogoCanvasGroup;
     [SerializeField] private CanvasGroup overlayCanvasGroup;
     [SerializeField] private TMP_Text loadingText;
     [SerializeField] private GameObject loadingBallRenderWorld;
@@ -25,6 +26,7 @@ public class LoadingFaderManager : MonoBehaviour
 
     [Header("Timing")]
     [SerializeField] private float minimumShowTime = 7f;
+    [SerializeField] private float logoFadeOutTime = 0.25f;
     [SerializeField] private float fadeOutTime = 1f;
     [SerializeField] private bool hideOnAwake = true;
 
@@ -87,6 +89,7 @@ public class LoadingFaderManager : MonoBehaviour
 
         SetOverlayObjectsActive(true);
         SetLoadingLogoActive(true);
+        SetLoadingLogoAlpha(1f);
         ForceOverlayCanvasToTop();
         SetLoadingText();
 
@@ -110,7 +113,6 @@ public class LoadingFaderManager : MonoBehaviour
         }
 
         ApplyFadeStartAudio();
-        SetLoadingLogoActive(false);
 
         if (overlayCanvasGroup == null)
         {
@@ -119,15 +121,32 @@ public class LoadingFaderManager : MonoBehaviour
         }
 
         float timer = 0f;
-        float startAlpha = overlayCanvasGroup.alpha;
-        float duration = Mathf.Max(0.01f, fadeOutTime);
 
-        while (timer < duration)
+        float overlayStartAlpha = overlayCanvasGroup.alpha;
+        float overlayDuration = Mathf.Max(0.01f, fadeOutTime);
+
+        float logoStartAlpha = loadingLogoCanvasGroup != null ? loadingLogoCanvasGroup.alpha : 1f;
+        float logoDuration = Mathf.Max(0.01f, logoFadeOutTime);
+        bool logoHidden = false;
+
+        while (timer < overlayDuration)
         {
             timer += Time.unscaledDeltaTime;
 
-            float percent = Mathf.Clamp01(timer / duration);
-            overlayCanvasGroup.alpha = Mathf.Lerp(startAlpha, 0f, percent);
+            float overlayPercent = Mathf.Clamp01(timer / overlayDuration);
+            overlayCanvasGroup.alpha = Mathf.Lerp(overlayStartAlpha, 0f, overlayPercent);
+
+            if (loadingLogoCanvasGroup != null && !logoHidden)
+            {
+                float logoPercent = Mathf.Clamp01(timer / logoDuration);
+                loadingLogoCanvasGroup.alpha = Mathf.Lerp(logoStartAlpha, 0f, logoPercent);
+
+                if (logoPercent >= 1f)
+                {
+                    SetLoadingLogoActive(false);
+                    logoHidden = true;
+                }
+            }
 
             yield return null;
         }
@@ -140,6 +159,7 @@ public class LoadingFaderManager : MonoBehaviour
         ResolveReferences();
 
         isShowing = false;
+        SetLoadingLogoAlpha(0f);
         SetLoadingLogoActive(false);
 
         if (overlayCanvasGroup != null)
@@ -174,6 +194,14 @@ public class LoadingFaderManager : MonoBehaviour
         if (loadingLogoArea != null)
         {
             loadingLogoArea.SetActive(active);
+        }
+    }
+
+    private void SetLoadingLogoAlpha(float alpha)
+    {
+        if (loadingLogoCanvasGroup != null)
+        {
+            loadingLogoCanvasGroup.alpha = alpha;
         }
     }
 
@@ -224,6 +252,21 @@ public class LoadingFaderManager : MonoBehaviour
         if (overlayCanvas == null && overlayRoot != null)
         {
             overlayCanvas = overlayRoot.GetComponentInParent<Canvas>(true);
+        }
+
+        if (loadingLogoArea == null && loadingLogoCanvasGroup != null)
+        {
+            loadingLogoArea = loadingLogoCanvasGroup.gameObject;
+        }
+
+        if (loadingLogoCanvasGroup == null && loadingLogoArea != null)
+        {
+            loadingLogoCanvasGroup = loadingLogoArea.GetComponent<CanvasGroup>();
+
+            if (loadingLogoCanvasGroup == null)
+            {
+                loadingLogoCanvasGroup = loadingLogoArea.AddComponent<CanvasGroup>();
+            }
         }
     }
 

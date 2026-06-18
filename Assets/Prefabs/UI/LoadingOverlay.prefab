@@ -166,6 +166,7 @@ MonoBehaviour:
   overlayCanvas: {fileID: 5175230307079064678}
   overlayRoot: {fileID: 5400627947234070734}
   loadingLogoArea: {fileID: 8303385125953979677}
+  loadingLogoCanvasGroup: {fileID: 6816993592298117622}
   overlayCanvasGroup: {fileID: 2860181876565763355}
   loadingText: {fileID: 5994088203957501829}
   loadingBallRenderWorld: {fileID: 2740271827071807130}
@@ -173,6 +174,7 @@ MonoBehaviour:
   overlaySortingOrder: 5000
   loadingTextValue: Loading
   minimumShowTime: 7
+  logoFadeOutTime: 0.5
   fadeOutTime: 1
   hideOnAwake: 1
 --- !u!1 &1026518371683795238
@@ -2043,6 +2045,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 5525314093537801869}
+  - component: {fileID: 6816993592298117622}
   m_Layer: 5
   m_Name: LogoArea
   m_TagString: Untagged
@@ -2071,6 +2074,18 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: -80}
   m_SizeDelta: {x: 700, y: 260}
   m_Pivot: {x: 0.5, y: 1}
+--- !u!225 &6816993592298117622
+CanvasGroup:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8303385125953979677}
+  m_Enabled: 1
+  m_Alpha: 1
+  m_Interactable: 1
+  m_BlocksRaycasts: 1
+  m_IgnoreParentGroups: 0
 --- !u!1 &8546934513179803683
 GameObject:
   m_ObjectHideFlags: 0

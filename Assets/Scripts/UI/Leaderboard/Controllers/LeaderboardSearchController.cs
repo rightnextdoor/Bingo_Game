@@ -257,14 +257,12 @@ public class LeaderboardSearchController : MonoBehaviour
 
         StopErrorRoutine();
 
-        errorText.text = message;
+        errorText.text = message ?? string.Empty;
 
         if (errorCanvasGroup != null)
         {
             errorCanvasGroup.alpha = 1f;
         }
-
-        errorText.gameObject.SetActive(true);
 
         errorRoutine = StartCoroutine(ErrorFadeRoutine());
     }
@@ -281,7 +279,6 @@ public class LeaderboardSearchController : MonoBehaviour
         if (errorText != null)
         {
             errorText.text = string.Empty;
-            errorText.gameObject.SetActive(false);
         }
     }
 
@@ -345,6 +342,7 @@ public class LeaderboardSearchController : MonoBehaviour
         }
 
         errorText.fontSize = ErrorFontSize;
+        errorText.text = string.Empty;
 
         errorCanvasGroup = errorText.GetComponent<CanvasGroup>();
 
@@ -352,6 +350,8 @@ public class LeaderboardSearchController : MonoBehaviour
         {
             errorCanvasGroup = errorText.gameObject.AddComponent<CanvasGroup>();
         }
+
+        errorCanvasGroup.alpha = 0f;
     }
 
     private float GetCurrentPreferredWidth(LayoutElement layoutElement, Button button)

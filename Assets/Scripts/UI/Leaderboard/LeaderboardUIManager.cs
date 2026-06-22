@@ -39,7 +39,7 @@ public class LeaderboardUIManager : MonoBehaviour
 
     #region Mode Setup Fields
 
-    private LeaderboardGameModeType currentMode;
+    private LeaderboardModeFilter currentMode = LeaderboardModeFilter.CreateOverall();
     private string currentModeTitleText;
     private LeaderboardSortType currentSortType;
 
@@ -258,7 +258,7 @@ public class LeaderboardUIManager : MonoBehaviour
     {
         currentPageSize = GetSelectedPageSizeFromFilter();
 
-        LeaderboardGameModeType selectedMode = LeaderboardGameModeType.Overall;
+        LeaderboardModeFilter selectedMode = LeaderboardModeFilter.CreateOverall();
 
         if (filterController != null)
         {
@@ -268,22 +268,40 @@ public class LeaderboardUIManager : MonoBehaviour
         SetLeaderboardMode(selectedMode);
     }
 
-    public void SetLeaderboardMode(LeaderboardGameModeType gameMode)
+    public void SetLeaderboardMode(LeaderboardModeFilter gameMode)
     {
         currentMode = gameMode;
 
-        switch (currentMode)
+        if (currentMode.IsOverall)
         {
-            case LeaderboardGameModeType.Overall:
+            SetupOverallMode();
+            return;
+        }
+
+        switch (currentMode.gameModeType)
+        {
+            case BingoGameModeType.Traditional:
                 SetupOverallMode();
                 break;
 
-            case LeaderboardGameModeType.Play:
+            case BingoGameModeType.Blackout:
+                SetupOverallMode();
+                break;
+
+            case BingoGameModeType.Risk:
+                SetupPlayMode();
+                break;
+
+            case BingoGameModeType.Death:
+                SetupPlayMode();
+                break;
+
+            case BingoGameModeType.Custom:
                 SetupPlayMode();
                 break;
 
             default:
-                currentMode = LeaderboardGameModeType.Overall;
+                currentMode = LeaderboardModeFilter.CreateOverall();
                 SetupOverallMode();
                 break;
         }
@@ -295,7 +313,7 @@ public class LeaderboardUIManager : MonoBehaviour
 
     private void SetupOverallMode()
     {
-        currentModeTitleText = "Overall Leaderboard";
+        currentModeTitleText = GetCurrentModeTitleText();
         currentSortType = LeaderboardSortType.ScoreHighest;
 
         currentHeaderCells.Clear();
@@ -320,7 +338,7 @@ public class LeaderboardUIManager : MonoBehaviour
 
     private void SetupPlayMode()
     {
-        currentModeTitleText = "Play Leaderboard";
+        currentModeTitleText = GetCurrentModeTitleText();
         currentSortType = LeaderboardSortType.ScoreHighest;
 
         currentHeaderCells.Clear();
@@ -436,6 +454,16 @@ public class LeaderboardUIManager : MonoBehaviour
         }
 
         leaderboardTitleText.text = titleText;
+    }
+
+    private string GetCurrentModeTitleText()
+    {
+        if (currentMode.IsOverall)
+        {
+            return "Overall Leaderboard";
+        }
+
+        return $"{currentMode.gameModeType} Leaderboard";
     }
 
     #endregion

@@ -9,13 +9,13 @@ public class LeaderboardFilterController : MonoBehaviour
     [SerializeField] private TMP_Dropdown gameModeDropdown;
     [SerializeField] private TMP_Dropdown pageSizeDropdown;
 
-    public event Action<LeaderboardGameModeType> GameModeChanged;
+    public event Action<LeaderboardModeFilter> GameModeChanged;
     public event Action<int> PageSizeChanged;
 
-    private readonly List<LeaderboardGameModeType> gameModeOptions = new();
+    private readonly List<LeaderboardModeFilter> gameModeOptions = new();
     private readonly List<LeaderboardPageSizeType> pageSizeOptions = new();
 
-    private LeaderboardGameModeType selectedGameMode = LeaderboardGameModeType.Overall;
+    private LeaderboardModeFilter selectedGameMode = LeaderboardModeFilter.CreateOverall();
     private LeaderboardPageSizeType selectedPageSize = LeaderboardPageSizeType.Show10;
 
     private void Awake()
@@ -49,7 +49,7 @@ public class LeaderboardFilterController : MonoBehaviour
         }
     }
 
-    public LeaderboardGameModeType GetSelectedGameMode()
+    public LeaderboardModeFilter GetSelectedGameMode()
     {
         return selectedGameMode;
     }
@@ -65,7 +65,7 @@ public class LeaderboardFilterController : MonoBehaviour
     }
 
 
-    public void SetGameMode(LeaderboardGameModeType gameMode)
+    public void SetGameMode(LeaderboardModeFilter gameMode)
     {
         selectedGameMode = gameMode;
 
@@ -79,7 +79,7 @@ public class LeaderboardFilterController : MonoBehaviour
         if (index < 0)
         {
             index = 0;
-            selectedGameMode = gameModeOptions.Count > 0 ? gameModeOptions[index] : LeaderboardGameModeType.Overall;
+            selectedGameMode = gameModeOptions.Count > 0 ? gameModeOptions[index] : LeaderboardModeFilter.CreateOverall();
         }
 
         gameModeDropdown.SetValueWithoutNotify(index);
@@ -120,9 +120,11 @@ public class LeaderboardFilterController : MonoBehaviour
     {
         gameModeOptions.Clear();
 
-        foreach (LeaderboardGameModeType gameMode in Enum.GetValues(typeof(LeaderboardGameModeType)))
+        gameModeOptions.Add(LeaderboardModeFilter.CreateOverall());
+
+        foreach (BingoGameModeType gameMode in Enum.GetValues(typeof(BingoGameModeType)))
         {
-            gameModeOptions.Add(gameMode);
+            gameModeOptions.Add(LeaderboardModeFilter.CreateGameMode(gameMode));
         }
     }
 
@@ -180,7 +182,7 @@ public class LeaderboardFilterController : MonoBehaviour
     {
         if (gameModeOptions.Count == 0)
         {
-            selectedGameMode = LeaderboardGameModeType.Overall;
+            selectedGameMode = LeaderboardModeFilter.CreateOverall();
             GameModeChanged?.Invoke(selectedGameMode);
             return;
         }
@@ -208,16 +210,14 @@ public class LeaderboardFilterController : MonoBehaviour
         PageSizeChanged?.Invoke(GetSelectedPageSize());
     }
 
-    private string GetGameModeLabel(LeaderboardGameModeType gameMode)
+    private string GetGameModeLabel(LeaderboardModeFilter gameMode)
     {
-        switch (gameMode)
+        if (gameMode.IsOverall)
         {
-            case LeaderboardGameModeType.Overall:
-                return "Overall";
-
-            default:
-                return gameMode.ToString();
+            return "Overall";
         }
+
+        return gameMode.gameModeType.ToString();
     }
 
     private string GetPageSizeLabel(LeaderboardPageSizeType pageSize)

@@ -1,10 +1,38 @@
 using System;
 using TMPro;
 
-public enum LeaderboardGameModeType
+public enum LeaderboardModeFilterType
 {
     Overall,
-    Play
+    GameMode
+}
+
+[Serializable]
+public struct LeaderboardModeFilter
+{
+    public LeaderboardModeFilterType filterType;
+    public BingoGameModeType gameModeType;
+
+    public bool IsOverall => filterType == LeaderboardModeFilterType.Overall;
+    public bool IsGameMode => filterType == LeaderboardModeFilterType.GameMode;
+
+    public static LeaderboardModeFilter CreateOverall()
+    {
+        return new LeaderboardModeFilter
+        {
+            filterType = LeaderboardModeFilterType.Overall,
+            gameModeType = default
+        };
+    }
+
+    public static LeaderboardModeFilter CreateGameMode(BingoGameModeType gameModeType)
+    {
+        return new LeaderboardModeFilter
+        {
+            filterType = LeaderboardModeFilterType.GameMode,
+            gameModeType = gameModeType
+        };
+    }
 }
 
 public enum LeaderboardPageSizeType

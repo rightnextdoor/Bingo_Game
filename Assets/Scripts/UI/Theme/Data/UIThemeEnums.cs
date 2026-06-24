@@ -68,5 +68,6 @@ public enum UIThemeSliderType
 
 public enum UIThemeToggleType
 {
-    RadioButton
+    RadioButton,
+    Checkmark
 }

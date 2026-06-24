@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d3c173fd56715224a8ab0eebb27f00c5, type: 3}
+  m_Name: Traditional
+  m_EditorClassIdentifier: Assembly-CSharp::BingoGameModeData
+  gameName: Classic Bingo
+  gameModeType: 0
+  description: Complete the selected winning pattern before the other players. This
+    is the classic bingo experience where the first player, or allowed winners, to
+    complete the active pattern wins.
+  ruleData: {fileID: 11400000, guid: 78370e14642bed6448beed8828f3a07c, type: 2}
+  defaultPattern: {fileID: 11400000, guid: 080b0d25fb7b5e74a8311b66676ef0e5, type: 2}
+  specialPatterns: []
+  supportsMultipleWinners: 0

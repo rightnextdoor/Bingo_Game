@@ -1,10 +1,11 @@
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
 [ExecuteAlways]
 public class UIThemeToggle : MonoBehaviour, IUIThemeTarget
 {
-    [SerializeField] private UIThemeToggleType toggleType = UIThemeToggleType.RadioButton;
+    [SerializeField] private UIThemeToggleType toggleType;
 
     private UIThemeManager themeManager;
 
@@ -14,6 +15,9 @@ public class UIThemeToggle : MonoBehaviour, IUIThemeTarget
     [Header("Images")]
     [SerializeField] private Image backgroundImage;
     [SerializeField] private Image checkmarkImage;
+
+    [Header("Label")]
+    [SerializeField] private TMP_Text labelText;
 
     private void OnEnable()
     {
@@ -81,5 +85,6 @@ public class UIThemeToggle : MonoBehaviour, IUIThemeTarget
         UIThemeApplier.ApplySelectableVisualStyle(toggle, style.ToggleVisual);
         UIThemeApplier.ApplyImageStyle(backgroundImage, style.BackgroundImage);
         UIThemeApplier.ApplyImageStyle(checkmarkImage, style.CheckmarkImage);
+        UIThemeApplier.ApplyTextStyle(labelText, style.LabelText);
     }
 }

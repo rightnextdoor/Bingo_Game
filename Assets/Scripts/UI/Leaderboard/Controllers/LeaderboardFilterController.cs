@@ -124,6 +124,11 @@ public class LeaderboardFilterController : MonoBehaviour
 
         foreach (BingoGameModeType gameMode in Enum.GetValues(typeof(BingoGameModeType)))
         {
+            if (gameMode == BingoGameModeType.Custom)
+            {
+                continue;
+            }
+
             gameModeOptions.Add(LeaderboardModeFilter.CreateGameMode(gameMode));
         }
     }

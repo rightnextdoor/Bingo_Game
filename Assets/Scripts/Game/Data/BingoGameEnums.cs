@@ -24,7 +24,6 @@ public enum BingoPatternType
     XPattern,
     Diamond,
     Star,
-    FullHouse,
     Blackout
 }
 

@@ -629,6 +629,16 @@ public class UIThemeDataEditor : Editor
             toggleProperty.FindPropertyRelative("checkmarkImage"),
             DrawImageComponentFields
         );
+
+        EditorGUILayout.Space(6);
+
+        EditorGUILayout.LabelField("Label", EditorStyles.boldLabel);
+
+        DrawFixedStyle(
+            "Label Text",
+            toggleProperty.FindPropertyRelative("labelText"),
+            DrawTextComponentFields
+        );
     }
 
     #endregion

@@ -15,10 +15,15 @@ public class UIThemeToggleStyle
     [Header("Checkmark")]
     [SerializeField] private UIThemeStyle checkmarkImage = new();
 
+    [Header("Label")]
+    [SerializeField] private UIThemeStyle labelText = new();
+
     public UIThemeSectionType SectionType => UIThemeSectionType.Toggle;
     public UIThemeToggleType ToggleType => toggleType;
 
     public UIThemeStyle ToggleVisual => toggleVisual;
     public UIThemeStyle BackgroundImage => backgroundImage;
     public UIThemeStyle CheckmarkImage => checkmarkImage;
+
+    public UIThemeStyle LabelText => labelText;
 }

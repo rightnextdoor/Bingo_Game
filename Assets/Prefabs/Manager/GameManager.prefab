@@ -18,6 +18,7 @@ GameObject:
   - component: {fileID: 343345014485353269}
   - component: {fileID: 5675938336279305089}
   - component: {fileID: 3952366522601752876}
+  - component: {fileID: 7344788184736564446}
   m_Layer: 0
   m_Name: GameManager
   m_TagString: Untagged
@@ -53,8 +54,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GameManager
   dontDestroyOnLoad: 1
-  saveManager: {fileID: 7669619414364807709}
-  userManager: {fileID: 3566465709955106869}
 --- !u!114 &7669619414364807709
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -82,7 +81,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 777b6c73b344cdb4fb1a706550ab1b86, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GameSceneManager
-  sceneReadyController: {fileID: 3952366522601752876}
   showLoadingOnStart: 1
   startingSceneType: 0
   mainScene:
@@ -182,3 +180,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b1b4d0f686ff34648846deef750dc2e6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SceneReadyController
+--- !u!114 &7344788184736564446
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8215340122209812844}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c7a5d6f3946406b41bcb111a0c92d60c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GameModeManager
+  gameModes: []

@@ -285,18 +285,14 @@ public class LeaderboardUIManager : MonoBehaviour
                 break;
 
             case BingoGameModeType.Blackout:
-                SetupOverallMode();
+                SetupPlayMode();
                 break;
 
             case BingoGameModeType.Risk:
-                SetupPlayMode();
+                SetupOverallMode();
                 break;
 
             case BingoGameModeType.Death:
-                SetupPlayMode();
-                break;
-
-            case BingoGameModeType.Custom:
                 SetupPlayMode();
                 break;
 

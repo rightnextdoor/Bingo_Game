@@ -19,6 +19,7 @@ GameObject:
   - component: {fileID: 5675938336279305089}
   - component: {fileID: 3952366522601752876}
   - component: {fileID: 7344788184736564446}
+  - component: {fileID: 6361720458790271769}
   m_Layer: 0
   m_Name: GameManager
   m_TagString: Untagged
@@ -192,4 +193,35 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c7a5d6f3946406b41bcb111a0c92d60c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GameModeManager
-  gameModes: []
+  gameModes:
+  - {fileID: 11400000, guid: 466967f2b102fdb4ea7d751190e2a04f, type: 2}
+  - {fileID: 11400000, guid: 69e2fa69ee3d3174b88141adad89969f, type: 2}
+  - {fileID: 11400000, guid: 2e62a6f598ef7cf49890e8215a66f1a7, type: 2}
+  - {fileID: 11400000, guid: 8f129ca4081060c488b3ba998fefa0b7, type: 2}
+  - {fileID: 11400000, guid: 904d5cd253f301d449baaffdd313e807, type: 2}
+  gameRules:
+  - {fileID: 11400000, guid: feb3f6821baf11c46bf64b9220add2b6, type: 2}
+  - {fileID: 11400000, guid: f9714d841fd279d4e9eb08763689846b, type: 2}
+  - {fileID: 11400000, guid: ffd4f52ae14b2c2458aed6c0bb21213d, type: 2}
+  - {fileID: 11400000, guid: 78370e14642bed6448beed8828f3a07c, type: 2}
+  bingoPatterns:
+  - {fileID: 11400000, guid: 6ee6d0fcbba4a81429dfcc117b3f8897, type: 2}
+  - {fileID: 11400000, guid: 4da9ad8f48ddde74a8da01abdc9c8b37, type: 2}
+  - {fileID: 11400000, guid: b0d7470275deaa04c9a96aad659a92e4, type: 2}
+  - {fileID: 11400000, guid: cce8190a323f9b24fb2839b43a0b100e, type: 2}
+  - {fileID: 11400000, guid: 080b0d25fb7b5e74a8311b66676ef0e5, type: 2}
+  - {fileID: 11400000, guid: 5c7be7d87e3638840a875104f4d957c4, type: 2}
+  - {fileID: 11400000, guid: fea783843cbdd8044af84c203c4812e3, type: 2}
+  - {fileID: 11400000, guid: 29183c4735543774dbb602f5cebd6182, type: 2}
+--- !u!114 &6361720458790271769
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8215340122209812844}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 83777bcb8773ca74083c13b6cd2153fc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LobbyManager

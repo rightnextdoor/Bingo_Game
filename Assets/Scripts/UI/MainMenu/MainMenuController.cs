@@ -27,11 +27,9 @@ public class MainMenuController : MonoBehaviour
     [SerializeField] private Button quitButton;
 
     [Header("Mode Setup Screen")]
+    [SerializeField] private MainMenuSettingsController settingsController;
     [SerializeField] private TMP_Text modeTitleText;
     [SerializeField] private ScrollRect settingsScrollRect;
-    [SerializeField] private GameObject soloSettingsGroup;
-    [SerializeField] private GameObject onlineSettingsGroup;
-    [SerializeField] private GameObject customSettingsGroup;
     [SerializeField] private Button setupBackButton;
     [SerializeField] private Button setupPlayButton;
 
@@ -79,6 +77,11 @@ public class MainMenuController : MonoBehaviour
         if (gameManager == null)
         {
             gameManager = GameManager.instance;
+        }
+
+        if (settingsController == null)
+        {
+            settingsController = GetComponentInChildren<MainMenuSettingsController>(true);
         }
     }
 
@@ -243,7 +246,15 @@ public class MainMenuController : MonoBehaviour
             modeTitleText.text = GetModeTitle(mode);
         }
 
-        ShowSettingsGroup(mode);
+        if (settingsController != null)
+        {
+            settingsController.ShowModeSettings(mode);
+        }
+        else
+        {
+            Debug.LogWarning("MainMenuController could not show mode settings because MainMenuSettingsController was not assigned.");
+        }
+
         ResetSettingsScroll();
     }
 
@@ -265,19 +276,78 @@ public class MainMenuController : MonoBehaviour
         }
     }
 
-    private void ShowSettingsGroup(MainMenuPlayMode mode)
-    {
-        SetScreenActive(soloSettingsGroup, mode == MainMenuPlayMode.Solo);
-        SetScreenActive(onlineSettingsGroup, mode == MainMenuPlayMode.Online);
-        SetScreenActive(customSettingsGroup, mode == MainMenuPlayMode.Custom);
-    }
-
     private void ResetSettingsScroll()
     {
+        ResizeSettingsContentToActiveGroup();
+
         if (settingsScrollRect != null)
         {
             settingsScrollRect.verticalNormalizedPosition = 1f;
         }
+    }
+
+    private void ResizeSettingsContentToActiveGroup()
+    {
+        if (settingsScrollRect == null || settingsScrollRect.content == null)
+        {
+            return;
+        }
+
+        RectTransform contentRect = settingsScrollRect.content;
+        RectTransform activeGroupRect = GetActiveSettingsGroupRect(contentRect);
+
+        if (activeGroupRect == null)
+        {
+            return;
+        }
+
+        Canvas.ForceUpdateCanvases();
+
+        LayoutRebuilder.ForceRebuildLayoutImmediate(activeGroupRect);
+
+        float preferredHeight = LayoutUtility.GetPreferredHeight(activeGroupRect);
+
+        if (preferredHeight <= 0f)
+        {
+            preferredHeight = activeGroupRect.rect.height;
+        }
+
+        if (preferredHeight < 0f)
+        {
+            preferredHeight = 0f;
+        }
+
+        Vector2 contentSize = contentRect.sizeDelta;
+        contentSize.y = preferredHeight;
+        contentRect.sizeDelta = contentSize;
+
+        Canvas.ForceUpdateCanvases();
+        LayoutRebuilder.ForceRebuildLayoutImmediate(contentRect);
+    }
+
+    private RectTransform GetActiveSettingsGroupRect(RectTransform contentRect)
+    {
+        if (contentRect == null)
+        {
+            return null;
+        }
+
+        for (int i = 0; i < contentRect.childCount; i++)
+        {
+            RectTransform childRect = contentRect.GetChild(i) as RectTransform;
+
+            if (childRect == null)
+            {
+                continue;
+            }
+
+            if (childRect.gameObject.activeSelf)
+            {
+                return childRect;
+            }
+        }
+
+        return null;
     }
 
     private void PlaySelectedMode()
@@ -287,6 +357,22 @@ public class MainMenuController : MonoBehaviour
         if (selectedMode == MainMenuPlayMode.None)
         {
             Debug.LogWarning("Cannot play because no mode is selected.");
+            return;
+        }
+
+        if (settingsController == null)
+        {
+            Debug.LogWarning("MainMenuController could not play because MainMenuSettingsController was not found.");
+            return;
+        }
+
+        if (!settingsController.TryBuildLobbySetupData(selectedMode, out LobbySetupData lobbySetupData))
+        {
+            return;
+        }
+
+        if (!settingsController.SaveMenuDataForMode(selectedMode))
+        {
             return;
         }
 

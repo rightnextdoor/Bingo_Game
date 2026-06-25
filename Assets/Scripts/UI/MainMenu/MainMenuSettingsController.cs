@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -23,6 +24,13 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
     [SerializeField] private Toggle soloUnlimitedToggle;
     [SerializeField] private TMP_Text soloErrorText;
 
+    [Header("Online Settings")]
+    [SerializeField] private TMP_Dropdown onlineGameModeDropdown;
+    [SerializeField] private TMP_Dropdown onlineSearchTypeDropdown;
+    [SerializeField] private GameObject onlineBallCountRow;
+    [SerializeField] private TMP_Dropdown onlineBallCountDropdown;
+    [SerializeField] private TMP_Text onlineErrorText;
+
     #endregion
 
     #region Private Fields
@@ -31,6 +39,10 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 
     private bool hasLoadedData;
 
+    private readonly List<BingoGameModeType> onlineGameModeOptions = new List<BingoGameModeType>();
+    private readonly List<OnlineSearchType> onlineSearchTypeOptions = new List<OnlineSearchType>();
+    private readonly List<BingoBallCountType> onlineBallCountOptions = new List<BingoBallCountType>();
+
     #endregion
 
     #region Unity Methods
@@ -38,6 +50,7 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
     private void Awake()
     {
         EnsureMenuData();
+        BuildAllDropdownOptions();
         ApplyAllDefaults();
         ClearAllErrors();
     }
@@ -135,6 +148,9 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
             case MainMenuPlayMode.Solo:
                 return TryBuildSoloLobbySetupData(lobbySetupData);
 
+            case MainMenuPlayMode.Online:
+                return TryBuildOnlineLobbySetupData(lobbySetupData);
+
             default:
                 Debug.LogWarning($"MainMenuSettingsController does not have validation setup for {playMode} yet.");
                 return false;
@@ -164,6 +180,7 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
     public void ClearAllErrors()
     {
         ClearError(soloErrorText);
+        ClearError(onlineErrorText);
     }
 
     #endregion
@@ -181,6 +198,11 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         {
             menuData.soloMenuData = new SoloMenuData();
         }
+
+        if (menuData.onlineMenuData == null)
+        {
+            menuData.onlineMenuData = new OnlineMenuData();
+        }
     }
 
     private void ApplyAllDefaults()
@@ -188,7 +210,7 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         EnsureMenuData();
 
         ApplySoloDefaults(menuData.soloMenuData);
-
+        ApplyOnlineDefaults(menuData.onlineMenuData);
     }
 
     private void LoadAllMenuData()
@@ -196,6 +218,7 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         EnsureMenuData();
 
         LoadSoloMenuData(menuData.soloMenuData);
+        LoadOnlineMenuData(menuData.onlineMenuData);
 
         ClearAllErrors();
     }
@@ -205,6 +228,7 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         EnsureMenuData();
 
         SaveSoloMenuData(menuData.soloMenuData);
+        SaveOnlineMenuData(menuData.onlineMenuData);
     }
 
     #endregion
@@ -214,15 +238,18 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
     private void RegisterAllListeners()
     {
         RegisterSoloListeners();
+        RegisterOnlineListeners();
     }
 
     private void UnregisterAllListeners()
     {
         UnregisterSoloListeners();
-
+        UnregisterOnlineListeners();
     }
 
     #endregion
+
+    #region Solo
 
     #region Solo Events
 
@@ -394,6 +421,388 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 
     #endregion
 
+    #region Solo UI State
+
+    private void ApplySoloUnlimitedState()
+    {
+        if (soloLobbySizeInput == null || soloUnlimitedToggle == null)
+        {
+            return;
+        }
+
+        soloLobbySizeInput.interactable = !soloUnlimitedToggle.isOn;
+    }
+
+    #endregion
+
+    #endregion
+
+    #region Online
+
+    #region Online Dropdown Setup
+
+    private void BuildAllDropdownOptions()
+    {
+        BuildOnlineGameModeDropdownOptions();
+        BuildOnlineSearchTypeDropdownOptions();
+        BuildOnlineBallCountDropdownOptions();
+    }
+
+    private void BuildOnlineGameModeDropdownOptions()
+    {
+        onlineGameModeOptions.Clear();
+
+        foreach (BingoGameModeType gameModeType in System.Enum.GetValues(typeof(BingoGameModeType)))
+        {
+            if (gameModeType == BingoGameModeType.Custom)
+            {
+                continue;
+            }
+
+            onlineGameModeOptions.Add(gameModeType);
+        }
+
+        if (onlineGameModeDropdown == null)
+        {
+            return;
+        }
+
+        List<string> labels = new List<string>();
+
+        for (int i = 0; i < onlineGameModeOptions.Count; i++)
+        {
+            labels.Add(GetGameModeLabel(onlineGameModeOptions[i]));
+        }
+
+        onlineGameModeDropdown.ClearOptions();
+        onlineGameModeDropdown.AddOptions(labels);
+    }
+
+    private void BuildOnlineSearchTypeDropdownOptions()
+    {
+        onlineSearchTypeOptions.Clear();
+
+        onlineSearchTypeOptions.Add(OnlineSearchType.QuickPlay);
+        onlineSearchTypeOptions.Add(OnlineSearchType.CustomSearch);
+
+        if (onlineSearchTypeDropdown == null)
+        {
+            return;
+        }
+
+        List<string> labels = new List<string>();
+
+        for (int i = 0; i < onlineSearchTypeOptions.Count; i++)
+        {
+            labels.Add(GetOnlineSearchTypeLabel(onlineSearchTypeOptions[i]));
+        }
+
+        onlineSearchTypeDropdown.ClearOptions();
+        onlineSearchTypeDropdown.AddOptions(labels);
+    }
+
+    private void BuildOnlineBallCountDropdownOptions()
+    {
+        onlineBallCountOptions.Clear();
+
+        foreach (BingoBallCountType ballCountType in System.Enum.GetValues(typeof(BingoBallCountType)))
+        {
+            onlineBallCountOptions.Add(ballCountType);
+        }
+
+        if (onlineBallCountDropdown == null)
+        {
+            return;
+        }
+
+        List<string> labels = new List<string>();
+
+        for (int i = 0; i < onlineBallCountOptions.Count; i++)
+        {
+            labels.Add(GetBallCountLabel(onlineBallCountOptions[i]));
+        }
+
+        onlineBallCountDropdown.ClearOptions();
+        onlineBallCountDropdown.AddOptions(labels);
+    }
+
+    #endregion
+
+    #region Online Events
+
+    private void RegisterOnlineListeners()
+    {
+        if (onlineGameModeDropdown != null)
+        {
+            onlineGameModeDropdown.onValueChanged.RemoveListener(OnOnlineGameModeChanged);
+            onlineGameModeDropdown.onValueChanged.AddListener(OnOnlineGameModeChanged);
+        }
+
+        if (onlineSearchTypeDropdown != null)
+        {
+            onlineSearchTypeDropdown.onValueChanged.RemoveListener(OnOnlineSearchTypeChanged);
+            onlineSearchTypeDropdown.onValueChanged.AddListener(OnOnlineSearchTypeChanged);
+        }
+
+        if (onlineBallCountDropdown != null)
+        {
+            onlineBallCountDropdown.onValueChanged.RemoveListener(OnOnlineBallCountChanged);
+            onlineBallCountDropdown.onValueChanged.AddListener(OnOnlineBallCountChanged);
+        }
+    }
+
+    private void UnregisterOnlineListeners()
+    {
+        if (onlineGameModeDropdown != null)
+        {
+            onlineGameModeDropdown.onValueChanged.RemoveListener(OnOnlineGameModeChanged);
+        }
+
+        if (onlineSearchTypeDropdown != null)
+        {
+            onlineSearchTypeDropdown.onValueChanged.RemoveListener(OnOnlineSearchTypeChanged);
+        }
+
+        if (onlineBallCountDropdown != null)
+        {
+            onlineBallCountDropdown.onValueChanged.RemoveListener(OnOnlineBallCountChanged);
+        }
+    }
+
+    private void OnOnlineGameModeChanged(int value)
+    {
+        ClearError(onlineErrorText);
+    }
+
+    private void OnOnlineSearchTypeChanged(int value)
+    {
+        ApplyOnlineSearchTypeState();
+        ClearError(onlineErrorText);
+    }
+
+    private void OnOnlineBallCountChanged(int value)
+    {
+        ClearError(onlineErrorText);
+    }
+
+    #endregion
+
+    #region Online Defaults Load Save
+
+    private void ApplyOnlineDefaults(OnlineMenuData onlineMenuData)
+    {
+        if (onlineMenuData == null)
+        {
+            onlineMenuData = new OnlineMenuData();
+        }
+
+        SetDropdownValueWithoutNotify(onlineGameModeDropdown, onlineGameModeOptions, ValidateOnlineGameModeType(onlineMenuData.gameModeType));
+        SetDropdownValueWithoutNotify(onlineSearchTypeDropdown, onlineSearchTypeOptions, onlineMenuData.searchType);
+        SetDropdownValueWithoutNotify(onlineBallCountDropdown, onlineBallCountOptions, onlineMenuData.ballCountType);
+
+        ApplyOnlineSearchTypeState();
+        ClearError(onlineErrorText);
+    }
+
+    private void LoadOnlineMenuData(OnlineMenuData onlineMenuData)
+    {
+        if (onlineMenuData == null)
+        {
+            ApplyOnlineDefaults(new OnlineMenuData());
+            return;
+        }
+
+        SetDropdownValueWithoutNotify(onlineGameModeDropdown, onlineGameModeOptions, ValidateOnlineGameModeType(onlineMenuData.gameModeType));
+        SetDropdownValueWithoutNotify(onlineSearchTypeDropdown, onlineSearchTypeOptions, onlineMenuData.searchType);
+        SetDropdownValueWithoutNotify(onlineBallCountDropdown, onlineBallCountOptions, onlineMenuData.ballCountType);
+
+        ApplyOnlineSearchTypeState();
+        ClearError(onlineErrorText);
+    }
+
+    private void SaveOnlineMenuData(OnlineMenuData onlineMenuData)
+    {
+        if (onlineMenuData == null)
+        {
+            return;
+        }
+
+        if (TryGetSelectedDropdownValue(onlineGameModeDropdown, onlineGameModeOptions, out BingoGameModeType selectedGameModeType))
+        {
+            onlineMenuData.gameModeType = selectedGameModeType;
+        }
+
+        if (TryGetSelectedDropdownValue(onlineSearchTypeDropdown, onlineSearchTypeOptions, out OnlineSearchType selectedSearchType))
+        {
+            onlineMenuData.searchType = selectedSearchType;
+        }
+
+        if (TryGetSelectedDropdownValue(onlineBallCountDropdown, onlineBallCountOptions, out BingoBallCountType selectedBallCountType))
+        {
+            onlineMenuData.ballCountType = selectedBallCountType;
+        }
+    }
+
+    #endregion
+
+    #region Online Lobby Data
+
+    private bool TryBuildOnlineLobbySetupData(LobbySetupData lobbySetupData)
+    {
+        if (lobbySetupData == null)
+        {
+            return false;
+        }
+
+        if (!TryGetSelectedDropdownValue(onlineGameModeDropdown, onlineGameModeOptions, out BingoGameModeType selectedGameModeType))
+        {
+            ShowError(onlineErrorText, "Online game mode is not ready.");
+            return false;
+        }
+
+        if (!TryGetSelectedDropdownValue(onlineSearchTypeDropdown, onlineSearchTypeOptions, out OnlineSearchType selectedSearchType))
+        {
+            ShowError(onlineErrorText, "Online search type is not ready.");
+            return false;
+        }
+
+        if (!TryGetSelectedDropdownValue(onlineBallCountDropdown, onlineBallCountOptions, out BingoBallCountType selectedBallCountType))
+        {
+            ShowError(onlineErrorText, "Ball count is not ready.");
+            return false;
+        }
+
+        lobbySetupData.onlineSetupData.gameModeType = selectedGameModeType;
+        lobbySetupData.onlineSetupData.searchType = selectedSearchType;
+        lobbySetupData.onlineSetupData.ballCountType = selectedBallCountType;
+
+        ClearError(onlineErrorText);
+        return true;
+    }
+
+    #endregion
+
+    #region Online UI State
+
+    private void ApplyOnlineSearchTypeState()
+    {
+        OnlineSearchType selectedSearchType = OnlineSearchType.QuickPlay;
+
+        TryGetSelectedDropdownValue(onlineSearchTypeDropdown, onlineSearchTypeOptions, out selectedSearchType);
+
+        bool showBallCount = selectedSearchType == OnlineSearchType.CustomSearch;
+
+        SetActive(onlineBallCountRow, showBallCount);
+
+        if (onlineBallCountDropdown != null)
+        {
+            onlineBallCountDropdown.interactable = showBallCount;
+        }
+    }
+
+    #endregion
+
+    #region Online Helpers
+
+    private BingoGameModeType ValidateOnlineGameModeType(BingoGameModeType gameModeType)
+    {
+        if (gameModeType == BingoGameModeType.Custom)
+        {
+            return GetDefaultOnlineGameModeType();
+        }
+
+        if (!onlineGameModeOptions.Contains(gameModeType))
+        {
+            return GetDefaultOnlineGameModeType();
+        }
+
+        return gameModeType;
+    }
+
+    private BingoGameModeType GetDefaultOnlineGameModeType()
+    {
+        if (onlineGameModeOptions.Count > 0)
+        {
+            return onlineGameModeOptions[0];
+        }
+
+        return BingoGameModeType.Traditional;
+    }
+
+    private string GetGameModeLabel(BingoGameModeType gameModeType)
+    {
+        if (GameModeManager.instance == null)
+        {
+            return gameModeType.ToString();
+        }
+
+        return GameModeManager.instance.GetGameModeName(gameModeType);
+    }
+
+    private string GetOnlineSearchTypeLabel(OnlineSearchType searchType)
+    {
+        switch (searchType)
+        {
+            case OnlineSearchType.QuickPlay:
+                return "Quick Play";
+
+            case OnlineSearchType.CustomSearch:
+                return "Custom Search";
+
+            default:
+                return searchType.ToString();
+        }
+    }
+
+    private string GetBallCountLabel(BingoBallCountType ballCountType)
+    {
+        return $"{(int)ballCountType} Ball";
+    }
+
+    private void SetDropdownValueWithoutNotify<T>(TMP_Dropdown dropdown, List<T> options, T value)
+    {
+        if (dropdown == null || options == null || options.Count == 0)
+        {
+            return;
+        }
+
+        int index = options.IndexOf(value);
+
+        if (index < 0)
+        {
+            index = 0;
+        }
+
+        dropdown.SetValueWithoutNotify(index);
+        dropdown.RefreshShownValue();
+    }
+
+    private bool TryGetSelectedDropdownValue<T>(TMP_Dropdown dropdown, List<T> options, out T value)
+    {
+        value = default;
+
+        if (dropdown == null || options == null || options.Count == 0)
+        {
+            return false;
+        }
+
+        int index = dropdown.value;
+
+        if (index < 0 || index >= options.Count)
+        {
+            index = 0;
+            dropdown.SetValueWithoutNotify(index);
+            dropdown.RefreshShownValue();
+        }
+
+        value = options[index];
+        return true;
+    }
+
+    #endregion
+
+    #endregion
+
     #region Lobby Size Validation
 
     private bool TryGetLobbySizeValue(TMP_InputField inputField, bool showError, TMP_Text errorText, out int lobbySize)
@@ -510,20 +919,6 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
     {
         SoloMenuData defaultSoloMenuData = new SoloMenuData();
         return ClampLobbySizeToAllowedRange(defaultSoloMenuData.lobbySize);
-    }
-
-    #endregion
-
-    #region Solo UI State
-
-    private void ApplySoloUnlimitedState()
-    {
-        if (soloLobbySizeInput == null || soloUnlimitedToggle == null)
-        {
-            return;
-        }
-
-        soloLobbySizeInput.interactable = !soloUnlimitedToggle.isOn;
     }
 
     #endregion

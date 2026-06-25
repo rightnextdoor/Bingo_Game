@@ -2,14 +2,6 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-public enum MainMenuPlayMode
-{
-    None,
-    Solo,
-    Online,
-    Custom
-}
-
 public class MainMenuController : MonoBehaviour
 {
     [Header("Screens")]

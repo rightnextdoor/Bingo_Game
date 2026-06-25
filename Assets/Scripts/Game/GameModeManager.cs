@@ -110,6 +110,23 @@ public class GameModeManager : MonoBehaviour
         return null;
     }
 
+    public string GetGameModeName(BingoGameModeType gameModeType)
+    {
+        BingoGameModeData gameModeData = GetGameModeData(gameModeType);
+
+        if (gameModeData == null)
+        {
+            return gameModeType.ToString();
+        }
+
+        if (string.IsNullOrWhiteSpace(gameModeData.GameName))
+        {
+            return gameModeType.ToString();
+        }
+
+        return gameModeData.GameName;
+    }
+
     public bool TryGetGameRuleData(BingoRuleType ruleType, out BingoGameRuleData ruleData)
     {
         ruleData = GetGameRuleData(ruleType);

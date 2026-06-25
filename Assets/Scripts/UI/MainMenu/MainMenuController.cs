@@ -437,6 +437,7 @@ public class MainMenuController : MonoBehaviour
 
         if (!settingsController.TryBuildLobbySetupData(selectedMode, out LobbySetupData lobbySetupData))
         {
+            ScrollSettingsToBottom();
             return;
         }
 
@@ -452,6 +453,19 @@ public class MainMenuController : MonoBehaviour
         }
 
         gameSceneManager.LoadLobbyScene();
+    }
+
+    private void ScrollSettingsToBottom()
+    {
+        ResizeSettingsContentToActiveGroup();
+
+        if (settingsScrollRect == null)
+        {
+            return;
+        }
+
+        Canvas.ForceUpdateCanvases();
+        settingsScrollRect.verticalNormalizedPosition = 0f;
     }
 
     private void QuitGame()

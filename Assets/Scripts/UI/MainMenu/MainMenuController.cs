@@ -120,6 +120,12 @@ public class MainMenuController : MonoBehaviour
             setupPlayButton.onClick.RemoveListener(PlaySelectedMode);
             setupPlayButton.onClick.AddListener(PlaySelectedMode);
         }
+
+        if (settingsController != null)
+        {
+            settingsController.SettingsLayoutChanged -= OnSettingsLayoutChanged;
+            settingsController.SettingsLayoutChanged += OnSettingsLayoutChanged;
+        }
     }
 
     private void UnregisterButtonListeners()
@@ -157,6 +163,11 @@ public class MainMenuController : MonoBehaviour
         if (setupPlayButton != null)
         {
             setupPlayButton.onClick.RemoveListener(PlaySelectedMode);
+        }
+
+        if (settingsController != null)
+        {
+            settingsController.SettingsLayoutChanged -= OnSettingsLayoutChanged;
         }
     }
 
@@ -278,6 +289,11 @@ public class MainMenuController : MonoBehaviour
         }
     }
 
+    private void OnSettingsLayoutChanged()
+    {
+        ResetSettingsScroll();
+    }
+
     private void ResizeSettingsContentToActiveGroup()
     {
         if (settingsScrollRect == null || settingsScrollRect.content == null)
@@ -297,12 +313,7 @@ public class MainMenuController : MonoBehaviour
 
         LayoutRebuilder.ForceRebuildLayoutImmediate(activeGroupRect);
 
-        float preferredHeight = LayoutUtility.GetPreferredHeight(activeGroupRect);
-
-        if (preferredHeight <= 0f)
-        {
-            preferredHeight = activeGroupRect.rect.height;
-        }
+        float preferredHeight = GetActiveGroupContentHeight(activeGroupRect);
 
         if (preferredHeight < 0f)
         {
@@ -315,6 +326,72 @@ public class MainMenuController : MonoBehaviour
 
         Canvas.ForceUpdateCanvases();
         LayoutRebuilder.ForceRebuildLayoutImmediate(contentRect);
+    }
+
+    private float GetActiveGroupContentHeight(RectTransform activeGroupRect)
+    {
+        if (activeGroupRect == null)
+        {
+            return 0f;
+        }
+
+        VerticalLayoutGroup verticalLayoutGroup = activeGroupRect.GetComponent<VerticalLayoutGroup>();
+
+        if (verticalLayoutGroup == null)
+        {
+            float preferredHeight = LayoutUtility.GetPreferredHeight(activeGroupRect);
+
+            if (preferredHeight <= 0f)
+            {
+                preferredHeight = activeGroupRect.rect.height;
+            }
+
+            return preferredHeight;
+        }
+
+        float height = verticalLayoutGroup.padding.top + verticalLayoutGroup.padding.bottom;
+        int activeLayoutChildCount = 0;
+
+        for (int i = 0; i < activeGroupRect.childCount; i++)
+        {
+            RectTransform childRect = activeGroupRect.GetChild(i) as RectTransform;
+
+            if (childRect == null)
+            {
+                continue;
+            }
+
+            if (!childRect.gameObject.activeSelf)
+            {
+                continue;
+            }
+
+            LayoutElement layoutElement = childRect.GetComponent<LayoutElement>();
+
+            if (layoutElement != null && layoutElement.ignoreLayout)
+            {
+                continue;
+            }
+
+            LayoutRebuilder.ForceRebuildLayoutImmediate(childRect);
+
+            float childHeight = LayoutUtility.GetPreferredHeight(childRect);
+
+            if (childHeight <= 0f)
+            {
+                childHeight = childRect.rect.height;
+            }
+
+            height += childHeight;
+            activeLayoutChildCount++;
+        }
+
+        if (activeLayoutChildCount > 1)
+        {
+            height += verticalLayoutGroup.spacing * (activeLayoutChildCount - 1);
+        }
+
+        return height;
     }
 
     private RectTransform GetActiveSettingsGroupRect(RectTransform contentRect)

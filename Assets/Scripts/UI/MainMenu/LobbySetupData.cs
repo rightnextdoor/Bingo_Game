@@ -7,6 +7,7 @@ public class LobbySetupData
 
     public SoloLobbySetupData soloSetupData = new SoloLobbySetupData();
     public OnlineLobbySetupData onlineSetupData = new OnlineLobbySetupData();
+    public CustomLobbySetupData customSetupData = new CustomLobbySetupData();
 
     public LobbySetupData()
     {
@@ -14,6 +15,7 @@ public class LobbySetupData
 
         soloSetupData = new SoloLobbySetupData();
         onlineSetupData = new OnlineLobbySetupData();
+        customSetupData = new CustomLobbySetupData();
     }
 }
 
@@ -42,5 +44,54 @@ public class OnlineLobbySetupData
         gameModeType = BingoGameModeType.Traditional;
         searchType = OnlineSearchType.QuickPlay;
         ballCountType = BingoBallCountType.Ball75;
+    }
+}
+
+[Serializable]
+public class CustomLobbySetupData
+{
+    public CustomLobbyActionType actionType = CustomLobbyActionType.HostLobby;
+
+    public CustomHostLobbySetupData hostSetupData = new CustomHostLobbySetupData();
+    public CustomSearchLobbySetupData searchSetupData = new CustomSearchLobbySetupData();
+
+    public CustomLobbySetupData()
+    {
+        actionType = CustomLobbyActionType.HostLobby;
+
+        hostSetupData = new CustomHostLobbySetupData();
+        searchSetupData = new CustomSearchLobbySetupData();
+    }
+}
+
+[Serializable]
+public class CustomHostLobbySetupData
+{
+    public string lobbyName = string.Empty;
+    public string password = string.Empty;
+
+    public bool unlimitedPlayers = false;
+    public int maxPlayers = 6;
+
+    public CustomHostLobbySetupData()
+    {
+        lobbyName = string.Empty;
+        password = string.Empty;
+
+        unlimitedPlayers = false;
+        maxPlayers = 6;
+    }
+}
+
+[Serializable]
+public class CustomSearchLobbySetupData
+{
+    public string lobbyCode = string.Empty;
+    public string password = string.Empty;
+
+    public CustomSearchLobbySetupData()
+    {
+        lobbyCode = string.Empty;
+        password = string.Empty;
     }
 }

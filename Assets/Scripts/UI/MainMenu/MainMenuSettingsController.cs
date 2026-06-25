@@ -10,6 +10,11 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
     private const int MinimumLobbySize = 6;
     private const int UnlimitedPlayerCount = 100000;
 
+    private const int MinimumTextLength = 1;
+    private const int LobbyNameCharacterLimit = 24;
+    private const int PasswordCharacterLimit = 24;
+    private const int LobbyCodeCharacterLimit = 12;
+
     #endregion
 
     #region Inspector Fields
@@ -31,6 +36,26 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
     [SerializeField] private TMP_Dropdown onlineBallCountDropdown;
     [SerializeField] private TMP_Text onlineErrorText;
 
+    [Header("Custom Settings")]
+    [SerializeField] private TMP_Dropdown customActionDropdown;
+    [SerializeField] private GameObject customHostSettingsGroup;
+    [SerializeField] private GameObject customSearchSettingsGroup;
+    [SerializeField] private TMP_Text customErrorText;
+
+    [Header("Custom Host Settings")]
+    [SerializeField] private TMP_InputField customHostLobbyNameInput;
+    [SerializeField] private TMP_InputField customHostPasswordInput;
+    [SerializeField] private Button customHostShowPasswordButton;
+    [SerializeField] private TMP_Text customHostShowPasswordButtonText;
+    [SerializeField] private TMP_InputField customHostLobbySizeInput;
+    [SerializeField] private Toggle customHostUnlimitedToggle;
+
+    [Header("Custom Search Settings")]
+    [SerializeField] private TMP_InputField customSearchLobbyCodeInput;
+    [SerializeField] private TMP_InputField customSearchPasswordInput;
+    [SerializeField] private Button customSearchShowPasswordButton;
+    [SerializeField] private TMP_Text customSearchShowPasswordButtonText;
+
     #endregion
 
     #region Private Fields
@@ -42,6 +67,13 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
     private readonly List<BingoGameModeType> onlineGameModeOptions = new List<BingoGameModeType>();
     private readonly List<OnlineSearchType> onlineSearchTypeOptions = new List<OnlineSearchType>();
     private readonly List<BingoBallCountType> onlineBallCountOptions = new List<BingoBallCountType>();
+
+    private readonly List<CustomLobbyActionType> customActionOptions = new List<CustomLobbyActionType>();
+
+    private bool customHostPasswordVisible;
+    private bool customSearchPasswordVisible;
+
+    public event System.Action SettingsLayoutChanged;
 
     #endregion
 
@@ -151,6 +183,9 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
             case MainMenuPlayMode.Online:
                 return TryBuildOnlineLobbySetupData(lobbySetupData);
 
+            case MainMenuPlayMode.Custom:
+                return TryBuildCustomLobbySetupData(lobbySetupData);
+
             default:
                 Debug.LogWarning($"MainMenuSettingsController does not have validation setup for {playMode} yet.");
                 return false;
@@ -181,6 +216,7 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
     {
         ClearError(soloErrorText);
         ClearError(onlineErrorText);
+        ClearError(customErrorText);
     }
 
     #endregion
@@ -211,14 +247,15 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 
         ApplySoloDefaults(menuData.soloMenuData);
         ApplyOnlineDefaults(menuData.onlineMenuData);
+        ApplyCustomDefaults();
     }
-
     private void LoadAllMenuData()
     {
         EnsureMenuData();
 
         LoadSoloMenuData(menuData.soloMenuData);
         LoadOnlineMenuData(menuData.onlineMenuData);
+        ApplyCustomDefaults();
 
         ClearAllErrors();
     }
@@ -239,12 +276,14 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
     {
         RegisterSoloListeners();
         RegisterOnlineListeners();
+        RegisterCustomListeners();
     }
 
     private void UnregisterAllListeners()
     {
         UnregisterSoloListeners();
         UnregisterOnlineListeners();
+        UnregisterCustomListeners();
     }
 
     #endregion
@@ -446,6 +485,7 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         BuildOnlineGameModeDropdownOptions();
         BuildOnlineSearchTypeDropdownOptions();
         BuildOnlineBallCountDropdownOptions();
+        BuildCustomActionDropdownOptions();
     }
 
     private void BuildOnlineGameModeDropdownOptions()
@@ -698,6 +738,8 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         {
             onlineBallCountDropdown.interactable = showBallCount;
         }
+
+        NotifySettingsLayoutChanged();
     }
 
     #endregion
@@ -797,6 +839,546 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 
         value = options[index];
         return true;
+    }
+
+    #endregion
+
+    #endregion
+
+    #region Custom
+
+    #region Custom Dropdown Setup
+
+    private void BuildCustomActionDropdownOptions()
+    {
+        customActionOptions.Clear();
+
+        customActionOptions.Add(CustomLobbyActionType.HostLobby);
+        customActionOptions.Add(CustomLobbyActionType.SearchLobby);
+
+        if (customActionDropdown == null)
+        {
+            return;
+        }
+
+        List<string> labels = new List<string>();
+
+        for (int i = 0; i < customActionOptions.Count; i++)
+        {
+            labels.Add(GetCustomLobbyActionLabel(customActionOptions[i]));
+        }
+
+        customActionDropdown.ClearOptions();
+        customActionDropdown.AddOptions(labels);
+    }
+
+    #endregion
+
+    #region Custom Events
+
+    private void RegisterCustomListeners()
+    {
+        if (customActionDropdown != null)
+        {
+            customActionDropdown.onValueChanged.RemoveListener(OnCustomActionChanged);
+            customActionDropdown.onValueChanged.AddListener(OnCustomActionChanged);
+        }
+
+        if (customHostLobbyNameInput != null)
+        {
+            customHostLobbyNameInput.onValueChanged.RemoveListener(OnCustomHostLobbyNameChanged);
+            customHostLobbyNameInput.onValueChanged.AddListener(OnCustomHostLobbyNameChanged);
+        }
+
+        if (customHostPasswordInput != null)
+        {
+            customHostPasswordInput.onValueChanged.RemoveListener(OnCustomHostPasswordChanged);
+            customHostPasswordInput.onValueChanged.AddListener(OnCustomHostPasswordChanged);
+        }
+
+        if (customHostLobbySizeInput != null)
+        {
+            customHostLobbySizeInput.onValueChanged.RemoveListener(OnCustomHostLobbySizeChanged);
+            customHostLobbySizeInput.onValueChanged.AddListener(OnCustomHostLobbySizeChanged);
+        }
+
+        if (customHostUnlimitedToggle != null)
+        {
+            customHostUnlimitedToggle.onValueChanged.RemoveListener(OnCustomHostUnlimitedChanged);
+            customHostUnlimitedToggle.onValueChanged.AddListener(OnCustomHostUnlimitedChanged);
+        }
+
+        if (customHostShowPasswordButton != null)
+        {
+            customHostShowPasswordButton.onClick.RemoveListener(ToggleCustomHostPasswordVisibility);
+            customHostShowPasswordButton.onClick.AddListener(ToggleCustomHostPasswordVisibility);
+        }
+
+        if (customSearchLobbyCodeInput != null)
+        {
+            customSearchLobbyCodeInput.onValueChanged.RemoveListener(OnCustomSearchLobbyCodeChanged);
+            customSearchLobbyCodeInput.onValueChanged.AddListener(OnCustomSearchLobbyCodeChanged);
+        }
+
+        if (customSearchPasswordInput != null)
+        {
+            customSearchPasswordInput.onValueChanged.RemoveListener(OnCustomSearchPasswordChanged);
+            customSearchPasswordInput.onValueChanged.AddListener(OnCustomSearchPasswordChanged);
+        }
+
+        if (customSearchShowPasswordButton != null)
+        {
+            customSearchShowPasswordButton.onClick.RemoveListener(ToggleCustomSearchPasswordVisibility);
+            customSearchShowPasswordButton.onClick.AddListener(ToggleCustomSearchPasswordVisibility);
+        }
+    }
+
+    private void UnregisterCustomListeners()
+    {
+        if (customActionDropdown != null)
+        {
+            customActionDropdown.onValueChanged.RemoveListener(OnCustomActionChanged);
+        }
+
+        if (customHostLobbyNameInput != null)
+        {
+            customHostLobbyNameInput.onValueChanged.RemoveListener(OnCustomHostLobbyNameChanged);
+        }
+
+        if (customHostPasswordInput != null)
+        {
+            customHostPasswordInput.onValueChanged.RemoveListener(OnCustomHostPasswordChanged);
+        }
+
+        if (customHostLobbySizeInput != null)
+        {
+            customHostLobbySizeInput.onValueChanged.RemoveListener(OnCustomHostLobbySizeChanged);
+        }
+
+        if (customHostUnlimitedToggle != null)
+        {
+            customHostUnlimitedToggle.onValueChanged.RemoveListener(OnCustomHostUnlimitedChanged);
+        }
+
+        if (customHostShowPasswordButton != null)
+        {
+            customHostShowPasswordButton.onClick.RemoveListener(ToggleCustomHostPasswordVisibility);
+        }
+
+        if (customSearchLobbyCodeInput != null)
+        {
+            customSearchLobbyCodeInput.onValueChanged.RemoveListener(OnCustomSearchLobbyCodeChanged);
+        }
+
+        if (customSearchPasswordInput != null)
+        {
+            customSearchPasswordInput.onValueChanged.RemoveListener(OnCustomSearchPasswordChanged);
+        }
+
+        if (customSearchShowPasswordButton != null)
+        {
+            customSearchShowPasswordButton.onClick.RemoveListener(ToggleCustomSearchPasswordVisibility);
+        }
+    }
+
+    private void OnCustomActionChanged(int value)
+    {
+        ApplyCustomActionState();
+        ClearError(customErrorText);
+    }
+
+    private void OnCustomHostLobbyNameChanged(string value)
+    {
+        if (!HasError(customErrorText))
+        {
+            return;
+        }
+
+        if (TryGetRequiredTextValue(customHostLobbyNameInput, false, customErrorText, "Lobby name", MinimumTextLength, LobbyNameCharacterLimit, out _))
+        {
+            ClearError(customErrorText);
+        }
+    }
+
+    private void OnCustomHostPasswordChanged(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            SetCustomPasswordVisibility(customHostPasswordInput, customHostShowPasswordButtonText, false, ref customHostPasswordVisible);
+        }
+    }
+
+    private void OnCustomHostLobbySizeChanged(string value)
+    {
+        if (!HasError(customErrorText))
+        {
+            return;
+        }
+
+        if (TryGetLobbySizeValue(customHostLobbySizeInput, false, customErrorText, out _))
+        {
+            ClearError(customErrorText);
+        }
+    }
+
+    private void OnCustomHostUnlimitedChanged(bool isOn)
+    {
+        ApplyCustomHostUnlimitedState();
+
+        if (isOn)
+        {
+            ClearError(customErrorText);
+            return;
+        }
+
+        if (HasError(customErrorText) && TryGetLobbySizeValue(customHostLobbySizeInput, false, customErrorText, out _))
+        {
+            ClearError(customErrorText);
+        }
+    }
+
+    private void OnCustomSearchLobbyCodeChanged(string value)
+    {
+        if (!HasError(customErrorText))
+        {
+            return;
+        }
+
+        if (TryGetRequiredTextValue(customSearchLobbyCodeInput, false, customErrorText, "Lobby code", MinimumTextLength, LobbyCodeCharacterLimit, out _))
+        {
+            ClearError(customErrorText);
+        }
+    }
+
+    private void OnCustomSearchPasswordChanged(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            SetCustomPasswordVisibility(customSearchPasswordInput, customSearchShowPasswordButtonText, false, ref customSearchPasswordVisible);
+        }
+    }
+
+    #endregion
+
+    #region Custom Defaults
+
+    private void ApplyCustomDefaults()
+    {
+        SetDropdownValueWithoutNotify(customActionDropdown, customActionOptions, CustomLobbyActionType.HostLobby);
+
+        if (customHostLobbyNameInput != null)
+        {
+            customHostLobbyNameInput.SetTextWithoutNotify(string.Empty);
+        }
+
+        if (customHostPasswordInput != null)
+        {
+            customHostPasswordInput.SetTextWithoutNotify(string.Empty);
+        }
+
+        if (customHostLobbySizeInput != null)
+        {
+            customHostLobbySizeInput.SetTextWithoutNotify(GetDefaultSoloLobbySize().ToString());
+        }
+
+        if (customHostUnlimitedToggle != null)
+        {
+            customHostUnlimitedToggle.SetIsOnWithoutNotify(false);
+        }
+
+        if (customSearchLobbyCodeInput != null)
+        {
+            customSearchLobbyCodeInput.SetTextWithoutNotify(string.Empty);
+        }
+
+        if (customSearchPasswordInput != null)
+        {
+            customSearchPasswordInput.SetTextWithoutNotify(string.Empty);
+        }
+
+        SetCustomPasswordVisibility(customHostPasswordInput, customHostShowPasswordButtonText, false, ref customHostPasswordVisible);
+        SetCustomPasswordVisibility(customSearchPasswordInput, customSearchShowPasswordButtonText, false, ref customSearchPasswordVisible);
+
+        ApplyCustomActionState();
+        ApplyCustomHostUnlimitedState();
+
+        ClearError(customErrorText);
+    }
+
+    #endregion
+
+    #region Custom Lobby Data
+
+    private bool TryBuildCustomLobbySetupData(LobbySetupData lobbySetupData)
+    {
+        if (lobbySetupData == null)
+        {
+            return false;
+        }
+
+        if (!TryGetSelectedDropdownValue(customActionDropdown, customActionOptions, out CustomLobbyActionType selectedActionType))
+        {
+            ShowError(customErrorText, "Custom lobby type is not ready.");
+            return false;
+        }
+
+        lobbySetupData.customSetupData.actionType = selectedActionType;
+
+        switch (selectedActionType)
+        {
+            case CustomLobbyActionType.HostLobby:
+                return TryBuildCustomHostLobbySetupData(lobbySetupData);
+
+            case CustomLobbyActionType.SearchLobby:
+                return TryBuildCustomSearchLobbySetupData(lobbySetupData);
+
+            default:
+                ShowError(customErrorText, "Custom lobby type is not valid.");
+                return false;
+        }
+    }
+
+    private bool TryBuildCustomHostLobbySetupData(LobbySetupData lobbySetupData)
+    {
+        if (!TryGetCustomRequiredTextValue(customHostLobbyNameInput, "Lobby name", LobbyNameCharacterLimit, out string lobbyName))
+        {
+            return false;
+        }
+
+        bool unlimitedPlayers = customHostUnlimitedToggle != null && customHostUnlimitedToggle.isOn;
+
+        int maxPlayers = UnlimitedPlayerCount;
+
+        if (!unlimitedPlayers)
+        {
+            if (!TryGetCustomLobbySizeValue(customHostLobbySizeInput, out maxPlayers))
+            {
+                return false;
+            }
+        }
+
+        lobbySetupData.customSetupData.hostSetupData.lobbyName = lobbyName;
+        lobbySetupData.customSetupData.hostSetupData.password = GetOptionalInputText(customHostPasswordInput, PasswordCharacterLimit);
+        lobbySetupData.customSetupData.hostSetupData.unlimitedPlayers = unlimitedPlayers;
+        lobbySetupData.customSetupData.hostSetupData.maxPlayers = maxPlayers;
+
+        ClearError(customErrorText);
+        return true;
+    }
+
+    private bool TryBuildCustomSearchLobbySetupData(LobbySetupData lobbySetupData)
+    {
+        if (!TryGetCustomRequiredTextValue(customSearchLobbyCodeInput, "Lobby code", LobbyCodeCharacterLimit, out string lobbyCode))
+        {
+            return false;
+        }
+
+        lobbySetupData.customSetupData.searchSetupData.lobbyCode = lobbyCode;
+        lobbySetupData.customSetupData.searchSetupData.password = GetOptionalInputText(customSearchPasswordInput, PasswordCharacterLimit);
+
+        ClearError(customErrorText);
+        return true;
+    }
+
+    #endregion
+
+    #region Custom UI State
+
+    private void ApplyCustomActionState()
+    {
+        CustomLobbyActionType selectedActionType = CustomLobbyActionType.HostLobby;
+
+        TryGetSelectedDropdownValue(customActionDropdown, customActionOptions, out selectedActionType);
+
+        bool showHostSettings = selectedActionType == CustomLobbyActionType.HostLobby;
+        bool showSearchSettings = selectedActionType == CustomLobbyActionType.SearchLobby;
+
+        SetActive(customHostSettingsGroup, showHostSettings);
+        SetActive(customSearchSettingsGroup, showSearchSettings);
+
+        NotifySettingsLayoutChanged();
+    }
+
+    private void ApplyCustomHostUnlimitedState()
+    {
+        if (customHostLobbySizeInput == null || customHostUnlimitedToggle == null)
+        {
+            return;
+        }
+
+        customHostLobbySizeInput.interactable = !customHostUnlimitedToggle.isOn;
+    }
+
+    private void ToggleCustomHostPasswordVisibility()
+    {
+        if (customHostPasswordInput == null || string.IsNullOrEmpty(customHostPasswordInput.text))
+        {
+            SetCustomPasswordVisibility(customHostPasswordInput, customHostShowPasswordButtonText, false, ref customHostPasswordVisible);
+            return;
+        }
+
+        SetCustomPasswordVisibility(customHostPasswordInput, customHostShowPasswordButtonText, !customHostPasswordVisible, ref customHostPasswordVisible);
+    }
+
+    private void ToggleCustomSearchPasswordVisibility()
+    {
+        if (customSearchPasswordInput == null || string.IsNullOrEmpty(customSearchPasswordInput.text))
+        {
+            SetCustomPasswordVisibility(customSearchPasswordInput, customSearchShowPasswordButtonText, false, ref customSearchPasswordVisible);
+            return;
+        }
+
+        SetCustomPasswordVisibility(customSearchPasswordInput, customSearchShowPasswordButtonText, !customSearchPasswordVisible, ref customSearchPasswordVisible);
+    }
+
+    private void SetCustomPasswordVisibility(TMP_InputField inputField, TMP_Text buttonText, bool isVisible, ref bool visibilityField)
+    {
+        visibilityField = isVisible;
+
+        if (inputField != null)
+        {
+            inputField.contentType = isVisible ? TMP_InputField.ContentType.Standard : TMP_InputField.ContentType.Password;
+            inputField.inputType = isVisible ? TMP_InputField.InputType.Standard : TMP_InputField.InputType.Password;
+            inputField.ForceLabelUpdate();
+        }
+
+        if (buttonText != null)
+        {
+            buttonText.text = isVisible ? "Hide" : "Show";
+        }
+    }
+
+    #endregion
+
+    #region Custom Helpers
+
+    private string GetCustomLobbyActionLabel(CustomLobbyActionType actionType)
+    {
+        switch (actionType)
+        {
+            case CustomLobbyActionType.HostLobby:
+                return "Host Lobby";
+
+            case CustomLobbyActionType.SearchLobby:
+                return "Search Lobby";
+
+            default:
+                return actionType.ToString();
+        }
+    }
+
+    private bool TryGetCustomRequiredTextValue(TMP_InputField inputField, string fieldName, int maxLength, out string value)
+    {
+        value = string.Empty;
+
+        if (inputField == null)
+        {
+            ShowCustomError($"{fieldName} input is missing.");
+            return false;
+        }
+
+        value = inputField.text.Trim();
+
+        if (value.Length < MinimumTextLength)
+        {
+            ShowCustomError($"{fieldName} cannot be empty.");
+            return false;
+        }
+
+        if (value.Length > maxLength)
+        {
+            value = value.Substring(0, maxLength);
+            inputField.SetTextWithoutNotify(value);
+        }
+
+        return true;
+    }
+
+    private bool TryGetCustomLobbySizeValue(TMP_InputField inputField, out int lobbySize)
+    {
+        if (TryGetLobbySizeValue(inputField, true, customErrorText, out lobbySize))
+        {
+            return true;
+        }
+
+        ForceShowError(customErrorText);
+        return false;
+    }
+
+    private void ShowCustomError(string message)
+    {
+        ShowError(customErrorText, message);
+        ForceShowError(customErrorText);
+
+        if (customErrorText == null)
+        {
+            Debug.LogWarning($"Custom settings error could not be shown because Custom Error Text is not assigned. Message: {message}");
+        }
+    }
+
+    private void ForceShowError(TMP_Text errorText)
+    {
+        if (errorText == null)
+        {
+            return;
+        }
+
+        if (!errorText.gameObject.activeSelf)
+        {
+            errorText.gameObject.SetActive(true);
+        }
+    }
+
+    private bool TryGetRequiredTextValue(TMP_InputField inputField, bool showError, TMP_Text errorText, string fieldName, int minLength, int maxLength, out string value)
+    {
+        value = string.Empty;
+
+        if (inputField == null)
+        {
+            if (showError)
+            {
+                ShowError(errorText, $"{fieldName} input is missing.");
+            }
+
+            return false;
+        }
+
+        value = inputField.text.Trim();
+
+        if (value.Length < minLength)
+        {
+            if (showError)
+            {
+                ShowError(errorText, $"{fieldName} cannot be empty.");
+            }
+
+            return false;
+        }
+
+        if (value.Length > maxLength)
+        {
+            value = value.Substring(0, maxLength);
+            inputField.SetTextWithoutNotify(value);
+        }
+
+        return true;
+    }
+
+    private string GetOptionalInputText(TMP_InputField inputField, int maxLength)
+    {
+        if (inputField == null)
+        {
+            return string.Empty;
+        }
+
+        string value = inputField.text.Trim();
+
+        if (value.Length > maxLength)
+        {
+            value = value.Substring(0, maxLength);
+        }
+
+        return value;
     }
 
     #endregion
@@ -1000,6 +1582,11 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         {
             target.SetActive(isActive);
         }
+    }
+
+    private void NotifySettingsLayoutChanged()
+    {
+        SettingsLayoutChanged?.Invoke();
     }
 
     #endregion

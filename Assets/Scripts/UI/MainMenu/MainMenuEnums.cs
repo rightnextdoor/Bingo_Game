@@ -11,3 +11,9 @@ public enum OnlineSearchType
     QuickPlay,
     CustomSearch
 }
+
+public enum CustomLobbyActionType
+{
+    HostLobby,
+    SearchLobby
+}

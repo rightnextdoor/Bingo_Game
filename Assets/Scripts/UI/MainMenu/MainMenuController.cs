@@ -31,6 +31,7 @@ public class MainMenuController : MonoBehaviour
     private PopupManager popupManager;
     private GameSceneManager gameSceneManager;
     private GameManager gameManager;
+    private LobbyManager lobbyManager;
 
     private void Awake()
     {
@@ -74,6 +75,11 @@ public class MainMenuController : MonoBehaviour
         if (settingsController == null)
         {
             settingsController = GetComponentInChildren<MainMenuSettingsController>(true);
+        }
+
+        if (lobbyManager == null)
+        {
+            lobbyManager = LobbyManager.instance;
         }
     }
 
@@ -445,6 +451,19 @@ public class MainMenuController : MonoBehaviour
         {
             return;
         }
+
+        if (lobbyManager == null)
+        {
+            lobbyManager = LobbyManager.instance;
+        }
+
+        if (lobbyManager == null)
+        {
+            Debug.LogWarning("MainMenuController could not send lobby setup data because LobbyManager was not found.");
+            return;
+        }
+
+        lobbyManager.SetPendingLobbySetupData(lobbySetupData);
 
         if (gameSceneManager == null)
         {

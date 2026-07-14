@@ -27,7 +27,8 @@ public enum UIThemeBackgroundType
     LeaderboardRow,
     LeaderboardRowHighlight,
     Pattern,
-    PatternHighlight
+    PatternHighlight,
+    PatternTooltip
 }
 
 public enum UIThemeButtonType
@@ -45,7 +46,8 @@ public enum UIThemeTextType
     Error,
     LeaderboardTitle,
     LeaderboardHeader,
-    LeaderboardCell
+    LeaderboardCell,
+    PatternTooltip
 }
 
 public enum UIThemeInputType

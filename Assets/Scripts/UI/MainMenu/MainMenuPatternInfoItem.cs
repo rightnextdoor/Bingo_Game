@@ -14,6 +14,10 @@ public class MainMenuPatternInfoItem : MonoBehaviour,
     [SerializeField] private GameObject highlightObject;
     [SerializeField] private TMP_Text patternNameText;
 
+    [Header("Tooltip Theme")]
+    [SerializeField] private UIThemeBackgroundType tooltipBackgroundType = UIThemeBackgroundType.PatternTooltip;
+    [SerializeField] private UIThemeTextType tooltipTextType = UIThemeTextType.PatternTooltip;
+
     #endregion
 
     #region Private Fields
@@ -110,6 +114,8 @@ public class MainMenuPatternInfoItem : MonoBehaviour,
                 .SetMessage(description)
                 .RemoveImage();
 
+        ApplyTooltipTheme(visualStyle);
+
         ToolTipManager.instance.ShowToolTip(
             visualStyle,
             rectTransform
@@ -121,6 +127,41 @@ public class MainMenuPatternInfoItem : MonoBehaviour,
         if (ToolTipManager.instance != null)
         {
             ToolTipManager.instance.HideToolTip();
+        }
+    }
+
+    private void ApplyTooltipTheme(
+    TooltipVisualStyle visualStyle)
+    {
+        if (visualStyle == null ||
+            UIThemeManager.instance == null)
+        {
+            return;
+        }
+
+        UIThemeStyle backgroundStyle =
+            UIThemeManager.instance.GetBackgroundStyle(
+                tooltipBackgroundType
+            );
+
+        if (backgroundStyle != null)
+        {
+            visualStyle.SetBackgroundColor(
+                backgroundStyle.Color
+            );
+        }
+
+        UIThemeStyle textStyle =
+            UIThemeManager.instance.GetTextStyle(
+                tooltipTextType
+            );
+
+        if (textStyle != null)
+        {
+            visualStyle
+                .SetFont(textStyle.FontAsset)
+                .SetTextColor(textStyle.VertexColor)
+                .SetNumberColor(textStyle.VertexColor);
         }
     }
 

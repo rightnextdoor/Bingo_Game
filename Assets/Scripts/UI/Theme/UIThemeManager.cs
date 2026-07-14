@@ -61,6 +61,7 @@ public class UIThemeManager : MonoBehaviour
     }
 
 #if UNITY_EDITOR
+
     private void OnValidate()
     {
         if (instance != null && instance != this)
@@ -75,6 +76,7 @@ public class UIThemeManager : MonoBehaviour
             ReconnectActiveThemeTargetsInEditor();
         }
     }
+
 #endif
 
     private void OnDestroy()
@@ -187,6 +189,16 @@ public class UIThemeManager : MonoBehaviour
                 Debug.LogWarning($"UIThemeManager does not support section type: {sectionType}");
                 return null;
         }
+    }
+
+    public UIThemeStyle GetBackgroundStyle(UIThemeBackgroundType backgroundType)
+    {
+        return FindBackgroundStyle(backgroundType);
+    }
+
+    public UIThemeStyle GetTextStyle(UIThemeTextType textType)
+    {
+        return FindTextStyle(textType);
     }
 
     private UIThemeData FindThemeData(UIThemeType themeType)

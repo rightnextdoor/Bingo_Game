@@ -2,6 +2,13 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
+public enum TooltipImageMode
+{
+    Default,
+    Custom,
+    None
+}
+
 [DisallowMultipleComponent]
 public class UI_ToolTip : MonoBehaviour
 {
@@ -19,49 +26,83 @@ public class UI_ToolTip : MonoBehaviour
     private const float MinHeight = 44f;
     private const float MaxHeight = 220f;
 
-    private const float TooltipHorizontalOffset = 12f;
-    private const float TooltipVerticalOffset = 20f;
-
     private RectTransform parentRect;
     private Canvas parentCanvas;
+    private Sprite defaultBackgroundImage;
 
     private readonly Vector3[] targetWorldCorners = new Vector3[4];
 
     private void Awake()
     {
         FindMissingReferences();
-        Hide();
+        SaveDefaultBackgroundImage();
     }
 
-    public void ShowNearTarget(UIMessageData messageData, string message, RectTransform targetRect)
+    private void SaveDefaultBackgroundImage()
+    {
+        if (backgroundImage != null)
+        {
+            defaultBackgroundImage = backgroundImage.sprite;
+        }
+    }
+
+    public void ShowNearTarget(
+     UIMessageData messageData,
+     string message,
+     RectTransform targetRect)
     {
         if (messageData == null || targetRect == null)
         {
             return;
         }
 
-        FindMissingReferences();
+        PrepareToShow();
 
-        if (!gameObject.activeSelf)
+        ApplyMessageStyle(
+            messageData.FontAsset,
+            messageData.FontSize,
+            messageData.TextColor,
+            messageData.BackgroundColor,
+            messageData.ImageMode,
+            messageData.CustomImage,
+            message
+        );
+
+        FinishShowing(
+            message,
+            targetRect,
+            messageData.TooltipOffset
+        );
+    }
+
+    public void ShowNearTarget(
+    TooltipVisualStyle visualStyle,
+    RectTransform targetRect)
+    {
+        if (visualStyle == null || targetRect == null)
         {
-            gameObject.SetActive(true);
+            return;
         }
 
-        if (!gameObject.activeSelf)
-        {
-            gameObject.SetActive(true);
-        }
+        string message = visualStyle.BuildMessage();
 
-        ApplyMessageStyle(messageData, message);
-        ResizeToFitMessage(message);
-        PositionNearTarget(targetRect);
+        PrepareToShow();
 
-        if (canvasGroup != null)
-        {
-            canvasGroup.alpha = 1f;
-            canvasGroup.blocksRaycasts = false;
-            canvasGroup.interactable = false;
-        }
+        ApplyMessageStyle(
+            visualStyle.FontAsset,
+            visualStyle.FontSize,
+            visualStyle.TextColor,
+            visualStyle.BackgroundColor,
+            visualStyle.ImageMode,
+            visualStyle.CustomImage,
+            message
+        );
+
+        FinishShowing(
+            message,
+            targetRect,
+            visualStyle.TooltipOffset
+        );
     }
 
     public void Hide()
@@ -81,31 +122,100 @@ public class UI_ToolTip : MonoBehaviour
         gameObject.SetActive(false);
     }
 
-    private void ApplyMessageStyle(UIMessageData messageData, string message)
+    private void PrepareToShow()
+    {
+        FindMissingReferences();
+
+        if (!gameObject.activeSelf)
+        {
+            gameObject.SetActive(true);
+        }
+    }
+
+    private void FinishShowing(
+        string message,
+        RectTransform targetRect,
+        Vector2 tooltipOffset)
+    {
+        ResizeToFitMessage(message);
+        PositionNearTarget(targetRect, tooltipOffset);
+
+        if (canvasGroup != null)
+        {
+            canvasGroup.alpha = 1f;
+            canvasGroup.blocksRaycasts = false;
+            canvasGroup.interactable = false;
+        }
+    }
+
+    private void ApplyMessageStyle(
+    TMP_FontAsset fontAsset,
+    int fontSize,
+    Color textColor,
+    Color backgroundColor,
+    TooltipImageMode imageMode,
+    Sprite customImage,
+    string message)
     {
         if (backgroundImage != null)
         {
             backgroundImage.gameObject.SetActive(true);
-            backgroundImage.color = messageData.BackgroundColor;
+            backgroundImage.color = backgroundColor;
             backgroundImage.raycastTarget = false;
+
+            ApplyBackgroundImage(
+                imageMode,
+                customImage
+            );
         }
 
         if (messageText != null)
         {
             messageText.gameObject.SetActive(true);
             messageText.richText = true;
-            messageText.textWrappingMode = TextWrappingModes.Normal;
-            messageText.overflowMode = TextOverflowModes.Ellipsis;
+            messageText.textWrappingMode =
+                TextWrappingModes.Normal;
+            messageText.overflowMode =
+                TextOverflowModes.Ellipsis;
             messageText.enableAutoSizing = false;
 
-            if (messageData.FontAsset != null)
+            if (fontAsset != null)
             {
-                messageText.font = messageData.FontAsset;
+                messageText.font = fontAsset;
             }
 
-            messageText.fontSize = messageData.FontSize;
-            messageText.color = messageData.TextColor;
+            messageText.fontSize = fontSize;
+            messageText.color = textColor;
             messageText.text = message;
+        }
+    }
+
+    private void ApplyBackgroundImage(
+    TooltipImageMode imageMode,
+    Sprite customImage)
+    {
+        if (backgroundImage == null)
+        {
+            return;
+        }
+
+        switch (imageMode)
+        {
+            case TooltipImageMode.Default:
+                backgroundImage.sprite =
+                    defaultBackgroundImage;
+                break;
+
+            case TooltipImageMode.Custom:
+                backgroundImage.sprite =
+                    customImage != null
+                        ? customImage
+                        : defaultBackgroundImage;
+                break;
+
+            case TooltipImageMode.None:
+                backgroundImage.sprite = null;
+                break;
         }
     }
 
@@ -151,65 +261,131 @@ public class UI_ToolTip : MonoBehaviour
         LayoutRebuilder.ForceRebuildLayoutImmediate(toolTipRect);
     }
 
-    private void PositionNearTarget(RectTransform targetRect)
+    private void PositionNearTarget(RectTransform targetRect, Vector2 tooltipOffset)
     {
-        if (toolTipRect == null || parentRect == null || targetRect == null)
+        if (toolTipRect == null ||
+            parentRect == null ||
+            targetRect == null)
         {
             return;
         }
 
         targetRect.GetWorldCorners(targetWorldCorners);
 
-        Vector2 targetMin = new Vector2(float.MaxValue, float.MaxValue);
-        Vector2 targetMax = new Vector2(float.MinValue, float.MinValue);
+        Vector2 targetMin = new Vector2(
+            float.MaxValue,
+            float.MaxValue
+        );
+
+        Vector2 targetMax = new Vector2(
+            float.MinValue,
+            float.MinValue
+        );
 
         for (int i = 0; i < targetWorldCorners.Length; i++)
         {
-            Vector3 localCorner = parentRect.InverseTransformPoint(targetWorldCorners[i]);
+            Vector3 localCorner =
+                parentRect.InverseTransformPoint(
+                    targetWorldCorners[i]
+                );
 
-            targetMin.x = Mathf.Min(targetMin.x, localCorner.x);
-            targetMin.y = Mathf.Min(targetMin.y, localCorner.y);
+            targetMin.x = Mathf.Min(
+                targetMin.x,
+                localCorner.x
+            );
 
-            targetMax.x = Mathf.Max(targetMax.x, localCorner.x);
-            targetMax.y = Mathf.Max(targetMax.y, localCorner.y);
+            targetMin.y = Mathf.Min(
+                targetMin.y,
+                localCorner.y
+            );
+
+            targetMax.x = Mathf.Max(
+                targetMax.x,
+                localCorner.x
+            );
+
+            targetMax.y = Mathf.Max(
+                targetMax.y,
+                localCorner.y
+            );
         }
 
         Vector2 size = toolTipRect.rect.size;
         Rect parentArea = parentRect.rect;
 
-        float targetX = targetMin.x - TooltipHorizontalOffset - size.x;
-        float targetY = targetMin.y - TooltipVerticalOffset;
+        float horizontalOffset = Mathf.Abs(tooltipOffset.x);
+        float verticalOffset = Mathf.Abs(tooltipOffset.y);
+
+        float targetX =
+            targetMin.x - horizontalOffset - size.x;
+
+        float targetY =
+            targetMin.y - verticalOffset;
 
         if (targetX < parentArea.xMin + ScreenPadding.x)
         {
-            targetX = targetMax.x + TooltipHorizontalOffset;
+            targetX =
+                targetMax.x + horizontalOffset;
         }
 
-        if (targetX + size.x > parentArea.xMax - ScreenPadding.x)
+        if (targetX + size.x >
+            parentArea.xMax - ScreenPadding.x)
         {
-            targetX = parentArea.xMax - ScreenPadding.x - size.x;
+            targetX =
+                parentArea.xMax -
+                ScreenPadding.x -
+                size.x;
         }
 
-        if (targetY - size.y < parentArea.yMin + ScreenPadding.y)
+        if (targetY - size.y <
+            parentArea.yMin + ScreenPadding.y)
         {
-            targetY = targetMax.y + TooltipVerticalOffset + size.y;
+            targetY =
+                targetMax.y +
+                verticalOffset +
+                size.y;
         }
 
-        if (targetY > parentArea.yMax - ScreenPadding.y)
+        if (targetY >
+            parentArea.yMax - ScreenPadding.y)
         {
-            targetY = parentArea.yMax - ScreenPadding.y;
+            targetY =
+                parentArea.yMax -
+                ScreenPadding.y;
         }
 
-        float minX = parentArea.xMin + ScreenPadding.x;
-        float maxX = parentArea.xMax - ScreenPadding.x - size.x;
+        float minX =
+            parentArea.xMin +
+            ScreenPadding.x;
 
-        float minY = parentArea.yMin + ScreenPadding.y + size.y;
-        float maxY = parentArea.yMax - ScreenPadding.y;
+        float maxX =
+            parentArea.xMax -
+            ScreenPadding.x -
+            size.x;
 
-        targetX = ClampEvenIfRangeIsSmall(targetX, minX, maxX);
-        targetY = ClampEvenIfRangeIsSmall(targetY, minY, maxY);
+        float minY =
+            parentArea.yMin +
+            ScreenPadding.y +
+            size.y;
 
-        toolTipRect.anchoredPosition = new Vector2(targetX, targetY);
+        float maxY =
+            parentArea.yMax -
+            ScreenPadding.y;
+
+        targetX = ClampEvenIfRangeIsSmall(
+            targetX,
+            minX,
+            maxX
+        );
+
+        targetY = ClampEvenIfRangeIsSmall(
+            targetY,
+            minY,
+            maxY
+        );
+
+        toolTipRect.anchoredPosition =
+            new Vector2(targetX, targetY);
     }
 
     private void FindMissingReferences()

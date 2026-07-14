@@ -20,6 +20,7 @@ public class MainMenuController : MonoBehaviour
 
     [Header("Mode Setup Screen")]
     [SerializeField] private MainMenuSettingsController settingsController;
+    [SerializeField] private MainMenuGameInfoController gameInfoController;
     [SerializeField] private TMP_Text modeTitleText;
     [SerializeField] private ScrollRect settingsScrollRect;
     [SerializeField] private Button setupBackButton;
@@ -81,6 +82,11 @@ public class MainMenuController : MonoBehaviour
         {
             lobbyManager = LobbyManager.instance;
         }
+
+        if (gameInfoController == null)
+        {
+            gameInfoController = GetComponentInChildren<MainMenuGameInfoController>(true);
+        }
     }
 
     private void RegisterButtonListeners()
@@ -131,6 +137,9 @@ public class MainMenuController : MonoBehaviour
         {
             settingsController.SettingsLayoutChanged -= OnSettingsLayoutChanged;
             settingsController.SettingsLayoutChanged += OnSettingsLayoutChanged;
+
+            settingsController.OnlineGameModeChanged -= OnOnlineGameModeChanged;
+            settingsController.OnlineGameModeChanged += OnOnlineGameModeChanged;
         }
     }
 
@@ -174,6 +183,7 @@ public class MainMenuController : MonoBehaviour
         if (settingsController != null)
         {
             settingsController.SettingsLayoutChanged -= OnSettingsLayoutChanged;
+            settingsController.OnlineGameModeChanged -= OnOnlineGameModeChanged;
         }
     }
 
@@ -258,6 +268,7 @@ public class MainMenuController : MonoBehaviour
         if (settingsController != null)
         {
             settingsController.ShowModeSettings(mode);
+            UpdateGameInfoForMode(mode);
         }
         else
         {
@@ -283,6 +294,59 @@ public class MainMenuController : MonoBehaviour
             default:
                 return string.Empty;
         }
+    }
+
+    private void UpdateGameInfoForMode(MainMenuPlayMode mode)
+    {
+        if (gameInfoController == null)
+        {
+            Debug.LogWarning("MainMenuController could not update game info because MainMenuGameInfoController was not assigned.");
+            return;
+        }
+
+        switch (mode)
+        {
+            case MainMenuPlayMode.Solo:
+                gameInfoController.ShowSoloInfo();
+                break;
+
+            case MainMenuPlayMode.Online:
+                gameInfoController.ShowOnlineInfo(GetSelectedOnlineGameModeType());
+                break;
+
+            case MainMenuPlayMode.Custom:
+                gameInfoController.ShowCustomInfo();
+                break;
+
+            default:
+                gameInfoController.ClearInfo();
+                break;
+        }
+    }
+
+    private BingoGameModeType GetSelectedOnlineGameModeType()
+    {
+        if (settingsController == null)
+        {
+            return BingoGameModeType.Traditional;
+        }
+
+        return settingsController.GetSelectedOnlineGameModeType();
+    }
+
+    private void OnOnlineGameModeChanged(BingoGameModeType selectedGameModeType)
+    {
+        if (selectedMode != MainMenuPlayMode.Online)
+        {
+            return;
+        }
+
+        if (gameInfoController == null)
+        {
+            return;
+        }
+
+        gameInfoController.ShowOnlineInfo(selectedGameModeType);
     }
 
     private void ResetSettingsScroll()

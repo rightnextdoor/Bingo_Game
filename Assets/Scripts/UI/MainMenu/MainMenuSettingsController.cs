@@ -74,6 +74,7 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
     private bool customSearchPasswordVisible;
 
     public event System.Action SettingsLayoutChanged;
+    public event System.Action<BingoGameModeType> OnlineGameModeChanged;
 
     #endregion
 
@@ -217,6 +218,16 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         ClearError(soloErrorText);
         ClearError(onlineErrorText);
         ClearError(customErrorText);
+    }
+
+    public BingoGameModeType GetSelectedOnlineGameModeType()
+    {
+        if (TryGetSelectedDropdownValue(onlineGameModeDropdown, onlineGameModeOptions, out BingoGameModeType selectedGameModeType))
+        {
+            return selectedGameModeType;
+        }
+
+        return GetDefaultOnlineGameModeType();
     }
 
     #endregion
@@ -612,6 +623,12 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
     private void OnOnlineGameModeChanged(int value)
     {
         ClearError(onlineErrorText);
+        NotifyOnlineGameModeChanged();
+    }
+
+    private void NotifyOnlineGameModeChanged()
+    {
+        OnlineGameModeChanged?.Invoke(GetSelectedOnlineGameModeType());
     }
 
     private void OnOnlineSearchTypeChanged(int value)

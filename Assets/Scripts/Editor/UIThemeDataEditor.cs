@@ -129,6 +129,7 @@ public class UIThemeDataEditor : Editor
         DrawList(
             inputStylesProperty,
             "Input",
+            "inputType",
             DrawInputStyleEntry
         );
     }
@@ -145,10 +146,11 @@ public class UIThemeDataEditor : Editor
         }
 
         DrawList(
-            dropdownStylesProperty,
-            "Dropdown",
-            DrawDropdownStyleEntry
-        );
+             dropdownStylesProperty,
+             "Dropdown",
+             "dropdownType",
+             DrawDropdownStyleEntry
+         );
     }
 
     private void DrawScrollSection()
@@ -165,6 +167,7 @@ public class UIThemeDataEditor : Editor
         DrawList(
             scrollStylesProperty,
             "Scroll",
+            "scrollType",
             DrawScrollStyleEntry
         );
     }
@@ -183,6 +186,7 @@ public class UIThemeDataEditor : Editor
         DrawList(
             sliderStylesProperty,
             "Slider",
+            "sliderType",
             DrawSliderStyleEntry
         );
     }
@@ -199,10 +203,11 @@ public class UIThemeDataEditor : Editor
         }
 
         DrawList(
-            toggleStylesProperty,
-            "Toggle",
-            DrawToggleStyleEntry
-        );
+             toggleStylesProperty,
+             "Toggle",
+             "toggleType",
+             DrawToggleStyleEntry
+         );
     }
 
     #endregion
@@ -230,6 +235,7 @@ public class UIThemeDataEditor : Editor
         DrawList(
             listProperty,
             entryLabel,
+            typePropertyName,
             entryProperty =>
             {
                 SerializedProperty typeProperty = entryProperty.FindPropertyRelative(typePropertyName);
@@ -245,17 +251,20 @@ public class UIThemeDataEditor : Editor
     }
 
     private void DrawList(
-        SerializedProperty listProperty,
-        string entryLabel,
-        System.Action<SerializedProperty> drawEntry
-    )
+    SerializedProperty listProperty,
+    string entryLabel,
+    string typePropertyName,
+    System.Action<SerializedProperty> drawEntry
+)
     {
         if (listProperty == null)
         {
             EditorGUILayout.HelpBox(
-                $"Missing property for {entryLabel} list. Make sure UIThemeData has the new list field.",
+                $"Missing property for {entryLabel} list. " +
+                $"Make sure UIThemeData has the new list field.",
                 MessageType.Error
             );
+
             return;
         }
 
@@ -263,15 +272,26 @@ public class UIThemeDataEditor : Editor
 
         for (int i = 0; i < listProperty.arraySize; i++)
         {
-            SerializedProperty entryProperty = listProperty.GetArrayElementAtIndex(i);
+            SerializedProperty entryProperty =
+                listProperty.GetArrayElementAtIndex(i);
 
-            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-
-            entryProperty.isExpanded = EditorGUILayout.Foldout(
-                entryProperty.isExpanded,
-                $"{entryLabel} {i + 1}",
-                true
+            string displayName = GetEntryDisplayName(
+                entryProperty,
+                typePropertyName,
+                entryLabel,
+                i
             );
+
+            EditorGUILayout.BeginVertical(
+                EditorStyles.helpBox
+            );
+
+            entryProperty.isExpanded =
+                EditorGUILayout.Foldout(
+                    entryProperty.isExpanded,
+                    displayName,
+                    true
+                );
 
             if (entryProperty.isExpanded)
             {
@@ -281,9 +301,12 @@ public class UIThemeDataEditor : Editor
 
                 EditorGUILayout.Space(4);
 
-                if (GUILayout.Button($"Remove {entryLabel} {i + 1}"))
+                if (GUILayout.Button(
+                    $"Remove {displayName}"
+                ))
                 {
                     listProperty.DeleteArrayElementAtIndex(i);
+
                     EditorGUI.indentLevel--;
                     EditorGUILayout.EndVertical();
                     break;
@@ -300,9 +323,16 @@ public class UIThemeDataEditor : Editor
         if (GUILayout.Button($"Add {entryLabel}"))
         {
             int newIndex = listProperty.arraySize;
-            listProperty.InsertArrayElementAtIndex(newIndex);
 
-            SerializedProperty newEntry = listProperty.GetArrayElementAtIndex(newIndex);
+            listProperty.InsertArrayElementAtIndex(
+                newIndex
+            );
+
+            SerializedProperty newEntry =
+                listProperty.GetArrayElementAtIndex(
+                    newIndex
+                );
+
             newEntry.isExpanded = true;
 
             ResetNewEntryDefaults(newEntry);
@@ -940,6 +970,42 @@ public class UIThemeDataEditor : Editor
             EditorUtility.SetDirty(dataToRefresh);
             UIThemeManager.RefreshThemeData(dataToRefresh);
         };
+    }
+
+    private string GetEntryDisplayName(
+    SerializedProperty entryProperty,
+    string typePropertyName,
+    string fallbackLabel,
+    int index
+)
+    {
+        if (entryProperty == null ||
+            string.IsNullOrWhiteSpace(typePropertyName))
+        {
+            return $"{fallbackLabel} {index + 1}";
+        }
+
+        SerializedProperty typeProperty =
+            entryProperty.FindPropertyRelative(
+                typePropertyName
+            );
+
+        if (typeProperty == null ||
+            typeProperty.propertyType !=
+            SerializedPropertyType.Enum)
+        {
+            return $"{fallbackLabel} {index + 1}";
+        }
+
+        int enumIndex = typeProperty.enumValueIndex;
+
+        if (enumIndex < 0 ||
+            enumIndex >= typeProperty.enumNames.Length)
+        {
+            return $"{fallbackLabel} {index + 1}";
+        }
+
+        return typeProperty.enumNames[enumIndex];
     }
 
     #endregion

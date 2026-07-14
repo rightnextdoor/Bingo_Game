@@ -9,6 +9,7 @@ public class ToolTipManager : MonoBehaviour
     [SerializeField] private UI_ToolTip toolTipUI;
 
     private UIMessageData currentMessageData;
+    private TooltipVisualStyle currentVisualStyle;
     private RectTransform currentTargetRect;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -46,6 +47,7 @@ public class ToolTipManager : MonoBehaviour
         }
 
         currentMessageData = messageData;
+        currentVisualStyle = null;
         currentTargetRect = targetRect;
 
         string message = messageData.BuildMessage();
@@ -53,9 +55,27 @@ public class ToolTipManager : MonoBehaviour
         toolTipUI.ShowNearTarget(messageData, message, targetRect);
     }
 
+    public void ShowToolTip(TooltipVisualStyle visualStyle, RectTransform targetRect)
+    {
+        if (visualStyle == null || targetRect == null || toolTipUI == null)
+        {
+            return;
+        }
+
+        currentMessageData = null;
+        currentVisualStyle = visualStyle;
+        currentTargetRect = targetRect;
+
+        toolTipUI.ShowNearTarget(
+            visualStyle,
+            targetRect
+        );
+    }
+
     public void HideToolTip()
     {
         currentMessageData = null;
+        currentVisualStyle = null;
         currentTargetRect = null;
 
         if (toolTipUI != null)

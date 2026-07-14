@@ -9,6 +9,11 @@ public class UIMessageData : ScriptableObject
     [TextArea(2, 8)]
     [SerializeField] private string messageText;
 
+    [Header("Tooltip Image")]
+    [SerializeField]
+    private TooltipImageMode imageMode = TooltipImageMode.Default;
+    [SerializeField] private Sprite customImage;
+
     [Header("Font")]
     [SerializeField] private TMP_FontAsset fontAsset;
     [SerializeField] private int fontSize = 24;
@@ -26,6 +31,8 @@ public class UIMessageData : ScriptableObject
     [SerializeField] private Vector2 tooltipOffset = new Vector2(18f, -18f);
 
     public string MessageText => messageText;
+    public TooltipImageMode ImageMode => imageMode;
+    public Sprite CustomImage => customImage;
     public TMP_FontAsset FontAsset => fontAsset;
     public int FontSize => fontSize;
     public Color TextColor => textColor;
@@ -70,7 +77,9 @@ public class UIMessageData : ScriptableObject
     Color backgroundColor,
     float displaySeconds,
     float fadeOutSeconds,
-    Vector2 tooltipOffset)
+    Vector2 tooltipOffset,
+    TooltipImageMode imageMode = TooltipImageMode.Default,
+    Sprite customImage = null)
     {
         UIMessageData data = CreateInstance<UIMessageData>();
 
@@ -82,6 +91,9 @@ public class UIMessageData : ScriptableObject
         data.displaySeconds = displaySeconds;
         data.fadeOutSeconds = fadeOutSeconds;
         data.tooltipOffset = tooltipOffset;
+
+        data.imageMode = imageMode;
+        data.customImage = customImage;
 
         return data;
     }

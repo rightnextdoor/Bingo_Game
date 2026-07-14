@@ -25,7 +25,9 @@ public enum UIThemeBackgroundType
     Header,
     Secondary,
     LeaderboardRow,
-    LeaderboardRowHighlight
+    LeaderboardRowHighlight,
+    Pattern,
+    PatternHighlight
 }
 
 public enum UIThemeButtonType

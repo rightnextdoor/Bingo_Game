@@ -3716,7 +3716,7 @@ MonoBehaviour:
   m_HandleRect: {fileID: 8028222560917546727}
   m_Direction: 0
   m_Value: 0
-  m_Size: 0.9999998
+  m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:
     m_PersistentCalls:
@@ -12807,10 +12807,6 @@ MonoBehaviour:
   patternsHeaderText: {fileID: 5767191842313713649}
   patternContent: {fileID: 571975984751368707}
   patternItemPrefab: {fileID: 3545763793367481700, guid: 33d6dcb3663132242a3773730ab72378, type: 3}
-  infoContent: {fileID: 1060894108911022671}
-  gameNameLayoutElement: {fileID: 8631819361866399389}
-  gameDescriptionLayoutElement: {fileID: 0}
-  rulesDescriptionLayoutElement: {fileID: 0}
 --- !u!1 &8865885742875053413
 GameObject:
   m_ObjectHideFlags: 0
@@ -13413,6 +13409,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 571975984751368707}
     m_Modifications:
+    - target: {fileID: 4314445219348336471, guid: 33d6dcb3663132242a3773730ab72378, type: 3}
+      propertyPath: m_RaycastTarget
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 5527756479962846369, guid: 33d6dcb3663132242a3773730ab72378, type: 3}
       propertyPath: m_Pivot.x
       value: 0.5
@@ -13496,6 +13496,10 @@ PrefabInstance:
     - target: {fileID: 7639502591522865102, guid: 33d6dcb3663132242a3773730ab72378, type: 3}
       propertyPath: m_Name
       value: PatternInfoItemPrefab
+      objectReference: {fileID: 0}
+    - target: {fileID: 8185634450875383878, guid: 33d6dcb3663132242a3773730ab72378, type: 3}
+      propertyPath: m_RaycastTarget
+      value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -16829,11 +16833,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2063452965122366944, guid: c2df0df2443cbfd498c2fcd7b99edbbc, type: 3}
       propertyPath: m_Size
-      value: 0.8266666
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 2063452965122366944, guid: c2df0df2443cbfd498c2fcd7b99edbbc, type: 3}
       propertyPath: m_Value
-      value: 1
+      value: 1.0000006
       objectReference: {fileID: 0}
     - target: {fileID: 2136658381497729903, guid: c2df0df2443cbfd498c2fcd7b99edbbc, type: 3}
       propertyPath: m_AnchorMax.y

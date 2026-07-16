@@ -495,47 +495,80 @@ public class MainMenuController : MonoBehaviour
 
         if (selectedMode == MainMenuPlayMode.None)
         {
-            Debug.LogWarning("Cannot play because no mode is selected.");
+            Debug.LogWarning(
+                "Cannot play because no mode is selected.");
+
             return;
         }
 
         if (settingsController == null)
         {
-            Debug.LogWarning("MainMenuController could not play because MainMenuSettingsController was not found.");
+            Debug.LogWarning(
+                "MainMenuController could not play because MainMenuSettingsController was not found.");
+
             return;
         }
 
-        if (!settingsController.TryBuildLobbySetupData(selectedMode, out LobbySetupData lobbySetupData))
+        if (userManager == null ||
+            !userManager.IsReady ||
+            !userManager.HasUser)
+        {
+            Debug.LogWarning(
+                "MainMenuController could not play because the current user is not ready.");
+
+            return;
+        }
+
+        if (!settingsController.TryBuildLobbySetupData(
+                selectedMode,
+                out LobbySetupData lobbySetupData))
         {
             ScrollSettingsToBottom();
             return;
         }
 
-        if (!settingsController.SaveMenuDataForMode(selectedMode))
+        lobbySetupData.userData = userManager.CurrentUser;
+
+        if (!settingsController.SaveMenuDataForMode(
+                selectedMode))
         {
             return;
         }
 
         if (lobbyManager == null)
         {
-            lobbyManager = LobbyManager.instance;
+            lobbyManager =
+                LobbyManager.instance;
         }
 
         if (lobbyManager == null)
         {
-            Debug.LogWarning("MainMenuController could not send lobby setup data because LobbyManager was not found.");
+            Debug.LogWarning(
+                "MainMenuController could not send lobby setup data because LobbyManager was not found.");
+
             return;
         }
-
-        lobbyManager.SetPendingLobbySetupData(lobbySetupData);
 
         if (gameSceneManager == null)
         {
-            Debug.LogWarning("MainMenuController could not load Lobby because GameSceneManager was not found.");
+            gameSceneManager =
+                GameSceneManager.instance;
+        }
+
+        if (gameSceneManager == null)
+        {
+            Debug.LogWarning(
+                "MainMenuController could not load Lobby because GameSceneManager was not found.");
+
             return;
         }
 
+        lobbyManager.SetPendingLobbySetupData(
+            lobbySetupData);
+
         gameSceneManager.LoadLobbyScene();
+
+        lobbyManager.BeginPendingLobbyEntry();
     }
 
     private void ScrollSettingsToBottom()

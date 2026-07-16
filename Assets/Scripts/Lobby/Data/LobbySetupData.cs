@@ -5,6 +5,8 @@ public class LobbySetupData
 {
     public MainMenuPlayMode playMode = MainMenuPlayMode.None;
 
+    public UserData userData = new UserData();
+
     public SoloLobbySetupData soloSetupData = new SoloLobbySetupData();
     public OnlineLobbySetupData onlineSetupData = new OnlineLobbySetupData();
     public CustomLobbySetupData customSetupData = new CustomLobbySetupData();
@@ -12,6 +14,8 @@ public class LobbySetupData
     public LobbySetupData()
     {
         playMode = MainMenuPlayMode.None;
+
+        userData = new UserData();
 
         soloSetupData = new SoloLobbySetupData();
         onlineSetupData = new OnlineLobbySetupData();
@@ -39,11 +43,17 @@ public class OnlineLobbySetupData
     public OnlineSearchType searchType = OnlineSearchType.QuickPlay;
     public BingoBallCountType ballCountType = BingoBallCountType.Ball75;
 
+    public bool unlimitedPlayers = false;
+    public int maxPlayers = 30;
+
     public OnlineLobbySetupData()
     {
         gameModeType = BingoGameModeType.Traditional;
         searchType = OnlineSearchType.QuickPlay;
         ballCountType = BingoBallCountType.Ball75;
+
+        unlimitedPlayers = false;
+        maxPlayers = 30;
     }
 }
 

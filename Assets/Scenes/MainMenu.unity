@@ -1462,23 +1462,23 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 989408339628007082, guid: f405dd3864b1d7241b138db31eed7538, type: 3}
       propertyPath: m_IsActive
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 1339458651799267380, guid: f405dd3864b1d7241b138db31eed7538, type: 3}
       propertyPath: m_AnchorMax.y
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 1339458651799267380, guid: f405dd3864b1d7241b138db31eed7538, type: 3}
       propertyPath: m_AnchorMin.y
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 1339458651799267380, guid: f405dd3864b1d7241b138db31eed7538, type: 3}
       propertyPath: m_AnchoredPosition.x
-      value: 591.8154
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 1339458651799267380, guid: f405dd3864b1d7241b138db31eed7538, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: -60
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 5376826884602316283, guid: f405dd3864b1d7241b138db31eed7538, type: 3}
       propertyPath: m_LocalPosition.x
@@ -1522,20 +1522,35 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 9060516257678056787, guid: f405dd3864b1d7241b138db31eed7538, type: 3}
       propertyPath: m_AnchorMax.y
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 9060516257678056787, guid: f405dd3864b1d7241b138db31eed7538, type: 3}
       propertyPath: m_AnchorMin.y
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 9060516257678056787, guid: f405dd3864b1d7241b138db31eed7538, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: -60
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 5470830889340424183, guid: f405dd3864b1d7241b138db31eed7538, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 0}
+    - targetCorrespondingSourceObject: {fileID: 8782426254475774321, guid: f405dd3864b1d7241b138db31eed7538, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 0}
+    - targetCorrespondingSourceObject: {fileID: 6935602071833281614, guid: f405dd3864b1d7241b138db31eed7538, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 0}
+    - targetCorrespondingSourceObject: {fileID: 7630988496967863407, guid: f405dd3864b1d7241b138db31eed7538, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 0}
+    - targetCorrespondingSourceObject: {fileID: 3994003713722803554, guid: f405dd3864b1d7241b138db31eed7538, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 0}
   m_SourcePrefab: {fileID: 100100000, guid: f405dd3864b1d7241b138db31eed7538, type: 3}
 --- !u!114 &7733763690654359273 stripped
 MonoBehaviour:

@@ -9,6 +9,7 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 
     private const int MinimumLobbySize = 6;
     private const int UnlimitedPlayerCount = 100000;
+    private const bool DefaultOnlineUnlimitedPlayers = true;
 
     private const int MinimumTextLength = 1;
     private const int LobbyNameCharacterLimit = 24;
@@ -732,6 +733,13 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         lobbySetupData.onlineSetupData.gameModeType = selectedGameModeType;
         lobbySetupData.onlineSetupData.searchType = selectedSearchType;
         lobbySetupData.onlineSetupData.ballCountType = selectedBallCountType;
+
+        lobbySetupData.onlineSetupData.unlimitedPlayers = DefaultOnlineUnlimitedPlayers;
+
+        if (DefaultOnlineUnlimitedPlayers)
+        {
+            lobbySetupData.onlineSetupData.maxPlayers = UnlimitedPlayerCount;
+        }
 
         ClearError(onlineErrorText);
         return true;

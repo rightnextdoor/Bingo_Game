@@ -236,9 +236,7 @@ public class NetworkLobbyManager :
                 "The Online lobby could not be created.");
         }
 
-        return AddPlayerToLobby(
-            selectedLobby,
-            lobbySetupData.userData);
+        return AddPlayerToLobby(selectedLobby, lobbySetupData.userData, false);
     }
 
     private LobbyEntryResult ProcessCustomLobbyEntry(
@@ -270,9 +268,7 @@ public class NetworkLobbyManager :
                             "The Custom lobby could not be created.");
                     }
 
-                    return AddPlayerToLobby(
-                        newLobby,
-                        lobbySetupData.userData);
+                    return AddPlayerToLobby(newLobby, lobbySetupData.userData, true);
                 }
 
             case CustomLobbyActionType.SearchLobby:
@@ -308,9 +304,7 @@ public class NetworkLobbyManager :
                             "The Custom lobby is full.");
                     }
 
-                    return AddPlayerToLobby(
-                        lobby,
-                        lobbySetupData.userData);
+                    return AddPlayerToLobby(lobby, lobbySetupData.userData, false);
                 }
 
             default:
@@ -320,23 +314,16 @@ public class NetworkLobbyManager :
         }
     }
 
-    private LobbyEntryResult AddPlayerToLobby(
-        Lobby lobby,
-        UserData userData)
+    private LobbyEntryResult AddPlayerToLobby(Lobby lobby, UserData userData, bool isHost)
     {
         if (lobby == null)
         {
-            return LobbyEntryResult.Failed(
-                LobbyEntryFailureType.LobbyNotFound,
-                "The lobby could not be found.");
+            return LobbyEntryResult.Failed(LobbyEntryFailureType.LobbyNotFound, "The lobby could not be found.");
         }
 
-        if (userData == null ||
-            !userData.HasUser)
+        if (userData == null || !userData.HasUser)
         {
-            return LobbyEntryResult.Failed(
-                LobbyEntryFailureType.UserMissing,
-                "The user information is missing.");
+            return LobbyEntryResult.Failed(LobbyEntryFailureType.UserMissing, "The user information is missing.");
         }
 
         if (lobby.HasPlayer(userData.userId))
@@ -346,24 +333,14 @@ public class NetworkLobbyManager :
 
         if (IsLobbyFull(lobby))
         {
-            return LobbyEntryResult.Failed(
-                LobbyEntryFailureType.LobbyFull,
-                "The lobby is full.");
+            return LobbyEntryResult.Failed(LobbyEntryFailureType.LobbyFull, "The lobby is full.");
         }
 
-        bool isHost =
-            lobby.players.Count == 0;
-
-        LobbyPlayerData playerData =
-            new LobbyPlayerData(
-                userData,
-                isHost);
+        LobbyPlayerData playerData = new LobbyPlayerData(userData, isHost);
 
         if (!lobby.AddPlayer(playerData))
         {
-            return LobbyEntryResult.Failed(
-                LobbyEntryFailureType.LobbyJoinFailed,
-                "The player could not be added to the lobby.");
+            return LobbyEntryResult.Failed(LobbyEntryFailureType.LobbyJoinFailed, "The player could not be added to the lobby.");
         }
 
         return LobbyEntryResult.Succeeded(lobby);

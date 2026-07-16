@@ -231,8 +231,7 @@ public class LobbyManager : MonoBehaviour
         pendingLobbySetupData = null;
         isEnteringLobby = false;
 
-        SetEntryState(
-            LobbyEntryState.Completed);
+        SetEntryState(LobbyEntryState.Completed);
 
         LobbyEntryCompleted?.Invoke(result);
     }

@@ -251,6 +251,11 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         {
             menuData.onlineMenuData = new OnlineMenuData();
         }
+
+        if (menuData.customMenuData == null)
+        {
+            menuData.customMenuData = new CustomMenuData();
+        }
     }
 
     private void ApplyAllDefaults()
@@ -259,7 +264,7 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 
         ApplySoloDefaults(menuData.soloMenuData);
         ApplyOnlineDefaults(menuData.onlineMenuData);
-        ApplyCustomDefaults();
+        ApplyCustomDefaults(menuData.customMenuData);
     }
     private void LoadAllMenuData()
     {
@@ -267,7 +272,7 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 
         LoadSoloMenuData(menuData.soloMenuData);
         LoadOnlineMenuData(menuData.onlineMenuData);
-        ApplyCustomDefaults();
+        LoadCustomMenuData(menuData.customMenuData);
 
         ClearAllErrors();
     }
@@ -278,6 +283,7 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 
         SaveSoloMenuData(menuData.soloMenuData);
         SaveOnlineMenuData(menuData.onlineMenuData);
+        SaveCustomMenuData(menuData.customMenuData);
     }
 
     #endregion
@@ -1087,9 +1093,14 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 
     #region Custom Defaults
 
-    private void ApplyCustomDefaults()
+    private void ApplyCustomDefaults(CustomMenuData customMenuData)
     {
-        SetDropdownValueWithoutNotify(customActionDropdown, customActionOptions, CustomLobbyActionType.HostLobby);
+        if (customMenuData == null)
+        {
+            customMenuData = new CustomMenuData();
+        }
+
+        SetDropdownValueWithoutNotify(customActionDropdown, customActionOptions, customMenuData.actionType);
 
         if (customHostLobbyNameInput != null)
         {
@@ -1126,8 +1137,68 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 
         ApplyCustomActionState();
         ApplyCustomHostUnlimitedState();
-
         ClearError(customErrorText);
+    }
+
+    private void LoadCustomMenuData(CustomMenuData customMenuData)
+    {
+        if (customMenuData == null)
+        {
+            ApplyCustomDefaults(new CustomMenuData());
+            return;
+        }
+
+        SetDropdownValueWithoutNotify(customActionDropdown, customActionOptions, customMenuData.actionType);
+
+        if (customHostLobbyNameInput != null)
+        {
+            customHostLobbyNameInput.SetTextWithoutNotify(string.Empty);
+        }
+
+        if (customHostPasswordInput != null)
+        {
+            customHostPasswordInput.SetTextWithoutNotify(string.Empty);
+        }
+
+        if (customHostLobbySizeInput != null)
+        {
+            customHostLobbySizeInput.SetTextWithoutNotify(GetDefaultSoloLobbySize().ToString());
+        }
+
+        if (customHostUnlimitedToggle != null)
+        {
+            customHostUnlimitedToggle.SetIsOnWithoutNotify(false);
+        }
+
+        if (customSearchLobbyCodeInput != null)
+        {
+            customSearchLobbyCodeInput.SetTextWithoutNotify(string.Empty);
+        }
+
+        if (customSearchPasswordInput != null)
+        {
+            customSearchPasswordInput.SetTextWithoutNotify(string.Empty);
+        }
+
+        SetCustomPasswordVisibility(customHostPasswordInput, customHostShowPasswordButtonText, false, ref customHostPasswordVisible);
+        SetCustomPasswordVisibility(customSearchPasswordInput, customSearchShowPasswordButtonText, false, ref customSearchPasswordVisible);
+
+        ApplyCustomActionState();
+        ApplyCustomHostUnlimitedState();
+        ClearError(customErrorText);
+    }
+
+    private void SaveCustomMenuData(CustomMenuData customMenuData)
+    {
+        if (customMenuData == null)
+        {
+            return;
+        }
+
+        if (TryGetSelectedDropdownValue(customActionDropdown, customActionOptions, out CustomLobbyActionType selectedActionType))
+        {
+            customMenuData.actionType = selectedActionType;
+        }
     }
 
     #endregion

@@ -354,32 +354,27 @@ public class LobbyManager : MonoBehaviour
 
     #region Failure Shell
 
-    private void CompleteLobbyEntryFailure(
-        LobbyEntryResult result)
+    private void CompleteLobbyEntryFailure(LobbyEntryResult result)
     {
         isEnteringLobby = false;
 
-        lastEntryResult =
-            result ??
-            LobbyEntryResult.Failed(
-                LobbyEntryFailureType.Unknown,
-                "The lobby could not be entered.");
+        lastEntryResult = result ?? LobbyEntryResult.Failed(
+            LobbyEntryFailureType.Unknown,
+            "The lobby could not be entered.");
 
-        SetEntryState(
-            LobbyEntryState.Failed);
+        SetEntryState(LobbyEntryState.Failed);
 
-        LobbyEntryFailed?.Invoke(
-            lastEntryResult);
-
-        HandleLobbyEntryFailure(
-            lastEntryResult);
+        HandleLobbyEntryFailure(lastEntryResult);
     }
 
-    private void HandleLobbyEntryFailure(
-        LobbyEntryResult result)
+    private void HandleLobbyEntryFailure(LobbyEntryResult result)
     {
-        // Failure scene transition, persistent loading UI,
-        // and popup handling will be added in the next phase.
+        if (result == null)
+        {
+            return;
+        }
+
+        LobbyEntryFailed?.Invoke(result);
 
         Debug.LogWarning(
             $"[LobbyManager] Lobby entry failed. " +

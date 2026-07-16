@@ -39,6 +39,9 @@ public class GameSceneManager : MonoBehaviour
     private GameSceneType currentSceneType;
     private bool isLoadingScene;
 
+    private bool hasPendingLoadingRedirect;
+    private GameSceneType pendingLoadingRedirectSceneType;
+
     #endregion
 
     #region Properties
@@ -114,6 +117,7 @@ public class GameSceneManager : MonoBehaviour
             return;
         }
 
+        hasPendingLoadingRedirect = false;
         loadingRoutine = StartCoroutine(LoadSceneRoutine(sceneType));
     }
 
@@ -124,7 +128,20 @@ public class GameSceneManager : MonoBehaviour
             return;
         }
 
+        hasPendingLoadingRedirect = false;
         loadingRoutine = StartCoroutine(CurrentSceneLoadingRoutine(sceneType));
+    }
+
+    public void ReturnToMainSceneAfterLobbyFailure()
+    {
+        if (isLoadingScene)
+        {
+            pendingLoadingRedirectSceneType = GameSceneType.Main;
+            hasPendingLoadingRedirect = true;
+            return;
+        }
+
+        LoadMainScene();
     }
 
     #endregion
@@ -134,42 +151,79 @@ public class GameSceneManager : MonoBehaviour
     private IEnumerator LoadSceneRoutine(GameSceneType sceneType)
     {
         isLoadingScene = true;
-        currentSceneType = sceneType;
-
-        ResolveReferences();
-
-
-        if (sceneReadyController != null)
-        {
-            sceneReadyController.ClearSceneReadyChecks();
-        }
 
         LoadingFaderManager loader = CurrentLoader;
 
-        if (loader != null)
+        if (loader != null && !loader.IsShowing)
         {
             loader.ShowLoading();
         }
 
-        yield return null;
+        GameSceneType targetSceneType = sceneType;
 
-        string sceneName = GetSceneName(sceneType);
-
-        if (string.IsNullOrWhiteSpace(sceneName))
+        while (true)
         {
-            Debug.LogWarning($"Cannot load scene because no scene name was found for {sceneType}.");
-            isLoadingScene = false;
-            yield break;
-        }
+            currentSceneType = targetSceneType;
 
-        AsyncOperation loadOperation = UnitySceneManager.LoadSceneAsync(sceneName, LoadSceneMode.Single);
+            ResolveReferences();
 
-        while (loadOperation != null && !loadOperation.isDone)
-        {
+            if (sceneReadyController != null)
+            {
+                sceneReadyController.ClearSceneReadyChecks();
+            }
+
             yield return null;
-        }
 
-        yield return WaitUntilSceneCanStart();
+            string sceneName = GetSceneName(targetSceneType);
+
+            if (string.IsNullOrWhiteSpace(sceneName))
+            {
+                Debug.LogWarning($"Cannot load scene because no scene name was found for {targetSceneType}.");
+
+                if (loader != null)
+                {
+                    loader.HideInstant();
+                }
+
+                isLoadingScene = false;
+                loadingRoutine = null;
+                yield break;
+            }
+
+            AsyncOperation loadOperation = UnitySceneManager.LoadSceneAsync(sceneName, LoadSceneMode.Single);
+
+            while (loadOperation != null && !loadOperation.isDone)
+            {
+                yield return null;
+            }
+
+            sceneReadyController = null;
+            ResolveReferences();
+
+            yield return null;
+
+            if (TryConsumeLoadingRedirect(out targetSceneType))
+            {
+                continue;
+            }
+
+            while (!CanStartScene())
+            {
+                if (hasPendingLoadingRedirect)
+                {
+                    break;
+                }
+
+                yield return null;
+            }
+
+            if (TryConsumeLoadingRedirect(out targetSceneType))
+            {
+                continue;
+            }
+
+            break;
+        }
 
         loader = CurrentLoader;
 
@@ -233,8 +287,9 @@ public class GameSceneManager : MonoBehaviour
 
         bool minimumTimeDone = loader == null || loader.HasMinimumShowTimePassed;
         bool sceneReady = sceneReadyController == null || sceneReadyController.AreAllReady();
+        bool lobbyEntryFinished = IsLobbyEntryFinished();
 
-        return minimumTimeDone && sceneReady;
+        return minimumTimeDone && sceneReady && lobbyEntryFinished;
     }
 
     #endregion
@@ -277,6 +332,36 @@ public class GameSceneManager : MonoBehaviour
         {
             return LoadingFaderManager.instance;
         }
+    }
+
+    private bool IsLobbyEntryFinished()
+    {
+        if (currentSceneType != GameSceneType.Lobby)
+        {
+            return true;
+        }
+
+        if (LobbyManager.instance == null)
+        {
+            return false;
+        }
+
+        return LobbyManager.instance.EntryState == LobbyEntryState.Completed || LobbyManager.instance.EntryState == LobbyEntryState.Failed;
+    }
+
+    private bool TryConsumeLoadingRedirect(out GameSceneType sceneType)
+    {
+        sceneType = currentSceneType;
+
+        if (!hasPendingLoadingRedirect)
+        {
+            return false;
+        }
+
+        sceneType = pendingLoadingRedirectSceneType;
+        hasPendingLoadingRedirect = false;
+
+        return true;
     }
 
     #endregion

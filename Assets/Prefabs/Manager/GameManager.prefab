@@ -21,6 +21,7 @@ GameObject:
   - component: {fileID: 7344788184736564446}
   - component: {fileID: 6361720458790271769}
   - component: {fileID: 6910353490865770210}
+  - component: {fileID: 2387506421031424793}
   m_Layer: 0
   m_Name: GameManager
   m_TagString: Untagged
@@ -238,3 +239,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c9d9e56560f109348843a36019b44305, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LocalLobbyManager
+--- !u!114 &2387506421031424793
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8215340122209812844}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c3fb35e3649294e458806219b9e9e4b9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LobbyEntryFailureManager

@@ -82,8 +82,7 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
 
     #region Lobby Entry
 
-    public async Task<LobbyEntryResult> EnterLobbyAsync(
-        LobbySetupData lobbySetupData)
+    public async Task<LobbyEntryResult> EnterLobbyAsync(LobbySetupData lobbySetupData)
     {
         if (!isReady)
         {
@@ -137,9 +136,7 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
             "The network lobby did not return a result.");
     }
 
-    public LobbyEntryResult ProcessAuthorityLobbyEntry(
-        LobbySetupData lobbySetupData,
-        ulong senderClientId)
+    public LobbyEntryResult ProcessAuthorityLobbyEntry(LobbySetupData lobbySetupData, ulong senderClientId)
     {
         if (networkBootstrap == null ||
             !networkBootstrap.IsAuthority)
@@ -384,9 +381,7 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         return result;
     }
 
-    private LobbyExitResult RemovePlayerFromLobby(
-        string userId,
-        LobbyPlayerExitReason exitReason)
+    private LobbyExitResult RemovePlayerFromLobby(string userId, LobbyPlayerExitReason exitReason)
     {
         Lobby lobby = FindUserLobby(userId);
 
@@ -406,9 +401,7 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
             exitReason);
     }
 
-    private void OnLobbyPlayerExitProcessed(
-        LobbyController controller,
-        LobbyExitResult exitResult)
+    private void OnLobbyPlayerExitProcessed(LobbyController controller, LobbyExitResult exitResult)
     {
         if (controller == null ||
             exitResult == null ||
@@ -430,9 +423,7 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
             exitResult.closeReason);
     }
 
-    private void CloseAndDeleteLobby(
-        Lobby lobby,
-        LobbyCloseReason closeReason)
+    private void CloseAndDeleteLobby(Lobby lobby, LobbyCloseReason closeReason)
     {
         if (lobby?.Controller == null)
         {
@@ -628,8 +619,7 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         return true;
     }
 
-    private LobbyEntryResult ProcessCustomLobbyEntry(
-        LobbySetupData lobbySetupData)
+    private LobbyEntryResult ProcessCustomLobbyEntry(LobbySetupData lobbySetupData)
     {
         CustomLobbySetupData customSetupData =
             lobbySetupData.customSetupData;
@@ -670,8 +660,7 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         }
     }
 
-    private LobbyEntryResult ProcessCustomLobbySearch(
-        LobbySetupData lobbySetupData)
+    private LobbyEntryResult ProcessCustomLobbySearch(LobbySetupData lobbySetupData)
     {
         CustomSearchLobbySetupData searchSetupData =
             lobbySetupData?.customSetupData?.searchSetupData;
@@ -717,8 +706,7 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
             false);
     }
 
-    private Lobby CreateCustomHostLobby(
-        LobbySetupData lobbySetupData)
+    private Lobby CreateCustomHostLobby(LobbySetupData lobbySetupData)
     {
         if (lobbySetupData == null ||
             networkBootstrap == null)
@@ -788,9 +776,7 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         return FindCustomLobby(roomCode) == null;
     }
 
-    private bool TryGetRelayJoinCode(
-        Lobby lobby,
-        out string relayJoinCode)
+    private bool TryGetRelayJoinCode(Lobby lobby, out string relayJoinCode)
     {
         relayJoinCode = string.Empty;
 
@@ -816,8 +802,7 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         return true;
     }
 
-    private bool IsCustomLobbySearch(
-        LobbySetupData lobbySetupData)
+    private bool IsCustomLobbySearch(LobbySetupData lobbySetupData)
     {
         return lobbySetupData != null &&
                lobbySetupData.playMode ==
@@ -831,8 +816,79 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
 
     #region Online Lobby Entry
 
-    private Lobby FindOrCreateOnlineLobby(
-        LobbySetupData lobbySetupData)
+    private Lobby FindOrCreateOnlineLobby(LobbySetupData lobbySetupData)
+    {
+        OnlineLobbySetupData onlineSetupData =
+            lobbySetupData?.onlineSetupData;
+
+        if (onlineSetupData == null)
+        {
+            return null;
+        }
+
+        switch (onlineSetupData.searchType)
+        {
+            case OnlineSearchType.QuickPlay:
+                return FindOrCreateQuickPlayLobby(
+                    lobbySetupData);
+
+            case OnlineSearchType.CustomSearch:
+                return FindOrCreateOnlineCustomSearchLobby(
+                    lobbySetupData);
+
+            default:
+                return null;
+        }
+    }
+
+    private Lobby FindOrCreateQuickPlayLobby(LobbySetupData lobbySetupData)
+    {
+        List<Lobby> eligibleLobbies =
+            FindEligibleOnlineLobbies();
+
+        if (eligibleLobbies.Count > 0)
+        {
+            List<BingoGameModeType> availableGameModeTypes =
+                BuildOnlineGameModeTypeList(
+                    eligibleLobbies);
+
+            if (availableGameModeTypes.Count > 0)
+            {
+                int gameModeIndex =
+                    UnityEngine.Random.Range(
+                        0,
+                        availableGameModeTypes.Count);
+
+                BingoGameModeType selectedGameModeType =
+                    availableGameModeTypes[gameModeIndex];
+
+                List<Lobby> selectedGameModeLobbies =
+                    FindOnlineLobbiesByGameMode(
+                        eligibleLobbies,
+                        selectedGameModeType);
+
+                if (selectedGameModeLobbies.Count > 0)
+                {
+                    int lobbyIndex =
+                        UnityEngine.Random.Range(
+                            0,
+                            selectedGameModeLobbies.Count);
+
+                    return selectedGameModeLobbies[lobbyIndex];
+                }
+            }
+        }
+
+        if (!TryApplyRandomQuickPlaySettings(
+                lobbySetupData))
+        {
+            return null;
+        }
+
+        return CreateLobby(lobbySetupData);
+    }
+
+    private Lobby FindOrCreateOnlineCustomSearchLobby(LobbySetupData lobbySetupData)
     {
         List<Lobby> matchingLobbies =
             FindMatchingOnlineLobbies(
@@ -851,8 +907,196 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         return CreateLobby(lobbySetupData);
     }
 
-    private List<Lobby> FindMatchingOnlineLobbies(
-        LobbySetupData requestedSetupData)
+    private List<Lobby> FindEligibleOnlineLobbies()
+    {
+        List<Lobby> eligibleLobbies =
+            new List<Lobby>();
+
+        for (int i = 0; i < lobbies.Count; i++)
+        {
+            Lobby lobby = lobbies[i];
+
+            if (IsEligibleOnlineLobby(lobby))
+            {
+                eligibleLobbies.Add(lobby);
+            }
+        }
+
+        return eligibleLobbies;
+    }
+
+    private List<BingoGameModeType> BuildOnlineGameModeTypeList(List<Lobby> eligibleLobbies)
+    {
+        List<BingoGameModeType> gameModeTypes =
+            new List<BingoGameModeType>();
+
+        if (eligibleLobbies == null)
+        {
+            return gameModeTypes;
+        }
+
+        for (int i = 0; i < eligibleLobbies.Count; i++)
+        {
+            Lobby lobby = eligibleLobbies[i];
+
+            if (lobby?.Controller == null)
+            {
+                continue;
+            }
+
+            BingoGameModeType gameModeType =
+                lobby.Controller.GameModeType;
+
+            if (gameModeType == BingoGameModeType.Custom ||
+                gameModeTypes.Contains(gameModeType))
+            {
+                continue;
+            }
+
+            gameModeTypes.Add(gameModeType);
+        }
+
+        return gameModeTypes;
+    }
+
+    private List<Lobby> FindOnlineLobbiesByGameMode(List<Lobby> eligibleLobbies, BingoGameModeType gameModeType)
+    {
+        List<Lobby> matchingLobbies =
+            new List<Lobby>();
+
+        if (eligibleLobbies == null)
+        {
+            return matchingLobbies;
+        }
+
+        for (int i = 0; i < eligibleLobbies.Count; i++)
+        {
+            Lobby lobby = eligibleLobbies[i];
+
+            if (lobby?.Controller == null ||
+                lobby.Controller.GameModeType != gameModeType)
+            {
+                continue;
+            }
+
+            matchingLobbies.Add(lobby);
+        }
+
+        return matchingLobbies;
+    }
+
+    private bool TryApplyRandomQuickPlaySettings(LobbySetupData lobbySetupData)
+    {
+        OnlineLobbySetupData onlineSetupData =
+            lobbySetupData?.onlineSetupData;
+
+        if (onlineSetupData == null)
+        {
+            return false;
+        }
+
+        List<BingoGameModeType> gameModeTypes =
+            GetAvailableQuickPlayGameModeTypes();
+
+        if (gameModeTypes.Count == 0)
+        {
+            return false;
+        }
+
+        int gameModeIndex =
+            UnityEngine.Random.Range(
+                0,
+                gameModeTypes.Count);
+
+        BingoGameModeType selectedGameModeType =
+            gameModeTypes[gameModeIndex];
+
+        List<BingoBallCountType> ballCountTypes =
+            GetAvailableQuickPlayBallCountTypes(
+                selectedGameModeType);
+
+        if (ballCountTypes.Count == 0)
+        {
+            return false;
+        }
+
+        int ballCountIndex =
+            UnityEngine.Random.Range(
+                0,
+                ballCountTypes.Count);
+
+        onlineSetupData.gameModeType =
+            selectedGameModeType;
+
+        onlineSetupData.ballCountType =
+            ballCountTypes[ballCountIndex];
+
+        return true;
+    }
+
+    private List<BingoGameModeType> GetAvailableQuickPlayGameModeTypes()
+    {
+        List<BingoGameModeType> gameModeTypes =
+            new List<BingoGameModeType>();
+
+        GameModeManager gameModeManager =
+            GameModeManager.instance;
+
+        if (gameModeManager != null)
+        {
+            IReadOnlyList<BingoGameModeData> gameModes =
+                gameModeManager.GameModes;
+
+            for (int i = 0; i < gameModes.Count; i++)
+            {
+                BingoGameModeData gameModeData =
+                    gameModes[i];
+
+                if (gameModeData == null ||
+                    gameModeData.GameModeType ==
+                        BingoGameModeType.Custom ||
+                    gameModeTypes.Contains(
+                        gameModeData.GameModeType))
+                {
+                    continue;
+                }
+
+                gameModeTypes.Add(
+                    gameModeData.GameModeType);
+            }
+        }
+
+        if (gameModeTypes.Count == 0)
+        {
+            gameModeTypes.Add(
+                BingoGameModeType.Traditional);
+        }
+
+        return gameModeTypes;
+    }
+
+    private List<BingoBallCountType> GetAvailableQuickPlayBallCountTypes(BingoGameModeType gameModeType)
+    {
+        List<BingoBallCountType> ballCountTypes =
+            new List<BingoBallCountType>();
+
+        if (gameModeType == BingoGameModeType.Custom)
+        {
+            return ballCountTypes;
+        }
+
+        foreach (
+            BingoBallCountType ballCountType in
+            System.Enum.GetValues(
+                typeof(BingoBallCountType)))
+        {
+            ballCountTypes.Add(ballCountType);
+        }
+
+        return ballCountTypes;
+    }
+
+    private List<Lobby> FindMatchingOnlineLobbies(LobbySetupData requestedSetupData)
     {
         List<Lobby> matchingLobbies =
             new List<Lobby>();
@@ -861,9 +1105,14 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         {
             Lobby lobby = lobbies[i];
 
-            if (IsEligibleOnlineLobby(
-                    lobby,
-                    requestedSetupData))
+            if (!IsEligibleOnlineLobby(lobby))
+            {
+                continue;
+            }
+
+            if (DoOnlineSettingsMatch(
+                    lobby.Controller,
+                    requestedSetupData?.onlineSetupData))
             {
                 matchingLobbies.Add(lobby);
             }
@@ -872,27 +1121,16 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         return matchingLobbies;
     }
 
-    private bool IsEligibleOnlineLobby(
-        Lobby lobby,
-        LobbySetupData requestedSetupData)
+    private bool IsEligibleOnlineLobby(Lobby lobby)
     {
-        if (lobby == null ||
-            lobby.playMode != MainMenuPlayMode.Online ||
-            lobby.lobbyState != LobbyState.Open ||
-            lobby.Controller == null ||
-            lobby.Controller.IsFull)
-        {
-            return false;
-        }
-
-        return DoOnlineSettingsMatch(
-            lobby.Controller,
-            requestedSetupData?.onlineSetupData);
+        return lobby != null &&
+               lobby.playMode == MainMenuPlayMode.Online &&
+               lobby.lobbyState == LobbyState.Open &&
+               lobby.Controller != null &&
+               !lobby.Controller.IsFull;
     }
 
-    private bool DoOnlineSettingsMatch(
-        LobbyController controller,
-        OnlineLobbySetupData requestedSetupData)
+    private bool DoOnlineSettingsMatch(LobbyController controller, OnlineLobbySetupData requestedSetupData)
     {
         if (controller == null ||
             requestedSetupData == null)

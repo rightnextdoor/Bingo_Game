@@ -26,11 +26,17 @@ public class LobbySetupData
 [Serializable]
 public class SoloLobbySetupData
 {
+    public BingoGameModeType gameModeType = BingoGameModeType.Traditional;
+    public BingoBallCountType ballCountType = BingoBallCountType.Ball75;
+
     public bool unlimitedPlayers = false;
     public int maxPlayers = 6;
 
     public SoloLobbySetupData()
     {
+        gameModeType = BingoGameModeType.Traditional;
+        ballCountType = BingoBallCountType.Ball75;
+
         unlimitedPlayers = false;
         maxPlayers = 6;
     }
@@ -80,6 +86,9 @@ public class CustomHostLobbySetupData
     public string lobbyName = string.Empty;
     public string password = string.Empty;
 
+    public BingoGameModeType gameModeType = BingoGameModeType.Traditional;
+    public BingoBallCountType ballCountType = BingoBallCountType.Ball75;
+
     public bool unlimitedPlayers = false;
     public int maxPlayers = 6;
 
@@ -87,6 +96,9 @@ public class CustomHostLobbySetupData
     {
         lobbyName = string.Empty;
         password = string.Empty;
+
+        gameModeType = BingoGameModeType.Traditional;
+        ballCountType = BingoBallCountType.Ball75;
 
         unlimitedPlayers = false;
         maxPlayers = 6;

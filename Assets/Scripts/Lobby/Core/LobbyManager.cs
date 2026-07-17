@@ -214,7 +214,8 @@ public class LobbyManager : MonoBehaviour
             pendingLobbySetupData.userData;
 
         if (userData == null ||
-            !result.lobby.HasPlayer(userData.userId))
+            result.lobby.Controller == null ||
+            !result.lobby.Controller.HasPlayer(userData.userId))
         {
             CompleteLobbyEntryFailure(
                 LobbyEntryResult.Failed(

@@ -1,17 +1,24 @@
 using System;
-using System.Collections.Generic;
 using UnityEngine;
 
 [Serializable]
 public class Lobby
 {
     [SerializeField] private string lobbyId;
+    [SerializeField] private LobbyController controller;
 
     public MainMenuPlayMode playMode;
     public LobbyState lobbyState;
 
-    public List<LobbyPlayerData> players;
-
+    public LobbyController Controller
+    {
+        get
+        {
+            EnsureController();
+            controller.AttachLobby(this);
+            return controller;
+        }
+    }
 
     public Lobby()
     {
@@ -20,7 +27,8 @@ public class Lobby
         playMode = MainMenuPlayMode.None;
         lobbyState = LobbyState.Open;
 
-        players = new List<LobbyPlayerData>();
+        controller = new LobbyController();
+        controller.AttachLobby(this);
     }
 
     public Lobby(MainMenuPlayMode playMode)
@@ -30,7 +38,30 @@ public class Lobby
         this.playMode = playMode;
         lobbyState = LobbyState.Open;
 
-        players = new List<LobbyPlayerData>();
+        LobbySetupData lobbySetupData = new LobbySetupData
+        {
+            playMode = playMode
+        };
+
+        controller = new LobbyController(this, lobbySetupData, null);
+    }
+
+    public Lobby(
+        LobbySetupData lobbySetupData,
+        Func<string, bool> isRoomCodeAvailable = null)
+    {
+        GenerateLobbyId();
+
+        playMode = lobbySetupData != null
+            ? lobbySetupData.playMode
+            : MainMenuPlayMode.None;
+
+        lobbyState = LobbyState.Open;
+
+        controller = new LobbyController(
+            this,
+            lobbySetupData,
+            isRoomCodeAvailable);
     }
 
     public string GetLobbyId()
@@ -43,89 +74,13 @@ public class Lobby
         return lobbyId;
     }
 
-    public bool HasPlayer(string userId)
-    {
-        if (string.IsNullOrWhiteSpace(userId))
-        {
-            return false;
-        }
-
-        EnsurePlayerList();
-
-        for (int i = 0; i < players.Count; i++)
-        {
-            LobbyPlayerData playerData = players[i];
-
-            if (playerData == null ||
-                playerData.userData == null)
-            {
-                continue;
-            }
-
-            if (playerData.userData.userId == userId)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    public LobbyPlayerData GetPlayer(string userId)
-    {
-        if (string.IsNullOrWhiteSpace(userId))
-        {
-            return null;
-        }
-
-        EnsurePlayerList();
-
-        for (int i = 0; i < players.Count; i++)
-        {
-            LobbyPlayerData playerData = players[i];
-
-            if (playerData == null ||
-                playerData.userData == null)
-            {
-                continue;
-            }
-
-            if (playerData.userData.userId == userId)
-            {
-                return playerData;
-            }
-        }
-
-        return null;
-    }
-
-    public bool AddPlayer(LobbyPlayerData playerData)
-    {
-        if (playerData == null ||
-            !playerData.HasValidUser)
-        {
-            return false;
-        }
-
-        EnsurePlayerList();
-
-        if (HasPlayer(playerData.userData.userId))
-        {
-            return false;
-        }
-
-        players.Add(playerData);
-
-        return true;
-    }
-
     private void GenerateLobbyId()
     {
         lobbyId = Guid.NewGuid().ToString("N");
     }
 
-    private void EnsurePlayerList()
+    private void EnsureController()
     {
-        players ??= new List<LobbyPlayerData>();
+        controller ??= new LobbyController();
     }
 }

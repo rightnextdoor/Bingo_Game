@@ -175,7 +175,6 @@ public class LobbyEntryFailureManager : MonoBehaviour
 
         if (popupOpened)
         {
-            Debug.Log($"[LobbyEntryFailureManager] Lobby failure popup opened. Type: {pendingFailureType}");
             ClearPendingFailure();
         }
 

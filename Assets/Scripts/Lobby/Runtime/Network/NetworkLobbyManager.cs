@@ -1,4 +1,3 @@
-using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -12,14 +11,8 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
     private const float ConnectionTimeoutSeconds = 30f;
     private const float LobbyConnectionTimeoutSeconds = 15f;
 
-    private const int MinimumCustomRoomCode = 1000;
-    private const int MaximumCustomRoomCodeExclusive = 10000;
-    private const int CustomRoomCodeGenerationAttempts = 100;
-
     private readonly List<Lobby> lobbies = new List<Lobby>();
-    private readonly Dictionary<string, LobbySetupData> lobbySetupDataById = new Dictionary<string, LobbySetupData>();
-    private readonly Dictionary<string, string> customLobbyIdByCode = new Dictionary<string, string>();
-    private readonly Dictionary<string, string> customRelayJoinCodeByCode = new Dictionary<string, string>();
+    private readonly Dictionary<string, string> relayJoinCodeByLobbyId = new Dictionary<string, string>();
 
     private bool isReady;
 
@@ -27,13 +20,14 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
     private NetworkBootstrap networkBootstrap;
 
     private Lobby currentLobby;
-    private string currentCustomLobbyCode = string.Empty;
 
     public SessionRuntimeType RuntimeType => SessionRuntimeType.Network;
     public bool IsReady => isReady;
     public IReadOnlyList<Lobby> Lobbies => lobbies;
     public Lobby CurrentLobby => currentLobby;
-    public string CurrentCustomLobbyCode => currentCustomLobbyCode;
+
+    public string CurrentCustomLobbyCode =>
+        currentLobby?.Controller?.RoomCode ?? string.Empty;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetStaticState()
@@ -99,12 +93,17 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
                 "The network lobby setup data is invalid.");
         }
 
-        if (!TryPrepareCustomLobbySearch(lobbySetupData, out string relayJoinCode, out LobbyEntryResult customSearchFailure))
+        if (!TryPrepareCustomLobbySearch(
+                lobbySetupData,
+                out string relayJoinCode,
+                out LobbyEntryResult customSearchFailure))
         {
             return customSearchFailure;
         }
 
-        bool connectionReady = await EnsureNetworkConnectionAsync(lobbySetupData, relayJoinCode);
+        bool connectionReady = await EnsureNetworkConnectionAsync(
+            lobbySetupData,
+            relayJoinCode);
 
         if (!connectionReady)
         {
@@ -134,7 +133,9 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
             "The network lobby did not return a result.");
     }
 
-    public LobbyEntryResult ProcessAuthorityLobbyEntry(LobbySetupData lobbySetupData, ulong senderClientId)
+    public LobbyEntryResult ProcessAuthorityLobbyEntry(
+        LobbySetupData lobbySetupData,
+        ulong senderClientId)
     {
         if (networkBootstrap == null || !networkBootstrap.IsAuthority)
         {
@@ -192,7 +193,10 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
                         "The Online lobby could not be created.");
                 }
 
-                return AddPlayerToLobby(selectedLobby, lobbySetupData.userData, false);
+                return AddPlayerToLobby(
+                    selectedLobby,
+                    lobbySetupData.userData,
+                    false);
 
             case MainMenuPlayMode.Custom:
                 return ProcessCustomLobbyEntry(lobbySetupData);
@@ -216,19 +220,17 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         relayJoinCode = string.Empty;
         failureResult = null;
 
-        if (lobbySetupData == null || lobbySetupData.playMode != MainMenuPlayMode.Custom)
+        if (!IsCustomLobbySearch(lobbySetupData))
         {
             return true;
         }
 
-        CustomLobbySetupData customSetupData = lobbySetupData.customSetupData;
+        CustomSearchLobbySetupData searchSetupData =
+            lobbySetupData.customSetupData.searchSetupData;
 
-        if (customSetupData == null || customSetupData.actionType != CustomLobbyActionType.SearchLobby)
-        {
-            return true;
-        }
+        Lobby lobby = FindCustomLobby(searchSetupData?.lobbyCode);
 
-        if (lobbies.Count == 0)
+        if (lobby == null || lobby.Controller == null)
         {
             failureResult = LobbyEntryResult.Failed(
                 LobbyEntryFailureType.LobbyNotFound,
@@ -237,21 +239,10 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
             return false;
         }
 
-        string roomCode = customSetupData.searchSetupData?.lobbyCode;
-        Lobby lobby = FindCustomLobby(roomCode);
+        LobbyController controller = lobby.Controller;
 
-        if (lobby == null)
-        {
-            failureResult = LobbyEntryResult.Failed(
-                LobbyEntryFailureType.LobbyNotFound,
-                "The Custom lobby could not be found.");
-
-            return false;
-        }
-
-        string requestedPassword = customSetupData.searchSetupData?.password;
-
-        if (!IsCustomPasswordValid(lobby, requestedPassword))
+        if (controller.HasPassword &&
+            !controller.IsPasswordValid(searchSetupData?.password))
         {
             failureResult = LobbyEntryResult.Failed(
                 LobbyEntryFailureType.InvalidPassword,
@@ -260,7 +251,7 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
             return false;
         }
 
-        if (IsLobbyFull(lobby))
+        if (controller.IsFull)
         {
             failureResult = LobbyEntryResult.Failed(
                 LobbyEntryFailureType.LobbyFull,
@@ -269,7 +260,7 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
             return false;
         }
 
-        if (!TryGetCustomRelayJoinCode(roomCode, out relayJoinCode))
+        if (!TryGetRelayJoinCode(lobby, out relayJoinCode))
         {
             failureResult = LobbyEntryResult.Failed(
                 LobbyEntryFailureType.NetworkConnectionFailed,
@@ -304,42 +295,63 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
                         "The Custom lobby could not be created.");
                 }
 
-                return AddPlayerToLobby(newLobby, lobbySetupData.userData, true);
+                return AddPlayerToLobby(
+                    newLobby,
+                    lobbySetupData.userData,
+                    true);
 
             case CustomLobbyActionType.SearchLobby:
-                string roomCode = customSetupData.searchSetupData?.lobbyCode;
-                Lobby lobby = FindCustomLobby(roomCode);
-
-                if (lobby == null)
-                {
-                    return LobbyEntryResult.Failed(
-                        LobbyEntryFailureType.LobbyNotFound,
-                        "The Custom lobby could not be found.");
-                }
-
-                string requestedPassword = customSetupData.searchSetupData?.password;
-
-                if (!IsCustomPasswordValid(lobby, requestedPassword))
-                {
-                    return LobbyEntryResult.Failed(
-                        LobbyEntryFailureType.InvalidPassword,
-                        "The Custom lobby password is incorrect.");
-                }
-
-                if (IsLobbyFull(lobby))
-                {
-                    return LobbyEntryResult.Failed(
-                        LobbyEntryFailureType.LobbyFull,
-                        "The Custom lobby is full.");
-                }
-
-                return AddPlayerToLobby(lobby, lobbySetupData.userData, false);
+                return ProcessCustomLobbySearch(lobbySetupData);
 
             default:
                 return LobbyEntryResult.Failed(
                     LobbyEntryFailureType.InvalidSetupData,
                     "The Custom lobby action is invalid.");
         }
+    }
+
+    private LobbyEntryResult ProcessCustomLobbySearch(LobbySetupData lobbySetupData)
+    {
+        CustomSearchLobbySetupData searchSetupData =
+            lobbySetupData?.customSetupData?.searchSetupData;
+
+        if (searchSetupData == null)
+        {
+            return LobbyEntryResult.Failed(
+                LobbyEntryFailureType.InvalidSetupData,
+                "The Custom lobby search data is missing.");
+        }
+
+        Lobby lobby = FindCustomLobby(searchSetupData.lobbyCode);
+
+        if (lobby == null || lobby.Controller == null)
+        {
+            return LobbyEntryResult.Failed(
+                LobbyEntryFailureType.LobbyNotFound,
+                "The Custom lobby could not be found.");
+        }
+
+        LobbyController controller = lobby.Controller;
+
+        if (controller.HasPassword &&
+            !controller.IsPasswordValid(searchSetupData.password))
+        {
+            return LobbyEntryResult.Failed(
+                LobbyEntryFailureType.InvalidPassword,
+                "The Custom lobby password is incorrect.");
+        }
+
+        if (controller.IsFull)
+        {
+            return LobbyEntryResult.Failed(
+                LobbyEntryFailureType.LobbyFull,
+                "The Custom lobby is full.");
+        }
+
+        return AddPlayerToLobby(
+            lobby,
+            lobbySetupData.userData,
+            false);
     }
 
     private Lobby CreateCustomHostLobby(LobbySetupData lobbySetupData)
@@ -356,88 +368,72 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
             return null;
         }
 
-        string roomCode = GenerateUniqueCustomRoomCode();
-
-        if (string.IsNullOrWhiteSpace(roomCode))
-        {
-            return null;
-        }
-
         Lobby lobby = CreateLobby(lobbySetupData);
 
-        if (lobby == null)
+        if (lobby?.Controller == null ||
+            string.IsNullOrWhiteSpace(lobby.Controller.RoomCode))
         {
+            lobbies.Remove(lobby);
             return null;
         }
 
         string lobbyId = lobby.GetLobbyId();
 
-        customLobbyIdByCode[roomCode] = lobbyId;
-        customRelayJoinCodeByCode[roomCode] = relayJoinCode;
-        currentCustomLobbyCode = roomCode;
+        relayJoinCodeByLobbyId[lobbyId] = relayJoinCode;
 
         Debug.Log(
             "[NetworkLobbyManager] Custom lobby created.\n" +
-            $"Room Code: {roomCode}\n" +
+            $"Room Code: {lobby.Controller.RoomCode}\n" +
             $"Lobby ID: {lobbyId}");
 
         return lobby;
     }
 
-    private string GenerateUniqueCustomRoomCode()
+    private Lobby FindCustomLobby(string requestedRoomCode)
     {
-        for (int attempt = 0; attempt < CustomRoomCodeGenerationAttempts; attempt++)
+        if (lobbies.Count == 0 || string.IsNullOrWhiteSpace(requestedRoomCode))
         {
-            string roomCode = UnityEngine.Random
-                .Range(MinimumCustomRoomCode, MaximumCustomRoomCodeExclusive)
-                .ToString();
+            return null;
+        }
 
-            if (!customLobbyIdByCode.ContainsKey(roomCode))
+        for (int i = 0; i < lobbies.Count; i++)
+        {
+            Lobby lobby = lobbies[i];
+
+            if (lobby == null || lobby.playMode != MainMenuPlayMode.Custom)
             {
-                return roomCode;
+                continue;
+            }
+
+            LobbyController controller = lobby.Controller;
+
+            if (controller != null &&
+                controller.MatchesRoomCode(requestedRoomCode))
+            {
+                return lobby;
             }
         }
 
-        Debug.LogWarning("[NetworkLobbyManager] Could not generate a unique Custom lobby room code.");
-        return string.Empty;
+        return null;
     }
 
-    private Lobby FindCustomLobby(string roomCode)
+    private bool IsCustomRoomCodeAvailable(string roomCode)
     {
-        if (lobbies.Count == 0 || string.IsNullOrWhiteSpace(roomCode))
-        {
-            return null;
-        }
-
-        string normalizedCode = NormalizeRoomCode(roomCode);
-
-        if (!customLobbyIdByCode.TryGetValue(normalizedCode, out string lobbyId))
-        {
-            return null;
-        }
-
-        Lobby lobby = FindLobby(lobbyId);
-
-        if (lobby == null || lobby.playMode != MainMenuPlayMode.Custom)
-        {
-            return null;
-        }
-
-        return lobby;
+        return FindCustomLobby(roomCode) == null;
     }
 
-    private bool TryGetCustomRelayJoinCode(string roomCode, out string relayJoinCode)
+    private bool TryGetRelayJoinCode(Lobby lobby, out string relayJoinCode)
     {
         relayJoinCode = string.Empty;
 
-        if (string.IsNullOrWhiteSpace(roomCode))
+        if (lobby == null)
         {
             return false;
         }
 
-        string normalizedCode = NormalizeRoomCode(roomCode);
-
-        if (!customRelayJoinCodeByCode.TryGetValue(normalizedCode, out string storedRelayJoinCode))
+        if (!relayJoinCodeByLobbyId.TryGetValue(
+                lobby.GetLobbyId(),
+                out string storedRelayJoinCode))
         {
             return false;
         }
@@ -451,31 +447,12 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         return true;
     }
 
-    private string NormalizeRoomCode(string roomCode)
+    private bool IsCustomLobbySearch(LobbySetupData lobbySetupData)
     {
-        return string.IsNullOrWhiteSpace(roomCode)
-            ? string.Empty
-            : roomCode.Trim().ToUpperInvariant();
-    }
-
-    private bool IsCustomPasswordValid(Lobby lobby, string requestedPassword)
-    {
-        if (lobby == null)
-        {
-            return false;
-        }
-
-        string lobbyId = lobby.GetLobbyId();
-
-        if (!lobbySetupDataById.TryGetValue(lobbyId, out LobbySetupData existingSetupData))
-        {
-            return false;
-        }
-
-        string expectedPassword = existingSetupData?.customSetupData?.hostSetupData?.password ?? string.Empty;
-        requestedPassword ??= string.Empty;
-
-        return string.Equals(expectedPassword, requestedPassword, StringComparison.Ordinal);
+        return lobbySetupData != null &&
+               lobbySetupData.playMode == MainMenuPlayMode.Custom &&
+               lobbySetupData.customSetupData != null &&
+               lobbySetupData.customSetupData.actionType == CustomLobbyActionType.SearchLobby;
     }
 
     #endregion
@@ -512,61 +489,48 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         return matchingLobbies;
     }
 
-    private bool IsEligibleOnlineLobby(Lobby lobby, LobbySetupData requestedSetupData)
+    private bool IsEligibleOnlineLobby(
+        Lobby lobby,
+        LobbySetupData requestedSetupData)
     {
-        if (lobby == null || lobby.playMode != MainMenuPlayMode.Online)
+        if (lobby == null ||
+            lobby.playMode != MainMenuPlayMode.Online ||
+            lobby.lobbyState != LobbyState.Open ||
+            lobby.Controller == null ||
+            lobby.Controller.IsFull)
         {
             return false;
         }
 
-        if (lobby.lobbyState != LobbyState.Open || IsLobbyFull(lobby))
-        {
-            return false;
-        }
-
-        string lobbyId = lobby.GetLobbyId();
-
-        if (!lobbySetupDataById.TryGetValue(lobbyId, out LobbySetupData existingSetupData))
-        {
-            return false;
-        }
-
-        return DoOnlineSettingsMatch(existingSetupData, requestedSetupData);
+        return DoOnlineSettingsMatch(
+            lobby.Controller,
+            requestedSetupData?.onlineSetupData);
     }
 
-    private bool DoOnlineSettingsMatch(LobbySetupData existingSetupData, LobbySetupData requestedSetupData)
+    private bool DoOnlineSettingsMatch(
+        LobbyController controller,
+        OnlineLobbySetupData requestedSetupData)
     {
-        if (existingSetupData?.onlineSetupData == null || requestedSetupData?.onlineSetupData == null)
+        if (controller == null || requestedSetupData == null)
         {
             return false;
         }
 
-        OnlineLobbySetupData existing = existingSetupData.onlineSetupData;
-        OnlineLobbySetupData requested = requestedSetupData.onlineSetupData;
-
-        if (existing.gameModeType != requested.gameModeType ||
-            existing.searchType != requested.searchType ||
-            existing.ballCountType != requested.ballCountType ||
-            existing.unlimitedPlayers != requested.unlimitedPlayers)
-        {
-            return false;
-        }
-
-        if (!existing.unlimitedPlayers && existing.maxPlayers != requested.maxPlayers)
-        {
-            return false;
-        }
-
-        return true;
+        return controller.GameModeType == requestedSetupData.gameModeType &&
+               controller.BallCountType == requestedSetupData.ballCountType &&
+               controller.MaxPlayers == requestedSetupData.maxPlayers;
     }
 
     #endregion
 
     #region Lobby Data
 
-    private LobbyEntryResult AddPlayerToLobby(Lobby lobby, UserData userData, bool isHost)
+    private LobbyEntryResult AddPlayerToLobby(
+        Lobby lobby,
+        UserData userData,
+        bool isHost)
     {
-        if (lobby == null)
+        if (lobby == null || lobby.Controller == null)
         {
             return LobbyEntryResult.Failed(
                 LobbyEntryFailureType.LobbyNotFound,
@@ -580,12 +544,14 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
                 "The user information is missing.");
         }
 
-        if (lobby.HasPlayer(userData.userId))
+        LobbyController controller = lobby.Controller;
+
+        if (controller.HasPlayer(userData.userId))
         {
             return LobbyEntryResult.Succeeded(lobby);
         }
 
-        if (IsLobbyFull(lobby))
+        if (controller.IsFull)
         {
             return LobbyEntryResult.Failed(
                 LobbyEntryFailureType.LobbyFull,
@@ -594,7 +560,7 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
 
         LobbyPlayerData playerData = new LobbyPlayerData(userData, isHost);
 
-        if (!lobby.AddPlayer(playerData))
+        if (!controller.AddPlayer(playerData))
         {
             return LobbyEntryResult.Failed(
                 LobbyEntryFailureType.LobbyJoinFailed,
@@ -611,33 +577,13 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
             return null;
         }
 
-        Lobby lobby = new Lobby(lobbySetupData.playMode);
-        string lobbyId = lobby.GetLobbyId();
+        Lobby lobby = new Lobby(
+            lobbySetupData,
+            IsCustomRoomCodeAvailable);
 
         lobbies.Add(lobby);
-        lobbySetupDataById[lobbyId] = CloneSetupData(lobbySetupData);
 
         return lobby;
-    }
-
-    private Lobby FindLobby(string lobbyId)
-    {
-        if (string.IsNullOrWhiteSpace(lobbyId))
-        {
-            return null;
-        }
-
-        for (int i = 0; i < lobbies.Count; i++)
-        {
-            Lobby lobby = lobbies[i];
-
-            if (lobby != null && string.Equals(lobby.GetLobbyId(), lobbyId, StringComparison.OrdinalIgnoreCase))
-            {
-                return lobby;
-            }
-        }
-
-        return null;
     }
 
     private Lobby FindUserLobby(string userId)
@@ -651,7 +597,8 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         {
             Lobby lobby = lobbies[i];
 
-            if (lobby != null && lobby.HasPlayer(userId))
+            if (lobby?.Controller != null &&
+                lobby.Controller.HasPlayer(userId))
             {
                 return lobby;
             }
@@ -660,77 +607,15 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         return null;
     }
 
-    private bool IsLobbyFull(Lobby lobby)
-    {
-        if (lobby == null)
-        {
-            return true;
-        }
-
-        string lobbyId = lobby.GetLobbyId();
-
-        if (!lobbySetupDataById.TryGetValue(lobbyId, out LobbySetupData setupData))
-        {
-            return true;
-        }
-
-        int currentPlayerCount = lobby.players != null ? lobby.players.Count : 0;
-
-        switch (lobby.playMode)
-        {
-            case MainMenuPlayMode.Online:
-                OnlineLobbySetupData onlineSetupData = setupData.onlineSetupData;
-
-                if (onlineSetupData == null)
-                {
-                    return true;
-                }
-
-                return HasReachedPlayerLimit(
-                    currentPlayerCount,
-                    onlineSetupData.unlimitedPlayers,
-                    onlineSetupData.maxPlayers);
-
-            case MainMenuPlayMode.Custom:
-                CustomHostLobbySetupData hostSetupData = setupData.customSetupData?.hostSetupData;
-
-                if (hostSetupData == null)
-                {
-                    return true;
-                }
-
-                return HasReachedPlayerLimit(
-                    currentPlayerCount,
-                    hostSetupData.unlimitedPlayers,
-                    hostSetupData.maxPlayers);
-
-            default:
-                return false;
-        }
-    }
-
-    private bool HasReachedPlayerLimit(int currentPlayerCount, bool unlimitedPlayers, int maxPlayers)
-    {
-        if (unlimitedPlayers)
-        {
-            return false;
-        }
-
-        if (maxPlayers <= 0)
-        {
-            return true;
-        }
-
-        return currentPlayerCount >= maxPlayers;
-    }
-
     #endregion
 
     #region Network Connection
 
     private bool IsValidNetworkSetup(LobbySetupData lobbySetupData)
     {
-        if (lobbySetupData == null || lobbySetupData.userData == null || !lobbySetupData.userData.HasUser)
+        if (lobbySetupData == null ||
+            lobbySetupData.userData == null ||
+            !lobbySetupData.userData.HasUser)
         {
             return false;
         }
@@ -748,7 +633,9 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         }
     }
 
-    private async Task<bool> EnsureNetworkConnectionAsync(LobbySetupData lobbySetupData, string customRelayJoinCode)
+    private async Task<bool> EnsureNetworkConnectionAsync(
+        LobbySetupData lobbySetupData,
+        string customRelayJoinCode)
     {
         if (networkBootstrap == null || !networkBootstrap.IsReady)
         {
@@ -788,7 +675,9 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
                         return false;
                     }
 
-                    started = await networkBootstrap.StartRelayClientAsync(userId, customRelayJoinCode);
+                    started = await networkBootstrap.StartRelayClientAsync(
+                        userId,
+                        customRelayJoinCode);
                 }
 
                 break;
@@ -857,17 +746,6 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         }
 
         return true;
-    }
-
-    private LobbySetupData CloneSetupData(LobbySetupData source)
-    {
-        if (source == null)
-        {
-            return null;
-        }
-
-        string json = JsonUtility.ToJson(source);
-        return JsonUtility.FromJson<LobbySetupData>(json);
     }
 
     #endregion

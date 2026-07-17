@@ -9,8 +9,9 @@ public interface ILobbyService
 
     IReadOnlyList<Lobby> Lobbies { get; }
 
-    Lobby CurrentLobby { get; }
-
     Task<LobbyEntryResult> EnterLobbyAsync(
         LobbySetupData lobbySetupData);
+
+    Task<LobbyExitResult> LeaveLobbyAsync(
+        string userId);
 }

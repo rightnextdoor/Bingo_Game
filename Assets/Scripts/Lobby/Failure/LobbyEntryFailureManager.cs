@@ -12,17 +12,26 @@ public class LobbyEntryFailureManager : MonoBehaviour
     private GameSceneManager gameSceneManager;
 
     private bool isSubscribedToLobbyFailure;
+    private bool isSubscribedToForcedExit;
     private bool isSubscribedToSceneReady;
     private bool hasPendingFailure;
 
-    private LobbyEntryFailureType pendingFailureType = LobbyEntryFailureType.None;
-    private string pendingFailureMessage = string.Empty;
+    private LobbyEntryFailureType pendingFailureType =
+        LobbyEntryFailureType.None;
+
+    private string pendingFailureMessage =
+        string.Empty;
 
     private Coroutine openPopupRoutine;
 
-    public bool HasPendingFailure => hasPendingFailure;
-    public LobbyEntryFailureType PendingFailureType => pendingFailureType;
-    public string PendingFailureMessage => pendingFailureMessage;
+    public bool HasPendingFailure =>
+        hasPendingFailure;
+
+    public LobbyEntryFailureType PendingFailureType =>
+        pendingFailureType;
+
+    public string PendingFailureMessage =>
+        pendingFailureMessage;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetStaticState()
@@ -68,17 +77,28 @@ public class LobbyEntryFailureManager : MonoBehaviour
 
     private void SubscribeToManagers()
     {
-        if (!isSubscribedToLobbyFailure)
+        if (lobbyManager == null)
         {
-            if (lobbyManager == null)
+            lobbyManager =
+                LobbyManager.instance;
+        }
+
+        if (lobbyManager != null)
+        {
+            if (!isSubscribedToLobbyFailure)
             {
-                lobbyManager = LobbyManager.instance;
+                lobbyManager.LobbyEntryFailed +=
+                    OnLobbyEntryFailed;
+
+                isSubscribedToLobbyFailure = true;
             }
 
-            if (lobbyManager != null)
+            if (!isSubscribedToForcedExit)
             {
-                lobbyManager.LobbyEntryFailed += OnLobbyEntryFailed;
-                isSubscribedToLobbyFailure = true;
+                lobbyManager.LobbyForcedExit +=
+                    OnLobbyForcedExit;
+
+                isSubscribedToForcedExit = true;
             }
         }
 
@@ -86,12 +106,15 @@ public class LobbyEntryFailureManager : MonoBehaviour
         {
             if (gameSceneManager == null)
             {
-                gameSceneManager = GameSceneManager.instance;
+                gameSceneManager =
+                    GameSceneManager.instance;
             }
 
             if (gameSceneManager != null)
             {
-                gameSceneManager.SceneReadyToStart += OnSceneReadyToStart;
+                gameSceneManager.SceneReadyToStart +=
+                    OnSceneReadyToStart;
+
                 isSubscribedToSceneReady = true;
             }
         }
@@ -99,40 +122,86 @@ public class LobbyEntryFailureManager : MonoBehaviour
 
     private void UnsubscribeFromManagers()
     {
-        if (isSubscribedToLobbyFailure && lobbyManager != null)
+        if (lobbyManager != null)
         {
-            lobbyManager.LobbyEntryFailed -= OnLobbyEntryFailed;
+            if (isSubscribedToLobbyFailure)
+            {
+                lobbyManager.LobbyEntryFailed -=
+                    OnLobbyEntryFailed;
+            }
+
+            if (isSubscribedToForcedExit)
+            {
+                lobbyManager.LobbyForcedExit -=
+                    OnLobbyForcedExit;
+            }
         }
 
-        if (isSubscribedToSceneReady && gameSceneManager != null)
+        if (isSubscribedToSceneReady &&
+            gameSceneManager != null)
         {
-            gameSceneManager.SceneReadyToStart -= OnSceneReadyToStart;
+            gameSceneManager.SceneReadyToStart -=
+                OnSceneReadyToStart;
         }
 
         isSubscribedToLobbyFailure = false;
+        isSubscribedToForcedExit = false;
         isSubscribedToSceneReady = false;
     }
 
-    private void OnLobbyEntryFailed(LobbyEntryResult result)
+    private void OnLobbyEntryFailed(
+        LobbyEntryResult result)
     {
-        pendingFailureType = result != null ? result.failureType : LobbyEntryFailureType.Unknown;
-        pendingFailureMessage = GetFailureMessage(result);
+        pendingFailureType =
+            result != null
+                ? result.failureType
+                : LobbyEntryFailureType.Unknown;
+
+        pendingFailureMessage =
+            GetFailureMessage(result);
+
         hasPendingFailure = true;
 
         SubscribeToManagers();
 
         if (gameSceneManager == null)
         {
-            Debug.LogWarning("[LobbyEntryFailureManager] Could not return to Main because GameSceneManager was not found.");
+            Debug.LogWarning(
+                "[LobbyEntryFailureManager] Could not return to Main because GameSceneManager was not found.");
+
             return;
         }
 
-        gameSceneManager.ReturnToMainSceneAfterLobbyFailure();
+        gameSceneManager
+            .ReturnToMainSceneAfterLobbyFailure();
     }
 
-    private void OnSceneReadyToStart(GameSceneType sceneType)
+    private void OnLobbyForcedExit(
+        LobbyExitNotification notification)
     {
-        if (!hasPendingFailure || sceneType != GameSceneType.Main)
+        pendingFailureType =
+            notification != null
+                ? notification.failureType
+                : LobbyEntryFailureType.Unknown;
+
+        pendingFailureMessage =
+            notification != null &&
+            !string.IsNullOrWhiteSpace(
+                notification.message)
+                ? notification.message
+                : GetFailureMessage(
+                    pendingFailureType);
+
+        hasPendingFailure = true;
+
+        SubscribeToManagers();
+    }
+
+    private void OnSceneReadyToStart(
+        GameSceneType sceneType)
+    {
+        if (!hasPendingFailure ||
+            sceneType != GameSceneType.Main)
         {
             return;
         }
@@ -142,21 +211,30 @@ public class LobbyEntryFailureManager : MonoBehaviour
             StopCoroutine(openPopupRoutine);
         }
 
-        openPopupRoutine = StartCoroutine(OpenFailurePopupWhenReady());
+        openPopupRoutine =
+            StartCoroutine(
+                OpenFailurePopupWhenReady());
     }
 
     private IEnumerator OpenFailurePopupWhenReady()
     {
         yield return null;
 
-        float timeoutTime = Time.unscaledTime + PopupReadyTimeoutSeconds;
+        float timeoutTime =
+            Time.unscaledTime +
+            PopupReadyTimeoutSeconds;
 
         while (Time.unscaledTime < timeoutTime)
         {
-            bool loaderFinished = LoadingFaderManager.instance == null || !LoadingFaderManager.instance.IsShowing;
-            bool popupManagerReady = PopupManager.instance != null;
+            bool loaderFinished =
+                LoadingFaderManager.instance == null ||
+                !LoadingFaderManager.instance.IsShowing;
 
-            if (loaderFinished && popupManagerReady)
+            bool popupManagerReady =
+                PopupManager.instance != null;
+
+            if (loaderFinished &&
+                popupManagerReady)
             {
                 break;
             }
@@ -166,12 +244,17 @@ public class LobbyEntryFailureManager : MonoBehaviour
 
         if (PopupManager.instance == null)
         {
-            Debug.LogWarning("[LobbyEntryFailureManager] Could not show the failure popup because PopupManager was not found.");
+            Debug.LogWarning(
+                "[LobbyEntryFailureManager] Could not show the failure popup because PopupManager was not found.");
+
             openPopupRoutine = null;
             yield break;
         }
 
-        bool popupOpened = PopupManager.instance.OpenLobbyEntryFailurePopup(pendingFailureMessage);
+        bool popupOpened =
+            PopupManager.instance
+                .OpenLobbyEntryFailurePopup(
+                    pendingFailureMessage);
 
         if (popupOpened)
         {
@@ -181,15 +264,27 @@ public class LobbyEntryFailureManager : MonoBehaviour
         openPopupRoutine = null;
     }
 
-    private string GetFailureMessage(LobbyEntryResult result)
+    private string GetFailureMessage(
+        LobbyEntryResult result)
     {
-        if (result != null && !string.IsNullOrWhiteSpace(result.failureMessage))
+        if (result != null &&
+            !string.IsNullOrWhiteSpace(
+                result.failureMessage))
         {
             return result.failureMessage;
         }
 
-        LobbyEntryFailureType failureType = result != null ? result.failureType : LobbyEntryFailureType.Unknown;
+        LobbyEntryFailureType failureType =
+            result != null
+                ? result.failureType
+                : LobbyEntryFailureType.Unknown;
 
+        return GetFailureMessage(failureType);
+    }
+
+    private string GetFailureMessage(
+        LobbyEntryFailureType failureType)
+    {
         switch (failureType)
         {
             case LobbyEntryFailureType.InvalidSetupData:
@@ -225,6 +320,18 @@ public class LobbyEntryFailureManager : MonoBehaviour
             case LobbyEntryFailureType.LobbyJoinFailed:
                 return "The lobby could not be joined.";
 
+            case LobbyEntryFailureType.LobbyLeaveFailed:
+                return "The lobby could not be left.";
+
+            case LobbyEntryFailureType.KickedFromLobby:
+                return "You were removed from the lobby by the host.";
+
+            case LobbyEntryFailureType.LobbyClosed:
+                return "The lobby was closed.";
+
+            case LobbyEntryFailureType.ConnectionLost:
+                return "The connection to the lobby was lost.";
+
             default:
                 return "The lobby could not be entered.";
         }
@@ -233,7 +340,10 @@ public class LobbyEntryFailureManager : MonoBehaviour
     private void ClearPendingFailure()
     {
         hasPendingFailure = false;
-        pendingFailureType = LobbyEntryFailureType.None;
-        pendingFailureMessage = string.Empty;
+        pendingFailureType =
+            LobbyEntryFailureType.None;
+
+        pendingFailureMessage =
+            string.Empty;
     }
 }

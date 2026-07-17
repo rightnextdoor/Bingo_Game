@@ -10,6 +10,8 @@ using UnityEngine;
 [DisallowMultipleComponent]
 public class NetworkBootstrap : MonoBehaviour
 {
+    private const float ShutdownTimeoutSeconds = 10f;
+
     public static NetworkBootstrap instance;
 
     private bool isReady;
@@ -470,6 +472,32 @@ public class NetworkBootstrap : MonoBehaviour
     #endregion
 
     #region Shutdown
+
+    public async Task<bool> ShutdownAsync()
+    {
+        if (!isReady)
+        {
+            return false;
+        }
+
+        Shutdown();
+
+        float timeoutTime =
+            Time.realtimeSinceStartup +
+            ShutdownTimeoutSeconds;
+
+        while (connectionState != NetworkConnectionState.Offline)
+        {
+            if (Time.realtimeSinceStartup >= timeoutTime)
+            {
+                return false;
+            }
+
+            await Task.Yield();
+        }
+
+        return true;
+    }
 
     public void Shutdown()
     {

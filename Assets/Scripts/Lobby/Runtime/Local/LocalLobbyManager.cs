@@ -10,12 +10,10 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
     private readonly List<Lobby> lobbies = new List<Lobby>();
 
     private bool isReady;
-    private Lobby currentLobby;
 
     public SessionRuntimeType RuntimeType => SessionRuntimeType.Local;
     public bool IsReady => isReady;
     public IReadOnlyList<Lobby> Lobbies => lobbies;
-    public Lobby CurrentLobby => currentLobby;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetStaticState()
@@ -42,6 +40,8 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
 
     private void OnDestroy()
     {
+        UnsubscribeFromAllLobbyControllers();
+
         if (instance == this)
         {
             instance = null;
@@ -51,6 +51,29 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
     public Task<LobbyEntryResult> EnterLobbyAsync(LobbySetupData lobbySetupData)
     {
         return Task.FromResult(EnterLobby(lobbySetupData));
+    }
+
+    public Task<LobbyExitResult> LeaveLobbyAsync(string userId)
+    {
+        Lobby lobby = FindUserLobby(userId);
+
+        if (lobby?.Controller == null)
+        {
+            return Task.FromResult(
+                LobbyExitResult.Succeeded(
+                    userId,
+                    LobbyPlayerExitReason.VoluntaryLeave,
+                    false,
+                    0,
+                    false,
+                    LobbyCloseReason.None));
+        }
+
+        LobbyExitResult result = lobby.Controller.RemovePlayer(
+            userId,
+            LobbyPlayerExitReason.VoluntaryLeave);
+
+        return Task.FromResult(result);
     }
 
     private LobbyEntryResult EnterLobby(LobbySetupData lobbySetupData)
@@ -74,13 +97,12 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
 
         if (existingUserLobby != null)
         {
-            currentLobby = existingUserLobby;
             return LobbyEntryResult.Succeeded(existingUserLobby);
         }
 
         Lobby selectedLobby = CreateLobby(lobbySetupData);
 
-        if (selectedLobby == null || selectedLobby.Controller == null)
+        if (selectedLobby?.Controller == null)
         {
             return LobbyEntryResult.Failed(
                 LobbyEntryFailureType.LobbyCreationFailed,
@@ -103,19 +125,19 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
                 "The player could not be added to the Solo lobby.");
         }
 
-        currentLobby = selectedLobby;
-
         return LobbyEntryResult.Succeeded(selectedLobby);
     }
 
     private bool IsValidSoloSetup(LobbySetupData lobbySetupData)
     {
-        if (lobbySetupData == null || lobbySetupData.playMode != MainMenuPlayMode.Solo)
+        if (lobbySetupData == null ||
+            lobbySetupData.playMode != MainMenuPlayMode.Solo)
         {
             return false;
         }
 
-        if (lobbySetupData.userData == null || !lobbySetupData.userData.HasUser)
+        if (lobbySetupData.userData == null ||
+            !lobbySetupData.userData.HasUser)
         {
             return false;
         }
@@ -144,6 +166,26 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
         return null;
     }
 
+    private Lobby FindLobbyByController(LobbyController controller)
+    {
+        if (controller == null)
+        {
+            return null;
+        }
+
+        for (int i = 0; i < lobbies.Count; i++)
+        {
+            Lobby lobby = lobbies[i];
+
+            if (lobby?.Controller == controller)
+            {
+                return lobby;
+            }
+        }
+
+        return null;
+    }
+
     private Lobby CreateLobby(LobbySetupData lobbySetupData)
     {
         if (lobbySetupData == null)
@@ -152,8 +194,61 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
         }
 
         Lobby lobby = new Lobby(lobbySetupData);
+        lobby.Controller.PlayerExitProcessed += OnLobbyPlayerExitProcessed;
+
         lobbies.Add(lobby);
 
         return lobby;
+    }
+
+    private void OnLobbyPlayerExitProcessed(
+        LobbyController controller,
+        LobbyExitResult exitResult)
+    {
+        if (controller == null ||
+            exitResult == null ||
+            !exitResult.success ||
+            !exitResult.shouldCloseLobby)
+        {
+            return;
+        }
+
+        Lobby lobby = FindLobbyByController(controller);
+
+        if (lobby == null)
+        {
+            return;
+        }
+
+        controller.CloseLobby(exitResult.closeReason);
+        DeleteLobby(lobby);
+    }
+
+    private void DeleteLobby(Lobby lobby)
+    {
+        if (lobby == null)
+        {
+            return;
+        }
+
+        if (lobby.Controller != null)
+        {
+            lobby.Controller.PlayerExitProcessed -= OnLobbyPlayerExitProcessed;
+        }
+
+        lobbies.Remove(lobby);
+    }
+
+    private void UnsubscribeFromAllLobbyControllers()
+    {
+        for (int i = 0; i < lobbies.Count; i++)
+        {
+            Lobby lobby = lobbies[i];
+
+            if (lobby?.Controller != null)
+            {
+                lobby.Controller.PlayerExitProcessed -= OnLobbyPlayerExitProcessed;
+            }
+        }
     }
 }

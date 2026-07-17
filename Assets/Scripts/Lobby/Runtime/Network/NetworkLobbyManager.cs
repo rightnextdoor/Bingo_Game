@@ -10,24 +10,22 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
 
     private const float ConnectionTimeoutSeconds = 30f;
     private const float LobbyConnectionTimeoutSeconds = 15f;
+    private const float ExitNotificationDeliverySeconds = 0.15f;
 
     private readonly List<Lobby> lobbies = new List<Lobby>();
-    private readonly Dictionary<string, string> relayJoinCodeByLobbyId = new Dictionary<string, string>();
+    private readonly Dictionary<string, string> relayJoinCodeByLobbyId =
+        new Dictionary<string, string>();
 
     private bool isReady;
+    private bool isSubscribedToConnectionRegistry;
 
     private NetworkRoot networkRoot;
     private NetworkBootstrap networkBootstrap;
-
-    private Lobby currentLobby;
+    private NetworkConnectionRegistry connectionRegistry;
 
     public SessionRuntimeType RuntimeType => SessionRuntimeType.Network;
     public bool IsReady => isReady;
     public IReadOnlyList<Lobby> Lobbies => lobbies;
-    public Lobby CurrentLobby => currentLobby;
-
-    public string CurrentCustomLobbyCode =>
-        currentLobby?.Controller?.RoomCode ?? string.Empty;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetStaticState()
@@ -64,11 +62,18 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
 
         networkRoot = NetworkRoot.instance;
         networkBootstrap = NetworkBootstrap.instance;
+        connectionRegistry = NetworkConnectionRegistry.instance;
+
+        SubscribeToConnectionRegistry();
+
         isReady = true;
     }
 
     private void OnDestroy()
     {
+        UnsubscribeFromConnectionRegistry();
+        UnsubscribeFromAllLobbyControllers();
+
         if (instance == this)
         {
             instance = null;
@@ -77,7 +82,8 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
 
     #region Lobby Entry
 
-    public async Task<LobbyEntryResult> EnterLobbyAsync(LobbySetupData lobbySetupData)
+    public async Task<LobbyEntryResult> EnterLobbyAsync(
+        LobbySetupData lobbySetupData)
     {
         if (!isReady)
         {
@@ -112,7 +118,8 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
                 "The network connection could not be created.");
         }
 
-        NetworkLobbyConnection lobbyConnection = await WaitForLocalLobbyConnectionAsync();
+        NetworkLobbyConnection lobbyConnection =
+            await WaitForLocalLobbyConnectionAsync();
 
         if (lobbyConnection == null)
         {
@@ -121,12 +128,9 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
                 "The network lobby connection was not available.");
         }
 
-        LobbyEntryResult result = await lobbyConnection.RequestEnterLobbyAsync(lobbySetupData);
-
-        if (result != null && result.success)
-        {
-            currentLobby = result.lobby;
-        }
+        LobbyEntryResult result =
+            await lobbyConnection.RequestEnterLobbyAsync(
+                lobbySetupData);
 
         return result ?? LobbyEntryResult.Failed(
             LobbyEntryFailureType.Unknown,
@@ -137,30 +141,33 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         LobbySetupData lobbySetupData,
         ulong senderClientId)
     {
-        if (networkBootstrap == null || !networkBootstrap.IsAuthority)
+        if (networkBootstrap == null ||
+            !networkBootstrap.IsAuthority)
         {
             return LobbyEntryResult.Failed(
                 LobbyEntryFailureType.ServiceUnavailable,
                 "This process is not the network authority.");
         }
 
-        NetworkConnectionRegistry connectionRegistry = NetworkConnectionRegistry.instance;
-
-        if (connectionRegistry == null || !connectionRegistry.IsReady)
+        if (connectionRegistry == null ||
+            !connectionRegistry.IsReady)
         {
             return LobbyEntryResult.Failed(
                 LobbyEntryFailureType.ServiceUnavailable,
                 "The network connection registry is not ready.");
         }
 
-        if (!connectionRegistry.TryGetBingoUserId(senderClientId, out string registeredUserId))
+        if (!connectionRegistry.TryGetBingoUserId(
+                senderClientId,
+                out string registeredUserId))
         {
             return LobbyEntryResult.Failed(
                 LobbyEntryFailureType.UserMissing,
                 "The connected user could not be resolved.");
         }
 
-        if (lobbySetupData?.userData == null || !lobbySetupData.userData.HasUser)
+        if (lobbySetupData?.userData == null ||
+            !lobbySetupData.userData.HasUser)
         {
             return LobbyEntryResult.Failed(
                 LobbyEntryFailureType.UserMissing,
@@ -184,7 +191,8 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         switch (lobbySetupData.playMode)
         {
             case MainMenuPlayMode.Online:
-                Lobby selectedLobby = FindOrCreateOnlineLobby(lobbySetupData);
+                Lobby selectedLobby =
+                    FindOrCreateOnlineLobby(lobbySetupData);
 
                 if (selectedLobby == null)
                 {
@@ -210,6 +218,350 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
 
     #endregion
 
+    #region Lobby Exit
+
+    public async Task<LobbyExitResult> LeaveLobbyAsync(string userId)
+    {
+        if (!isReady)
+        {
+            return LobbyExitResult.Failed(
+                userId,
+                LobbyPlayerExitReason.VoluntaryLeave,
+                "The network lobby manager is not ready.");
+        }
+
+        LobbyExitResult result;
+
+        if (NetworkLobbyConnection.local != null)
+        {
+            result =
+                await NetworkLobbyConnection.local
+                    .RequestLeaveLobbyAsync();
+        }
+        else if (networkBootstrap != null &&
+                 networkBootstrap.IsAuthority)
+        {
+            result = RemovePlayerFromLobby(
+                userId,
+                LobbyPlayerExitReason.VoluntaryLeave);
+        }
+        else
+        {
+            return LobbyExitResult.Failed(
+                userId,
+                LobbyPlayerExitReason.VoluntaryLeave,
+                "The network lobby connection was not available.");
+        }
+
+        if (result != null && result.success)
+        {
+            await ShutdownLocalNetworkAfterExitIfPossible();
+        }
+
+        return result ?? LobbyExitResult.Failed(
+            userId,
+            LobbyPlayerExitReason.VoluntaryLeave,
+            "The network lobby did not return a leave result.");
+    }
+
+    public async Task<LobbyExitResult> KickPlayerAsync(string targetUserId)
+    {
+        if (NetworkLobbyConnection.local == null)
+        {
+            return LobbyExitResult.Failed(
+                targetUserId,
+                LobbyPlayerExitReason.Kicked,
+                "The network lobby connection was not available.");
+        }
+
+        return await NetworkLobbyConnection.local
+            .RequestKickPlayerAsync(targetUserId);
+    }
+
+    public LobbyExitResult ProcessAuthorityLobbyExit(ulong senderClientId)
+    {
+        if (!TryResolveConnectedUser(
+                senderClientId,
+                out string userId,
+                out LobbyExitResult failureResult))
+        {
+            return failureResult;
+        }
+
+        return RemovePlayerFromLobby(
+            userId,
+            LobbyPlayerExitReason.VoluntaryLeave);
+    }
+
+    public LobbyExitResult ProcessAuthorityKickPlayer(
+        ulong senderClientId,
+        string targetUserId)
+    {
+        if (!TryResolveConnectedUser(
+                senderClientId,
+                out string requesterUserId,
+                out LobbyExitResult failureResult))
+        {
+            return failureResult;
+        }
+
+        if (string.IsNullOrWhiteSpace(targetUserId))
+        {
+            return LobbyExitResult.Failed(
+                targetUserId,
+                LobbyPlayerExitReason.Kicked,
+                "The target player UserId is missing.");
+        }
+
+        Lobby lobby = FindUserLobby(requesterUserId);
+
+        if (lobby?.Controller == null ||
+            lobby.playMode != MainMenuPlayMode.Custom)
+        {
+            return LobbyExitResult.Failed(
+                targetUserId,
+                LobbyPlayerExitReason.Kicked,
+                "Only a Custom lobby host can remove a player.");
+        }
+
+        LobbyPlayerData requesterPlayer =
+            lobby.Controller.GetPlayer(requesterUserId);
+
+        if (requesterPlayer == null || !requesterPlayer.isHost)
+        {
+            return LobbyExitResult.Failed(
+                targetUserId,
+                LobbyPlayerExitReason.Kicked,
+                "Only the Custom lobby host can remove a player.");
+        }
+
+        if (requesterUserId == targetUserId)
+        {
+            return LobbyExitResult.Failed(
+                targetUserId,
+                LobbyPlayerExitReason.Kicked,
+                "The host cannot kick themselves. Use Leave Lobby instead.");
+        }
+
+        LobbyPlayerData targetPlayer =
+            lobby.Controller.GetPlayer(targetUserId);
+
+        if (targetPlayer == null)
+        {
+            return LobbyExitResult.Failed(
+                targetUserId,
+                LobbyPlayerExitReason.Kicked,
+                "The target player was not found in the lobby.");
+        }
+
+        if (targetPlayer.isHost)
+        {
+            return LobbyExitResult.Failed(
+                targetUserId,
+                LobbyPlayerExitReason.Kicked,
+                "The Custom lobby host cannot be kicked.");
+        }
+
+        ulong targetClientId = default;
+        bool hasTargetConnection =
+            connectionRegistry != null &&
+            connectionRegistry.TryGetClientId(
+                targetUserId,
+                out targetClientId);
+
+        LobbyExitResult result = lobby.Controller.RemovePlayer(
+            targetUserId,
+            LobbyPlayerExitReason.Kicked);
+
+        if (result.success && hasTargetConnection)
+        {
+            NetworkLobbyConnection.TrySendForcedLobbyExit(
+                targetClientId,
+                LobbyExitNotification.Kicked(
+                    lobby.GetLobbyId()));
+        }
+
+        return result;
+    }
+
+    private LobbyExitResult RemovePlayerFromLobby(
+        string userId,
+        LobbyPlayerExitReason exitReason)
+    {
+        Lobby lobby = FindUserLobby(userId);
+
+        if (lobby?.Controller == null)
+        {
+            return LobbyExitResult.Succeeded(
+                userId,
+                exitReason,
+                false,
+                0,
+                false,
+                LobbyCloseReason.None);
+        }
+
+        return lobby.Controller.RemovePlayer(
+            userId,
+            exitReason);
+    }
+
+    private void OnLobbyPlayerExitProcessed(
+        LobbyController controller,
+        LobbyExitResult exitResult)
+    {
+        if (controller == null ||
+            exitResult == null ||
+            !exitResult.success ||
+            !exitResult.shouldCloseLobby)
+        {
+            return;
+        }
+
+        Lobby lobby = FindLobbyByController(controller);
+
+        if (lobby == null)
+        {
+            return;
+        }
+
+        CloseAndDeleteLobby(
+            lobby,
+            exitResult.closeReason);
+    }
+
+    private void CloseAndDeleteLobby(
+        Lobby lobby,
+        LobbyCloseReason closeReason)
+    {
+        if (lobby?.Controller == null)
+        {
+            return;
+        }
+
+        string lobbyId = lobby.GetLobbyId();
+
+        List<string> remainingUserIds =
+            lobby.Controller.CloseLobby(closeReason);
+
+        if (closeReason == LobbyCloseReason.HostLeft)
+        {
+            for (int i = 0; i < remainingUserIds.Count; i++)
+            {
+                string userId = remainingUserIds[i];
+
+                if (connectionRegistry == null ||
+                    !connectionRegistry.TryGetClientId(
+                        userId,
+                        out ulong clientId))
+                {
+                    continue;
+                }
+
+                NetworkLobbyConnection.TrySendForcedLobbyExit(
+                    clientId,
+                    LobbyExitNotification.LobbyClosed(
+                        lobbyId,
+                        LobbyCloseReason.HostLeft));
+            }
+        }
+
+        DeleteLobby(lobby);
+    }
+
+    private void DeleteLobby(Lobby lobby)
+    {
+        if (lobby == null)
+        {
+            return;
+        }
+
+        if (lobby.Controller != null)
+        {
+            lobby.Controller.PlayerExitProcessed -=
+                OnLobbyPlayerExitProcessed;
+        }
+
+        relayJoinCodeByLobbyId.Remove(
+            lobby.GetLobbyId());
+
+        lobbies.Remove(lobby);
+
+    }
+
+    private bool TryResolveConnectedUser(
+        ulong clientId,
+        out string userId,
+        out LobbyExitResult failureResult)
+    {
+        userId = string.Empty;
+        failureResult = null;
+
+        if (networkBootstrap == null ||
+            !networkBootstrap.IsAuthority)
+        {
+            failureResult = LobbyExitResult.Failed(
+                userId,
+                LobbyPlayerExitReason.VoluntaryLeave,
+                "This process is not the network authority.");
+
+            return false;
+        }
+
+        if (connectionRegistry == null ||
+            !connectionRegistry.IsReady)
+        {
+            failureResult = LobbyExitResult.Failed(
+                userId,
+                LobbyPlayerExitReason.VoluntaryLeave,
+                "The network connection registry is not ready.");
+
+            return false;
+        }
+
+        if (!connectionRegistry.TryGetBingoUserId(
+                clientId,
+                out userId))
+        {
+            failureResult = LobbyExitResult.Failed(
+                userId,
+                LobbyPlayerExitReason.VoluntaryLeave,
+                "The connected user could not be resolved.");
+
+            return false;
+        }
+
+        return true;
+    }
+
+    private async Task ShutdownLocalNetworkAfterExitIfPossible()
+    {
+        if (networkBootstrap == null ||
+            !networkBootstrap.IsConnected)
+        {
+            return;
+        }
+
+        if (networkBootstrap.IsAuthority &&
+            lobbies.Count > 0)
+        {
+            return;
+        }
+
+        float deliveryTime =
+            Time.realtimeSinceStartup +
+            ExitNotificationDeliverySeconds;
+
+        while (Time.realtimeSinceStartup < deliveryTime)
+        {
+            await Task.Yield();
+        }
+
+        await networkBootstrap.ShutdownAsync();
+    }
+
+    #endregion
+
     #region Custom Lobby Entry
 
     private bool TryPrepareCustomLobbySearch(
@@ -228,9 +580,10 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         CustomSearchLobbySetupData searchSetupData =
             lobbySetupData.customSetupData.searchSetupData;
 
-        Lobby lobby = FindCustomLobby(searchSetupData?.lobbyCode);
+        Lobby lobby = FindCustomLobby(
+            searchSetupData?.lobbyCode);
 
-        if (lobby == null || lobby.Controller == null)
+        if (lobby?.Controller == null)
         {
             failureResult = LobbyEntryResult.Failed(
                 LobbyEntryFailureType.LobbyNotFound,
@@ -242,7 +595,8 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         LobbyController controller = lobby.Controller;
 
         if (controller.HasPassword &&
-            !controller.IsPasswordValid(searchSetupData?.password))
+            !controller.IsPasswordValid(
+                searchSetupData?.password))
         {
             failureResult = LobbyEntryResult.Failed(
                 LobbyEntryFailureType.InvalidPassword,
@@ -260,7 +614,9 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
             return false;
         }
 
-        if (!TryGetRelayJoinCode(lobby, out relayJoinCode))
+        if (!TryGetRelayJoinCode(
+                lobby,
+                out relayJoinCode))
         {
             failureResult = LobbyEntryResult.Failed(
                 LobbyEntryFailureType.NetworkConnectionFailed,
@@ -272,9 +628,11 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         return true;
     }
 
-    private LobbyEntryResult ProcessCustomLobbyEntry(LobbySetupData lobbySetupData)
+    private LobbyEntryResult ProcessCustomLobbyEntry(
+        LobbySetupData lobbySetupData)
     {
-        CustomLobbySetupData customSetupData = lobbySetupData.customSetupData;
+        CustomLobbySetupData customSetupData =
+            lobbySetupData.customSetupData;
 
         if (customSetupData == null)
         {
@@ -286,7 +644,8 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         switch (customSetupData.actionType)
         {
             case CustomLobbyActionType.HostLobby:
-                Lobby newLobby = CreateCustomHostLobby(lobbySetupData);
+                Lobby newLobby =
+                    CreateCustomHostLobby(lobbySetupData);
 
                 if (newLobby == null)
                 {
@@ -301,7 +660,8 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
                     true);
 
             case CustomLobbyActionType.SearchLobby:
-                return ProcessCustomLobbySearch(lobbySetupData);
+                return ProcessCustomLobbySearch(
+                    lobbySetupData);
 
             default:
                 return LobbyEntryResult.Failed(
@@ -310,7 +670,8 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         }
     }
 
-    private LobbyEntryResult ProcessCustomLobbySearch(LobbySetupData lobbySetupData)
+    private LobbyEntryResult ProcessCustomLobbySearch(
+        LobbySetupData lobbySetupData)
     {
         CustomSearchLobbySetupData searchSetupData =
             lobbySetupData?.customSetupData?.searchSetupData;
@@ -322,9 +683,10 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
                 "The Custom lobby search data is missing.");
         }
 
-        Lobby lobby = FindCustomLobby(searchSetupData.lobbyCode);
+        Lobby lobby = FindCustomLobby(
+            searchSetupData.lobbyCode);
 
-        if (lobby == null || lobby.Controller == null)
+        if (lobby?.Controller == null)
         {
             return LobbyEntryResult.Failed(
                 LobbyEntryFailureType.LobbyNotFound,
@@ -334,7 +696,8 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         LobbyController controller = lobby.Controller;
 
         if (controller.HasPassword &&
-            !controller.IsPasswordValid(searchSetupData.password))
+            !controller.IsPasswordValid(
+                searchSetupData.password))
         {
             return LobbyEntryResult.Failed(
                 LobbyEntryFailureType.InvalidPassword,
@@ -354,14 +717,17 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
             false);
     }
 
-    private Lobby CreateCustomHostLobby(LobbySetupData lobbySetupData)
+    private Lobby CreateCustomHostLobby(
+        LobbySetupData lobbySetupData)
     {
-        if (lobbySetupData == null || networkBootstrap == null)
+        if (lobbySetupData == null ||
+            networkBootstrap == null)
         {
             return null;
         }
 
-        string relayJoinCode = networkBootstrap.RelayJoinCode;
+        string relayJoinCode =
+            networkBootstrap.RelayJoinCode;
 
         if (string.IsNullOrWhiteSpace(relayJoinCode))
         {
@@ -371,27 +737,25 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         Lobby lobby = CreateLobby(lobbySetupData);
 
         if (lobby?.Controller == null ||
-            string.IsNullOrWhiteSpace(lobby.Controller.RoomCode))
+            string.IsNullOrWhiteSpace(
+                lobby.Controller.RoomCode))
         {
-            lobbies.Remove(lobby);
+            DeleteLobby(lobby);
             return null;
         }
 
         string lobbyId = lobby.GetLobbyId();
 
-        relayJoinCodeByLobbyId[lobbyId] = relayJoinCode;
-
-        Debug.Log(
-            "[NetworkLobbyManager] Custom lobby created.\n" +
-            $"Room Code: {lobby.Controller.RoomCode}\n" +
-            $"Lobby ID: {lobbyId}");
+        relayJoinCodeByLobbyId[lobbyId] =
+            relayJoinCode;
 
         return lobby;
     }
 
     private Lobby FindCustomLobby(string requestedRoomCode)
     {
-        if (lobbies.Count == 0 || string.IsNullOrWhiteSpace(requestedRoomCode))
+        if (lobbies.Count == 0 ||
+            string.IsNullOrWhiteSpace(requestedRoomCode))
         {
             return null;
         }
@@ -400,7 +764,8 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         {
             Lobby lobby = lobbies[i];
 
-            if (lobby == null || lobby.playMode != MainMenuPlayMode.Custom)
+            if (lobby == null ||
+                lobby.playMode != MainMenuPlayMode.Custom)
             {
                 continue;
             }
@@ -408,7 +773,8 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
             LobbyController controller = lobby.Controller;
 
             if (controller != null &&
-                controller.MatchesRoomCode(requestedRoomCode))
+                controller.MatchesRoomCode(
+                    requestedRoomCode))
             {
                 return lobby;
             }
@@ -422,7 +788,9 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         return FindCustomLobby(roomCode) == null;
     }
 
-    private bool TryGetRelayJoinCode(Lobby lobby, out string relayJoinCode)
+    private bool TryGetRelayJoinCode(
+        Lobby lobby,
+        out string relayJoinCode)
     {
         relayJoinCode = string.Empty;
 
@@ -438,7 +806,8 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
             return false;
         }
 
-        if (string.IsNullOrWhiteSpace(storedRelayJoinCode))
+        if (string.IsNullOrWhiteSpace(
+                storedRelayJoinCode))
         {
             return false;
         }
@@ -447,40 +816,54 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         return true;
     }
 
-    private bool IsCustomLobbySearch(LobbySetupData lobbySetupData)
+    private bool IsCustomLobbySearch(
+        LobbySetupData lobbySetupData)
     {
         return lobbySetupData != null &&
-               lobbySetupData.playMode == MainMenuPlayMode.Custom &&
+               lobbySetupData.playMode ==
+                   MainMenuPlayMode.Custom &&
                lobbySetupData.customSetupData != null &&
-               lobbySetupData.customSetupData.actionType == CustomLobbyActionType.SearchLobby;
+               lobbySetupData.customSetupData.actionType ==
+                   CustomLobbyActionType.SearchLobby;
     }
 
     #endregion
 
     #region Online Lobby Entry
 
-    private Lobby FindOrCreateOnlineLobby(LobbySetupData lobbySetupData)
+    private Lobby FindOrCreateOnlineLobby(
+        LobbySetupData lobbySetupData)
     {
-        List<Lobby> matchingLobbies = FindMatchingOnlineLobbies(lobbySetupData);
+        List<Lobby> matchingLobbies =
+            FindMatchingOnlineLobbies(
+                lobbySetupData);
 
         if (matchingLobbies.Count > 0)
         {
-            int randomIndex = UnityEngine.Random.Range(0, matchingLobbies.Count);
+            int randomIndex =
+                UnityEngine.Random.Range(
+                    0,
+                    matchingLobbies.Count);
+
             return matchingLobbies[randomIndex];
         }
 
         return CreateLobby(lobbySetupData);
     }
 
-    private List<Lobby> FindMatchingOnlineLobbies(LobbySetupData requestedSetupData)
+    private List<Lobby> FindMatchingOnlineLobbies(
+        LobbySetupData requestedSetupData)
     {
-        List<Lobby> matchingLobbies = new List<Lobby>();
+        List<Lobby> matchingLobbies =
+            new List<Lobby>();
 
         for (int i = 0; i < lobbies.Count; i++)
         {
             Lobby lobby = lobbies[i];
 
-            if (IsEligibleOnlineLobby(lobby, requestedSetupData))
+            if (IsEligibleOnlineLobby(
+                    lobby,
+                    requestedSetupData))
             {
                 matchingLobbies.Add(lobby);
             }
@@ -511,14 +894,18 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         LobbyController controller,
         OnlineLobbySetupData requestedSetupData)
     {
-        if (controller == null || requestedSetupData == null)
+        if (controller == null ||
+            requestedSetupData == null)
         {
             return false;
         }
 
-        return controller.GameModeType == requestedSetupData.gameModeType &&
-               controller.BallCountType == requestedSetupData.ballCountType &&
-               controller.MaxPlayers == requestedSetupData.maxPlayers;
+        return controller.GameModeType ==
+                   requestedSetupData.gameModeType &&
+               controller.BallCountType ==
+                   requestedSetupData.ballCountType &&
+               controller.MaxPlayers ==
+                   requestedSetupData.maxPlayers;
     }
 
     #endregion
@@ -530,7 +917,7 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         UserData userData,
         bool isHost)
     {
-        if (lobby == null || lobby.Controller == null)
+        if (lobby?.Controller == null)
         {
             return LobbyEntryResult.Failed(
                 LobbyEntryFailureType.LobbyNotFound,
@@ -558,7 +945,10 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
                 "The lobby is full.");
         }
 
-        LobbyPlayerData playerData = new LobbyPlayerData(userData, isHost);
+        LobbyPlayerData playerData =
+            new LobbyPlayerData(
+                userData,
+                isHost);
 
         if (!controller.AddPlayer(playerData))
         {
@@ -570,7 +960,8 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         return LobbyEntryResult.Succeeded(lobby);
     }
 
-    private Lobby CreateLobby(LobbySetupData lobbySetupData)
+    private Lobby CreateLobby(
+        LobbySetupData lobbySetupData)
     {
         if (lobbySetupData == null)
         {
@@ -580,6 +971,9 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         Lobby lobby = new Lobby(
             lobbySetupData,
             IsCustomRoomCodeAvailable);
+
+        lobby.Controller.PlayerExitProcessed +=
+            OnLobbyPlayerExitProcessed;
 
         lobbies.Add(lobby);
 
@@ -607,11 +1001,92 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         return null;
     }
 
+    private Lobby FindLobbyByController(
+        LobbyController controller)
+    {
+        if (controller == null)
+        {
+            return null;
+        }
+
+        for (int i = 0; i < lobbies.Count; i++)
+        {
+            Lobby lobby = lobbies[i];
+
+            if (lobby?.Controller == controller)
+            {
+                return lobby;
+            }
+        }
+
+        return null;
+    }
+
+    #endregion
+
+    #region Disconnect Handling
+
+    private void SubscribeToConnectionRegistry()
+    {
+        if (isSubscribedToConnectionRegistry)
+        {
+            return;
+        }
+
+        if (connectionRegistry == null)
+        {
+            connectionRegistry =
+                NetworkConnectionRegistry.instance;
+        }
+
+        if (connectionRegistry == null)
+        {
+            return;
+        }
+
+        connectionRegistry.ConnectionRemoved +=
+            OnConnectionRemoved;
+
+        isSubscribedToConnectionRegistry = true;
+    }
+
+    private void UnsubscribeFromConnectionRegistry()
+    {
+        if (!isSubscribedToConnectionRegistry)
+        {
+            return;
+        }
+
+        if (connectionRegistry != null)
+        {
+            connectionRegistry.ConnectionRemoved -=
+                OnConnectionRemoved;
+        }
+
+        isSubscribedToConnectionRegistry = false;
+    }
+
+    private void OnConnectionRemoved(
+        ulong clientId,
+        string userId)
+    {
+        if (networkBootstrap == null ||
+            !networkBootstrap.IsAuthority)
+        {
+            return;
+        }
+
+        RemovePlayerFromLobby(
+            userId,
+            LobbyPlayerExitReason.Disconnected);
+    }
+
     #endregion
 
     #region Network Connection
 
-    private bool IsValidNetworkSetup(LobbySetupData lobbySetupData)
+    private bool IsValidNetworkSetup(
+        LobbySetupData lobbySetupData)
     {
         if (lobbySetupData == null ||
             lobbySetupData.userData == null ||
@@ -637,47 +1112,79 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         LobbySetupData lobbySetupData,
         string customRelayJoinCode)
     {
-        if (networkBootstrap == null || !networkBootstrap.IsReady)
+        if (networkBootstrap == null ||
+            !networkBootstrap.IsReady)
         {
             return false;
         }
 
         if (networkBootstrap.IsConnected)
         {
-            return true;
+            if (NetworkLobbyConnection.local != null)
+            {
+                return true;
+            }
+
+            if (networkBootstrap.IsAuthority &&
+                lobbies.Count > 0)
+            {
+                Debug.LogWarning(
+                    "[NetworkLobbyManager] The network is connected, but the local lobby connection is missing while authority lobbies are still active.");
+
+                return false;
+            }
+
+            bool shutdownComplete =
+                await networkBootstrap.ShutdownAsync();
+
+            if (!shutdownComplete)
+            {
+                return false;
+            }
         }
 
-        string userId = lobbySetupData.userData.userId;
+        string userId =
+            lobbySetupData.userData.userId;
+
         bool started;
 
         switch (lobbySetupData.playMode)
         {
             case MainMenuPlayMode.Online:
-                started = await networkBootstrap.StartRelayHostAsync(userId);
+                started =
+                    await networkBootstrap
+                        .StartRelayHostAsync(userId);
                 break;
 
             case MainMenuPlayMode.Custom:
-                CustomLobbySetupData customSetupData = lobbySetupData.customSetupData;
+                CustomLobbySetupData customSetupData =
+                    lobbySetupData.customSetupData;
 
                 if (customSetupData == null)
                 {
                     return false;
                 }
 
-                if (customSetupData.actionType == CustomLobbyActionType.HostLobby)
+                if (customSetupData.actionType ==
+                    CustomLobbyActionType.HostLobby)
                 {
-                    started = await networkBootstrap.StartRelayHostAsync(userId);
+                    started =
+                        await networkBootstrap
+                            .StartRelayHostAsync(userId);
                 }
                 else
                 {
-                    if (string.IsNullOrWhiteSpace(customRelayJoinCode))
+                    if (string.IsNullOrWhiteSpace(
+                            customRelayJoinCode))
                     {
                         return false;
                     }
 
-                    started = await networkBootstrap.StartRelayClientAsync(
-                        userId,
-                        customRelayJoinCode);
+                    started =
+                        await networkBootstrap
+                            .StartRelayClientAsync(
+                                userId,
+                                customRelayJoinCode);
                 }
 
                 break;
@@ -691,17 +1198,22 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
             return false;
         }
 
-        float timeoutTime = Time.realtimeSinceStartup + ConnectionTimeoutSeconds;
+        float timeoutTime =
+            Time.realtimeSinceStartup +
+            ConnectionTimeoutSeconds;
 
         while (!networkBootstrap.IsConnected)
         {
-            if (networkBootstrap.ConnectionState == NetworkConnectionState.Failed ||
-                networkBootstrap.ConnectionState == NetworkConnectionState.Disconnected)
+            if (networkBootstrap.ConnectionState ==
+                    NetworkConnectionState.Failed ||
+                networkBootstrap.ConnectionState ==
+                    NetworkConnectionState.Disconnected)
             {
                 return false;
             }
 
-            if (Time.realtimeSinceStartup >= timeoutTime)
+            if (Time.realtimeSinceStartup >=
+                timeoutTime)
             {
                 return false;
             }
@@ -712,13 +1224,17 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         return true;
     }
 
-    private async Task<NetworkLobbyConnection> WaitForLocalLobbyConnectionAsync()
+    private async Task<NetworkLobbyConnection>
+        WaitForLocalLobbyConnectionAsync()
     {
-        float timeoutTime = Time.realtimeSinceStartup + LobbyConnectionTimeoutSeconds;
+        float timeoutTime =
+            Time.realtimeSinceStartup +
+            LobbyConnectionTimeoutSeconds;
 
         while (NetworkLobbyConnection.local == null)
         {
-            if (Time.realtimeSinceStartup >= timeoutTime)
+            if (Time.realtimeSinceStartup >=
+                timeoutTime)
             {
                 return null;
             }
@@ -735,17 +1251,39 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
 
     private bool CanInitialize()
     {
-        if (NetworkRoot.instance == null || !NetworkRoot.instance.IsReady)
+        if (NetworkRoot.instance == null ||
+            !NetworkRoot.instance.IsReady)
         {
             return false;
         }
 
-        if (NetworkBootstrap.instance == null || !NetworkBootstrap.instance.IsReady)
+        if (NetworkBootstrap.instance == null ||
+            !NetworkBootstrap.instance.IsReady)
+        {
+            return false;
+        }
+
+        if (NetworkConnectionRegistry.instance == null ||
+            !NetworkConnectionRegistry.instance.IsReady)
         {
             return false;
         }
 
         return true;
+    }
+
+    private void UnsubscribeFromAllLobbyControllers()
+    {
+        for (int i = 0; i < lobbies.Count; i++)
+        {
+            Lobby lobby = lobbies[i];
+
+            if (lobby?.Controller != null)
+            {
+                lobby.Controller.PlayerExitProcessed -=
+                    OnLobbyPlayerExitProcessed;
+            }
+        }
     }
 
     #endregion

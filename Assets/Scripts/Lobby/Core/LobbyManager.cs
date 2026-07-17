@@ -17,6 +17,7 @@ public class LobbyManager : MonoBehaviour
     private ILobbyService activeLobbyService;
 
     private Lobby currentLobby;
+    private string currentUserId = string.Empty;
 
     private SessionRuntimeType runtimeType =
         SessionRuntimeType.Local;
@@ -27,6 +28,10 @@ public class LobbyManager : MonoBehaviour
     private LobbyEntryResult lastEntryResult;
 
     private bool isEnteringLobby;
+    private bool isLeavingLobby;
+
+    private NetworkBootstrap networkBootstrap;
+    private bool isSubscribedToNetworkBootstrap;
 
     public bool HasPendingLobbySetupData =>
         pendingLobbySetupData != null;
@@ -49,22 +54,22 @@ public class LobbyManager : MonoBehaviour
     public bool IsEnteringLobby =>
         isEnteringLobby;
 
+    public bool IsLeavingLobby =>
+        isLeavingLobby;
+
     public bool HasEnteredLobby =>
         entryState == LobbyEntryState.Completed &&
         currentLobby != null;
 
-    public event Action<LobbyEntryState>
-        LobbyEntryStateChanged;
+    public event Action<LobbyEntryState> LobbyEntryStateChanged;
+    public event Action<LobbyEntryResult> LobbyEntryCompleted;
+    public event Action<LobbyEntryResult> LobbyEntryFailed;
 
-    public event Action<LobbyEntryResult>
-        LobbyEntryCompleted;
+    public event Action<LobbyExitResult> LobbyExitCompleted;
+    public event Action<LobbyExitResult> LobbyExitFailed;
+    public event Action<LobbyExitNotification> LobbyForcedExit;
 
-    public event Action<LobbyEntryResult>
-        LobbyEntryFailed;
-
-
-    [RuntimeInitializeOnLoadMethod(
-        RuntimeInitializeLoadType.SubsystemRegistration)]
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetStaticState()
     {
         instance = null;
@@ -72,8 +77,7 @@ public class LobbyManager : MonoBehaviour
 
     private void Awake()
     {
-        if (instance != null &&
-            instance != this)
+        if (instance != null && instance != this)
         {
             Destroy(this);
             return;
@@ -82,8 +86,25 @@ public class LobbyManager : MonoBehaviour
         instance = this;
     }
 
+    private void OnEnable()
+    {
+        SubscribeToNetworkEvents();
+    }
+
+    private void Start()
+    {
+        SubscribeToNetworkEvents();
+    }
+
+    private void OnDisable()
+    {
+        UnsubscribeFromNetworkEvents();
+    }
+
     private void OnDestroy()
     {
+        UnsubscribeFromNetworkEvents();
+
         if (instance == this)
         {
             instance = null;
@@ -103,13 +124,13 @@ public class LobbyManager : MonoBehaviour
             return;
         }
 
-        pendingLobbySetupData =
-            lobbySetupData;
-
-        currentLobby = null;
+        pendingLobbySetupData = lobbySetupData;
         lastEntryResult = null;
 
-        SetEntryState(LobbyEntryState.Idle);
+        if (currentLobby == null)
+        {
+            SetEntryState(LobbyEntryState.Idle);
+        }
     }
 
     public void ClearPendingLobbySetupData()
@@ -123,22 +144,18 @@ public class LobbyManager : MonoBehaviour
 
     public async void BeginPendingLobbyEntry()
     {
-        if (isEnteringLobby)
+        if (isEnteringLobby || isLeavingLobby)
         {
             return;
         }
 
         isEnteringLobby = true;
-
-        currentLobby = null;
         lastEntryResult = null;
 
         if (!TryValidatePendingSetupData(
                 out LobbyEntryResult validationFailure))
         {
-            CompleteLobbyEntryFailure(
-                validationFailure);
-
+            CompleteLobbyEntryFailure(validationFailure);
             return;
         }
 
@@ -157,8 +174,7 @@ public class LobbyManager : MonoBehaviour
         {
             CompleteLobbyEntryFailure(
                 LobbyEntryResult.Failed(
-                    LobbyEntryFailureType
-                        .ServiceUnavailable,
+                    LobbyEntryFailureType.ServiceUnavailable,
                     "The required lobby manager was not ready."));
 
             return;
@@ -182,10 +198,9 @@ public class LobbyManager : MonoBehaviour
         {
             Debug.LogException(exception);
 
-            result =
-                LobbyEntryResult.Failed(
-                    LobbyEntryFailureType.Unknown,
-                    "An unexpected error occurred while entering the lobby.");
+            result = LobbyEntryResult.Failed(
+                LobbyEntryFailureType.Unknown,
+                "An unexpected error occurred while entering the lobby.");
         }
 
         if (result == null || !result.success)
@@ -203,8 +218,7 @@ public class LobbyManager : MonoBehaviour
         {
             CompleteLobbyEntryFailure(
                 LobbyEntryResult.Failed(
-                    LobbyEntryFailureType
-                        .LobbyJoinFailed,
+                    LobbyEntryFailureType.LobbyJoinFailed,
                     "The lobby was not returned after the player joined."));
 
             return;
@@ -215,38 +229,39 @@ public class LobbyManager : MonoBehaviour
 
         if (userData == null ||
             result.lobby.Controller == null ||
-            !result.lobby.Controller.HasPlayer(userData.userId))
+            !result.lobby.Controller.HasPlayer(
+                userData.userId))
         {
             CompleteLobbyEntryFailure(
                 LobbyEntryResult.Failed(
-                    LobbyEntryFailureType
-                        .LobbyJoinFailed,
+                    LobbyEntryFailureType.LobbyJoinFailed,
                     "The player was not added to the lobby."));
 
             return;
         }
 
         currentLobby = result.lobby;
+        currentUserId = userData.userId;
         lastEntryResult = result;
 
         pendingLobbySetupData = null;
         isEnteringLobby = false;
+
+        SubscribeToNetworkEvents();
 
         SetEntryState(LobbyEntryState.Completed);
 
         LobbyEntryCompleted?.Invoke(result);
     }
 
-    private async Task<ILobbyService>
-        WaitForLobbyServiceAsync(
-            SessionRuntimeType selectedRuntimeType)
+    private async Task<ILobbyService> WaitForLobbyServiceAsync(
+        SessionRuntimeType selectedRuntimeType)
     {
         float timeoutTime =
             Time.realtimeSinceStartup +
             ServiceReadyTimeoutSeconds;
 
-        while (Time.realtimeSinceStartup <
-               timeoutTime)
+        while (Time.realtimeSinceStartup < timeoutTime)
         {
             ILobbyService lobbyService =
                 GetLobbyService(
@@ -314,13 +329,20 @@ public class LobbyManager : MonoBehaviour
     {
         failureResult = null;
 
+        if (currentLobby != null)
+        {
+            failureResult = LobbyEntryResult.Failed(
+                LobbyEntryFailureType.AlreadyInLobby,
+                "The current player must leave the existing lobby first.");
+
+            return false;
+        }
+
         if (pendingLobbySetupData == null)
         {
-            failureResult =
-                LobbyEntryResult.Failed(
-                    LobbyEntryFailureType
-                        .InvalidSetupData,
-                    "The lobby setup data is missing.");
+            failureResult = LobbyEntryResult.Failed(
+                LobbyEntryFailureType.InvalidSetupData,
+                "The lobby setup data is missing.");
 
             return false;
         }
@@ -328,11 +350,9 @@ public class LobbyManager : MonoBehaviour
         if (pendingLobbySetupData.playMode ==
             MainMenuPlayMode.None)
         {
-            failureResult =
-                LobbyEntryResult.Failed(
-                    LobbyEntryFailureType
-                        .InvalidSetupData,
-                    "The lobby mode is not valid.");
+            failureResult = LobbyEntryResult.Failed(
+                LobbyEntryFailureType.InvalidSetupData,
+                "The lobby mode is not valid.");
 
             return false;
         }
@@ -340,10 +360,9 @@ public class LobbyManager : MonoBehaviour
         if (pendingLobbySetupData.userData == null ||
             !pendingLobbySetupData.userData.HasUser)
         {
-            failureResult =
-                LobbyEntryResult.Failed(
-                    LobbyEntryFailureType.UserMissing,
-                    "The current user is missing.");
+            failureResult = LobbyEntryResult.Failed(
+                LobbyEntryFailureType.UserMissing,
+                "The current user is missing.");
 
             return false;
         }
@@ -353,22 +372,269 @@ public class LobbyManager : MonoBehaviour
 
     #endregion
 
+    #region Lobby Exit
+
+    public async void LeaveCurrentLobby()
+    {
+        if (isLeavingLobby || isEnteringLobby)
+        {
+            return;
+        }
+
+        if (currentLobby == null)
+        {
+            ReturnToMainScene();
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(currentUserId))
+        {
+            CompleteLobbyExitFailure(
+                LobbyExitResult.Failed(
+                    currentUserId,
+                    LobbyPlayerExitReason.VoluntaryLeave,
+                    "The current lobby player could not be resolved."));
+
+            return;
+        }
+
+        ILobbyService lobbyService =
+            GetLobbyService(runtimeType);
+
+        if (lobbyService == null ||
+            !lobbyService.IsReady)
+        {
+            CompleteLobbyExitFailure(
+                LobbyExitResult.Failed(
+                    currentUserId,
+                    LobbyPlayerExitReason.VoluntaryLeave,
+                    "The lobby service was not ready."));
+
+            return;
+        }
+
+        isLeavingLobby = true;
+
+        LobbyExitResult result;
+
+        try
+        {
+            result =
+                await lobbyService
+                    .LeaveLobbyAsync(
+                        currentUserId);
+        }
+        catch (Exception exception)
+        {
+            Debug.LogException(exception);
+
+            result = LobbyExitResult.Failed(
+                currentUserId,
+                LobbyPlayerExitReason.VoluntaryLeave,
+                "An unexpected error occurred while leaving the lobby.");
+        }
+
+        if (result == null || !result.success)
+        {
+            CompleteLobbyExitFailure(
+                result ??
+                LobbyExitResult.Failed(
+                    currentUserId,
+                    LobbyPlayerExitReason.VoluntaryLeave,
+                    "The lobby service did not return a leave result."));
+
+            return;
+        }
+
+        ClearCurrentLobby();
+
+        isLeavingLobby = false;
+        SetEntryState(LobbyEntryState.Idle);
+
+        LobbyExitCompleted?.Invoke(result);
+
+        ReturnToMainScene();
+    }
+
+    private void CompleteLobbyExitFailure(
+        LobbyExitResult result)
+    {
+        isLeavingLobby = false;
+
+        LobbyExitResult finalResult =
+            result ??
+            LobbyExitResult.Failed(
+                currentUserId,
+                LobbyPlayerExitReason.VoluntaryLeave,
+                "The player could not leave the lobby.");
+
+        LobbyExitFailed?.Invoke(finalResult);
+
+        Debug.LogWarning(
+            "[LobbyManager] Lobby exit failed. " +
+            $"Message: {finalResult.failureMessage}");
+    }
+
+    private void OnLocalLobbyExitReceived(
+        LobbyExitNotification notification)
+    {
+        HandleForcedLobbyExit(notification);
+    }
+
+    private void OnNetworkConnectionStateChanged(
+        NetworkConnectionState connectionState)
+    {
+        if (runtimeType != SessionRuntimeType.Network ||
+            currentLobby == null ||
+            isLeavingLobby)
+        {
+            return;
+        }
+
+        if (connectionState !=
+                NetworkConnectionState.Disconnected &&
+            connectionState !=
+                NetworkConnectionState.Failed)
+        {
+            return;
+        }
+
+        HandleForcedLobbyExit(
+            LobbyExitNotification.ConnectionLost(
+                currentLobby.GetLobbyId()));
+    }
+
+    private void HandleForcedLobbyExit(
+        LobbyExitNotification notification)
+    {
+        if (notification == null ||
+            currentLobby == null)
+        {
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(
+                notification.lobbyId) &&
+            !string.Equals(
+                notification.lobbyId,
+                currentLobby.GetLobbyId(),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        ClearCurrentLobby();
+
+        isEnteringLobby = false;
+        isLeavingLobby = false;
+
+        SetEntryState(LobbyEntryState.Failed);
+
+        LobbyForcedExit?.Invoke(notification);
+
+        ReturnToMainScene();
+    }
+
+    private void ClearCurrentLobby()
+    {
+        currentLobby = null;
+        currentUserId = string.Empty;
+        activeLobbyService = null;
+        lastEntryResult = null;
+    }
+
+    private void ReturnToMainScene()
+    {
+        GameSceneManager gameSceneManager =
+            GameSceneManager.instance;
+
+        if (gameSceneManager == null)
+        {
+            Debug.LogWarning(
+                "[LobbyManager] Could not return to Main because GameSceneManager was not found.");
+
+            return;
+        }
+
+        if (gameSceneManager.IsLoadingScene)
+        {
+            return;
+        }
+
+        gameSceneManager.LoadMainScene();
+    }
+
+    #endregion
+
+    #region Network Events
+
+    private void SubscribeToNetworkEvents()
+    {
+        NetworkLobbyConnection.LocalLobbyExitReceived -=
+            OnLocalLobbyExitReceived;
+
+        NetworkLobbyConnection.LocalLobbyExitReceived +=
+            OnLocalLobbyExitReceived;
+
+        if (isSubscribedToNetworkBootstrap)
+        {
+            return;
+        }
+
+        if (networkBootstrap == null)
+        {
+            networkBootstrap =
+                NetworkBootstrap.instance;
+        }
+
+        if (networkBootstrap == null)
+        {
+            return;
+        }
+
+        networkBootstrap.ConnectionStateChanged +=
+            OnNetworkConnectionStateChanged;
+
+        isSubscribedToNetworkBootstrap = true;
+    }
+
+    private void UnsubscribeFromNetworkEvents()
+    {
+        NetworkLobbyConnection.LocalLobbyExitReceived -=
+            OnLocalLobbyExitReceived;
+
+        if (isSubscribedToNetworkBootstrap &&
+            networkBootstrap != null)
+        {
+            networkBootstrap.ConnectionStateChanged -=
+                OnNetworkConnectionStateChanged;
+        }
+
+        isSubscribedToNetworkBootstrap = false;
+    }
+
+    #endregion
+
     #region Failure Shell
 
-    private void CompleteLobbyEntryFailure(LobbyEntryResult result)
+    private void CompleteLobbyEntryFailure(
+        LobbyEntryResult result)
     {
         isEnteringLobby = false;
 
-        lastEntryResult = result ?? LobbyEntryResult.Failed(
-            LobbyEntryFailureType.Unknown,
-            "The lobby could not be entered.");
+        lastEntryResult =
+            result ??
+            LobbyEntryResult.Failed(
+                LobbyEntryFailureType.Unknown,
+                "The lobby could not be entered.");
 
         SetEntryState(LobbyEntryState.Failed);
 
         HandleLobbyEntryFailure(lastEntryResult);
     }
 
-    private void HandleLobbyEntryFailure(LobbyEntryResult result)
+    private void HandleLobbyEntryFailure(
+        LobbyEntryResult result)
     {
         if (result == null)
         {

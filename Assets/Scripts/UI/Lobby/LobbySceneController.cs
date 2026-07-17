@@ -32,7 +32,9 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
 
     private void OnEnable()
     {
-        bindRoutine = StartCoroutine(BindWhenLobbyIsReady());
+        bindRoutine =
+            StartCoroutine(
+                BindWhenLobbyIsReady());
     }
 
     private void OnDisable()
@@ -46,7 +48,8 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
         UnbindLobbyController();
     }
 
-    public void DisplayLobbyInfo(LobbyViewData lobbyViewData)
+    public void DisplayLobbyInfo(
+        LobbyViewData lobbyViewData)
     {
         if (lobbyViewData == null)
         {
@@ -106,6 +109,22 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
             BuildPlayerListText(lobbyViewData));
     }
 
+    public void LeaveLobby()
+    {
+        LobbyManager lobbyManager =
+            LobbyManager.instance;
+
+        if (lobbyManager == null)
+        {
+            Debug.LogWarning(
+                "[LobbySceneController] Could not leave the Lobby because LobbyManager was not found.");
+
+            return;
+        }
+
+        lobbyManager.LeaveCurrentLobby();
+    }
+
     private IEnumerator BindWhenLobbyIsReady()
     {
         while (LobbyManager.instance == null ||
@@ -117,12 +136,15 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
         }
 
         BindLobbyController(
-            LobbyManager.instance.CurrentLobby.Controller);
+            LobbyManager.instance
+                .CurrentLobby
+                .Controller);
 
         bindRoutine = null;
     }
 
-    private void BindLobbyController(LobbyController controller)
+    private void BindLobbyController(
+        LobbyController controller)
     {
         if (lobbyController == controller)
         {
@@ -147,7 +169,8 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
         lobbyController = null;
     }
 
-    private string BuildPatternText(LobbyViewData lobbyViewData)
+    private string BuildPatternText(
+        LobbyViewData lobbyViewData)
     {
         if (lobbyViewData.patternTypes == null ||
             lobbyViewData.patternTypes.Count == 0)
@@ -155,22 +178,27 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
             return "None";
         }
 
-        StringBuilder builder = new StringBuilder();
+        StringBuilder builder =
+            new StringBuilder();
 
-        for (int i = 0; i < lobbyViewData.patternTypes.Count; i++)
+        for (int i = 0;
+             i < lobbyViewData.patternTypes.Count;
+             i++)
         {
             if (i > 0)
             {
                 builder.Append(", ");
             }
 
-            builder.Append(lobbyViewData.patternTypes[i]);
+            builder.Append(
+                lobbyViewData.patternTypes[i]);
         }
 
         return builder.ToString();
     }
 
-    private string BuildPlayerListText(LobbyViewData lobbyViewData)
+    private string BuildPlayerListText(
+        LobbyViewData lobbyViewData)
     {
         if (lobbyViewData.playerNames == null ||
             lobbyViewData.playerNames.Count == 0)
@@ -178,14 +206,20 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
             return "Players:\nNone";
         }
 
-        StringBuilder builder = new StringBuilder();
+        StringBuilder builder =
+            new StringBuilder();
+
         builder.AppendLine("Players:");
 
-        for (int i = 0; i < lobbyViewData.playerNames.Count; i++)
+        for (int i = 0;
+             i < lobbyViewData.playerNames.Count;
+             i++)
         {
-            builder.Append(lobbyViewData.playerNames[i]);
+            builder.Append(
+                lobbyViewData.playerNames[i]);
 
-            if (i < lobbyViewData.playerNames.Count - 1)
+            if (i <
+                lobbyViewData.playerNames.Count - 1)
             {
                 builder.AppendLine();
             }
@@ -201,31 +235,13 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
             : value;
     }
 
-    private void SetText(TMP_Text target, string value)
+    private void SetText(
+        TMP_Text target,
+        string value)
     {
         if (target != null)
         {
             target.text = value;
         }
-    }
-
-    public void LeaveLobby()
-    {
-        GameSceneManager gameSceneManager = GameSceneManager.instance;
-
-        if (gameSceneManager == null)
-        {
-            Debug.LogWarning(
-                "[LobbySceneController] Could not leave the Lobby because GameSceneManager was not found.");
-
-            return;
-        }
-
-        if (gameSceneManager.IsLoadingScene)
-        {
-            return;
-        }
-
-        gameSceneManager.LoadMainScene();
     }
 }

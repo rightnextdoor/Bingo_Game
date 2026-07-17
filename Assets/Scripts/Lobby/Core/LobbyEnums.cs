@@ -19,6 +19,21 @@ public enum LobbyEntryState
     Failed
 }
 
+public enum LobbyPlayerExitReason
+{
+    VoluntaryLeave,
+    Kicked,
+    Disconnected,
+    LobbyClosed
+}
+
+public enum LobbyCloseReason
+{
+    None,
+    Empty,
+    HostLeft
+}
+
 public enum LobbyEntryFailureType
 {
     None,
@@ -33,5 +48,9 @@ public enum LobbyEntryFailureType
     AlreadyInLobby,
     LobbyCreationFailed,
     LobbyJoinFailed,
+    LobbyLeaveFailed,
+    KickedFromLobby,
+    LobbyClosed,
+    ConnectionLost,
     Unknown
 }

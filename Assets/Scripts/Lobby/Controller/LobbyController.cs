@@ -32,6 +32,7 @@ public class LobbyController
     [SerializeField] private BingoBallCountType ballCountType = BingoBallCountType.Ball75;
 
     [SerializeField] private int maxPlayers = DefaultMaximumPlayers;
+    [SerializeField] private LobbyCloseReason closeReason = LobbyCloseReason.None;
 
     [NonSerialized] private Lobby lobby;
     [NonSerialized] private List<ILobbyView> views;
@@ -54,6 +55,12 @@ public class LobbyController
     public int PlayerCount => players != null ? players.Count : 0;
     public int MaxPlayers => maxPlayers;
     public bool IsFull => maxPlayers > 0 && PlayerCount >= maxPlayers;
+    public bool IsEmpty => PlayerCount == 0;
+
+    public LobbyCloseReason CloseReason => closeReason;
+
+    [field: NonSerialized]
+    public event Action<LobbyController, LobbyExitResult> PlayerExitProcessed;
 
     public LobbyController()
     {
@@ -78,29 +85,7 @@ public class LobbyController
 
     public bool HasPlayer(string userId)
     {
-        if (string.IsNullOrWhiteSpace(userId))
-        {
-            return false;
-        }
-
-        EnsureCollections();
-
-        for (int i = 0; i < players.Count; i++)
-        {
-            LobbyPlayerData playerData = players[i];
-
-            if (playerData?.userData == null)
-            {
-                continue;
-            }
-
-            if (playerData.userData.userId == userId)
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return GetPlayer(userId) != null;
     }
 
     public LobbyPlayerData GetPlayer(string userId)
@@ -139,6 +124,11 @@ public class LobbyController
 
         EnsureCollections();
 
+        if (lobby != null && lobby.lobbyState == LobbyState.Closed)
+        {
+            return false;
+        }
+
         if (HasPlayer(playerData.userData.userId) || IsFull)
         {
             return false;
@@ -150,9 +140,103 @@ public class LobbyController
         return true;
     }
 
+    public LobbyExitResult RemovePlayer(
+        string userId,
+        LobbyPlayerExitReason exitReason)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return LobbyExitResult.Failed(
+                userId,
+                exitReason,
+                "The player UserId is missing.");
+        }
+
+        EnsureCollections();
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            LobbyPlayerData playerData = players[i];
+
+            if (playerData?.userData == null ||
+                playerData.userData.userId != userId)
+            {
+                continue;
+            }
+
+            bool wasHost = playerData.isHost;
+
+            players.RemoveAt(i);
+
+            bool customHostLeft =
+                lobby != null &&
+                lobby.playMode == MainMenuPlayMode.Custom &&
+                wasHost;
+
+            bool shouldCloseLobby = customHostLeft || IsEmpty;
+
+            LobbyCloseReason requestedCloseReason = customHostLeft
+                ? LobbyCloseReason.HostLeft
+                : IsEmpty
+                    ? LobbyCloseReason.Empty
+                    : LobbyCloseReason.None;
+
+            LobbyExitResult result = LobbyExitResult.Succeeded(
+                userId,
+                exitReason,
+                wasHost,
+                PlayerCount,
+                shouldCloseLobby,
+                requestedCloseReason);
+
+            RefreshViews();
+            PlayerExitProcessed?.Invoke(this, result);
+
+            return result;
+        }
+
+        return LobbyExitResult.Failed(
+            userId,
+            exitReason,
+            "The player was not found in the lobby.");
+    }
+
+    public List<string> CloseLobby(LobbyCloseReason requestedCloseReason)
+    {
+        EnsureCollections();
+
+        closeReason = requestedCloseReason;
+
+        if (lobby != null)
+        {
+            lobby.lobbyState = LobbyState.Closed;
+        }
+
+        List<string> removedUserIds = new List<string>();
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            LobbyPlayerData playerData = players[i];
+
+            if (playerData?.userData == null ||
+                string.IsNullOrWhiteSpace(playerData.userData.userId))
+            {
+                continue;
+            }
+
+            removedUserIds.Add(playerData.userData.userId);
+        }
+
+        players.Clear();
+        RefreshViews();
+
+        return removedUserIds;
+    }
+
     public bool MatchesRoomCode(string requestedRoomCode)
     {
-        if (string.IsNullOrWhiteSpace(roomCode) || string.IsNullOrWhiteSpace(requestedRoomCode))
+        if (string.IsNullOrWhiteSpace(roomCode) ||
+            string.IsNullOrWhiteSpace(requestedRoomCode))
         {
             return false;
         }
@@ -296,6 +380,7 @@ public class LobbyController
         ballCountType = BingoBallCountType.Ball75;
 
         maxPlayers = DefaultMaximumPlayers;
+        closeReason = LobbyCloseReason.None;
 
         MainMenuPlayMode playMode = lobby != null
             ? lobby.playMode
@@ -461,7 +546,8 @@ public class LobbyController
         {
             BingoPatternData patternData = patterns[i];
 
-            if (patternData == null || patternTypes.Contains(patternData.PatternType))
+            if (patternData == null ||
+                patternTypes.Contains(patternData.PatternType))
             {
                 continue;
             }
@@ -488,7 +574,8 @@ public class LobbyController
                 .Range(MinimumCustomRoomCode, MaximumCustomRoomCodeExclusive)
                 .ToString();
 
-            if (isRoomCodeAvailable == null || isRoomCodeAvailable(proposedRoomCode))
+            if (isRoomCodeAvailable == null ||
+                isRoomCodeAvailable(proposedRoomCode))
             {
                 return proposedRoomCode;
             }

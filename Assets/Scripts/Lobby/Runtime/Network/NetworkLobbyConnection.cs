@@ -5,32 +5,42 @@ using Unity.Netcode;
 using UnityEngine;
 
 [DisallowMultipleComponent]
-public class NetworkLobbyConnection :
-    NetworkBehaviour
+public class NetworkLobbyConnection : NetworkBehaviour
 {
     public static NetworkLobbyConnection local;
 
     private const float RequestTimeoutSeconds = 30f;
 
-    private readonly Dictionary<
-        string,
-        TaskCompletionSource<LobbyEntryResult>>
-        pendingRequests =
-            new Dictionary<
-                string,
-                TaskCompletionSource<LobbyEntryResult>>();
+    private static readonly Dictionary<ulong, NetworkLobbyConnection>
+        serverConnectionsByClientId =
+            new Dictionary<ulong, NetworkLobbyConnection>();
 
+    private readonly Dictionary<string, TaskCompletionSource<LobbyEntryResult>>
+        pendingEntryRequests =
+            new Dictionary<string, TaskCompletionSource<LobbyEntryResult>>();
 
-    [RuntimeInitializeOnLoadMethod(
-        RuntimeInitializeLoadType.SubsystemRegistration)]
+    private readonly Dictionary<string, TaskCompletionSource<LobbyExitResult>>
+        pendingExitRequests =
+            new Dictionary<string, TaskCompletionSource<LobbyExitResult>>();
+
+    public static event Action<LobbyExitNotification> LocalLobbyExitReceived;
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetStaticState()
     {
         local = null;
+        serverConnectionsByClientId.Clear();
+        LocalLobbyExitReceived = null;
     }
 
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
+
+        if (IsServer)
+        {
+            serverConnectionsByClientId[OwnerClientId] = this;
+        }
 
         if (IsOwner)
         {
@@ -40,6 +50,15 @@ public class NetworkLobbyConnection :
 
     public override void OnNetworkDespawn()
     {
+        if (IsServer &&
+            serverConnectionsByClientId.TryGetValue(
+                OwnerClientId,
+                out NetworkLobbyConnection registeredConnection) &&
+            registeredConnection == this)
+        {
+            serverConnectionsByClientId.Remove(OwnerClientId);
+        }
+
         if (local == this)
         {
             local = null;
@@ -50,15 +69,13 @@ public class NetworkLobbyConnection :
         base.OnNetworkDespawn();
     }
 
-    public async Task<LobbyEntryResult>
-        RequestEnterLobbyAsync(
-            LobbySetupData lobbySetupData)
+    public async Task<LobbyEntryResult> RequestEnterLobbyAsync(
+        LobbySetupData lobbySetupData)
     {
         if (!IsSpawned || !IsOwner)
         {
             return LobbyEntryResult.Failed(
-                LobbyEntryFailureType
-                    .NetworkLobbyConnectionUnavailable,
+                LobbyEntryFailureType.NetworkLobbyConnectionUnavailable,
                 "The local network lobby connection is not ready.");
         }
 
@@ -69,48 +86,128 @@ public class NetworkLobbyConnection :
                 "The lobby setup data is missing.");
         }
 
-        string requestId =
-            Guid.NewGuid().ToString("N");
+        string requestId = Guid.NewGuid().ToString("N");
+        string setupDataJson = JsonUtility.ToJson(lobbySetupData);
 
-        string setupDataJson =
-            JsonUtility.ToJson(lobbySetupData);
+        TaskCompletionSource<LobbyEntryResult> completionSource =
+            new TaskCompletionSource<LobbyEntryResult>();
 
-        TaskCompletionSource<LobbyEntryResult>
-            completionSource =
-                new TaskCompletionSource<
-                    LobbyEntryResult>();
+        pendingEntryRequests.Add(requestId, completionSource);
 
-        pendingRequests.Add(
+        RequestEnterLobbyRpc(requestId, setupDataJson);
+
+        LobbyEntryResult timeoutResult = LobbyEntryResult.Failed(
+            LobbyEntryFailureType.LobbyJoinFailed,
+            "The network lobby request timed out.");
+
+        return await WaitForEntryResultAsync(
             requestId,
-            completionSource);
+            completionSource,
+            timeoutResult);
+    }
 
-        RequestEnterLobbyRpc(
-            requestId,
-            setupDataJson);
-
-        float timeoutTime =
-            Time.realtimeSinceStartup +
-            RequestTimeoutSeconds;
-
-        while (!completionSource.Task.IsCompleted)
+    public async Task<LobbyExitResult> RequestLeaveLobbyAsync()
+    {
+        if (!IsSpawned || !IsOwner)
         {
-            if (Time.realtimeSinceStartup >=
-                timeoutTime)
-            {
-                pendingRequests.Remove(requestId);
-
-                return LobbyEntryResult.Failed(
-                    LobbyEntryFailureType
-                        .LobbyJoinFailed,
-                    "The network lobby request timed out.");
-            }
-
-            await Task.Yield();
+            return LobbyExitResult.Failed(
+                string.Empty,
+                LobbyPlayerExitReason.VoluntaryLeave,
+                "The local network lobby connection is not ready.");
         }
 
-        pendingRequests.Remove(requestId);
+        string requestId = Guid.NewGuid().ToString("N");
 
-        return await completionSource.Task;
+        TaskCompletionSource<LobbyExitResult> completionSource =
+            new TaskCompletionSource<LobbyExitResult>();
+
+        pendingExitRequests.Add(requestId, completionSource);
+
+        RequestLeaveLobbyRpc(requestId);
+
+        LobbyExitResult timeoutResult = LobbyExitResult.Failed(
+            string.Empty,
+            LobbyPlayerExitReason.VoluntaryLeave,
+            "The network lobby leave request timed out.");
+
+        return await WaitForExitResultAsync(
+            requestId,
+            completionSource,
+            timeoutResult);
+    }
+
+    public async Task<LobbyExitResult> RequestKickPlayerAsync(
+        string targetUserId)
+    {
+        if (!IsSpawned || !IsOwner)
+        {
+            return LobbyExitResult.Failed(
+                targetUserId,
+                LobbyPlayerExitReason.Kicked,
+                "The local network lobby connection is not ready.");
+        }
+
+        if (string.IsNullOrWhiteSpace(targetUserId))
+        {
+            return LobbyExitResult.Failed(
+                targetUserId,
+                LobbyPlayerExitReason.Kicked,
+                "The target player UserId is missing.");
+        }
+
+        string requestId = Guid.NewGuid().ToString("N");
+
+        TaskCompletionSource<LobbyExitResult> completionSource =
+            new TaskCompletionSource<LobbyExitResult>();
+
+        pendingExitRequests.Add(requestId, completionSource);
+
+        RequestKickPlayerRpc(requestId, targetUserId);
+
+        LobbyExitResult timeoutResult = LobbyExitResult.Failed(
+            targetUserId,
+            LobbyPlayerExitReason.Kicked,
+            "The network kick request timed out.");
+
+        return await WaitForExitResultAsync(
+            requestId,
+            completionSource,
+            timeoutResult);
+    }
+
+    public static bool TrySendForcedLobbyExit(
+    ulong clientId,
+    LobbyExitNotification notification)
+    {
+        if (notification == null)
+        {
+            return false;
+        }
+
+        if (!serverConnectionsByClientId.TryGetValue(
+                clientId,
+                out NetworkLobbyConnection connection))
+        {
+            return false;
+        }
+
+        if (connection == null ||
+            !connection.IsSpawned ||
+            !connection.IsServer)
+        {
+            return false;
+        }
+
+        string notificationJson =
+            JsonUtility.ToJson(notification);
+
+        connection.ReceiveForcedLobbyExitRpc(
+            notificationJson,
+            connection.RpcTarget.Single(
+                clientId,
+                RpcTargetUse.Temp));
+
+        return true;
     }
 
     [Rpc(
@@ -121,19 +218,15 @@ public class NetworkLobbyConnection :
         string setupDataJson,
         RpcParams rpcParams = default)
     {
-        ulong senderClientId =
-            rpcParams.Receive.SenderClientId;
+        ulong senderClientId = rpcParams.Receive.SenderClientId;
 
         LobbyEntryResult result;
-
         LobbySetupData lobbySetupData = null;
 
         try
         {
             lobbySetupData =
-                JsonUtility
-                    .FromJson<LobbySetupData>(
-                        setupDataJson);
+                JsonUtility.FromJson<LobbySetupData>(setupDataJson);
         }
         catch (Exception exception)
         {
@@ -142,34 +235,101 @@ public class NetworkLobbyConnection :
 
         if (lobbySetupData == null)
         {
-            result =
-                LobbyEntryResult.Failed(
-                    LobbyEntryFailureType
-                        .InvalidSetupData,
-                    "The network lobby setup data could not be read.");
+            result = LobbyEntryResult.Failed(
+                LobbyEntryFailureType.InvalidSetupData,
+                "The network lobby setup data could not be read.");
         }
         else if (NetworkLobbyManager.instance == null ||
                  !NetworkLobbyManager.instance.IsReady)
         {
-            result =
-                LobbyEntryResult.Failed(
-                    LobbyEntryFailureType
-                        .ServiceUnavailable,
-                    "The authoritative network lobby manager is not ready.");
+            result = LobbyEntryResult.Failed(
+                LobbyEntryFailureType.ServiceUnavailable,
+                "The authoritative network lobby manager is not ready.");
         }
         else
         {
-            result =
-                NetworkLobbyManager.instance
-                    .ProcessAuthorityLobbyEntry(
-                        lobbySetupData,
-                        senderClientId);
+            result = NetworkLobbyManager.instance
+                .ProcessAuthorityLobbyEntry(
+                    lobbySetupData,
+                    senderClientId);
         }
 
-        string resultJson =
-            JsonUtility.ToJson(result);
+        string resultJson = JsonUtility.ToJson(result);
 
         ReceiveLobbyEntryResultRpc(
+            requestId,
+            resultJson,
+            RpcTarget.Single(
+                senderClientId,
+                RpcTargetUse.Temp));
+    }
+
+    [Rpc(
+        SendTo.Server,
+        InvokePermission = RpcInvokePermission.Owner)]
+    private void RequestLeaveLobbyRpc(
+        string requestId,
+        RpcParams rpcParams = default)
+    {
+        ulong senderClientId = rpcParams.Receive.SenderClientId;
+
+        LobbyExitResult result;
+
+        if (NetworkLobbyManager.instance == null ||
+            !NetworkLobbyManager.instance.IsReady)
+        {
+            result = LobbyExitResult.Failed(
+                string.Empty,
+                LobbyPlayerExitReason.VoluntaryLeave,
+                "The authoritative network lobby manager is not ready.");
+        }
+        else
+        {
+            result = NetworkLobbyManager.instance
+                .ProcessAuthorityLobbyExit(senderClientId);
+        }
+
+        string resultJson = JsonUtility.ToJson(result);
+
+        ReceiveLobbyExitResultRpc(
+            requestId,
+            resultJson,
+            RpcTarget.Single(
+                senderClientId,
+                RpcTargetUse.Temp));
+    }
+
+    [Rpc(
+        SendTo.Server,
+        InvokePermission = RpcInvokePermission.Owner)]
+    private void RequestKickPlayerRpc(
+        string requestId,
+        string targetUserId,
+        RpcParams rpcParams = default)
+    {
+        ulong senderClientId = rpcParams.Receive.SenderClientId;
+
+        LobbyExitResult result;
+
+        if (NetworkLobbyManager.instance == null ||
+            !NetworkLobbyManager.instance.IsReady)
+        {
+            result = LobbyExitResult.Failed(
+                targetUserId,
+                LobbyPlayerExitReason.Kicked,
+                "The authoritative network lobby manager is not ready.");
+        }
+        else
+        {
+            result = NetworkLobbyManager.instance
+                .ProcessAuthorityKickPlayer(
+                    senderClientId,
+                    targetUserId);
+        }
+
+        string resultJson = JsonUtility.ToJson(result);
+
+        ReceiveLobbyExitResultRpc(
             requestId,
             resultJson,
             RpcTarget.Single(
@@ -188,10 +348,9 @@ public class NetworkLobbyConnection :
             return;
         }
 
-        if (!pendingRequests.TryGetValue(
+        if (!pendingEntryRequests.TryGetValue(
                 requestId,
-                out TaskCompletionSource<LobbyEntryResult>
-                    completionSource))
+                out TaskCompletionSource<LobbyEntryResult> completionSource))
         {
             return;
         }
@@ -200,39 +359,157 @@ public class NetworkLobbyConnection :
 
         try
         {
-            result =
-                JsonUtility
-                    .FromJson<LobbyEntryResult>(
-                        resultJson);
+            result = JsonUtility.FromJson<LobbyEntryResult>(resultJson);
         }
         catch (Exception exception)
         {
             Debug.LogException(exception);
         }
 
-        result ??=
-            LobbyEntryResult.Failed(
-                LobbyEntryFailureType.Unknown,
-                "The network lobby result could not be read.");
+        result ??= LobbyEntryResult.Failed(
+            LobbyEntryFailureType.Unknown,
+            "The network lobby result could not be read.");
 
         completionSource.TrySetResult(result);
+    }
+
+    [Rpc(SendTo.SpecifiedInParams)]
+    private void ReceiveLobbyExitResultRpc(
+        string requestId,
+        string resultJson,
+        RpcParams rpcParams = default)
+    {
+        if (string.IsNullOrWhiteSpace(requestId))
+        {
+            return;
+        }
+
+        if (!pendingExitRequests.TryGetValue(
+                requestId,
+                out TaskCompletionSource<LobbyExitResult> completionSource))
+        {
+            return;
+        }
+
+        LobbyExitResult result = null;
+
+        try
+        {
+            result = JsonUtility.FromJson<LobbyExitResult>(resultJson);
+        }
+        catch (Exception exception)
+        {
+            Debug.LogException(exception);
+        }
+
+        result ??= LobbyExitResult.Failed(
+            string.Empty,
+            LobbyPlayerExitReason.VoluntaryLeave,
+            "The network lobby exit result could not be read.");
+
+        completionSource.TrySetResult(result);
+    }
+
+    [Rpc(SendTo.SpecifiedInParams)]
+    private void ReceiveForcedLobbyExitRpc(
+        string notificationJson,
+        RpcParams rpcParams = default)
+    {
+        LobbyExitNotification notification = null;
+
+        try
+        {
+            notification =
+                JsonUtility.FromJson<LobbyExitNotification>(
+                    notificationJson);
+        }
+        catch (Exception exception)
+        {
+            Debug.LogException(exception);
+        }
+
+        if (notification == null)
+        {
+            return;
+        }
+
+        LocalLobbyExitReceived?.Invoke(notification);
+    }
+
+    private async Task<LobbyEntryResult> WaitForEntryResultAsync(
+        string requestId,
+        TaskCompletionSource<LobbyEntryResult> completionSource,
+        LobbyEntryResult timeoutResult)
+    {
+        float timeoutTime =
+            Time.realtimeSinceStartup +
+            RequestTimeoutSeconds;
+
+        while (!completionSource.Task.IsCompleted)
+        {
+            if (Time.realtimeSinceStartup >= timeoutTime)
+            {
+                pendingEntryRequests.Remove(requestId);
+                return timeoutResult;
+            }
+
+            await Task.Yield();
+        }
+
+        pendingEntryRequests.Remove(requestId);
+
+        return await completionSource.Task;
+    }
+
+    private async Task<LobbyExitResult> WaitForExitResultAsync(
+        string requestId,
+        TaskCompletionSource<LobbyExitResult> completionSource,
+        LobbyExitResult timeoutResult)
+    {
+        float timeoutTime =
+            Time.realtimeSinceStartup +
+            RequestTimeoutSeconds;
+
+        while (!completionSource.Task.IsCompleted)
+        {
+            if (Time.realtimeSinceStartup >= timeoutTime)
+            {
+                pendingExitRequests.Remove(requestId);
+                return timeoutResult;
+            }
+
+            await Task.Yield();
+        }
+
+        pendingExitRequests.Remove(requestId);
+
+        return await completionSource.Task;
     }
 
     private void CompletePendingRequestsAsFailed()
     {
         foreach (
-            KeyValuePair<
-                string,
-                TaskCompletionSource<LobbyEntryResult>>
-            pendingRequest in pendingRequests)
+            KeyValuePair<string, TaskCompletionSource<LobbyEntryResult>>
+            pendingRequest in pendingEntryRequests)
         {
             pendingRequest.Value.TrySetResult(
                 LobbyEntryResult.Failed(
-                    LobbyEntryFailureType
-                        .NetworkConnectionFailed,
+                    LobbyEntryFailureType.NetworkConnectionFailed,
                     "The network connection was closed."));
         }
 
-        pendingRequests.Clear();
+        foreach (
+            KeyValuePair<string, TaskCompletionSource<LobbyExitResult>>
+            pendingRequest in pendingExitRequests)
+        {
+            pendingRequest.Value.TrySetResult(
+                LobbyExitResult.Failed(
+                    string.Empty,
+                    LobbyPlayerExitReason.Disconnected,
+                    "The network connection was closed."));
+        }
+
+        pendingEntryRequests.Clear();
+        pendingExitRequests.Clear();
     }
 }

@@ -70,9 +70,44 @@ public class UserManager : MonoBehaviour, ISceneReadyCheck
     {
         RegisterReadyCheck();
 
-        RefreshCurrentUserFromDatabase();
+        if (!TryInitializeMultiplayerPlayModeTestUser())
+        {
+            RefreshCurrentUserFromDatabase();
+        }
 
         isReady = true;
+    }
+
+    private bool TryInitializeMultiplayerPlayModeTestUser()
+    {
+        if (!MultiplayerPlayModeTestContext.IsActive)
+        {
+            return false;
+        }
+
+        UserData testUser = new UserData();
+
+        testUser.CreateUser(
+            MultiplayerPlayModeTestContext.PlayerName,
+            string.Empty);
+
+        testUser.userId =
+            MultiplayerPlayModeTestContext.UserId;
+
+        testUser.userTag =
+            UserTag.Player;
+
+        testUser.RepairData();
+
+        RepairUserIconIfMissing(
+            testUser,
+            false);
+
+        currentUser = testUser;
+
+        UserChanged?.Invoke();
+
+        return true;
     }
 
     private void OnDestroy()
@@ -148,6 +183,11 @@ public class UserManager : MonoBehaviour, ISceneReadyCheck
 
     private void AddOrUpdateCurrentUser()
     {
+        if (MultiplayerPlayModeTestContext.IsActive)
+        {
+            return;
+        }
+
         if (UserDatabase.instance == null)
         {
             Debug.LogWarning("Cannot save current user because UserDatabase instance was not found.");
@@ -423,8 +463,14 @@ public class UserManager : MonoBehaviour, ISceneReadyCheck
 
     #region Database
 
+
     private void RefreshCurrentUserFromDatabase()
     {
+        if (MultiplayerPlayModeTestContext.IsActive)
+        {
+            return;
+        }
+
         if (UserDatabase.instance == null)
         {
             return;

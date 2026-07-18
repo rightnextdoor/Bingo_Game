@@ -56,6 +56,8 @@ public class SaveManager : MonoBehaviour
 
         instance = this;
 
+        ApplyMultiplayerPlayModeTestSaveFile();
+
         EnsureDataHandler();
     }
 
@@ -373,5 +375,16 @@ public class SaveManager : MonoBehaviour
         Exception exception = task.Exception.GetBaseException();
 
         Debug.LogWarning($"{taskName} failed: {exception.Message}");
+    }
+
+    private void ApplyMultiplayerPlayModeTestSaveFile()
+    {
+        if (!MultiplayerPlayModeTestContext.IsActive)
+        {
+            return;
+        }
+
+        fileName =
+            $"bingo_save_mppm_player_{MultiplayerPlayModeTestContext.PlayerNumber}.json";
     }
 }

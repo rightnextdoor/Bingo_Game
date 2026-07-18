@@ -224,6 +224,20 @@ public class NetworkBootstrap : MonoBehaviour
         return true;
     }
 
+    public void PrepareForMultiplayerPlayModeTesting()
+    {
+#if UNITY_EDITOR
+        if (!MultiplayerPlayModeTestContext.IsActive ||
+            networkManager == null ||
+            networkManager.IsListening)
+        {
+            return;
+        }
+
+        networkManager.NetworkConfig.EnableSceneManagement = false;
+#endif
+    }
+
     #region Offline
 
     public void StartOffline()

@@ -45,6 +45,7 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
             bindRoutine = null;
         }
 
+        UnsubscribeFromLobbyManager();
         UnbindLobbyController();
     }
 
@@ -135,12 +136,37 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
             yield return null;
         }
 
-        BindLobbyController(
-            LobbyManager.instance
-                .CurrentLobby
-                .Controller);
+        LobbyManager lobbyManager = LobbyManager.instance;
+
+        lobbyManager.LobbyViewUpdated -= OnLobbyViewUpdated;
+        lobbyManager.LobbyViewUpdated += OnLobbyViewUpdated;
+
+        if (lobbyManager.RuntimeType == SessionRuntimeType.Network)
+        {
+            UnbindLobbyController();
+
+            LobbyViewData lobbyViewData = lobbyManager.CurrentLobbyViewData ?? lobbyManager.CurrentLobby.Controller.BuildViewData();
+            DisplayLobbyInfo(lobbyViewData);
+        }
+        else
+        {
+            BindLobbyController(lobbyManager.CurrentLobby.Controller);
+        }
 
         bindRoutine = null;
+    }
+
+    private void OnLobbyViewUpdated(LobbyViewData lobbyViewData)
+    {
+        DisplayLobbyInfo(lobbyViewData);
+    }
+
+    private void UnsubscribeFromLobbyManager()
+    {
+        if (LobbyManager.instance != null)
+        {
+            LobbyManager.instance.LobbyViewUpdated -= OnLobbyViewUpdated;
+        }
     }
 
     private void BindLobbyController(

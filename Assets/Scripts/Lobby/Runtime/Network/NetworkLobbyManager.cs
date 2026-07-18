@@ -98,9 +98,12 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
                 "The network lobby setup data is invalid.");
         }
 
-        if (!TryPrepareCustomLobbySearch(
+        string relayJoinCode = string.Empty;
+
+        if (!HasUsableNetworkConnection() &&
+            !TryPrepareCustomLobbySearch(
                 lobbySetupData,
-                out string relayJoinCode,
+                out relayJoinCode,
                 out LobbyEntryResult customSearchFailure))
         {
             return customSearchFailure;
@@ -127,13 +130,26 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
                 "The network lobby connection was not available.");
         }
 
-        LobbyEntryResult result =
-            await lobbyConnection.RequestEnterLobbyAsync(
-                lobbySetupData);
+        LobbyEntryResult result = await lobbyConnection.RequestEnterLobbyAsync(lobbySetupData);
 
-        return result ?? LobbyEntryResult.Failed(
-            LobbyEntryFailureType.Unknown,
-            "The network lobby did not return a result.");
+        if (result == null)
+        {
+            return LobbyEntryResult.Failed(LobbyEntryFailureType.Unknown, "The network lobby did not return a result.");
+        }
+
+        if (!result.success)
+        {
+            _ = TryRollbackFailedLobbyEntryAsync();
+        }
+
+        return result;
+    }
+
+    private bool HasUsableNetworkConnection()
+    {
+        return networkBootstrap != null &&
+               networkBootstrap.IsConnected &&
+               NetworkLobbyConnection.GetLocalConnection() != null;
     }
 
     public LobbyEntryResult ProcessAuthorityLobbyEntry(LobbySetupData lobbySetupData, ulong senderClientId)
@@ -228,15 +244,13 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         }
 
         LobbyExitResult result;
+        NetworkLobbyConnection lobbyConnection = NetworkLobbyConnection.GetLocalConnection();
 
-        if (NetworkLobbyConnection.local != null)
+        if (lobbyConnection != null)
         {
-            result =
-                await NetworkLobbyConnection.local
-                    .RequestLeaveLobbyAsync();
+            result = await lobbyConnection.RequestLeaveLobbyAsync();
         }
-        else if (networkBootstrap != null &&
-                 networkBootstrap.IsAuthority)
+        else if (networkBootstrap != null && networkBootstrap.IsAuthority)
         {
             result = RemovePlayerFromLobby(
                 userId,
@@ -263,16 +277,14 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
 
     public async Task<LobbyExitResult> KickPlayerAsync(string targetUserId)
     {
-        if (NetworkLobbyConnection.local == null)
+        NetworkLobbyConnection lobbyConnection = NetworkLobbyConnection.GetLocalConnection();
+
+        if (lobbyConnection == null)
         {
-            return LobbyExitResult.Failed(
-                targetUserId,
-                LobbyPlayerExitReason.Kicked,
-                "The network lobby connection was not available.");
+            return LobbyExitResult.Failed(targetUserId, LobbyPlayerExitReason.Kicked, "The network lobby connection was not available.");
         }
 
-        return await NetworkLobbyConnection.local
-            .RequestKickPlayerAsync(targetUserId);
+        return await lobbyConnection.RequestKickPlayerAsync(targetUserId);
     }
 
     public LobbyExitResult ProcessAuthorityLobbyExit(ulong senderClientId)
@@ -381,6 +393,48 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         return result;
     }
 
+    public void ProcessAuthorityLobbyConnectionDespawn(ulong clientId)
+    {
+        if (networkBootstrap == null || !networkBootstrap.IsAuthority || connectionRegistry == null)
+        {
+            return;
+        }
+
+        if (!connectionRegistry.TryGetBingoUserId(clientId, out string userId))
+        {
+            return;
+        }
+
+        RemovePlayerFromLobby(userId, LobbyPlayerExitReason.Disconnected);
+    }
+
+    public void ProcessAuthorityLobbySceneReady(ulong clientId)
+    {
+        if (networkBootstrap == null || !networkBootstrap.IsAuthority || connectionRegistry == null || !connectionRegistry.IsReady)
+        {
+            return;
+        }
+
+        if (!connectionRegistry.TryGetBingoUserId(clientId, out string userId))
+        {
+            return;
+        }
+
+        Lobby lobby = FindUserLobby(userId);
+
+        if (lobby?.Controller == null)
+        {
+            return;
+        }
+
+        if (!lobby.Controller.SetLobbySceneReady(userId, true))
+        {
+            return;
+        }
+
+        BroadcastLobbyView(lobby);
+    }
+
     private LobbyExitResult RemovePlayerFromLobby(string userId, LobbyPlayerExitReason exitReason)
     {
         Lobby lobby = FindUserLobby(userId);
@@ -403,10 +457,7 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
 
     private void OnLobbyPlayerExitProcessed(LobbyController controller, LobbyExitResult exitResult)
     {
-        if (controller == null ||
-            exitResult == null ||
-            !exitResult.success ||
-            !exitResult.shouldCloseLobby)
+        if (controller == null || exitResult == null || !exitResult.success)
         {
             return;
         }
@@ -418,9 +469,13 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
             return;
         }
 
-        CloseAndDeleteLobby(
-            lobby,
-            exitResult.closeReason);
+        if (exitResult.shouldCloseLobby)
+        {
+            CloseAndDeleteLobby(lobby, exitResult.closeReason);
+            return;
+        }
+
+        BroadcastLobbyView(lobby);
     }
 
     private void CloseAndDeleteLobby(Lobby lobby, LobbyCloseReason closeReason)
@@ -525,8 +580,32 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         return true;
     }
 
+    private async Task TryRollbackFailedLobbyEntryAsync()
+    {
+        NetworkLobbyConnection lobbyConnection = NetworkLobbyConnection.GetLocalConnection();
+
+        if (lobbyConnection == null || networkBootstrap == null || !networkBootstrap.IsConnected)
+        {
+            return;
+        }
+
+        try
+        {
+            await lobbyConnection.RequestLeaveLobbyAsync();
+        }
+        catch (System.Exception exception)
+        {
+            Debug.LogWarning($"[NetworkLobbyManager] Failed lobby entry rollback could not complete: {exception.Message}");
+        }
+    }
+
     private async Task ShutdownLocalNetworkAfterExitIfPossible()
     {
+        if (MultiplayerPlayModeTestContext.IsActive)
+        {
+            return;
+        }
+
         if (networkBootstrap == null ||
             !networkBootstrap.IsConnected)
         {
@@ -714,15 +793,9 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
             return null;
         }
 
-        string relayJoinCode =
-            networkBootstrap.RelayJoinCode;
-
-        if (string.IsNullOrWhiteSpace(relayJoinCode))
-        {
-            return null;
-        }
-
-        Lobby lobby = CreateLobby(lobbySetupData);
+        Lobby lobby =
+            CreateLobby(
+                lobbySetupData);
 
         if (lobby?.Controller == null ||
             string.IsNullOrWhiteSpace(
@@ -732,10 +805,16 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
             return null;
         }
 
-        string lobbyId = lobby.GetLobbyId();
+        string relayJoinCode =
+            networkBootstrap.RelayJoinCode;
 
-        relayJoinCodeByLobbyId[lobbyId] =
-            relayJoinCode;
+        if (!string.IsNullOrWhiteSpace(
+                relayJoinCode))
+        {
+            relayJoinCodeByLobbyId[
+                lobby.GetLobbyId()] =
+                    relayJoinCode;
+        }
 
         return lobby;
     }
@@ -1183,17 +1262,15 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
                 "The lobby is full.");
         }
 
-        LobbyPlayerData playerData =
-            new LobbyPlayerData(
-                userData,
-                isHost);
+        LobbyPlayerData playerData = new LobbyPlayerData(userData, isHost);
+        playerData.isLobbySceneReady = false;
 
         if (!controller.AddPlayer(playerData))
         {
-            return LobbyEntryResult.Failed(
-                LobbyEntryFailureType.LobbyJoinFailed,
-                "The player could not be added to the lobby.");
+            return LobbyEntryResult.Failed(LobbyEntryFailureType.LobbyJoinFailed, "The player could not be added to the lobby.");
         }
+
+        BroadcastLobbyView(lobby);
 
         return LobbyEntryResult.Succeeded(lobby);
     }
@@ -1216,6 +1293,30 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         lobbies.Add(lobby);
 
         return lobby;
+    }
+
+    private void BroadcastLobbyView(Lobby lobby)
+    {
+        if (lobby?.Controller == null || networkBootstrap == null || !networkBootstrap.IsAuthority || connectionRegistry == null)
+        {
+            return;
+        }
+
+        LobbyViewData lobbyViewData = lobby.Controller.BuildViewData();
+        IReadOnlyList<LobbyPlayerData> players = lobby.Controller.Players;
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            LobbyPlayerData playerData = players[i];
+            string userId = playerData?.userData?.userId;
+
+            if (string.IsNullOrWhiteSpace(userId) || !connectionRegistry.TryGetClientId(userId, out ulong clientId))
+            {
+                continue;
+            }
+
+            NetworkLobbyConnection.TrySendLobbyView(clientId, lobbyViewData);
+        }
     }
 
     private Lobby FindUserLobby(string userId)
@@ -1356,6 +1457,34 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
             return false;
         }
 
+        if (MultiplayerPlayModeTestContext.IsActive)
+        {
+            float timeoutTimes =
+                Time.realtimeSinceStartup +
+                ConnectionTimeoutSeconds;
+
+            while (!HasUsableNetworkConnection())
+            {
+                if (Time.realtimeSinceStartup >= timeoutTimes)
+                {
+                    Debug.LogWarning(
+                        "[Bingo] Multiplayer Play Mode connection timed out.\n" +
+                        $"Player: {MultiplayerPlayModeTestContext.PlayerNumber}\n" +
+                        $"Connection State: {networkBootstrap.ConnectionState}\n" +
+                        $"Is Connected: {networkBootstrap.IsConnected}\n" +
+                        $"Is Client: {networkBootstrap.IsClient}\n" +
+                        $"Is Authority: {networkBootstrap.IsAuthority}\n" +
+                        $"Has Lobby Connection: {NetworkLobbyConnection.GetLocalConnection() != null}");
+
+                    return false;
+                }
+
+                await Task.Yield();
+            }
+
+            return true;
+        }
+
         if (networkBootstrap.IsConnected)
         {
             if (NetworkLobbyConnection.local != null)
@@ -1462,25 +1591,26 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         return true;
     }
 
-    private async Task<NetworkLobbyConnection>
-        WaitForLocalLobbyConnectionAsync()
+    private async Task<NetworkLobbyConnection> WaitForLocalLobbyConnectionAsync()
     {
-        float timeoutTime =
-            Time.realtimeSinceStartup +
-            LobbyConnectionTimeoutSeconds;
+        float timeoutTime = Time.realtimeSinceStartup + LobbyConnectionTimeoutSeconds;
 
-        while (NetworkLobbyConnection.local == null)
+        while (true)
         {
-            if (Time.realtimeSinceStartup >=
-                timeoutTime)
+            NetworkLobbyConnection lobbyConnection = NetworkLobbyConnection.GetLocalConnection();
+
+            if (lobbyConnection != null)
+            {
+                return lobbyConnection;
+            }
+
+            if (Time.realtimeSinceStartup >= timeoutTime)
             {
                 return null;
             }
 
             await Task.Yield();
         }
-
-        return NetworkLobbyConnection.local;
     }
 
     #endregion

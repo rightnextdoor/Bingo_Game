@@ -17,6 +17,8 @@ public class LobbyManager : MonoBehaviour
     private ILobbyService activeLobbyService;
 
     private Lobby currentLobby;
+    private LobbyViewData currentLobbyViewData;
+    private LobbyViewData pendingNetworkLobbyViewData;
     private string currentUserId = string.Empty;
 
     private SessionRuntimeType runtimeType =
@@ -32,34 +34,21 @@ public class LobbyManager : MonoBehaviour
 
     private NetworkBootstrap networkBootstrap;
     private bool isSubscribedToNetworkBootstrap;
+    private GameSceneManager gameSceneManager;
+    private bool isSubscribedToGameSceneManager;
 
-    public bool HasPendingLobbySetupData =>
-        pendingLobbySetupData != null;
+    public bool HasPendingLobbySetupData => pendingLobbySetupData != null;
+    public LobbySetupData PendingLobbySetupData => pendingLobbySetupData;
+    public SessionRuntimeType RuntimeType => runtimeType;
+    public LobbyEntryState EntryState => entryState;
 
-    public LobbySetupData PendingLobbySetupData =>
-        pendingLobbySetupData;
+    public Lobby CurrentLobby => currentLobby;
+    public LobbyViewData CurrentLobbyViewData => currentLobbyViewData;
+    public LobbyEntryResult LastEntryResult => lastEntryResult;
 
-    public SessionRuntimeType RuntimeType =>
-        runtimeType;
-
-    public LobbyEntryState EntryState =>
-        entryState;
-
-    public Lobby CurrentLobby =>
-        currentLobby;
-
-    public LobbyEntryResult LastEntryResult =>
-        lastEntryResult;
-
-    public bool IsEnteringLobby =>
-        isEnteringLobby;
-
-    public bool IsLeavingLobby =>
-        isLeavingLobby;
-
-    public bool HasEnteredLobby =>
-        entryState == LobbyEntryState.Completed &&
-        currentLobby != null;
+    public bool IsEnteringLobby => isEnteringLobby;
+    public bool IsLeavingLobby => isLeavingLobby;
+    public bool HasEnteredLobby => entryState == LobbyEntryState.Completed && currentLobby != null;
 
     public event Action<LobbyEntryState> LobbyEntryStateChanged;
     public event Action<LobbyEntryResult> LobbyEntryCompleted;
@@ -68,6 +57,7 @@ public class LobbyManager : MonoBehaviour
     public event Action<LobbyExitResult> LobbyExitCompleted;
     public event Action<LobbyExitResult> LobbyExitFailed;
     public event Action<LobbyExitNotification> LobbyForcedExit;
+    public event Action<LobbyViewData> LobbyViewUpdated;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetStaticState()
@@ -89,21 +79,25 @@ public class LobbyManager : MonoBehaviour
     private void OnEnable()
     {
         SubscribeToNetworkEvents();
+        SubscribeToSceneEvents();
     }
 
     private void Start()
     {
         SubscribeToNetworkEvents();
+        SubscribeToSceneEvents();
     }
 
     private void OnDisable()
     {
         UnsubscribeFromNetworkEvents();
+        UnsubscribeFromSceneEvents();
     }
 
     private void OnDestroy()
     {
         UnsubscribeFromNetworkEvents();
+        UnsubscribeFromSceneEvents();
 
         if (instance == this)
         {
@@ -242,7 +236,11 @@ public class LobbyManager : MonoBehaviour
 
         currentLobby = result.lobby;
         currentUserId = userData.userId;
+        currentLobbyViewData = currentLobby.Controller.BuildViewData();
         lastEntryResult = result;
+
+        ApplyPendingNetworkLobbyViewData();
+        PublishCurrentLobbyView();
 
         pendingLobbySetupData = null;
         isEnteringLobby = false;
@@ -481,6 +479,28 @@ public class LobbyManager : MonoBehaviour
         HandleForcedLobbyExit(notification);
     }
 
+    private void OnLocalLobbyViewReceived(LobbyViewData lobbyViewData)
+    {
+        if (lobbyViewData == null || string.IsNullOrWhiteSpace(lobbyViewData.lobbyId))
+        {
+            return;
+        }
+
+        if (currentLobby == null)
+        {
+            pendingNetworkLobbyViewData = lobbyViewData;
+            return;
+        }
+
+        if (!string.Equals(lobbyViewData.lobbyId, currentLobby.GetLobbyId(), StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        currentLobbyViewData = lobbyViewData;
+        PublishCurrentLobbyView();
+    }
+
     private void OnNetworkConnectionStateChanged(
         NetworkConnectionState connectionState)
     {
@@ -538,9 +558,34 @@ public class LobbyManager : MonoBehaviour
     private void ClearCurrentLobby()
     {
         currentLobby = null;
+        currentLobbyViewData = null;
+        pendingNetworkLobbyViewData = null;
         currentUserId = string.Empty;
         activeLobbyService = null;
         lastEntryResult = null;
+    }
+
+    private void ApplyPendingNetworkLobbyViewData()
+    {
+        if (currentLobby == null || pendingNetworkLobbyViewData == null)
+        {
+            return;
+        }
+
+        if (string.Equals(pendingNetworkLobbyViewData.lobbyId, currentLobby.GetLobbyId(), StringComparison.OrdinalIgnoreCase))
+        {
+            currentLobbyViewData = pendingNetworkLobbyViewData;
+        }
+
+        pendingNetworkLobbyViewData = null;
+    }
+
+    private void PublishCurrentLobbyView()
+    {
+        if (currentLobbyViewData != null)
+        {
+            LobbyViewUpdated?.Invoke(currentLobbyViewData);
+        }
     }
 
     private void ReturnToMainScene()
@@ -570,11 +615,10 @@ public class LobbyManager : MonoBehaviour
 
     private void SubscribeToNetworkEvents()
     {
-        NetworkLobbyConnection.LocalLobbyExitReceived -=
-            OnLocalLobbyExitReceived;
-
-        NetworkLobbyConnection.LocalLobbyExitReceived +=
-            OnLocalLobbyExitReceived;
+        NetworkLobbyConnection.LocalLobbyExitReceived -= OnLocalLobbyExitReceived;
+        NetworkLobbyConnection.LocalLobbyExitReceived += OnLocalLobbyExitReceived;
+        NetworkLobbyConnection.LocalLobbyViewReceived -= OnLocalLobbyViewReceived;
+        NetworkLobbyConnection.LocalLobbyViewReceived += OnLocalLobbyViewReceived;
 
         if (isSubscribedToNetworkBootstrap)
         {
@@ -600,8 +644,8 @@ public class LobbyManager : MonoBehaviour
 
     private void UnsubscribeFromNetworkEvents()
     {
-        NetworkLobbyConnection.LocalLobbyExitReceived -=
-            OnLocalLobbyExitReceived;
+        NetworkLobbyConnection.LocalLobbyExitReceived -= OnLocalLobbyExitReceived;
+        NetworkLobbyConnection.LocalLobbyViewReceived -= OnLocalLobbyViewReceived;
 
         if (isSubscribedToNetworkBootstrap &&
             networkBootstrap != null)
@@ -615,12 +659,58 @@ public class LobbyManager : MonoBehaviour
 
     #endregion
 
+    #region Scene Events
+
+    private void SubscribeToSceneEvents()
+    {
+        if (isSubscribedToGameSceneManager)
+        {
+            return;
+        }
+
+        if (gameSceneManager == null)
+        {
+            gameSceneManager = GameSceneManager.instance;
+        }
+
+        if (gameSceneManager == null)
+        {
+            return;
+        }
+
+        gameSceneManager.SceneReadyForFadeOut += OnSceneReadyForFadeOut;
+        isSubscribedToGameSceneManager = true;
+    }
+
+    private void UnsubscribeFromSceneEvents()
+    {
+        if (isSubscribedToGameSceneManager && gameSceneManager != null)
+        {
+            gameSceneManager.SceneReadyForFadeOut -= OnSceneReadyForFadeOut;
+        }
+
+        isSubscribedToGameSceneManager = false;
+    }
+
+    private void OnSceneReadyForFadeOut(GameSceneType sceneType)
+    {
+        if (sceneType != GameSceneType.Lobby || runtimeType != SessionRuntimeType.Network || currentLobby == null || entryState != LobbyEntryState.Completed)
+        {
+            return;
+        }
+
+        NetworkLobbyConnection lobbyConnection = NetworkLobbyConnection.GetLocalConnection();
+        lobbyConnection?.NotifyLobbySceneReady();
+    }
+
+    #endregion
+
     #region Failure Shell
 
-    private void CompleteLobbyEntryFailure(
-        LobbyEntryResult result)
+    private void CompleteLobbyEntryFailure(LobbyEntryResult result)
     {
         isEnteringLobby = false;
+        pendingNetworkLobbyViewData = null;
 
         lastEntryResult =
             result ??

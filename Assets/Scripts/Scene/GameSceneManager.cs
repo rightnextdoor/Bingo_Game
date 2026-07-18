@@ -17,6 +17,7 @@ public class GameSceneManager : MonoBehaviour
     public static GameSceneManager instance;
 
     public event Action<GameSceneType> SceneReadyToStart;
+    public event Action<GameSceneType> SceneReadyForFadeOut;
 
     #region Inspector Fields
 
@@ -225,6 +226,8 @@ public class GameSceneManager : MonoBehaviour
             break;
         }
 
+        SceneReadyForFadeOut?.Invoke(currentSceneType);
+
         loader = CurrentLoader;
 
         if (loader != null)
@@ -253,6 +256,8 @@ public class GameSceneManager : MonoBehaviour
         }
 
         yield return WaitUntilSceneCanStart();
+
+        SceneReadyForFadeOut?.Invoke(currentSceneType);
 
         loader = CurrentLoader;
 

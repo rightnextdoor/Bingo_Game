@@ -24,6 +24,7 @@ public class NetworkLobbyConnection : NetworkBehaviour
             new Dictionary<string, TaskCompletionSource<LobbyExitResult>>();
 
     public static event Action<LobbyExitNotification> LocalLobbyExitReceived;
+    public static event Action<LobbyViewData> LocalLobbyViewReceived;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetStaticState()
@@ -31,6 +32,7 @@ public class NetworkLobbyConnection : NetworkBehaviour
         local = null;
         serverConnectionsByClientId.Clear();
         LocalLobbyExitReceived = null;
+        LocalLobbyViewReceived = null;
     }
 
     public override void OnNetworkSpawn()
@@ -42,7 +44,7 @@ public class NetworkLobbyConnection : NetworkBehaviour
             serverConnectionsByClientId[OwnerClientId] = this;
         }
 
-        if (IsOwner)
+        if (IsLocalPlayer || IsOwner)
         {
             local = this;
         }
@@ -50,13 +52,14 @@ public class NetworkLobbyConnection : NetworkBehaviour
 
     public override void OnNetworkDespawn()
     {
-        if (IsServer &&
-            serverConnectionsByClientId.TryGetValue(
-                OwnerClientId,
-                out NetworkLobbyConnection registeredConnection) &&
-            registeredConnection == this)
+        if (IsServer)
         {
-            serverConnectionsByClientId.Remove(OwnerClientId);
+            NetworkLobbyManager.instance?.ProcessAuthorityLobbyConnectionDespawn(OwnerClientId);
+
+            if (serverConnectionsByClientId.TryGetValue(OwnerClientId, out NetworkLobbyConnection registeredConnection) && registeredConnection == this)
+            {
+                serverConnectionsByClientId.Remove(OwnerClientId);
+            }
         }
 
         if (local == this)
@@ -67,6 +70,46 @@ public class NetworkLobbyConnection : NetworkBehaviour
         CompletePendingRequestsAsFailed();
 
         base.OnNetworkDespawn();
+    }
+
+    public static NetworkLobbyConnection GetLocalConnection()
+    {
+        if (local != null &&
+            local.IsSpawned)
+        {
+            return local;
+        }
+
+        NetworkManager networkManager =
+            NetworkManager.Singleton;
+
+        if (networkManager == null ||
+            !networkManager.IsListening ||
+            !networkManager.IsClient)
+        {
+            return null;
+        }
+
+        NetworkObject playerObject =
+            networkManager.LocalClient?.PlayerObject;
+
+        if (playerObject == null)
+        {
+            return null;
+        }
+
+        NetworkLobbyConnection connection =
+            playerObject.GetComponent<NetworkLobbyConnection>();
+
+        if (connection == null ||
+            !connection.IsSpawned)
+        {
+            return null;
+        }
+
+        local = connection;
+
+        return local;
     }
 
     public async Task<LobbyEntryResult> RequestEnterLobbyAsync(
@@ -104,6 +147,16 @@ public class NetworkLobbyConnection : NetworkBehaviour
             requestId,
             completionSource,
             timeoutResult);
+    }
+
+    public void NotifyLobbySceneReady()
+    {
+        if (!IsSpawned || !IsOwner)
+        {
+            return;
+        }
+
+        NotifyLobbySceneReadyRpc();
     }
 
     public async Task<LobbyExitResult> RequestLeaveLobbyAsync()
@@ -175,9 +228,30 @@ public class NetworkLobbyConnection : NetworkBehaviour
             timeoutResult);
     }
 
-    public static bool TrySendForcedLobbyExit(
-    ulong clientId,
-    LobbyExitNotification notification)
+    public static bool TrySendLobbyView(ulong clientId, LobbyViewData lobbyViewData)
+    {
+        if (lobbyViewData == null)
+        {
+            return false;
+        }
+
+        if (!serverConnectionsByClientId.TryGetValue(clientId, out NetworkLobbyConnection connection))
+        {
+            return false;
+        }
+
+        if (connection == null || !connection.IsSpawned || !connection.IsServer)
+        {
+            return false;
+        }
+
+        string lobbyViewJson = JsonUtility.ToJson(lobbyViewData);
+        connection.ReceiveLobbyViewRpc(lobbyViewJson, connection.RpcTarget.Single(clientId, RpcTargetUse.Temp));
+
+        return true;
+    }
+
+    public static bool TrySendForcedLobbyExit(ulong clientId, LobbyExitNotification notification)
     {
         if (notification == null)
         {
@@ -262,6 +336,17 @@ public class NetworkLobbyConnection : NetworkBehaviour
             RpcTarget.Single(
                 senderClientId,
                 RpcTargetUse.Temp));
+    }
+
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Owner)]
+    private void NotifyLobbySceneReadyRpc(RpcParams rpcParams = default)
+    {
+        if (NetworkLobbyManager.instance == null || !NetworkLobbyManager.instance.IsReady)
+        {
+            return;
+        }
+
+        NetworkLobbyManager.instance.ProcessAuthorityLobbySceneReady(rpcParams.Receive.SenderClientId);
     }
 
     [Rpc(
@@ -408,6 +493,28 @@ public class NetworkLobbyConnection : NetworkBehaviour
             "The network lobby exit result could not be read.");
 
         completionSource.TrySetResult(result);
+    }
+
+    [Rpc(SendTo.SpecifiedInParams)]
+    private void ReceiveLobbyViewRpc(string lobbyViewJson, RpcParams rpcParams = default)
+    {
+        LobbyViewData lobbyViewData = null;
+
+        try
+        {
+            lobbyViewData = JsonUtility.FromJson<LobbyViewData>(lobbyViewJson);
+        }
+        catch (Exception exception)
+        {
+            Debug.LogException(exception);
+        }
+
+        if (lobbyViewData == null)
+        {
+            return;
+        }
+
+        LocalLobbyViewReceived?.Invoke(lobbyViewData);
     }
 
     [Rpc(SendTo.SpecifiedInParams)]

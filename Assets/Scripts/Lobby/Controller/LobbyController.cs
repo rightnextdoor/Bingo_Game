@@ -140,6 +140,26 @@ public class LobbyController
         return true;
     }
 
+    public bool SetLobbySceneReady(string userId, bool isReady)
+    {
+        LobbyPlayerData playerData = GetPlayer(userId);
+
+        if (playerData == null)
+        {
+            return false;
+        }
+
+        if (playerData.isLobbySceneReady == isReady)
+        {
+            return true;
+        }
+
+        playerData.isLobbySceneReady = isReady;
+        RefreshViews();
+
+        return true;
+    }
+
     public LobbyExitResult RemovePlayer(
         string userId,
         LobbyPlayerExitReason exitReason)
@@ -357,7 +377,7 @@ public class LobbyController
             ruleType = ruleType,
             patternTypes = new List<BingoPatternType>(patternTypes),
             ballCountType = ballCountType,
-            playerCount = PlayerCount,
+            playerCount = GetVisiblePlayerCount(),
             maxPlayers = maxPlayers,
             playerNames = BuildPlayerNameList()
         };
@@ -585,6 +605,23 @@ public class LobbyController
         return string.Empty;
     }
 
+    private int GetVisiblePlayerCount()
+    {
+        int visiblePlayerCount = 0;
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            LobbyPlayerData playerData = players[i];
+
+            if (playerData != null && playerData.isLobbySceneReady)
+            {
+                visiblePlayerCount++;
+            }
+        }
+
+        return visiblePlayerCount;
+    }
+
     private List<string> BuildPlayerNameList()
     {
         List<string> playerNames = new List<string>();
@@ -593,8 +630,7 @@ public class LobbyController
         {
             LobbyPlayerData playerData = players[i];
 
-            if (playerData?.userData == null ||
-                string.IsNullOrWhiteSpace(playerData.userData.playerName))
+            if (playerData?.userData == null || !playerData.isLobbySceneReady || string.IsNullOrWhiteSpace(playerData.userData.playerName))
             {
                 continue;
             }

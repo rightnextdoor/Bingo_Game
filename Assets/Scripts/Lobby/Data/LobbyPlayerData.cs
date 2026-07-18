@@ -7,6 +7,7 @@ public class LobbyPlayerData
 
     public bool isHost;
     public bool isReady;
+    public bool isLobbySceneReady;
 
     public LobbyBoardData boardData;
 
@@ -21,6 +22,7 @@ public class LobbyPlayerData
 
         isHost = false;
         isReady = false;
+        isLobbySceneReady = true;
 
         boardData = new LobbyBoardData();
     }
@@ -32,8 +34,8 @@ public class LobbyPlayerData
         this.userData = userData ?? new UserData();
 
         this.isHost = isHost;
-        isReady =
-            this.userData.userTag == UserTag.Bot;
+        isReady = this.userData.userTag == UserTag.Bot;
+        isLobbySceneReady = true;
 
         boardData = new LobbyBoardData();
     }

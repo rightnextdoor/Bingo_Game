@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
@@ -64,6 +65,8 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
     private MenuData menuData;
 
     private bool hasLoadedData;
+    private bool hasBuiltGameModeOptions;
+    private bool isUiReady;
 
     private readonly List<BingoGameModeType> onlineGameModeOptions = new List<BingoGameModeType>();
     private readonly List<OnlineSearchType> onlineSearchTypeOptions = new List<OnlineSearchType>();
@@ -84,15 +87,25 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
     private void Awake()
     {
         EnsureMenuData();
-        BuildAllDropdownOptions();
-        ApplyAllDefaults();
+        BuildNonGameModeDropdownOptions();
         ClearAllErrors();
     }
 
-    private void Start()
+    private IEnumerator Start()
     {
         RegisterReadyCheck();
         TryLoadFromCurrentSaveData();
+
+        while (GameModeManager.instance == null || !GameModeManager.instance.IsReady)
+        {
+            yield return null;
+        }
+
+        BuildOnlineGameModeDropdownOptions();
+
+        hasBuiltGameModeOptions = true;
+
+        TryInitializeUi();
     }
 
     private void OnEnable()
@@ -118,23 +131,23 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
     {
         if (data == null)
         {
-            EnsureMenuData();
-            ApplyAllDefaults();
-            hasLoadedData = true;
-            return;
+            menuData = new MenuData();
         }
-
-        if (data.menuData == null)
+        else
         {
-            data.menuData = new MenuData();
-        }
+            if (data.menuData == null)
+            {
+                data.menuData = new MenuData();
+            }
 
-        menuData = data.menuData;
+            menuData = data.menuData;
+        }
 
         EnsureMenuData();
-        LoadAllMenuData();
 
         hasLoadedData = true;
+
+        TryInitializeUi();
     }
 
     public void SaveData(ref GameData data)
@@ -152,12 +165,12 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 
     bool ISaveManager.IsReady()
     {
-        return hasLoadedData;
+        return isUiReady;
     }
 
     string ISceneReadyCheck.ReadyName => "Main Menu Settings Controller";
 
-    bool ISceneReadyCheck.IsReady => hasLoadedData;
+    bool ISceneReadyCheck.IsReady => isUiReady;
 
     #endregion
 
@@ -266,6 +279,7 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         ApplyOnlineDefaults(menuData.onlineMenuData);
         ApplyCustomDefaults(menuData.customMenuData);
     }
+
     private void LoadAllMenuData()
     {
         EnsureMenuData();
@@ -284,6 +298,18 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         SaveSoloMenuData(menuData.soloMenuData);
         SaveOnlineMenuData(menuData.onlineMenuData);
         SaveCustomMenuData(menuData.customMenuData);
+    }
+
+    private void TryInitializeUi()
+    {
+        if (!hasLoadedData || !hasBuiltGameModeOptions)
+        {
+            return;
+        }
+
+        LoadAllMenuData();
+
+        isUiReady = true;
     }
 
     #endregion
@@ -498,9 +524,8 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 
     #region Online Dropdown Setup
 
-    private void BuildAllDropdownOptions()
+    private void BuildNonGameModeDropdownOptions()
     {
-        BuildOnlineGameModeDropdownOptions();
         BuildOnlineSearchTypeDropdownOptions();
         BuildOnlineBallCountDropdownOptions();
         BuildCustomActionDropdownOptions();
@@ -510,6 +535,20 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
     {
         onlineGameModeOptions.Clear();
 
+        if (onlineGameModeDropdown == null)
+        {
+            return;
+        }
+
+        GameModeManager gameModeManager = GameModeManager.instance;
+
+        if (gameModeManager == null || !gameModeManager.IsReady)
+        {
+            return;
+        }
+
+        List<string> labels = new List<string>();
+
         foreach (BingoGameModeType gameModeType in System.Enum.GetValues(typeof(BingoGameModeType)))
         {
             if (gameModeType == BingoGameModeType.Custom)
@@ -517,19 +556,15 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
                 continue;
             }
 
+            BingoGameModeData gameModeData = gameModeManager.GetGameModeData(gameModeType);
+
+            if (gameModeData == null)
+            {
+                continue;
+            }
+
             onlineGameModeOptions.Add(gameModeType);
-        }
-
-        if (onlineGameModeDropdown == null)
-        {
-            return;
-        }
-
-        List<string> labels = new List<string>();
-
-        for (int i = 0; i < onlineGameModeOptions.Count; i++)
-        {
-            labels.Add(GetGameModeLabel(onlineGameModeOptions[i]));
+            labels.Add(gameModeData.GameName);
         }
 
         onlineGameModeDropdown.ClearOptions();
@@ -800,16 +835,6 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         }
 
         return BingoGameModeType.Traditional;
-    }
-
-    private string GetGameModeLabel(BingoGameModeType gameModeType)
-    {
-        if (GameModeManager.instance == null)
-        {
-            return gameModeType.ToString();
-        }
-
-        return GameModeManager.instance.GetGameModeName(gameModeType);
     }
 
     private string GetOnlineSearchTypeLabel(OnlineSearchType searchType)

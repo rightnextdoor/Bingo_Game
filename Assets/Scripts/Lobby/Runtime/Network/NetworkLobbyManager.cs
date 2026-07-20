@@ -13,8 +13,7 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
     private const float ExitNotificationDeliverySeconds = 0.15f;
 
     private readonly List<Lobby> lobbies = new List<Lobby>();
-    private readonly Dictionary<string, string> relayJoinCodeByLobbyId =
-        new Dictionary<string, string>();
+    private readonly Dictionary<string, string> relayJoinCodeByLobbyId = new Dictionary<string, string>();
 
     private bool isReady;
     private bool isSubscribedToConnectionRegistry;
@@ -897,8 +896,7 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
 
     private Lobby FindOrCreateOnlineLobby(LobbySetupData lobbySetupData)
     {
-        OnlineLobbySetupData onlineSetupData =
-            lobbySetupData?.onlineSetupData;
+        OnlineLobbySetupData onlineSetupData = lobbySetupData?.onlineSetupData;
 
         if (onlineSetupData == null)
         {
@@ -908,12 +906,10 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         switch (onlineSetupData.searchType)
         {
             case OnlineSearchType.QuickPlay:
-                return FindOrCreateQuickPlayLobby(
-                    lobbySetupData);
+                return FindOrCreateQuickPlayLobby(lobbySetupData);
 
             case OnlineSearchType.CustomSearch:
-                return FindOrCreateOnlineCustomSearchLobby(
-                    lobbySetupData);
+                return FindOrCreateOnlineCustomSearchLobby(lobbySetupData);
 
             default:
                 return null;
@@ -922,46 +918,18 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
 
     private Lobby FindOrCreateQuickPlayLobby(LobbySetupData lobbySetupData)
     {
-        List<Lobby> eligibleLobbies =
-            FindEligibleOnlineLobbies();
+        OnlineLobbySetupData onlineSetupData = lobbySetupData?.onlineSetupData;
 
-        if (eligibleLobbies.Count > 0)
-        {
-            List<BingoGameModeType> availableGameModeTypes =
-                BuildOnlineGameModeTypeList(
-                    eligibleLobbies);
-
-            if (availableGameModeTypes.Count > 0)
-            {
-                int gameModeIndex =
-                    UnityEngine.Random.Range(
-                        0,
-                        availableGameModeTypes.Count);
-
-                BingoGameModeType selectedGameModeType =
-                    availableGameModeTypes[gameModeIndex];
-
-                List<Lobby> selectedGameModeLobbies =
-                    FindOnlineLobbiesByGameMode(
-                        eligibleLobbies,
-                        selectedGameModeType);
-
-                if (selectedGameModeLobbies.Count > 0)
-                {
-                    int lobbyIndex =
-                        UnityEngine.Random.Range(
-                            0,
-                            selectedGameModeLobbies.Count);
-
-                    return selectedGameModeLobbies[lobbyIndex];
-                }
-            }
-        }
-
-        if (!TryApplyRandomQuickPlaySettings(
-                lobbySetupData))
+        if (onlineSetupData == null)
         {
             return null;
+        }
+
+        List<Lobby> matchingGameModeLobbies = FindEligibleOnlineLobbiesByGameMode(onlineSetupData.gameModeType);
+
+        if (matchingGameModeLobbies.Count > 0)
+        {
+            return GetRandomLobby(matchingGameModeLobbies);
         }
 
         return CreateLobby(lobbySetupData);
@@ -969,216 +937,30 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
 
     private Lobby FindOrCreateOnlineCustomSearchLobby(LobbySetupData lobbySetupData)
     {
-        List<Lobby> matchingLobbies =
-            FindMatchingOnlineLobbies(
-                lobbySetupData);
+        OnlineLobbySetupData onlineSetupData = lobbySetupData?.onlineSetupData;
 
-        if (matchingLobbies.Count > 0)
+        if (onlineSetupData == null)
         {
-            int randomIndex =
-                UnityEngine.Random.Range(
-                    0,
-                    matchingLobbies.Count);
+            return null;
+        }
 
-            return matchingLobbies[randomIndex];
+        List<Lobby> matchingGameModeLobbies = FindEligibleOnlineLobbiesByGameMode(onlineSetupData.gameModeType);
+
+        List<Lobby> matchingBallCountLobbies = FindOnlineLobbiesByBallCount(
+            matchingGameModeLobbies,
+            onlineSetupData.ballCountType);
+
+        if (matchingBallCountLobbies.Count > 0)
+        {
+            return GetRandomLobby(matchingBallCountLobbies);
         }
 
         return CreateLobby(lobbySetupData);
     }
 
-    private List<Lobby> FindEligibleOnlineLobbies()
+    private List<Lobby> FindEligibleOnlineLobbiesByGameMode(BingoGameModeType gameModeType)
     {
-        List<Lobby> eligibleLobbies =
-            new List<Lobby>();
-
-        for (int i = 0; i < lobbies.Count; i++)
-        {
-            Lobby lobby = lobbies[i];
-
-            if (IsEligibleOnlineLobby(lobby))
-            {
-                eligibleLobbies.Add(lobby);
-            }
-        }
-
-        return eligibleLobbies;
-    }
-
-    private List<BingoGameModeType> BuildOnlineGameModeTypeList(List<Lobby> eligibleLobbies)
-    {
-        List<BingoGameModeType> gameModeTypes =
-            new List<BingoGameModeType>();
-
-        if (eligibleLobbies == null)
-        {
-            return gameModeTypes;
-        }
-
-        for (int i = 0; i < eligibleLobbies.Count; i++)
-        {
-            Lobby lobby = eligibleLobbies[i];
-
-            if (lobby?.Controller == null)
-            {
-                continue;
-            }
-
-            BingoGameModeType gameModeType =
-                lobby.Controller.GameModeType;
-
-            if (gameModeType == BingoGameModeType.Custom ||
-                gameModeTypes.Contains(gameModeType))
-            {
-                continue;
-            }
-
-            gameModeTypes.Add(gameModeType);
-        }
-
-        return gameModeTypes;
-    }
-
-    private List<Lobby> FindOnlineLobbiesByGameMode(List<Lobby> eligibleLobbies, BingoGameModeType gameModeType)
-    {
-        List<Lobby> matchingLobbies =
-            new List<Lobby>();
-
-        if (eligibleLobbies == null)
-        {
-            return matchingLobbies;
-        }
-
-        for (int i = 0; i < eligibleLobbies.Count; i++)
-        {
-            Lobby lobby = eligibleLobbies[i];
-
-            if (lobby?.Controller == null ||
-                lobby.Controller.GameModeType != gameModeType)
-            {
-                continue;
-            }
-
-            matchingLobbies.Add(lobby);
-        }
-
-        return matchingLobbies;
-    }
-
-    private bool TryApplyRandomQuickPlaySettings(LobbySetupData lobbySetupData)
-    {
-        OnlineLobbySetupData onlineSetupData =
-            lobbySetupData?.onlineSetupData;
-
-        if (onlineSetupData == null)
-        {
-            return false;
-        }
-
-        List<BingoGameModeType> gameModeTypes =
-            GetAvailableQuickPlayGameModeTypes();
-
-        if (gameModeTypes.Count == 0)
-        {
-            return false;
-        }
-
-        int gameModeIndex =
-            UnityEngine.Random.Range(
-                0,
-                gameModeTypes.Count);
-
-        BingoGameModeType selectedGameModeType =
-            gameModeTypes[gameModeIndex];
-
-        List<BingoBallCountType> ballCountTypes =
-            GetAvailableQuickPlayBallCountTypes(
-                selectedGameModeType);
-
-        if (ballCountTypes.Count == 0)
-        {
-            return false;
-        }
-
-        int ballCountIndex =
-            UnityEngine.Random.Range(
-                0,
-                ballCountTypes.Count);
-
-        onlineSetupData.gameModeType =
-            selectedGameModeType;
-
-        onlineSetupData.ballCountType =
-            ballCountTypes[ballCountIndex];
-
-        return true;
-    }
-
-    private List<BingoGameModeType> GetAvailableQuickPlayGameModeTypes()
-    {
-        List<BingoGameModeType> gameModeTypes =
-            new List<BingoGameModeType>();
-
-        GameModeManager gameModeManager =
-            GameModeManager.instance;
-
-        if (gameModeManager != null)
-        {
-            IReadOnlyList<BingoGameModeData> gameModes =
-                gameModeManager.GameModes;
-
-            for (int i = 0; i < gameModes.Count; i++)
-            {
-                BingoGameModeData gameModeData =
-                    gameModes[i];
-
-                if (gameModeData == null ||
-                    gameModeData.GameModeType ==
-                        BingoGameModeType.Custom ||
-                    gameModeTypes.Contains(
-                        gameModeData.GameModeType))
-                {
-                    continue;
-                }
-
-                gameModeTypes.Add(
-                    gameModeData.GameModeType);
-            }
-        }
-
-        if (gameModeTypes.Count == 0)
-        {
-            gameModeTypes.Add(
-                BingoGameModeType.Traditional);
-        }
-
-        return gameModeTypes;
-    }
-
-    private List<BingoBallCountType> GetAvailableQuickPlayBallCountTypes(BingoGameModeType gameModeType)
-    {
-        List<BingoBallCountType> ballCountTypes =
-            new List<BingoBallCountType>();
-
-        if (gameModeType == BingoGameModeType.Custom)
-        {
-            return ballCountTypes;
-        }
-
-        foreach (
-            BingoBallCountType ballCountType in
-            System.Enum.GetValues(
-                typeof(BingoBallCountType)))
-        {
-            ballCountTypes.Add(ballCountType);
-        }
-
-        return ballCountTypes;
-    }
-
-    private List<Lobby> FindMatchingOnlineLobbies(LobbySetupData requestedSetupData)
-    {
-        List<Lobby> matchingLobbies =
-            new List<Lobby>();
+        List<Lobby> matchingLobbies = new List<Lobby>();
 
         for (int i = 0; i < lobbies.Count; i++)
         {
@@ -1189,15 +971,53 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
                 continue;
             }
 
-            if (DoOnlineSettingsMatch(
-                    lobby.Controller,
-                    requestedSetupData?.onlineSetupData))
+            if (lobby.Controller.GameModeType != gameModeType)
             {
-                matchingLobbies.Add(lobby);
+                continue;
             }
+
+            matchingLobbies.Add(lobby);
         }
 
         return matchingLobbies;
+    }
+
+    private List<Lobby> FindOnlineLobbiesByBallCount(
+    List<Lobby> gameModeLobbies,
+    BingoBallCountType ballCountType)
+    {
+        List<Lobby> matchingLobbies = new List<Lobby>();
+
+        if (gameModeLobbies == null)
+        {
+            return matchingLobbies;
+        }
+
+        for (int i = 0; i < gameModeLobbies.Count; i++)
+        {
+            Lobby lobby = gameModeLobbies[i];
+
+            if (lobby?.Controller == null ||
+                lobby.Controller.BallCountType != ballCountType)
+            {
+                continue;
+            }
+
+            matchingLobbies.Add(lobby);
+        }
+
+        return matchingLobbies;
+    }
+
+    private Lobby GetRandomLobby(List<Lobby> matchingLobbies)
+    {
+        if (matchingLobbies == null || matchingLobbies.Count == 0)
+        {
+            return null;
+        }
+
+        int randomIndex = UnityEngine.Random.Range(0, matchingLobbies.Count);
+        return matchingLobbies[randomIndex];
     }
 
     private bool IsEligibleOnlineLobby(Lobby lobby)
@@ -1207,22 +1027,6 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
                lobby.lobbyState == LobbyState.Open &&
                lobby.Controller != null &&
                !lobby.Controller.IsFull;
-    }
-
-    private bool DoOnlineSettingsMatch(LobbyController controller, OnlineLobbySetupData requestedSetupData)
-    {
-        if (controller == null ||
-            requestedSetupData == null)
-        {
-            return false;
-        }
-
-        return controller.GameModeType ==
-                   requestedSetupData.gameModeType &&
-               controller.BallCountType ==
-                   requestedSetupData.ballCountType &&
-               controller.MaxPlayers ==
-                   requestedSetupData.maxPlayers;
     }
 
     #endregion

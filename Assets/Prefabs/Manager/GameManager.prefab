@@ -264,5 +264,5 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b1d6608384cde3841b6f30d9e67f52fe, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LobbyTimerSettings
-  onlineTimerMinutes: 2
+  onlineTimerMinutes: 5
   finalCountdownSeconds: 10

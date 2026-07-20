@@ -16,9 +16,12 @@ public class GameModeManager : MonoBehaviour
     [Header("Patterns")]
     [SerializeField] private List<BingoPatternData> bingoPatterns = new List<BingoPatternData>();
 
+    private bool isReady;
+
     public IReadOnlyList<BingoGameModeData> GameModes => gameModes;
     public IReadOnlyList<BingoGameRuleData> GameRules => gameRules;
     public IReadOnlyList<BingoPatternData> BingoPatterns => bingoPatterns;
+    public bool IsReady => isReady;
 
     #endregion
 
@@ -39,12 +42,14 @@ public class GameModeManager : MonoBehaviour
         }
 
         instance = this;
+        isReady = true;
     }
 
     private void OnDestroy()
     {
         if (instance == this)
         {
+            isReady = false;
             instance = null;
         }
     }

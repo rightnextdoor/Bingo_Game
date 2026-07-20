@@ -17,6 +17,8 @@ public class LobbyController
 
     [SerializeField] private List<LobbyPlayerData> players = new List<LobbyPlayerData>();
 
+    [SerializeField] private LobbyTimer timer = new LobbyTimer();
+
     [SerializeField] private string lobbyName = string.Empty;
     [SerializeField] private string roomCode = string.Empty;
     [NonSerialized] private string password = string.Empty;
@@ -57,6 +59,10 @@ public class LobbyController
     public bool IsFull => maxPlayers > 0 && PlayerCount >= maxPlayers;
     public bool IsEmpty => PlayerCount == 0;
 
+    public LobbyTimer Timer => timer;
+    public bool IsTimerActive => timer != null && timer.IsActive;
+    public double TimerEndTime => timer != null ? timer.EndTime : 0d;
+
     public LobbyCloseReason CloseReason => closeReason;
 
     [field: NonSerialized]
@@ -65,14 +71,13 @@ public class LobbyController
     public LobbyController()
     {
         EnsureCollections();
+        EnsureTimer();
     }
 
-    public LobbyController(
-        Lobby lobby,
-        LobbySetupData lobbySetupData,
-        Func<string, bool> isRoomCodeAvailable)
+    public LobbyController(Lobby lobby, LobbySetupData lobbySetupData, Func<string, bool> isRoomCodeAvailable)
     {
         EnsureCollections();
+        EnsureTimer();
         AttachLobby(lobby);
         Initialize(lobbySetupData, isRoomCodeAvailable);
     }
@@ -160,9 +165,7 @@ public class LobbyController
         return true;
     }
 
-    public LobbyExitResult RemovePlayer(
-        string userId,
-        LobbyPlayerExitReason exitReason)
+    public LobbyExitResult RemovePlayer(string userId, LobbyPlayerExitReason exitReason)
     {
         if (string.IsNullOrWhiteSpace(userId))
         {
@@ -251,6 +254,23 @@ public class LobbyController
         RefreshViews();
 
         return removedUserIds;
+    }
+
+    public bool BeginFinalCountdown()
+    {
+        if (lobby == null ||
+            lobby.lobbyState == LobbyState.Closed ||
+            lobby.lobbyState == LobbyState.InGame)
+        {
+            return false;
+        }
+
+        lobby.lobbyState = LobbyState.FinalCountdown;
+        timer.StartFinalCountdown();
+
+        RefreshViews();
+
+        return true;
     }
 
     public bool MatchesRoomCode(string requestedRoomCode)
@@ -368,6 +388,8 @@ public class LobbyController
             lobbyId = lobby != null ? lobby.GetLobbyId() : string.Empty,
             playMode = lobby != null ? lobby.playMode : MainMenuPlayMode.None,
             lobbyState = lobby != null ? lobby.lobbyState : LobbyState.Open,
+            isTimerActive = IsTimerActive,
+            timerEndTime = TimerEndTime,
             lobbyName = lobbyName,
             roomCode = roomCode,
             hasPassword = HasPassword,
@@ -385,9 +407,7 @@ public class LobbyController
         return lobbyViewData;
     }
 
-    private void Initialize(
-        LobbySetupData lobbySetupData,
-        Func<string, bool> isRoomCodeAvailable)
+    private void Initialize(LobbySetupData lobbySetupData, Func<string, bool> isRoomCodeAvailable)
     {
         players = new List<LobbyPlayerData>();
 
@@ -405,6 +425,8 @@ public class LobbyController
         MainMenuPlayMode playMode = lobby != null
             ? lobby.playMode
             : lobbySetupData?.playMode ?? MainMenuPlayMode.None;
+
+        InitializeTimer(playMode);
 
         switch (playMode)
         {
@@ -456,9 +478,7 @@ public class LobbyController
         maxPlayers = GetValidMaximumPlayers(onlineSetupData.maxPlayers);
     }
 
-    private void ApplyCustomSetup(
-        CustomLobbySetupData customSetupData,
-        Func<string, bool> isRoomCodeAvailable)
+    private void ApplyCustomSetup(CustomLobbySetupData customSetupData, Func<string, bool> isRoomCodeAvailable)
     {
         lobbyName = DefaultCustomLobbyName;
 
@@ -487,6 +507,30 @@ public class LobbyController
         maxPlayers = GetValidMaximumPlayers(hostSetupData.maxPlayers);
 
         roomCode = GenerateUniqueRoomCode(isRoomCodeAvailable);
+    }
+
+    private void InitializeTimer(MainMenuPlayMode playMode)
+    {
+        EnsureTimer();
+
+        LobbyTimerSettings timerSettings = LobbyTimerSettings.instance;
+
+        if (timerSettings == null)
+        {
+            timer.Stop();
+            Debug.LogWarning("[LobbyController] LobbyTimerSettings was not found. The lobby timer was not started.");
+            return;
+        }
+
+        timer.Initialize(
+            playMode,
+            timerSettings.OnlineTimerSeconds,
+            timerSettings.FinalCountdownSeconds);
+    }
+
+    private void EnsureTimer()
+    {
+        timer ??= new LobbyTimer();
     }
 
     private BingoGameModeType ResolveGameModeType(BingoGameModeType requestedGameModeType)

@@ -1,40 +1,19 @@
 using System.Collections;
-using System.Text;
-using TMPro;
 using UnityEngine;
 
 [DisallowMultipleComponent]
 public class LobbySceneController : MonoBehaviour, ILobbyView
 {
-    [Header("Lobby Header")]
-    [SerializeField] private TMP_Text titleText;
-
-    [Header("Lobby Identity")]
-    [SerializeField] private TMP_Text lobbyIdText;
-    [SerializeField] private TMP_Text playModeText;
-    [SerializeField] private TMP_Text lobbyStateText;
-    [SerializeField] private TMP_Text lobbyNameText;
-    [SerializeField] private TMP_Text roomCodeText;
-    [SerializeField] private TMP_Text passwordText;
-
-    [Header("Game Information")]
-    [SerializeField] private TMP_Text gameModeText;
-    [SerializeField] private TMP_Text ruleText;
-    [SerializeField] private TMP_Text patternsText;
-    [SerializeField] private TMP_Text ballCountText;
-
-    [Header("Players")]
-    [SerializeField] private TMP_Text playerCountText;
-    [SerializeField] private TMP_Text playerListText;
+    [Header("Sections")]
+    [SerializeField] private LobbyHeaderController headerController;
 
     private LobbyController lobbyController;
     private Coroutine bindRoutine;
 
     private void OnEnable()
     {
-        bindRoutine =
-            StartCoroutine(
-                BindWhenLobbyIsReady());
+        SubscribeToHeader();
+        bindRoutine = StartCoroutine(BindWhenLobbyIsReady());
     }
 
     private void OnDisable()
@@ -45,85 +24,68 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
             bindRoutine = null;
         }
 
+        UnsubscribeFromHeader();
         UnsubscribeFromLobbyManager();
         UnbindLobbyController();
     }
 
-    public void DisplayLobbyInfo(
-        LobbyViewData lobbyViewData)
+    public void DisplayLobbyInfo(LobbyViewData lobbyViewData)
     {
         if (lobbyViewData == null)
         {
             return;
         }
 
-        SetText(
-            titleText,
-            $"{lobbyViewData.runtimeType} {lobbyViewData.playMode}");
-
-        SetText(
-            lobbyIdText,
-            $"Lobby ID: {GetDisplayValue(lobbyViewData.lobbyId)}");
-
-        SetText(
-            playModeText,
-            $"Play Mode: {lobbyViewData.playMode}");
-
-        SetText(
-            lobbyStateText,
-            $"Lobby State: {lobbyViewData.lobbyState}");
-
-        SetText(
-            lobbyNameText,
-            $"Lobby Name: {GetDisplayValue(lobbyViewData.lobbyName)}");
-
-        SetText(
-            roomCodeText,
-            $"Room Code: {GetDisplayValue(lobbyViewData.roomCode)}");
-
-        SetText(
-            passwordText,
-            $"Password: {(lobbyViewData.hasPassword ? "Set" : "None")}");
-
-        SetText(
-            gameModeText,
-            $"Game Mode: {GetDisplayValue(lobbyViewData.gameModeName)}");
-
-        SetText(
-            ruleText,
-            $"Rule: {(lobbyViewData.hasRule ? lobbyViewData.ruleType.ToString() : "None")}");
-
-        SetText(
-            patternsText,
-            $"Patterns: {BuildPatternText(lobbyViewData)}");
-
-        SetText(
-            ballCountText,
-            $"Ball Count: {(int)lobbyViewData.ballCountType}");
-
-        SetText(
-            playerCountText,
-            $"Players: {lobbyViewData.playerCount} / {lobbyViewData.maxPlayers}");
-
-        SetText(
-            playerListText,
-            BuildPlayerListText(lobbyViewData));
+        headerController?.DisplayLobbyInfo(lobbyViewData, CanOpenHostSettings(lobbyViewData));
     }
 
-    public void LeaveLobby()
+    private void LeaveLobby()
     {
-        LobbyManager lobbyManager =
-            LobbyManager.instance;
+        LobbyManager lobbyManager = LobbyManager.instance;
 
         if (lobbyManager == null)
         {
-            Debug.LogWarning(
-                "[LobbySceneController] Could not leave the Lobby because LobbyManager was not found.");
-
+            Debug.LogWarning("[LobbySceneController] Could not leave the Lobby because LobbyManager was not found.");
             return;
         }
 
         lobbyManager.LeaveCurrentLobby();
+    }
+
+    private void OpenHostSettings()
+    {
+        PopupManager popupManager = PopupManager.instance;
+
+        if (popupManager == null)
+        {
+            Debug.LogWarning("[LobbySceneController] Could not open Host Settings because PopupManager was not found.");
+            return;
+        }
+
+        popupManager.OpenPopup(PopupId.HostSettings);
+    }
+
+    private bool CanOpenHostSettings(LobbyViewData lobbyViewData)
+    {
+        if (lobbyViewData.playMode == MainMenuPlayMode.Solo)
+        {
+            return true;
+        }
+
+        if (lobbyViewData.playMode != MainMenuPlayMode.Custom)
+        {
+            return false;
+        }
+
+        LobbyManager lobbyManager = LobbyManager.instance;
+
+        if (lobbyManager == null || lobbyManager.CurrentLobby?.Controller == null)
+        {
+            return false;
+        }
+
+        LobbyPlayerData currentPlayer = lobbyManager.CurrentLobby.Controller.GetPlayer(lobbyManager.CurrentUserId);
+        return currentPlayer != null && currentPlayer.isHost;
     }
 
     private IEnumerator BindWhenLobbyIsReady()
@@ -161,6 +123,31 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
         DisplayLobbyInfo(lobbyViewData);
     }
 
+    private void SubscribeToHeader()
+    {
+        if (headerController == null)
+        {
+            return;
+        }
+
+        headerController.LeaveRequested -= LeaveLobby;
+        headerController.LeaveRequested += LeaveLobby;
+
+        headerController.HostSettingsRequested -= OpenHostSettings;
+        headerController.HostSettingsRequested += OpenHostSettings;
+    }
+
+    private void UnsubscribeFromHeader()
+    {
+        if (headerController == null)
+        {
+            return;
+        }
+
+        headerController.LeaveRequested -= LeaveLobby;
+        headerController.HostSettingsRequested -= OpenHostSettings;
+    }
+
     private void UnsubscribeFromLobbyManager()
     {
         if (LobbyManager.instance != null)
@@ -169,8 +156,7 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
         }
     }
 
-    private void BindLobbyController(
-        LobbyController controller)
+    private void BindLobbyController(LobbyController controller)
     {
         if (lobbyController == controller)
         {
@@ -193,81 +179,5 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
 
         lobbyController.UnbindView(this);
         lobbyController = null;
-    }
-
-    private string BuildPatternText(
-        LobbyViewData lobbyViewData)
-    {
-        if (lobbyViewData.patternTypes == null ||
-            lobbyViewData.patternTypes.Count == 0)
-        {
-            return "None";
-        }
-
-        StringBuilder builder =
-            new StringBuilder();
-
-        for (int i = 0;
-             i < lobbyViewData.patternTypes.Count;
-             i++)
-        {
-            if (i > 0)
-            {
-                builder.Append(", ");
-            }
-
-            builder.Append(
-                lobbyViewData.patternTypes[i]);
-        }
-
-        return builder.ToString();
-    }
-
-    private string BuildPlayerListText(
-        LobbyViewData lobbyViewData)
-    {
-        if (lobbyViewData.playerNames == null ||
-            lobbyViewData.playerNames.Count == 0)
-        {
-            return "Players:\nNone";
-        }
-
-        StringBuilder builder =
-            new StringBuilder();
-
-        builder.AppendLine("Players:");
-
-        for (int i = 0;
-             i < lobbyViewData.playerNames.Count;
-             i++)
-        {
-            builder.Append(
-                lobbyViewData.playerNames[i]);
-
-            if (i <
-                lobbyViewData.playerNames.Count - 1)
-            {
-                builder.AppendLine();
-            }
-        }
-
-        return builder.ToString();
-    }
-
-    private string GetDisplayValue(string value)
-    {
-        return string.IsNullOrWhiteSpace(value)
-            ? "None"
-            : value;
-    }
-
-    private void SetText(
-        TMP_Text target,
-        string value)
-    {
-        if (target != null)
-        {
-            target.text = value;
-        }
     }
 }

@@ -45,6 +45,7 @@ public class LobbyManager : MonoBehaviour
     public Lobby CurrentLobby => currentLobby;
     public LobbyViewData CurrentLobbyViewData => currentLobbyViewData;
     public LobbyEntryResult LastEntryResult => lastEntryResult;
+    public string CurrentUserId => currentUserId;
 
     public bool IsEnteringLobby => isEnteringLobby;
     public bool IsLeavingLobby => isLeavingLobby;

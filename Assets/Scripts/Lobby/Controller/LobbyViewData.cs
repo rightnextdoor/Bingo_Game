@@ -10,6 +10,9 @@ public class LobbyViewData
     public MainMenuPlayMode playMode;
     public LobbyState lobbyState;
 
+    public bool isTimerActive;
+    public double timerEndTime;
+
     public string lobbyName;
     public string roomCode;
     public bool hasPassword;
@@ -36,6 +39,9 @@ public class LobbyViewData
         lobbyId = string.Empty;
         playMode = MainMenuPlayMode.None;
         lobbyState = LobbyState.Open;
+
+        isTimerActive = false;
+        timerEndTime = 0d;
 
         lobbyName = string.Empty;
         roomCode = string.Empty;

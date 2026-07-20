@@ -9,10 +9,8 @@ public enum PopupId
     UserInfo,
     Leaderboard,
     Settings,
-    LocalPlayOptions,
-    OnlineOptions,
-    CustomOptions,
-    LobbyEntryFailure
+    LobbyEntryFailure,
+    HostSettings
 }
 
 [Serializable]

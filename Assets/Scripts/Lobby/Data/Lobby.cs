@@ -46,9 +46,7 @@ public class Lobby
         controller = new LobbyController(this, lobbySetupData, null);
     }
 
-    public Lobby(
-        LobbySetupData lobbySetupData,
-        Func<string, bool> isRoomCodeAvailable = null)
+    public Lobby(LobbySetupData lobbySetupData, Func<string, bool> isRoomCodeAvailable = null)
     {
         GenerateLobbyId();
 
@@ -58,10 +56,7 @@ public class Lobby
 
         lobbyState = LobbyState.Open;
 
-        controller = new LobbyController(
-            this,
-            lobbySetupData,
-            isRoomCodeAvailable);
+        controller = new LobbyController(this, lobbySetupData, isRoomCodeAvailable);
     }
 
     public string GetLobbyId()
@@ -82,5 +77,7 @@ public class Lobby
     private void EnsureController()
     {
         controller ??= new LobbyController();
+        controller.AttachLobby(this);
     }
+
 }

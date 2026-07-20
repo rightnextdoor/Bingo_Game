@@ -559,6 +559,53 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 89897740}
   m_CullTransparentMesh: 1
+--- !u!1 &111433713
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 111433715}
+  - component: {fileID: 111433714}
+  m_Layer: 0
+  m_Name: Development
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &111433714
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 111433713}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fc8879c34ab292c49bd3216c3a9fa12b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LobbySimulationController
+  simulateOnStart: 1
+  playMode: 2
+  isHost: 1
+--- !u!4 &111433715
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 111433713}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 548.8369, y: 234.56435, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &157503593
 GameObject:
   m_ObjectHideFlags: 0
@@ -2496,6 +2543,7 @@ GameObject:
   - component: {fileID: 638686429}
   - component: {fileID: 638686428}
   - component: {fileID: 638686427}
+  - component: {fileID: 638686431}
   m_Layer: 5
   m_Name: LobbyHeaderSection
   m_TagString: Untagged
@@ -2597,6 +2645,22 @@ MonoBehaviour:
   m_FlexibleWidth: -1
   m_FlexibleHeight: 0
   m_LayoutPriority: 1
+--- !u!114 &638686431
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 638686425}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: abd3db4e654d759498c8c5b1e422e8c5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LobbyHeaderController
+  lobbyTitleText: {fileID: 512875370}
+  lobbyTimerText: {fileID: 629026266}
+  leaveButton: {fileID: 919286672}
+  hostSettingsButton: {fileID: 2107819193}
 --- !u!1 &681623763
 GameObject:
   m_ObjectHideFlags: 0
@@ -3326,6 +3390,7 @@ GameObject:
   m_Component:
   - component: {fileID: 904034411}
   - component: {fileID: 904034412}
+  - component: {fileID: 904034413}
   m_Layer: 5
   m_Name: LobbyContent
   m_TagString: Untagged
@@ -3380,6 +3445,19 @@ MonoBehaviour:
   m_ChildScaleWidth: 0
   m_ChildScaleHeight: 0
   m_ReverseArrangement: 0
+--- !u!114 &904034413
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 904034410}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ebd5b0460f8c0714e8639408aca18c3f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LobbySceneController
+  headerController: {fileID: 638686431}
 --- !u!1 &919286669
 GameObject:
   m_ObjectHideFlags: 0
@@ -3805,6 +3883,10 @@ PrefabInstance:
     - target: {fileID: 1854102416727074944, guid: f7e0f34e7bbfde64d932d6d233ff8e28, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6965907320464363891, guid: f7e0f34e7bbfde64d932d6d233ff8e28, type: 3}
+      propertyPath: onlineTimerMinutes
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 8215340122209812844, guid: f7e0f34e7bbfde64d932d6d233ff8e28, type: 3}
       propertyPath: m_Name
@@ -8223,3 +8305,4 @@ SceneRoots:
   - {fileID: 68669352}
   - {fileID: 7626225034656011717}
   - {fileID: 5766140704749825432}
+  - {fileID: 111433715}

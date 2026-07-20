@@ -1323,6 +1323,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 1069712657688527482}
     m_Modifications:
+    - target: {fileID: 3208022644085789413, guid: c2df0df2443cbfd498c2fcd7b99edbbc, type: 3}
+      propertyPath: m_Name
+      value: GameInfoPanel
+      objectReference: {fileID: 0}
     - target: {fileID: 4638822466777951173, guid: c2df0df2443cbfd498c2fcd7b99edbbc, type: 3}
       propertyPath: m_Pivot.x
       value: 0.5

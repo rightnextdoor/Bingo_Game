@@ -35,7 +35,8 @@ public enum UIThemeButtonType
 {
     Primary,
     Secondary,
-    Close
+    Close,
+    Ready
 }
 
 public enum UIThemeTextType

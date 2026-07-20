@@ -588,7 +588,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fc8879c34ab292c49bd3216c3a9fa12b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LobbySimulationController
-  simulateOnStart: 0
+  simulateOnStart: 1
   playMode: 2
   isHost: 1
 --- !u!4 &111433715
@@ -7842,23 +7842,23 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 989408339628007082, guid: f405dd3864b1d7241b138db31eed7538, type: 3}
       propertyPath: m_IsActive
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 1339458651799267380, guid: f405dd3864b1d7241b138db31eed7538, type: 3}
       propertyPath: m_AnchorMax.y
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 1339458651799267380, guid: f405dd3864b1d7241b138db31eed7538, type: 3}
       propertyPath: m_AnchorMin.y
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 1339458651799267380, guid: f405dd3864b1d7241b138db31eed7538, type: 3}
       propertyPath: m_AnchoredPosition.x
-      value: 0
+      value: 591.8154
       objectReference: {fileID: 0}
     - target: {fileID: 1339458651799267380, guid: f405dd3864b1d7241b138db31eed7538, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 0
+      value: -60
       objectReference: {fileID: 0}
     - target: {fileID: 5376826884602316283, guid: f405dd3864b1d7241b138db31eed7538, type: 3}
       propertyPath: m_LocalPosition.x
@@ -7902,15 +7902,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 9060516257678056787, guid: f405dd3864b1d7241b138db31eed7538, type: 3}
       propertyPath: m_AnchorMax.y
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 9060516257678056787, guid: f405dd3864b1d7241b138db31eed7538, type: 3}
       propertyPath: m_AnchorMin.y
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 9060516257678056787, guid: f405dd3864b1d7241b138db31eed7538, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 0
+      value: -60
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

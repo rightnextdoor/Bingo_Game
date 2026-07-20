@@ -5,24 +5,66 @@ using UnityEngine;
 [Serializable]
 public class LobbyController
 {
+    #region Lobby Setup Fields
+
     private const string DefaultSoloLobbyName = "Solo Lobby";
     private const string DefaultOnlineLobbyName = "Online Lobby";
     private const string DefaultCustomLobbyName = "Custom Lobby";
 
     private const int DefaultMaximumPlayers = 6;
 
+    [SerializeField] private string lobbyName = string.Empty;
+    [SerializeField] private int maxPlayers = DefaultMaximumPlayers;
+    [SerializeField] private LobbyCloseReason closeReason = LobbyCloseReason.None;
+
+    [NonSerialized] private Lobby lobby;
+
+    public string LobbyName => lobbyName;
+    public int MaxPlayers => maxPlayers;
+    public LobbyCloseReason CloseReason => closeReason;
+
+    #endregion
+
+    #region Player Fields
+
+    [SerializeField] private List<LobbyPlayerData> players = new List<LobbyPlayerData>();
+
+    public IReadOnlyList<LobbyPlayerData> Players => players;
+    public int PlayerCount => players != null ? players.Count : 0;
+    public bool IsFull => maxPlayers > 0 && PlayerCount >= maxPlayers;
+    public bool IsEmpty => PlayerCount == 0;
+
+    [field: NonSerialized]
+    public event Action<LobbyController, LobbyExitResult> PlayerExitProcessed;
+
+    #endregion
+
+    #region Timer Fields
+
+    [SerializeField] private LobbyTimer timer = new LobbyTimer();
+
+    public LobbyTimer Timer => timer;
+    public bool IsTimerActive => timer != null && timer.IsActive;
+    public double TimerEndTime => timer != null ? timer.EndTime : 0d;
+
+    #endregion
+
+    #region Custom Lobby Fields
+
     private const int MinimumCustomRoomCode = 1000;
     private const int MaximumCustomRoomCodeExclusive = 10000;
     private const int CustomRoomCodeGenerationAttempts = 100;
 
-    [SerializeField] private List<LobbyPlayerData> players = new List<LobbyPlayerData>();
-
-    [SerializeField] private LobbyTimer timer = new LobbyTimer();
-
-    [SerializeField] private string lobbyName = string.Empty;
     [SerializeField] private string roomCode = string.Empty;
     [NonSerialized] private string password = string.Empty;
     [SerializeField] private bool hasPassword;
+
+    public string RoomCode => roomCode;
+    public bool HasPassword => hasPassword;
+
+    #endregion
+
+    #region Game Data Fields
 
     [SerializeField] private BingoGameModeType gameModeType = BingoGameModeType.Traditional;
 
@@ -33,18 +75,6 @@ public class LobbyController
 
     [SerializeField] private BingoBallCountType ballCountType = BingoBallCountType.Ball75;
 
-    [SerializeField] private int maxPlayers = DefaultMaximumPlayers;
-    [SerializeField] private LobbyCloseReason closeReason = LobbyCloseReason.None;
-
-    [NonSerialized] private Lobby lobby;
-    [NonSerialized] private List<ILobbyView> views;
-
-    public IReadOnlyList<LobbyPlayerData> Players => players;
-
-    public string LobbyName => lobbyName;
-    public string RoomCode => roomCode;
-    public bool HasPassword => hasPassword;
-
     public BingoGameModeType GameModeType => gameModeType;
 
     public bool HasRule => hasRule;
@@ -54,19 +84,15 @@ public class LobbyController
 
     public BingoBallCountType BallCountType => ballCountType;
 
-    public int PlayerCount => players != null ? players.Count : 0;
-    public int MaxPlayers => maxPlayers;
-    public bool IsFull => maxPlayers > 0 && PlayerCount >= maxPlayers;
-    public bool IsEmpty => PlayerCount == 0;
+    #endregion
 
-    public LobbyTimer Timer => timer;
-    public bool IsTimerActive => timer != null && timer.IsActive;
-    public double TimerEndTime => timer != null ? timer.EndTime : 0d;
+    #region View Fields
 
-    public LobbyCloseReason CloseReason => closeReason;
+    [NonSerialized] private List<ILobbyView> views;
 
-    [field: NonSerialized]
-    public event Action<LobbyController, LobbyExitResult> PlayerExitProcessed;
+    #endregion
+
+    #region Constructors
 
     public LobbyController()
     {
@@ -82,11 +108,149 @@ public class LobbyController
         Initialize(lobbySetupData, isRoomCodeAvailable);
     }
 
+    #endregion
+
+    #region Lobby Setup
+
     public void AttachLobby(Lobby lobby)
     {
         this.lobby = lobby;
         EnsureCollections();
     }
+
+    private void Initialize(LobbySetupData lobbySetupData, Func<string, bool> isRoomCodeAvailable)
+    {
+        players = new List<LobbyPlayerData>();
+
+        lobbyName = GetDefaultLobbyName();
+        roomCode = string.Empty;
+        password = string.Empty;
+        hasPassword = false;
+
+        gameModeType = BingoGameModeType.Traditional;
+        ballCountType = BingoBallCountType.Ball75;
+
+        maxPlayers = DefaultMaximumPlayers;
+        closeReason = LobbyCloseReason.None;
+
+        MainMenuPlayMode playMode = lobby != null
+            ? lobby.playMode
+            : lobbySetupData?.playMode ?? MainMenuPlayMode.None;
+
+        InitializeTimer(playMode);
+
+        switch (playMode)
+        {
+            case MainMenuPlayMode.Solo:
+                ApplySoloSetup(lobbySetupData?.soloSetupData);
+                break;
+
+            case MainMenuPlayMode.Online:
+                ApplyOnlineSetup(lobbySetupData?.onlineSetupData);
+                break;
+
+            case MainMenuPlayMode.Custom:
+                ApplyCustomSetup(
+                    lobbySetupData?.customSetupData,
+                    isRoomCodeAvailable);
+                break;
+        }
+
+        gameModeType = ResolveGameModeType(gameModeType);
+        ballCountType = ResolveBallCountType(ballCountType);
+        ResolveGameModeData();
+    }
+
+    private void ApplySoloSetup(SoloLobbySetupData soloSetupData)
+    {
+        lobbyName = DefaultSoloLobbyName;
+
+        if (soloSetupData == null)
+        {
+            return;
+        }
+
+        gameModeType = soloSetupData.gameModeType;
+        ballCountType = soloSetupData.ballCountType;
+        maxPlayers = GetValidMaximumPlayers(soloSetupData.maxPlayers);
+    }
+
+    private void ApplyOnlineSetup(OnlineLobbySetupData onlineSetupData)
+    {
+        lobbyName = DefaultOnlineLobbyName;
+
+        if (onlineSetupData == null)
+        {
+            return;
+        }
+
+        gameModeType = onlineSetupData.gameModeType;
+        ballCountType = onlineSetupData.ballCountType;
+        maxPlayers = GetValidMaximumPlayers(onlineSetupData.maxPlayers);
+    }
+
+    private void ApplyCustomSetup(CustomLobbySetupData customSetupData, Func<string, bool> isRoomCodeAvailable)
+    {
+        lobbyName = DefaultCustomLobbyName;
+
+        if (customSetupData == null ||
+            customSetupData.actionType != CustomLobbyActionType.HostLobby)
+        {
+            return;
+        }
+
+        CustomHostLobbySetupData hostSetupData = customSetupData.hostSetupData;
+
+        if (hostSetupData == null)
+        {
+            return;
+        }
+
+        lobbyName = string.IsNullOrWhiteSpace(hostSetupData.lobbyName)
+            ? DefaultCustomLobbyName
+            : hostSetupData.lobbyName.Trim();
+
+        password = hostSetupData.password ?? string.Empty;
+        hasPassword = !string.IsNullOrWhiteSpace(password);
+
+        gameModeType = hostSetupData.gameModeType;
+        ballCountType = hostSetupData.ballCountType;
+        maxPlayers = GetValidMaximumPlayers(hostSetupData.maxPlayers);
+
+        roomCode = GenerateUniqueRoomCode(isRoomCodeAvailable);
+    }
+
+    private string GetDefaultLobbyName()
+    {
+        if (lobby == null)
+        {
+            return string.Empty;
+        }
+
+        switch (lobby.playMode)
+        {
+            case MainMenuPlayMode.Solo:
+                return DefaultSoloLobbyName;
+
+            case MainMenuPlayMode.Online:
+                return DefaultOnlineLobbyName;
+
+            case MainMenuPlayMode.Custom:
+                return DefaultCustomLobbyName;
+
+            default:
+                return string.Empty;
+        }
+    }
+
+    private int GetValidMaximumPlayers(int requestedMaximumPlayers)
+    {
+        return Mathf.Max(1, requestedMaximumPlayers);
+    }
+
+    #endregion
+
+    #region Players
 
     public bool HasPlayer(string userId)
     {
@@ -224,6 +388,10 @@ public class LobbyController
             "The player was not found in the lobby.");
     }
 
+    #endregion
+
+    #region Lobby State
+
     public List<string> CloseLobby(LobbyCloseReason requestedCloseReason)
     {
         EnsureCollections();
@@ -256,6 +424,10 @@ public class LobbyController
         return removedUserIds;
     }
 
+    #endregion
+
+    #region Timer
+
     public bool BeginFinalCountdown()
     {
         if (lobby == null ||
@@ -272,6 +444,34 @@ public class LobbyController
 
         return true;
     }
+
+    private void InitializeTimer(MainMenuPlayMode playMode)
+    {
+        EnsureTimer();
+
+        LobbyTimerSettings timerSettings = LobbyTimerSettings.instance;
+
+        if (timerSettings == null)
+        {
+            timer.Stop();
+            Debug.LogWarning("[LobbyController] LobbyTimerSettings was not found. The lobby timer was not started.");
+            return;
+        }
+
+        timer.Initialize(
+            playMode,
+            timerSettings.OnlineTimerSeconds,
+            timerSettings.FinalCountdownSeconds);
+    }
+
+    private void EnsureTimer()
+    {
+        timer ??= new LobbyTimer();
+    }
+
+    #endregion
+
+    #region Custom Lobby Access
 
     public bool MatchesRoomCode(string requestedRoomCode)
     {
@@ -320,217 +520,40 @@ public class LobbyController
         return !string.IsNullOrWhiteSpace(roomCode);
     }
 
+    private string GenerateUniqueRoomCode(Func<string, bool> isRoomCodeAvailable)
+    {
+        for (int attempt = 0; attempt < CustomRoomCodeGenerationAttempts; attempt++)
+        {
+            string proposedRoomCode = UnityEngine.Random
+                .Range(MinimumCustomRoomCode, MaximumCustomRoomCodeExclusive)
+                .ToString();
+
+            if (isRoomCodeAvailable == null ||
+                isRoomCodeAvailable(proposedRoomCode))
+            {
+                return proposedRoomCode;
+            }
+        }
+
+        Debug.LogWarning("[LobbyController] Could not generate a unique Custom lobby room code.");
+        return string.Empty;
+    }
+
+    private string NormalizeRoomCode(string value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? string.Empty
+            : value.Trim().ToUpperInvariant();
+    }
+
+    #endregion
+
+    #region Game Data
+
     public void RefreshResolvedGameData()
     {
         ResolveGameModeData();
         RefreshViews();
-    }
-
-    public void BindView(ILobbyView view)
-    {
-        if (view == null)
-        {
-            return;
-        }
-
-        EnsureCollections();
-
-        if (!views.Contains(view))
-        {
-            views.Add(view);
-        }
-
-        ResolveGameModeData();
-        view.DisplayLobbyInfo(BuildViewData());
-    }
-
-    public void UnbindView(ILobbyView view)
-    {
-        if (view == null || views == null)
-        {
-            return;
-        }
-
-        views.Remove(view);
-    }
-
-    public void RefreshViews()
-    {
-        if (views == null || views.Count == 0)
-        {
-            return;
-        }
-
-        LobbyViewData lobbyViewData = BuildViewData();
-
-        for (int i = views.Count - 1; i >= 0; i--)
-        {
-            ILobbyView view = views[i];
-
-            if (view == null)
-            {
-                views.RemoveAt(i);
-                continue;
-            }
-
-            view.DisplayLobbyInfo(lobbyViewData);
-        }
-    }
-
-    public LobbyViewData BuildViewData()
-    {
-        EnsureCollections();
-        ResolveGameModeData();
-
-        LobbyViewData lobbyViewData = new LobbyViewData
-        {
-            runtimeType = GetRuntimeType(),
-            lobbyId = lobby != null ? lobby.GetLobbyId() : string.Empty,
-            playMode = lobby != null ? lobby.playMode : MainMenuPlayMode.None,
-            lobbyState = lobby != null ? lobby.lobbyState : LobbyState.Open,
-            isTimerActive = IsTimerActive,
-            timerEndTime = TimerEndTime,
-            lobbyName = lobbyName,
-            roomCode = roomCode,
-            hasPassword = HasPassword,
-            gameModeType = gameModeType,
-            gameModeName = GetGameModeName(),
-            hasRule = hasRule,
-            ruleType = ruleType,
-            patternTypes = new List<BingoPatternType>(patternTypes),
-            ballCountType = ballCountType,
-            playerCount = GetVisiblePlayerCount(),
-            maxPlayers = maxPlayers,
-            playerNames = BuildPlayerNameList()
-        };
-
-        return lobbyViewData;
-    }
-
-    private void Initialize(LobbySetupData lobbySetupData, Func<string, bool> isRoomCodeAvailable)
-    {
-        players = new List<LobbyPlayerData>();
-
-        lobbyName = GetDefaultLobbyName();
-        roomCode = string.Empty;
-        password = string.Empty;
-        hasPassword = false;
-
-        gameModeType = BingoGameModeType.Traditional;
-        ballCountType = BingoBallCountType.Ball75;
-
-        maxPlayers = DefaultMaximumPlayers;
-        closeReason = LobbyCloseReason.None;
-
-        MainMenuPlayMode playMode = lobby != null
-            ? lobby.playMode
-            : lobbySetupData?.playMode ?? MainMenuPlayMode.None;
-
-        InitializeTimer(playMode);
-
-        switch (playMode)
-        {
-            case MainMenuPlayMode.Solo:
-                ApplySoloSetup(lobbySetupData?.soloSetupData);
-                break;
-
-            case MainMenuPlayMode.Online:
-                ApplyOnlineSetup(lobbySetupData?.onlineSetupData);
-                break;
-
-            case MainMenuPlayMode.Custom:
-                ApplyCustomSetup(
-                    lobbySetupData?.customSetupData,
-                    isRoomCodeAvailable);
-                break;
-        }
-
-        gameModeType = ResolveGameModeType(gameModeType);
-        ballCountType = ResolveBallCountType(ballCountType);
-        ResolveGameModeData();
-    }
-
-    private void ApplySoloSetup(SoloLobbySetupData soloSetupData)
-    {
-        lobbyName = DefaultSoloLobbyName;
-
-        if (soloSetupData == null)
-        {
-            return;
-        }
-
-        gameModeType = soloSetupData.gameModeType;
-        ballCountType = soloSetupData.ballCountType;
-        maxPlayers = GetValidMaximumPlayers(soloSetupData.maxPlayers);
-    }
-
-    private void ApplyOnlineSetup(OnlineLobbySetupData onlineSetupData)
-    {
-        lobbyName = DefaultOnlineLobbyName;
-
-        if (onlineSetupData == null)
-        {
-            return;
-        }
-
-        gameModeType = onlineSetupData.gameModeType;
-        ballCountType = onlineSetupData.ballCountType;
-        maxPlayers = GetValidMaximumPlayers(onlineSetupData.maxPlayers);
-    }
-
-    private void ApplyCustomSetup(CustomLobbySetupData customSetupData, Func<string, bool> isRoomCodeAvailable)
-    {
-        lobbyName = DefaultCustomLobbyName;
-
-        if (customSetupData == null ||
-            customSetupData.actionType != CustomLobbyActionType.HostLobby)
-        {
-            return;
-        }
-
-        CustomHostLobbySetupData hostSetupData = customSetupData.hostSetupData;
-
-        if (hostSetupData == null)
-        {
-            return;
-        }
-
-        lobbyName = string.IsNullOrWhiteSpace(hostSetupData.lobbyName)
-            ? DefaultCustomLobbyName
-            : hostSetupData.lobbyName.Trim();
-
-        password = hostSetupData.password ?? string.Empty;
-        hasPassword = !string.IsNullOrWhiteSpace(password);
-
-        gameModeType = hostSetupData.gameModeType;
-        ballCountType = hostSetupData.ballCountType;
-        maxPlayers = GetValidMaximumPlayers(hostSetupData.maxPlayers);
-
-        roomCode = GenerateUniqueRoomCode(isRoomCodeAvailable);
-    }
-
-    private void InitializeTimer(MainMenuPlayMode playMode)
-    {
-        EnsureTimer();
-
-        LobbyTimerSettings timerSettings = LobbyTimerSettings.instance;
-
-        if (timerSettings == null)
-        {
-            timer.Stop();
-            Debug.LogWarning("[LobbyController] LobbyTimerSettings was not found. The lobby timer was not started.");
-            return;
-        }
-
-        timer.Initialize(
-            playMode,
-            timerSettings.OnlineTimerSeconds,
-            timerSettings.FinalCountdownSeconds);
-    }
-
-    private void EnsureTimer()
-    {
-        timer ??= new LobbyTimer();
     }
 
     private BingoGameModeType ResolveGameModeType(BingoGameModeType requestedGameModeType)
@@ -630,23 +653,89 @@ public class LobbyController
         return GameModeManager.instance.GetGameModeName(gameModeType);
     }
 
-    private string GenerateUniqueRoomCode(Func<string, bool> isRoomCodeAvailable)
-    {
-        for (int attempt = 0; attempt < CustomRoomCodeGenerationAttempts; attempt++)
-        {
-            string proposedRoomCode = UnityEngine.Random
-                .Range(MinimumCustomRoomCode, MaximumCustomRoomCodeExclusive)
-                .ToString();
+    #endregion
 
-            if (isRoomCodeAvailable == null ||
-                isRoomCodeAvailable(proposedRoomCode))
-            {
-                return proposedRoomCode;
-            }
+    #region Lobby Views
+
+    public void BindView(ILobbyView view)
+    {
+        if (view == null)
+        {
+            return;
         }
 
-        Debug.LogWarning("[LobbyController] Could not generate a unique Custom lobby room code.");
-        return string.Empty;
+        EnsureCollections();
+
+        if (!views.Contains(view))
+        {
+            views.Add(view);
+        }
+
+        ResolveGameModeData();
+        view.DisplayLobbyInfo(BuildViewData());
+    }
+
+    public void UnbindView(ILobbyView view)
+    {
+        if (view == null || views == null)
+        {
+            return;
+        }
+
+        views.Remove(view);
+    }
+
+    public void RefreshViews()
+    {
+        if (views == null || views.Count == 0)
+        {
+            return;
+        }
+
+        LobbyViewData lobbyViewData = BuildViewData();
+
+        for (int i = views.Count - 1; i >= 0; i--)
+        {
+            ILobbyView view = views[i];
+
+            if (view == null)
+            {
+                views.RemoveAt(i);
+                continue;
+            }
+
+            view.DisplayLobbyInfo(lobbyViewData);
+        }
+    }
+
+    public LobbyViewData BuildViewData()
+    {
+        EnsureCollections();
+        ResolveGameModeData();
+
+        LobbyViewData lobbyViewData = new LobbyViewData
+        {
+            runtimeType = GetRuntimeType(),
+            lobbyId = lobby != null ? lobby.GetLobbyId() : string.Empty,
+            playMode = lobby != null ? lobby.playMode : MainMenuPlayMode.None,
+            lobbyState = lobby != null ? lobby.lobbyState : LobbyState.Open,
+            isTimerActive = IsTimerActive,
+            timerEndTime = TimerEndTime,
+            lobbyName = lobbyName,
+            roomCode = roomCode,
+            hasPassword = HasPassword,
+            gameModeType = gameModeType,
+            gameModeName = GetGameModeName(),
+            hasRule = hasRule,
+            ruleType = ruleType,
+            patternTypes = new List<BingoPatternType>(patternTypes),
+            ballCountType = ballCountType,
+            playerCount = GetVisiblePlayerCount(),
+            maxPlayers = maxPlayers,
+            playerNames = BuildPlayerNameList()
+        };
+
+        return lobbyViewData;
     }
 
     private int GetVisiblePlayerCount()
@@ -695,40 +784,9 @@ public class LobbyController
         return SessionRuntimeType.Network;
     }
 
-    private string GetDefaultLobbyName()
-    {
-        if (lobby == null)
-        {
-            return string.Empty;
-        }
+    #endregion
 
-        switch (lobby.playMode)
-        {
-            case MainMenuPlayMode.Solo:
-                return DefaultSoloLobbyName;
-
-            case MainMenuPlayMode.Online:
-                return DefaultOnlineLobbyName;
-
-            case MainMenuPlayMode.Custom:
-                return DefaultCustomLobbyName;
-
-            default:
-                return string.Empty;
-        }
-    }
-
-    private int GetValidMaximumPlayers(int requestedMaximumPlayers)
-    {
-        return Mathf.Max(1, requestedMaximumPlayers);
-    }
-
-    private string NormalizeRoomCode(string value)
-    {
-        return string.IsNullOrWhiteSpace(value)
-            ? string.Empty
-            : value.Trim().ToUpperInvariant();
-    }
+    #region Helpers
 
     private void EnsureCollections()
     {
@@ -736,4 +794,6 @@ public class LobbyController
         patternTypes ??= new List<BingoPatternType>();
         views ??= new List<ILobbyView>();
     }
+
+    #endregion
 }

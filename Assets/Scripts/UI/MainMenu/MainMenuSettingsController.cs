@@ -8,8 +8,6 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 {
     #region Constants
 
-    private const int MinimumLobbySize = 6;
-    private const int UnlimitedPlayerCount = 100000;
     private const bool DefaultOnlineUnlimitedPlayers = true;
 
     private const int MinimumTextLength = 1;
@@ -96,7 +94,9 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         RegisterReadyCheck();
         TryLoadFromCurrentSaveData();
 
-        while (GameModeManager.instance == null || !GameModeManager.instance.IsReady)
+        while (LobbySettings.instance == null ||
+               GameModeManager.instance == null ||
+               !GameModeManager.instance.IsReady)
         {
             yield return null;
         }
@@ -484,7 +484,7 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         if (unlimitedPlayers)
         {
             lobbySetupData.soloSetupData.unlimitedPlayers = true;
-            lobbySetupData.soloSetupData.maxPlayers = UnlimitedPlayerCount;
+            lobbySetupData.soloSetupData.maxPlayers = GetUnlimitedPlayerCount();
 
             ClearError(soloErrorText);
             return true;
@@ -779,7 +779,7 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 
         if (DefaultOnlineUnlimitedPlayers)
         {
-            lobbySetupData.onlineSetupData.maxPlayers = UnlimitedPlayerCount;
+            lobbySetupData.onlineSetupData.maxPlayers = GetUnlimitedPlayerCount();
         }
 
         ClearError(onlineErrorText);
@@ -1268,7 +1268,7 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 
         bool unlimitedPlayers = customHostUnlimitedToggle != null && customHostUnlimitedToggle.isOn;
 
-        int maxPlayers = UnlimitedPlayerCount;
+        int maxPlayers = GetUnlimitedPlayerCount();
 
         if (!unlimitedPlayers)
         {
@@ -1528,7 +1528,7 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         {
             if (showError)
             {
-                ShowError(errorText, $"Lobby size must be at least {MinimumLobbySize}.");
+                ShowError(errorText, $"Lobby size must be at least {GetMinimumLobbySize()}.");
             }
 
             return false;
@@ -1544,20 +1544,20 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
             return false;
         }
 
-        if (parsedLobbySize < MinimumLobbySize)
+        if (parsedLobbySize < GetMinimumLobbySize())
         {
             if (showError)
             {
-                ShowError(errorText, $"Lobby size must be at least {MinimumLobbySize}.");
+                ShowError(errorText, $"Lobby size must be at least {GetMinimumLobbySize()}.");
             }
 
             return false;
         }
 
-        if (parsedLobbySize > UnlimitedPlayerCount)
+        if (parsedLobbySize > GetUnlimitedPlayerCount())
         {
-            parsedLobbySize = UnlimitedPlayerCount;
-            inputField.SetTextWithoutNotify(UnlimitedPlayerCount.ToString());
+            parsedLobbySize = GetUnlimitedPlayerCount();
+            inputField.SetTextWithoutNotify(GetUnlimitedPlayerCount().ToString());
         }
 
         lobbySize = parsedLobbySize;
@@ -1566,14 +1566,14 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 
     private int ClampLobbySizeToAllowedRange(int lobbySize)
     {
-        if (lobbySize < MinimumLobbySize)
+        if (lobbySize < GetMinimumLobbySize())
         {
             return GetSavedDefaultLobbySize();
         }
 
-        if (lobbySize > UnlimitedPlayerCount)
+        if (lobbySize > GetUnlimitedPlayerCount())
         {
-            return UnlimitedPlayerCount;
+            return GetUnlimitedPlayerCount();
         }
 
         return lobbySize;
@@ -1605,14 +1605,14 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 
         int savedLobbySize = menuData.soloMenuData.lobbySize;
 
-        if (savedLobbySize < MinimumLobbySize)
+        if (savedLobbySize < GetMinimumLobbySize())
         {
-            return MinimumLobbySize;
+            return GetMinimumLobbySize();
         }
 
-        if (savedLobbySize > UnlimitedPlayerCount)
+        if (savedLobbySize > GetUnlimitedPlayerCount())
         {
-            return UnlimitedPlayerCount;
+            return GetUnlimitedPlayerCount();
         }
 
         return savedLobbySize;
@@ -1620,8 +1620,17 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 
     private int GetDefaultSoloLobbySize()
     {
-        SoloMenuData defaultSoloMenuData = new SoloMenuData();
-        return ClampLobbySizeToAllowedRange(defaultSoloMenuData.lobbySize);
+        return LobbySettings.instance.MinimumPlayers;
+    }
+
+    private int GetMinimumLobbySize()
+    {
+        return LobbySettings.instance.MinimumPlayers;
+    }
+
+    private int GetUnlimitedPlayerCount()
+    {
+        return LobbySettings.instance.UnlimitedPlayerCount;
     }
 
     #endregion

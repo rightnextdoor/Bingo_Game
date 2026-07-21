@@ -24,11 +24,16 @@ public class LobbyViewData
     public BingoRuleType ruleType;
 
     public List<BingoPatternType> patternTypes;
+    public bool usesDefaultPatterns;
 
     public BingoBallCountType ballCountType;
 
     public int playerCount;
     public int maxPlayers;
+    public bool unlimitedPlayers;
+
+    public bool addBots;
+    public int botCount;
 
     public List<string> playerNames;
 
@@ -54,11 +59,18 @@ public class LobbyViewData
         ruleType = BingoRuleType.Traditional;
 
         patternTypes = new List<BingoPatternType>();
+        usesDefaultPatterns = true;
 
         ballCountType = BingoBallCountType.Ball75;
 
         playerCount = 0;
-        maxPlayers = 1;
+        maxPlayers = LobbySettings.instance != null
+            ? LobbySettings.instance.MinimumPlayers
+            : 6;
+        unlimitedPlayers = false;
+
+        addBots = false;
+        botCount = 0;
 
         playerNames = new List<string>();
     }

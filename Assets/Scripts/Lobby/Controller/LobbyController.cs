@@ -11,16 +11,16 @@ public class LobbyController
     private const string DefaultOnlineLobbyName = "Online Lobby";
     private const string DefaultCustomLobbyName = "Custom Lobby";
 
-    private const int DefaultMaximumPlayers = 6;
-
     [SerializeField] private string lobbyName = string.Empty;
-    [SerializeField] private int maxPlayers = DefaultMaximumPlayers;
+    [SerializeField] private int maxPlayers;
+    [SerializeField] private bool unlimitedPlayers;
     [SerializeField] private LobbyCloseReason closeReason = LobbyCloseReason.None;
 
     [NonSerialized] private Lobby lobby;
 
     public string LobbyName => lobbyName;
     public int MaxPlayers => maxPlayers;
+    public bool UnlimitedPlayers => unlimitedPlayers;
     public LobbyCloseReason CloseReason => closeReason;
 
     #endregion
@@ -72,8 +72,12 @@ public class LobbyController
     [SerializeField] private BingoRuleType ruleType = BingoRuleType.Traditional;
 
     [SerializeField] private List<BingoPatternType> patternTypes = new List<BingoPatternType>();
+    [SerializeField] private bool usesDefaultPatterns = true;
 
     [SerializeField] private BingoBallCountType ballCountType = BingoBallCountType.Ball75;
+
+    [SerializeField] private bool addBots;
+    [SerializeField] private int botCount;
 
     public BingoGameModeType GameModeType => gameModeType;
 
@@ -81,8 +85,12 @@ public class LobbyController
     public BingoRuleType RuleType => ruleType;
 
     public IReadOnlyList<BingoPatternType> PatternTypes => patternTypes;
+    public bool UsesDefaultPatterns => usesDefaultPatterns;
 
     public BingoBallCountType BallCountType => ballCountType;
+
+    public bool AddBots => addBots;
+    public int BotCount => botCount;
 
     #endregion
 
@@ -129,8 +137,15 @@ public class LobbyController
 
         gameModeType = BingoGameModeType.Traditional;
         ballCountType = BingoBallCountType.Ball75;
+        patternTypes.Clear();
+        usesDefaultPatterns = true;
 
-        maxPlayers = DefaultMaximumPlayers;
+        unlimitedPlayers = false;
+        maxPlayers = GetMinimumPlayers();
+
+        addBots = false;
+        botCount = 0;
+
         closeReason = LobbyCloseReason.None;
 
         MainMenuPlayMode playMode = lobby != null
@@ -172,7 +187,8 @@ public class LobbyController
 
         gameModeType = soloSetupData.gameModeType;
         ballCountType = soloSetupData.ballCountType;
-        maxPlayers = GetValidMaximumPlayers(soloSetupData.maxPlayers);
+        unlimitedPlayers = soloSetupData.unlimitedPlayers;
+        maxPlayers = GetValidMaximumPlayers(soloSetupData.maxPlayers, unlimitedPlayers);
     }
 
     private void ApplyOnlineSetup(OnlineLobbySetupData onlineSetupData)
@@ -186,7 +202,8 @@ public class LobbyController
 
         gameModeType = onlineSetupData.gameModeType;
         ballCountType = onlineSetupData.ballCountType;
-        maxPlayers = GetValidMaximumPlayers(onlineSetupData.maxPlayers);
+        unlimitedPlayers = onlineSetupData.unlimitedPlayers;
+        maxPlayers = GetValidMaximumPlayers(onlineSetupData.maxPlayers, unlimitedPlayers);
     }
 
     private void ApplyCustomSetup(CustomLobbySetupData customSetupData, Func<string, bool> isRoomCodeAvailable)
@@ -215,7 +232,8 @@ public class LobbyController
 
         gameModeType = hostSetupData.gameModeType;
         ballCountType = hostSetupData.ballCountType;
-        maxPlayers = GetValidMaximumPlayers(hostSetupData.maxPlayers);
+        unlimitedPlayers = hostSetupData.unlimitedPlayers;
+        maxPlayers = GetValidMaximumPlayers(hostSetupData.maxPlayers, unlimitedPlayers);
 
         roomCode = GenerateUniqueRoomCode(isRoomCodeAvailable);
     }
@@ -243,9 +261,24 @@ public class LobbyController
         }
     }
 
-    private int GetValidMaximumPlayers(int requestedMaximumPlayers)
+    private int GetMinimumPlayers()
     {
-        return Mathf.Max(1, requestedMaximumPlayers);
+        return LobbySettings.instance.MinimumPlayers;
+    }
+
+    private int GetUnlimitedPlayerCount()
+    {
+        return LobbySettings.instance.UnlimitedPlayerCount;
+    }
+
+    private int GetValidMaximumPlayers(int requestedMaximumPlayers, bool isUnlimited)
+    {
+        if (isUnlimited)
+        {
+            return GetUnlimitedPlayerCount();
+        }
+
+        return Mathf.Clamp(requestedMaximumPlayers, GetMinimumPlayers(), GetUnlimitedPlayerCount());
     }
 
     #endregion
@@ -449,12 +482,12 @@ public class LobbyController
     {
         EnsureTimer();
 
-        LobbyTimerSettings timerSettings = LobbyTimerSettings.instance;
+        LobbySettings timerSettings = LobbySettings.instance;
 
         if (timerSettings == null)
         {
             timer.Stop();
-            Debug.LogWarning("[LobbyController] LobbyTimerSettings was not found. The lobby timer was not started.");
+            Debug.LogWarning("[LobbyController] LobbySettings was not found. The lobby timer was not started.");
             return;
         }
 
@@ -614,7 +647,6 @@ public class LobbyController
         BingoGameModeData gameModeData = gameModeManager.GetGameModeData(gameModeType);
 
         hasRule = false;
-        patternTypes.Clear();
 
         if (gameModeData == null)
         {
@@ -627,19 +659,95 @@ public class LobbyController
             ruleType = gameModeData.RuleData.RuleType;
         }
 
+        if (usesDefaultPatterns)
+        {
+            ApplyDefaultPatterns(gameModeData);
+        }
+    }
+
+    public bool ApplyHostSettings(LobbyHostSettingsData settingsData)
+    {
+        if (settingsData == null)
+        {
+            return false;
+        }
+
+        if (!settingsData.usesDefaultPatterns &&
+            (settingsData.patternTypes == null || settingsData.patternTypes.Count == 0))
+        {
+            return false;
+        }
+
+        gameModeType = ResolveGameModeType(settingsData.gameModeType);
+        ballCountType = ResolveBallCountType(settingsData.ballCountType);
+
+        usesDefaultPatterns = settingsData.usesDefaultPatterns;
+
+        if (usesDefaultPatterns)
+        {
+            patternTypes.Clear();
+        }
+        else
+        {
+            ApplyCustomPatterns(settingsData.patternTypes);
+        }
+
+        unlimitedPlayers = settingsData.unlimitedPlayers;
+        maxPlayers = GetValidMaximumPlayers(settingsData.maxPlayers, unlimitedPlayers);
+
+        addBots = settingsData.addBots;
+        botCount = addBots ? Mathf.Max(0, settingsData.botCount) : 0;
+
+        ResolveGameModeData();
+        RefreshViews();
+
+        return true;
+    }
+
+    private void ApplyDefaultPatterns(BingoGameModeData gameModeData)
+    {
+        patternTypes.Clear();
+
+        if (gameModeData == null)
+        {
+            return;
+        }
+
         List<BingoPatternData> patterns = gameModeData.GetAllPatterns();
 
         for (int i = 0; i < patterns.Count; i++)
         {
             BingoPatternData patternData = patterns[i];
 
-            if (patternData == null ||
-                patternTypes.Contains(patternData.PatternType))
+            if (patternData == null || patternTypes.Contains(patternData.PatternType))
             {
                 continue;
             }
 
             patternTypes.Add(patternData.PatternType);
+        }
+    }
+
+    private void ApplyCustomPatterns(List<BingoPatternType> requestedPatternTypes)
+    {
+        patternTypes.Clear();
+
+        if (requestedPatternTypes == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < requestedPatternTypes.Count; i++)
+        {
+            BingoPatternType patternType = requestedPatternTypes[i];
+
+            if (!Enum.IsDefined(typeof(BingoPatternType), patternType) ||
+                patternTypes.Contains(patternType))
+            {
+                continue;
+            }
+
+            patternTypes.Add(patternType);
         }
     }
 
@@ -729,9 +837,13 @@ public class LobbyController
             hasRule = hasRule,
             ruleType = ruleType,
             patternTypes = new List<BingoPatternType>(patternTypes),
+            usesDefaultPatterns = usesDefaultPatterns,
             ballCountType = ballCountType,
             playerCount = GetVisiblePlayerCount(),
             maxPlayers = maxPlayers,
+            unlimitedPlayers = unlimitedPlayers,
+            addBots = addBots,
+            botCount = botCount,
             playerNames = BuildPlayerNameList()
         };
 

@@ -63,7 +63,8 @@ public enum UIThemeDropdownType
 
 public enum UIThemeScrollType
 {
-    Default
+    Default,
+    Patterns
 }
 
 public enum UIThemeSliderType

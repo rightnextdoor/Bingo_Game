@@ -22,7 +22,7 @@ GameObject:
   - component: {fileID: 6361720458790271769}
   - component: {fileID: 6910353490865770210}
   - component: {fileID: 2387506421031424793}
-  - component: {fileID: 6965907320464363891}
+  - component: {fileID: 9213971337090501165}
   m_Layer: 0
   m_Name: GameManager
   m_TagString: Untagged
@@ -252,7 +252,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c3fb35e3649294e458806219b9e9e4b9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LobbyEntryFailureManager
---- !u!114 &6965907320464363891
+--- !u!114 &9213971337090501165
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -261,8 +261,10 @@ MonoBehaviour:
   m_GameObject: {fileID: 8215340122209812844}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: b1d6608384cde3841b6f30d9e67f52fe, type: 3}
+  m_Script: {fileID: 11500000, guid: 86bea08f31e2c1a4e93bdaece4a943dd, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::LobbyTimerSettings
+  m_EditorClassIdentifier: Assembly-CSharp::LobbySettings
+  minimumPlayers: 6
+  unlimitedPlayerCount: 100000
   onlineTimerMinutes: 5
   finalCountdownSeconds: 10

@@ -463,9 +463,7 @@ public class LobbyController
 
     public bool BeginFinalCountdown()
     {
-        if (lobby == null ||
-            lobby.lobbyState == LobbyState.Closed ||
-            lobby.lobbyState == LobbyState.InGame)
+        if (lobby == null || lobby.lobbyState != LobbyState.Open)
         {
             return false;
         }
@@ -476,6 +474,25 @@ public class LobbyController
         RefreshViews();
 
         return true;
+    }
+
+    public bool BeginFinalCountdown(string requesterUserId)
+    {
+        if (lobby == null ||
+            (lobby.playMode != MainMenuPlayMode.Solo &&
+             lobby.playMode != MainMenuPlayMode.Custom))
+        {
+            return false;
+        }
+
+        LobbyPlayerData requesterPlayer = GetPlayer(requesterUserId);
+
+        if (requesterPlayer == null || !requesterPlayer.isHost)
+        {
+            return false;
+        }
+
+        return BeginFinalCountdown();
     }
 
     private void InitializeTimer(MainMenuPlayMode playMode)
@@ -500,6 +517,25 @@ public class LobbyController
     private void EnsureTimer()
     {
         timer ??= new LobbyTimer();
+    }
+
+    public bool CompleteFinalCountdown()
+    {
+        if (lobby == null ||
+            lobby.lobbyState != LobbyState.FinalCountdown ||
+            timer == null ||
+            !timer.IsActive ||
+            LobbyTimer.GetCurrentTime() < timer.EndTime)
+        {
+            return false;
+        }
+
+        lobby.lobbyState = LobbyState.InGame;
+        timer.Stop();
+
+        RefreshViews();
+
+        return true;
     }
 
     #endregion
@@ -665,9 +701,27 @@ public class LobbyController
         }
     }
 
-    public bool ApplyHostSettings(LobbyHostSettingsData settingsData)
+    public bool ApplyHostSettings(string requesterUserId, LobbyHostSettingsData settingsData)
     {
-        if (settingsData == null)
+        if (lobby == null || settingsData == null)
+        {
+            return false;
+        }
+
+        if (lobby.lobbyState != LobbyState.Open)
+        {
+            return false;
+        }
+
+        if (lobby.playMode != MainMenuPlayMode.Solo &&
+            lobby.playMode != MainMenuPlayMode.Custom)
+        {
+            return false;
+        }
+
+        LobbyPlayerData requesterPlayer = GetPlayer(requesterUserId);
+
+        if (requesterPlayer == null || !requesterPlayer.isHost)
         {
             return false;
         }
@@ -832,6 +886,7 @@ public class LobbyController
             lobbyName = lobbyName,
             roomCode = roomCode,
             hasPassword = HasPassword,
+            lobbyPassword = password,
             gameModeType = gameModeType,
             gameModeName = GetGameModeName(),
             hasRule = hasRule,

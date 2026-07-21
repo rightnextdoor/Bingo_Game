@@ -16,6 +16,7 @@ public class LobbyViewData
     public string lobbyName;
     public string roomCode;
     public bool hasPassword;
+    public string lobbyPassword;
 
     public BingoGameModeType gameModeType;
     public string gameModeName;
@@ -51,6 +52,7 @@ public class LobbyViewData
         lobbyName = string.Empty;
         roomCode = string.Empty;
         hasPassword = false;
+        lobbyPassword = string.Empty;
 
         gameModeType = BingoGameModeType.Traditional;
         gameModeName = string.Empty;

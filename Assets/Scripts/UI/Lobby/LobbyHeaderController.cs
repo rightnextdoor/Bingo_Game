@@ -12,11 +12,13 @@ public class LobbyHeaderController : MonoBehaviour
 
     [Header("Buttons")]
     [SerializeField] private Button leaveButton;
+    [SerializeField] private Button startButton;
     [SerializeField] private Button hostSettingsButton;
 
     private LobbyViewData currentLobbyViewData;
 
     public event Action LeaveRequested;
+    public event Action StartRequested;
     public event Action HostSettingsRequested;
 
     private void OnEnable()
@@ -24,6 +26,11 @@ public class LobbyHeaderController : MonoBehaviour
         if (leaveButton != null)
         {
             leaveButton.onClick.AddListener(OnLeaveClicked);
+        }
+
+        if (startButton != null)
+        {
+            startButton.onClick.AddListener(OnStartClicked);
         }
 
         if (hostSettingsButton != null)
@@ -39,6 +46,11 @@ public class LobbyHeaderController : MonoBehaviour
             leaveButton.onClick.RemoveListener(OnLeaveClicked);
         }
 
+        if (startButton != null)
+        {
+            startButton.onClick.RemoveListener(OnStartClicked);
+        }
+
         if (hostSettingsButton != null)
         {
             hostSettingsButton.onClick.RemoveListener(OnHostSettingsClicked);
@@ -50,7 +62,7 @@ public class LobbyHeaderController : MonoBehaviour
         UpdateTimerDisplay();
     }
 
-    public void DisplayLobbyInfo(LobbyViewData lobbyViewData, bool canOpenHostSettings)
+    public void DisplayLobbyInfo(LobbyViewData lobbyViewData, bool canOpenHostSettings, bool canStartLobby)
     {
         if (lobbyViewData == null)
         {
@@ -60,8 +72,17 @@ public class LobbyHeaderController : MonoBehaviour
         currentLobbyViewData = lobbyViewData;
 
         SetLobbyTitle(lobbyViewData);
+        SetStartVisible(canStartLobby);
         SetHostSettingsVisible(canOpenHostSettings);
         UpdateTimerDisplay();
+    }
+
+    private void SetStartVisible(bool isVisible)
+    {
+        if (startButton != null)
+        {
+            startButton.gameObject.SetActive(isVisible);
+        }
     }
 
     public void SetTimerSeconds(float remainingSeconds)
@@ -143,5 +164,10 @@ public class LobbyHeaderController : MonoBehaviour
     private void OnHostSettingsClicked()
     {
         HostSettingsRequested?.Invoke();
+    }
+
+    private void OnStartClicked()
+    {
+        StartRequested?.Invoke();
     }
 }

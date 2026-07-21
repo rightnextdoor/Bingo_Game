@@ -57,7 +57,6 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
     public LobbyHostSettingsData WorkingData => workingData;
     public bool IsUiReady => isUiReady;
 
-    public event Action<LobbyHostSettingsData> ApplySettingsRequested;
     public event Action SettingsLayoutChanged;
 
     #endregion
@@ -867,9 +866,10 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
         return true;
     }
 
-    private void ApplyAndClose()
+    private async void ApplyAndClose()
     {
-        if (!TryBuildHostSettingsData(out LobbyHostSettingsData settingsData))
+        if (!TryBuildHostSettingsData(
+                out LobbyHostSettingsData settingsData))
         {
             return;
         }
@@ -885,36 +885,60 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
             $"Add Bots: {settingsData.addBots} | " +
             $"Bot Count: {settingsData.botCount}");
 
-        LobbyManager lobbyManager = LobbyManager.instance;
+        LobbyManager lobbyManager =
+            LobbyManager.instance;
 
-        if (lobbyManager == null || lobbyManager.CurrentLobby == null)
+        if (lobbyManager == null ||
+            lobbyManager.CurrentLobby == null)
         {
-            ShowError("The current lobby could not be found.");
+            ShowError(
+                "The current lobby could not be found.");
+
             return;
         }
 
+        bool settingsApplied;
+
         if (lobbyManager.RuntimeType == SessionRuntimeType.Local)
         {
-            LobbyController lobbyController = lobbyManager.CurrentLobby.Controller;
+            LobbyController lobbyController =
+                lobbyManager.CurrentLobby.Controller;
 
-            if (lobbyController == null || !lobbyController.ApplyHostSettings(settingsData))
-            {
-                ShowError("The lobby settings could not be applied.");
-                return;
-            }
+            settingsApplied =
+                lobbyController != null &&
+                lobbyController.ApplyHostSettings(
+                    lobbyManager.CurrentUserId,
+                    settingsData);
         }
         else
         {
-            if (ApplySettingsRequested == null)
+            NetworkLobbyConnection lobbyConnection =
+                NetworkLobbyConnection.GetLocalConnection();
+
+            if (lobbyConnection == null)
             {
-                ShowError("The network host settings request is not connected yet.");
+                ShowError(
+                    "The network lobby connection is not available.");
+
                 return;
             }
 
-            ApplySettingsRequested.Invoke(settingsData);
+            settingsApplied =
+                await lobbyConnection
+                    .RequestApplyHostSettingsAsync(
+                        settingsData);
+        }
+
+        if (!settingsApplied)
+        {
+            ShowError(
+                "The lobby settings could not be applied.");
+
+            return;
         }
 
         workingData = settingsData;
+
         ClosePopup();
     }
 

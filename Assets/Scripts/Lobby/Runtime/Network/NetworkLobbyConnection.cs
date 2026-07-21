@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Unity.Netcode;
@@ -11,17 +12,16 @@ public class NetworkLobbyConnection : NetworkBehaviour
 
     private const float RequestTimeoutSeconds = 30f;
 
-    private static readonly Dictionary<ulong, NetworkLobbyConnection>
-        serverConnectionsByClientId =
-            new Dictionary<ulong, NetworkLobbyConnection>();
+    private static readonly Dictionary<ulong, NetworkLobbyConnection> serverConnectionsByClientId = new Dictionary<ulong, NetworkLobbyConnection>();
 
-    private readonly Dictionary<string, TaskCompletionSource<LobbyEntryResult>>
-        pendingEntryRequests =
-            new Dictionary<string, TaskCompletionSource<LobbyEntryResult>>();
+    private readonly Dictionary<string, TaskCompletionSource<LobbyEntryResult>> pendingEntryRequests = new Dictionary<string, TaskCompletionSource<LobbyEntryResult>>();
 
-    private readonly Dictionary<string, TaskCompletionSource<LobbyExitResult>>
-        pendingExitRequests =
-            new Dictionary<string, TaskCompletionSource<LobbyExitResult>>();
+    private readonly Dictionary<string, TaskCompletionSource<LobbyExitResult>> pendingExitRequests = new Dictionary<string, TaskCompletionSource<LobbyExitResult>>();
+
+    private readonly Dictionary<string, TaskCompletionSource<bool>> pendingHostSettingsRequests = new Dictionary<string, TaskCompletionSource<bool>>();
+
+    private Lobby authorityLobby;
+    private Coroutine startLobbyRoutine;
 
     public static event Action<LobbyExitNotification> LocalLobbyExitReceived;
     public static event Action<LobbyViewData> LocalLobbyViewReceived;
@@ -56,7 +56,10 @@ public class NetworkLobbyConnection : NetworkBehaviour
         {
             NetworkLobbyManager.instance?.ProcessAuthorityLobbyConnectionDespawn(OwnerClientId);
 
-            if (serverConnectionsByClientId.TryGetValue(OwnerClientId, out NetworkLobbyConnection registeredConnection) && registeredConnection == this)
+            if (serverConnectionsByClientId.TryGetValue(
+                    OwnerClientId,
+                    out NetworkLobbyConnection registeredConnection) &&
+                registeredConnection == this)
             {
                 serverConnectionsByClientId.Remove(OwnerClientId);
             }
@@ -66,6 +69,8 @@ public class NetworkLobbyConnection : NetworkBehaviour
         {
             local = null;
         }
+
+        authorityLobby = null;
 
         CompletePendingRequestsAsFailed();
 
@@ -328,6 +333,11 @@ public class NetworkLobbyConnection : NetworkBehaviour
                     senderClientId);
         }
 
+        if (result != null && result.success && result.lobby != null)
+        {
+            authorityLobby = result.lobby;
+        }
+
         string resultJson = JsonUtility.ToJson(result);
 
         ReceiveLobbyEntryResultRpc(
@@ -459,10 +469,7 @@ public class NetworkLobbyConnection : NetworkBehaviour
     }
 
     [Rpc(SendTo.SpecifiedInParams)]
-    private void ReceiveLobbyExitResultRpc(
-        string requestId,
-        string resultJson,
-        RpcParams rpcParams = default)
+    private void ReceiveLobbyExitResultRpc(string requestId, string resultJson, RpcParams rpcParams = default)
     {
         if (string.IsNullOrWhiteSpace(requestId))
         {
@@ -495,6 +502,171 @@ public class NetworkLobbyConnection : NetworkBehaviour
         completionSource.TrySetResult(result);
     }
 
+    public async Task<bool> RequestApplyHostSettingsAsync(LobbyHostSettingsData settingsData)
+    {
+        if (!IsSpawned || !IsOwner || settingsData == null)
+        {
+            return false;
+        }
+
+        string requestId = Guid.NewGuid().ToString("N");
+        string settingsJson = JsonUtility.ToJson(settingsData);
+
+        TaskCompletionSource<bool> completionSource =
+            new TaskCompletionSource<bool>();
+
+        pendingHostSettingsRequests.Add(
+            requestId,
+            completionSource);
+
+        RequestApplyHostSettingsRpc(
+            requestId,
+            settingsJson);
+
+        return await WaitForHostSettingsResultAsync(
+            requestId,
+            completionSource);
+    }
+
+    [Rpc(
+    SendTo.Server,
+    InvokePermission = RpcInvokePermission.Owner)]
+    private void RequestApplyHostSettingsRpc(
+    string requestId,
+    string settingsJson,
+    RpcParams rpcParams = default)
+    {
+        ulong senderClientId = rpcParams.Receive.SenderClientId;
+
+        bool success = false;
+        LobbyHostSettingsData settingsData = null;
+
+        try
+        {
+            settingsData =
+                JsonUtility.FromJson<LobbyHostSettingsData>(
+                    settingsJson);
+        }
+        catch (Exception exception)
+        {
+            Debug.LogException(exception);
+        }
+
+        NetworkConnectionRegistry connectionRegistry =
+            NetworkConnectionRegistry.instance;
+
+        if (settingsData != null &&
+            authorityLobby?.Controller != null &&
+            connectionRegistry != null &&
+            connectionRegistry.IsReady &&
+            connectionRegistry.TryGetBingoUserId(
+                senderClientId,
+                out string requesterUserId))
+        {
+            success = authorityLobby.Controller.ApplyHostSettings(
+                requesterUserId,
+                settingsData);
+
+            if (success)
+            {
+                BroadcastLobbyView(authorityLobby);
+            }
+        }
+
+        ReceiveHostSettingsResultRpc(
+            requestId,
+            success,
+            RpcTarget.Single(
+                senderClientId,
+                RpcTargetUse.Temp));
+    }
+
+    [Rpc(SendTo.SpecifiedInParams)]
+    private void ReceiveHostSettingsResultRpc(
+    string requestId,
+    bool success,
+    RpcParams rpcParams = default)
+    {
+        if (string.IsNullOrWhiteSpace(requestId))
+        {
+            return;
+        }
+
+        if (!pendingHostSettingsRequests.TryGetValue(
+                requestId,
+                out TaskCompletionSource<bool> completionSource))
+        {
+            return;
+        }
+
+        completionSource.TrySetResult(success);
+    }
+
+    private async Task<bool> WaitForHostSettingsResultAsync(
+    string requestId,
+    TaskCompletionSource<bool> completionSource)
+    {
+        float timeoutTime =
+            Time.realtimeSinceStartup +
+            RequestTimeoutSeconds;
+
+        while (!completionSource.Task.IsCompleted)
+        {
+            if (Time.realtimeSinceStartup >= timeoutTime)
+            {
+                pendingHostSettingsRequests.Remove(requestId);
+                return false;
+            }
+
+            await Task.Yield();
+        }
+
+        pendingHostSettingsRequests.Remove(requestId);
+
+        return await completionSource.Task;
+    }
+
+    private static void BroadcastLobbyView(Lobby lobby)
+    {
+        if (lobby?.Controller == null)
+        {
+            return;
+        }
+
+        NetworkConnectionRegistry connectionRegistry =
+            NetworkConnectionRegistry.instance;
+
+        if (connectionRegistry == null ||
+            !connectionRegistry.IsReady)
+        {
+            return;
+        }
+
+        LobbyViewData lobbyViewData =
+            lobby.Controller.BuildViewData();
+
+        IReadOnlyList<LobbyPlayerData> players =
+            lobby.Controller.Players;
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            LobbyPlayerData playerData = players[i];
+            string userId = playerData?.userData?.userId;
+
+            if (string.IsNullOrWhiteSpace(userId) ||
+                !connectionRegistry.TryGetClientId(
+                    userId,
+                    out ulong clientId))
+            {
+                continue;
+            }
+
+            TrySendLobbyView(
+                clientId,
+                lobbyViewData);
+        }
+    }
+
     [Rpc(SendTo.SpecifiedInParams)]
     private void ReceiveLobbyViewRpc(string lobbyViewJson, RpcParams rpcParams = default)
     {
@@ -518,9 +690,7 @@ public class NetworkLobbyConnection : NetworkBehaviour
     }
 
     [Rpc(SendTo.SpecifiedInParams)]
-    private void ReceiveForcedLobbyExitRpc(
-        string notificationJson,
-        RpcParams rpcParams = default)
+    private void ReceiveForcedLobbyExitRpc(string notificationJson, RpcParams rpcParams = default)
     {
         LobbyExitNotification notification = null;
 
@@ -616,7 +786,81 @@ public class NetworkLobbyConnection : NetworkBehaviour
                     "The network connection was closed."));
         }
 
+        foreach (
+            KeyValuePair<string, TaskCompletionSource<bool>>
+            pendingRequest in pendingHostSettingsRequests)
+        {
+            pendingRequest.Value.TrySetResult(false);
+        }
+
+        pendingHostSettingsRequests.Clear();
         pendingEntryRequests.Clear();
         pendingExitRequests.Clear();
+    }
+
+    public void RequestStartLobby()
+    {
+        if (!IsSpawned || !IsOwner)
+        {
+            return;
+        }
+
+        RequestStartLobbyRpc();
+    }
+
+    [Rpc(
+    SendTo.Server,
+    InvokePermission = RpcInvokePermission.Owner)]
+    private void RequestStartLobbyRpc(RpcParams rpcParams = default)
+    {
+        if (authorityLobby?.Controller == null)
+        {
+            return;
+        }
+
+        NetworkConnectionRegistry connectionRegistry =
+            NetworkConnectionRegistry.instance;
+
+        if (connectionRegistry == null ||
+            !connectionRegistry.IsReady ||
+            !connectionRegistry.TryGetBingoUserId(
+                rpcParams.Receive.SenderClientId,
+                out string requesterUserId))
+        {
+            return;
+        }
+
+        if (!authorityLobby.Controller.BeginFinalCountdown(requesterUserId))
+        {
+            return;
+        }
+
+        BroadcastLobbyView(authorityLobby);
+
+        if (startLobbyRoutine != null)
+        {
+            StopCoroutine(startLobbyRoutine);
+        }
+
+        startLobbyRoutine =
+            StartCoroutine(
+                WaitForAuthorityFinalCountdown());
+    }
+
+    private IEnumerator WaitForAuthorityFinalCountdown()
+    {
+        while (authorityLobby?.Controller != null &&
+               authorityLobby.Controller.TimerEndTime > LobbyTimer.GetCurrentTime())
+        {
+            yield return null;
+        }
+
+        if (authorityLobby?.Controller != null &&
+            authorityLobby.Controller.CompleteFinalCountdown())
+        {
+            BroadcastLobbyView(authorityLobby);
+        }
+
+        startLobbyRoutine = null;
     }
 }

@@ -9,6 +9,7 @@ public class BingoBoardController : MonoBehaviour
     private const int CellCount = 25;
     private const int FreeCellIndex = 12;
 
+    [SerializeField] private CanvasGroup boardCanvasGroup;
     [SerializeField] private List<BingoBoardCellController> cells = new List<BingoBoardCellController>();
 
     #endregion
@@ -51,4 +52,20 @@ public class BingoBoardController : MonoBehaviour
     }
 
     #endregion
+
+    #region Interaction
+
+    public void SetInteractable(bool interactable)
+    {
+        if (boardCanvasGroup == null)
+        {
+            return;
+        }
+
+        boardCanvasGroup.interactable = interactable;
+        boardCanvasGroup.blocksRaycasts = interactable;
+    }
+
+    #endregion
+
 }

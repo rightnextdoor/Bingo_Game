@@ -545,6 +545,23 @@ public class LobbyController
         return BeginFinalCountdown();
     }
 
+    public bool TryBeginOnlineFinalCountdown()
+    {
+        if (lobby == null ||
+            lobby.playMode != MainMenuPlayMode.Online ||
+            lobby.lobbyState != LobbyState.Open ||
+            timer == null ||
+            !timer.HasReachedFinalCountdown())
+        {
+            return false;
+        }
+
+        lobby.lobbyState = LobbyState.FinalCountdown;
+        RefreshViews();
+
+        return true;
+    }
+
     private void InitializeTimer(MainMenuPlayMode playMode)
     {
         EnsureTimer();
@@ -574,8 +591,7 @@ public class LobbyController
         if (lobby == null ||
             lobby.lobbyState != LobbyState.FinalCountdown ||
             timer == null ||
-            !timer.IsActive ||
-            LobbyTimer.GetCurrentTime() < timer.EndTime)
+            !timer.HasExpired())
         {
             return false;
         }

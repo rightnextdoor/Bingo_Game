@@ -51,8 +51,12 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
 
         if (boardSectionController != null)
         {
+            bool controlsInteractable = lobbyViewData.lobbyState == LobbyState.Open;
+
             boardSectionController.DisplayBoard(GetCurrentPlayerBoard(lobbyViewData));
-            boardSectionController.SetRerollInteractable(lobbyViewData.lobbyState == LobbyState.Open);
+            boardSectionController.SetBoardInteractable(false);
+            boardSectionController.SetRerollInteractable(controlsInteractable);
+            boardSectionController.SetReadyInteractable(controlsInteractable);
         }
 
         customPanelController?.DisplayLobbyInfo(lobbyViewData);
@@ -352,14 +356,24 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
 
         boardSectionController.RerollRequested -= RerollBoard;
         boardSectionController.RerollRequested += RerollBoard;
+
+        boardSectionController.ReadyRequested -= ReadyPlayer;
+        boardSectionController.ReadyRequested += ReadyPlayer;
     }
 
     private void UnsubscribeFromBoardSection()
     {
-        if (boardSectionController != null)
+        if (boardSectionController == null)
         {
-            boardSectionController.RerollRequested -= RerollBoard;
+            return;
         }
+
+        boardSectionController.RerollRequested -= RerollBoard;
+        boardSectionController.ReadyRequested -= ReadyPlayer;
+    }
+
+    private void ReadyPlayer()
+    {
     }
 
     private void RerollBoard()

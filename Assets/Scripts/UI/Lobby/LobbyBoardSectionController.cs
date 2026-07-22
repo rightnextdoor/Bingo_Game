@@ -8,9 +8,13 @@ public class LobbyBoardSectionController : MonoBehaviour
     #region Fields
 
     [SerializeField] private BingoBoardController boardController;
+
+    [Header("Controls")]
     [SerializeField] private Button rerollButton;
+    [SerializeField] private Button readyButton;
 
     public event Action RerollRequested;
+    public event Action ReadyRequested;
 
     #endregion
 
@@ -22,6 +26,11 @@ public class LobbyBoardSectionController : MonoBehaviour
         {
             rerollButton.onClick.AddListener(OnRerollClicked);
         }
+
+        if (readyButton != null)
+        {
+            readyButton.onClick.AddListener(OnReadyClicked);
+        }
     }
 
     private void OnDisable()
@@ -29,6 +38,11 @@ public class LobbyBoardSectionController : MonoBehaviour
         if (rerollButton != null)
         {
             rerollButton.onClick.RemoveListener(OnRerollClicked);
+        }
+
+        if (readyButton != null)
+        {
+            readyButton.onClick.RemoveListener(OnReadyClicked);
         }
     }
 
@@ -41,11 +55,28 @@ public class LobbyBoardSectionController : MonoBehaviour
         boardController?.DisplayBoard(boardData);
     }
 
-    public void SetRerollInteractable(bool isInteractable)
+    public void SetBoardInteractable(bool interactable)
+    {
+        boardController?.SetInteractable(interactable);
+    }
+
+    #endregion
+
+    #region Controls
+
+    public void SetRerollInteractable(bool interactable)
     {
         if (rerollButton != null)
         {
-            rerollButton.interactable = isInteractable;
+            rerollButton.interactable = interactable;
+        }
+    }
+
+    public void SetReadyInteractable(bool interactable)
+    {
+        if (readyButton != null)
+        {
+            readyButton.interactable = interactable;
         }
     }
 
@@ -56,6 +87,11 @@ public class LobbyBoardSectionController : MonoBehaviour
     private void OnRerollClicked()
     {
         RerollRequested?.Invoke();
+    }
+
+    private void OnReadyClicked()
+    {
+        ReadyRequested?.Invoke();
     }
 
     #endregion

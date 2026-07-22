@@ -336,6 +336,7 @@ public class NetworkLobbyConnection : NetworkBehaviour
         if (result != null && result.success && result.lobby != null)
         {
             authorityLobby = result.lobby;
+            TryStartAuthorityOnlineCountdown(result.lobby);
         }
 
         string resultJson = JsonUtility.ToJson(result);
@@ -346,6 +347,41 @@ public class NetworkLobbyConnection : NetworkBehaviour
             RpcTarget.Single(
                 senderClientId,
                 RpcTargetUse.Temp));
+    }
+
+    private IEnumerator WaitForAuthorityOnlineCountdown(Lobby onlineLobby)
+    {
+        LobbyController controller = onlineLobby?.Controller;
+
+        if (controller == null)
+        {
+            startLobbyRoutine = null;
+            yield break;
+        }
+
+        while (onlineLobby.lobbyState == LobbyState.Open)
+        {
+            if (controller.TryBeginOnlineFinalCountdown())
+            {
+                BroadcastLobbyView(onlineLobby);
+                break;
+            }
+
+            yield return null;
+        }
+
+        while (onlineLobby.lobbyState == LobbyState.FinalCountdown &&
+               !controller.Timer.HasExpired())
+        {
+            yield return null;
+        }
+
+        if (controller.CompleteFinalCountdown())
+        {
+            BroadcastLobbyView(onlineLobby);
+        }
+
+        startLobbyRoutine = null;
     }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Owner)]
@@ -845,6 +881,20 @@ public class NetworkLobbyConnection : NetworkBehaviour
         startLobbyRoutine =
             StartCoroutine(
                 WaitForAuthorityFinalCountdown());
+    }
+
+    private void TryStartAuthorityOnlineCountdown(Lobby lobby)
+    {
+        if (lobby?.Controller == null ||
+            lobby.playMode != MainMenuPlayMode.Online ||
+            startLobbyRoutine != null)
+        {
+            return;
+        }
+
+        startLobbyRoutine =
+            StartCoroutine(
+                WaitForAuthorityOnlineCountdown(lobby));
     }
 
     private IEnumerator WaitForAuthorityFinalCountdown()

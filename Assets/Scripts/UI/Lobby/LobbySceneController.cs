@@ -7,6 +7,7 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
     [Header("Sections")]
     [SerializeField] private LobbyHeaderController headerController;
     [SerializeField] private LobbyCustomPanelController customPanelController;
+    [SerializeField] private LobbyBoardSectionController boardSectionController;
 
     private LobbyController lobbyController;
     private Coroutine bindRoutine;
@@ -15,6 +16,7 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
     private void OnEnable()
     {
         SubscribeToHeader();
+        SubscribeToBoardSection();
         bindRoutine = StartCoroutine(BindWhenLobbyIsReady());
     }
 
@@ -34,6 +36,7 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
 
         UnsubscribeFromHeader();
         UnsubscribeFromLobbyManager();
+        UnsubscribeFromBoardSection();
         UnbindLobbyController();
     }
 
@@ -44,10 +47,13 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
             return;
         }
 
-        headerController?.DisplayLobbyInfo(
-            lobbyViewData,
-            CanOpenHostSettings(lobbyViewData),
-            CanStartLobby(lobbyViewData));
+        headerController?.DisplayLobbyInfo(lobbyViewData, CanOpenHostSettings(lobbyViewData), CanStartLobby(lobbyViewData));
+
+        if (boardSectionController != null)
+        {
+            boardSectionController.DisplayBoard(GetCurrentPlayerBoard(lobbyViewData));
+            boardSectionController.SetRerollInteractable(lobbyViewData.lobbyState == LobbyState.Open);
+        }
 
         customPanelController?.DisplayLobbyInfo(lobbyViewData);
 
@@ -311,5 +317,76 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
         }
 
         gameSceneManager.LoadGameScene();
+    }
+
+    private LobbyBoardData GetCurrentPlayerBoard(LobbyViewData lobbyViewData)
+    {
+        LobbyManager lobbyManager = LobbyManager.instance;
+
+        if (lobbyManager == null ||
+            string.IsNullOrWhiteSpace(lobbyManager.CurrentUserId) ||
+            lobbyViewData?.playerBoards == null)
+        {
+            return null;
+        }
+
+        for (int i = 0; i < lobbyViewData.playerBoards.Count; i++)
+        {
+            LobbyPlayerBoardViewData playerBoard = lobbyViewData.playerBoards[i];
+
+            if (playerBoard != null && playerBoard.userId == lobbyManager.CurrentUserId)
+            {
+                return playerBoard.boardData;
+            }
+        }
+
+        return null;
+    }
+
+    private void SubscribeToBoardSection()
+    {
+        if (boardSectionController == null)
+        {
+            return;
+        }
+
+        boardSectionController.RerollRequested -= RerollBoard;
+        boardSectionController.RerollRequested += RerollBoard;
+    }
+
+    private void UnsubscribeFromBoardSection()
+    {
+        if (boardSectionController != null)
+        {
+            boardSectionController.RerollRequested -= RerollBoard;
+        }
+    }
+
+    private void RerollBoard()
+    {
+        LobbyManager lobbyManager = LobbyManager.instance;
+
+        if (lobbyManager == null ||
+            lobbyManager.CurrentLobby == null ||
+            string.IsNullOrWhiteSpace(lobbyManager.CurrentUserId))
+        {
+            return;
+        }
+
+        if (lobbyManager.RuntimeType == SessionRuntimeType.Local)
+        {
+            lobbyManager.CurrentLobby.Controller?.RerollPlayerBoard(lobbyManager.CurrentUserId);
+            return;
+        }
+
+        NetworkLobbyConnection lobbyConnection = NetworkLobbyConnection.GetLocalConnection();
+
+        if (lobbyConnection == null)
+        {
+            Debug.LogWarning("[LobbySceneController] The network lobby connection was not available for board reroll.");
+            return;
+        }
+
+        lobbyConnection.RequestRerollBoard();
     }
 }

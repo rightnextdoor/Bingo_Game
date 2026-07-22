@@ -28,6 +28,7 @@ public class SoloLobbySetupData
 {
     public BingoGameModeType gameModeType = BingoGameModeType.Traditional;
     public BingoBallCountType ballCountType = BingoBallCountType.Ball75;
+    public bool useFreeCell = true;
 
     public bool unlimitedPlayers = false;
     public int maxPlayers = 6;
@@ -36,6 +37,7 @@ public class SoloLobbySetupData
     {
         gameModeType = BingoGameModeType.Traditional;
         ballCountType = BingoBallCountType.Ball75;
+        useFreeCell = true;
 
         unlimitedPlayers = false;
         maxPlayers = 6;
@@ -48,6 +50,7 @@ public class OnlineLobbySetupData
     public BingoGameModeType gameModeType = BingoGameModeType.Traditional;
     public OnlineSearchType searchType = OnlineSearchType.QuickPlay;
     public BingoBallCountType ballCountType = BingoBallCountType.Ball75;
+    public bool useFreeCell = true;
 
     public bool unlimitedPlayers = false;
     public int maxPlayers = 30;
@@ -57,6 +60,7 @@ public class OnlineLobbySetupData
         gameModeType = BingoGameModeType.Traditional;
         searchType = OnlineSearchType.QuickPlay;
         ballCountType = BingoBallCountType.Ball75;
+        useFreeCell = true;
 
         unlimitedPlayers = false;
         maxPlayers = 30;
@@ -88,6 +92,7 @@ public class CustomHostLobbySetupData
 
     public BingoGameModeType gameModeType = BingoGameModeType.Traditional;
     public BingoBallCountType ballCountType = BingoBallCountType.Ball75;
+    public bool useFreeCell = true;
 
     public bool unlimitedPlayers = false;
     public int maxPlayers = 6;
@@ -99,6 +104,7 @@ public class CustomHostLobbySetupData
 
         gameModeType = BingoGameModeType.Traditional;
         ballCountType = BingoBallCountType.Ball75;
+        useFreeCell = true;
 
         unlimitedPlayers = false;
         maxPlayers = 6;

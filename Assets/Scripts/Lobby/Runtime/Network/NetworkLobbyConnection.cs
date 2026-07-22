@@ -863,4 +863,30 @@ public class NetworkLobbyConnection : NetworkBehaviour
 
         startLobbyRoutine = null;
     }
+
+    public void RequestRerollBoard()
+    {
+        if (!IsSpawned || !IsOwner)
+        {
+            return;
+        }
+
+        RequestRerollBoardRpc();
+    }
+
+    [Rpc(
+    SendTo.Server,
+    InvokePermission = RpcInvokePermission.Owner)]
+    private void RequestRerollBoardRpc(
+    RpcParams rpcParams = default)
+    {
+        if (NetworkLobbyManager.instance == null ||
+            !NetworkLobbyManager.instance.IsReady)
+        {
+            return;
+        }
+
+        NetworkLobbyManager.instance.ProcessAuthorityRerollBoard(
+            rpcParams.Receive.SenderClientId);
+    }
 }

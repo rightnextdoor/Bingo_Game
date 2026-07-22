@@ -1213,6 +1213,7 @@ GameObject:
   - component: {fileID: 523102114524243897}
   - component: {fileID: 4730818296315770234}
   - component: {fileID: 4244893747365575278}
+  - component: {fileID: 2540606888373903356}
   m_Layer: 5
   m_Name: BingoBoard
   m_TagString: Untagged
@@ -1343,6 +1344,44 @@ MonoBehaviour:
   - {fileID: 10719231534195635}
   - {fileID: 6163011830369959174}
   - {fileID: 1546175260615239559}
+--- !u!114 &2540606888373903356
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7156181465873837498}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3012afe2633b38e409965f2774bd8c09, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoBoardController
+  cells:
+  - {fileID: 3095261523945456948}
+  - {fileID: 4717268405375867366}
+  - {fileID: 602743740299787305}
+  - {fileID: 6940293036712938229}
+  - {fileID: 2015818795206798255}
+  - {fileID: 8048734947314036901}
+  - {fileID: 3271191320504762034}
+  - {fileID: 5197501544523850217}
+  - {fileID: 2016491877607309184}
+  - {fileID: 1341028128344402919}
+  - {fileID: 2794189248944908536}
+  - {fileID: 4076543014767616622}
+  - {fileID: 686192657138159800}
+  - {fileID: 4359354206885656688}
+  - {fileID: 6503813524023490527}
+  - {fileID: 6493283727746192416}
+  - {fileID: 1438465489113268061}
+  - {fileID: 1367618261214060981}
+  - {fileID: 3625834323220501077}
+  - {fileID: 2263779219878296875}
+  - {fileID: 9143688997383491599}
+  - {fileID: 8091520118851955940}
+  - {fileID: 3081054244002362099}
+  - {fileID: 9179291568247352390}
+  - {fileID: 4580461685404595911}
 --- !u!1 &7238238172658517148
 GameObject:
   m_ObjectHideFlags: 0
@@ -1660,6 +1699,17 @@ RectTransform:
   m_CorrespondingSourceObject: {fileID: 8904949927724016787, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
   m_PrefabInstance: {fileID: 5659311951381773}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &9179291568247352390 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 9184948577088448843, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
+  m_PrefabInstance: {fileID: 5659311951381773}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53d1eadb9414ee94fbd0bde613b9a5c0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoBoardCellController
 --- !u!1001 &113600044588267844
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1773,6 +1823,17 @@ RectTransform:
   m_CorrespondingSourceObject: {fileID: 8904949927724016787, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
   m_PrefabInstance: {fileID: 113600044588267844}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &9143688997383491599 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 9184948577088448843, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
+  m_PrefabInstance: {fileID: 113600044588267844}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53d1eadb9414ee94fbd0bde613b9a5c0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoBoardCellController
 --- !u!1001 &1098215012726392239
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1881,6 +1942,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d9eaa1631551b3442af2a65431e12f30, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::UIThemeBoardCellTarget
+--- !u!114 &8091520118851955940 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 9184948577088448843, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
+  m_PrefabInstance: {fileID: 1098215012726392239}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53d1eadb9414ee94fbd0bde613b9a5c0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoBoardCellController
 --- !u!224 &8406277096697995580 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 8904949927724016787, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
@@ -1999,6 +2071,17 @@ RectTransform:
   m_CorrespondingSourceObject: {fileID: 8904949927724016787, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
   m_PrefabInstance: {fileID: 1208556635140315630}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &8048734947314036901 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 9184948577088448843, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
+  m_PrefabInstance: {fileID: 1208556635140315630}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53d1eadb9414ee94fbd0bde613b9a5c0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoBoardCellController
 --- !u!1001 &2244940715546272702
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -2107,6 +2190,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d9eaa1631551b3442af2a65431e12f30, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::UIThemeBoardCellTarget
+--- !u!114 &6940293036712938229 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 9184948577088448843, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
+  m_PrefabInstance: {fileID: 2244940715546272702}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53d1eadb9414ee94fbd0bde613b9a5c0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoBoardCellController
 --- !u!224 &7256175759877932845 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 8904949927724016787, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
@@ -2209,6 +2303,17 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
+--- !u!114 &6503813524023490527 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 9184948577088448843, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
+  m_PrefabInstance: {fileID: 2681139176243142292}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53d1eadb9414ee94fbd0bde613b9a5c0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoBoardCellController
 --- !u!224 &6818992063682083335 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 8904949927724016787, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
@@ -2322,6 +2427,17 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
+--- !u!114 &6493283727746192416 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 9184948577088448843, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
+  m_PrefabInstance: {fileID: 2696452438721101163}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53d1eadb9414ee94fbd0bde613b9a5c0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoBoardCellController
 --- !u!224 &6845196502060866040 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 8904949927724016787, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
@@ -2435,6 +2551,17 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
+--- !u!114 &5197501544523850217 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 9184948577088448843, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
+  m_PrefabInstance: {fileID: 3987447152836429986}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53d1eadb9414ee94fbd0bde613b9a5c0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoBoardCellController
 --- !u!224 &5531263428415728689 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 8904949927724016787, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
@@ -2548,6 +2675,17 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
+--- !u!114 &4717268405375867366 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 9184948577088448843, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
+  m_PrefabInstance: {fileID: 4467681392423874733}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53d1eadb9414ee94fbd0bde613b9a5c0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoBoardCellController
 --- !u!224 &5013870094786057278 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 8904949927724016787, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
@@ -2677,6 +2815,17 @@ RectTransform:
   m_CorrespondingSourceObject: {fileID: 8904949927724016787, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
   m_PrefabInstance: {fileID: 4676548079007424396}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &4580461685404595911 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 9184948577088448843, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
+  m_PrefabInstance: {fileID: 4676548079007424396}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53d1eadb9414ee94fbd0bde613b9a5c0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoBoardCellController
 --- !u!1001 &4830382853064757563
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -2790,6 +2939,17 @@ RectTransform:
   m_CorrespondingSourceObject: {fileID: 8904949927724016787, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
   m_PrefabInstance: {fileID: 4830382853064757563}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &4359354206885656688 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 9184948577088448843, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
+  m_PrefabInstance: {fileID: 4830382853064757563}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53d1eadb9414ee94fbd0bde613b9a5c0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoBoardCellController
 --- !u!1001 &5180745232706489125
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -2898,6 +3058,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d9eaa1631551b3442af2a65431e12f30, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::UIThemeBoardCellTarget
+--- !u!114 &4076543014767616622 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 9184948577088448843, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
+  m_PrefabInstance: {fileID: 5180745232706489125}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53d1eadb9414ee94fbd0bde613b9a5c0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoBoardCellController
 --- !u!224 &4355271730351419318 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 8904949927724016787, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
@@ -3011,6 +3182,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d9eaa1631551b3442af2a65431e12f30, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::UIThemeBoardCellTarget
+--- !u!114 &3625834323220501077 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 9184948577088448843, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
+  m_PrefabInstance: {fileID: 5559398015928384286}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53d1eadb9414ee94fbd0bde613b9a5c0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoBoardCellController
 --- !u!224 &3941300365802954637 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 8904949927724016787, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
@@ -3129,6 +3311,17 @@ RectTransform:
   m_CorrespondingSourceObject: {fileID: 8904949927724016787, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
   m_PrefabInstance: {fileID: 5914041313171396601}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &3271191320504762034 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 9184948577088448843, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
+  m_PrefabInstance: {fileID: 5914041313171396601}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53d1eadb9414ee94fbd0bde613b9a5c0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoBoardCellController
 --- !u!1001 &6162030286266838143
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -3237,6 +3430,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d9eaa1631551b3442af2a65431e12f30, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::UIThemeBoardCellTarget
+--- !u!114 &3095261523945456948 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 9184948577088448843, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
+  m_PrefabInstance: {fileID: 6162030286266838143}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53d1eadb9414ee94fbd0bde613b9a5c0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoBoardCellController
 --- !u!224 &3321212459439835372 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 8904949927724016787, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
@@ -3350,6 +3554,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d9eaa1631551b3442af2a65431e12f30, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::UIThemeBoardCellTarget
+--- !u!114 &3081054244002362099 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 9184948577088448843, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
+  m_PrefabInstance: {fileID: 6175953050338745272}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53d1eadb9414ee94fbd0bde613b9a5c0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoBoardCellController
 --- !u!224 &3324175857451220779 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 8904949927724016787, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
@@ -3468,6 +3683,17 @@ RectTransform:
   m_CorrespondingSourceObject: {fileID: 8904949927724016787, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
   m_PrefabInstance: {fileID: 6463098949665653171}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &2794189248944908536 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 9184948577088448843, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
+  m_PrefabInstance: {fileID: 6463098949665653171}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53d1eadb9414ee94fbd0bde613b9a5c0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoBoardCellController
 --- !u!1001 &6925956947398595680
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -3570,6 +3796,17 @@ RectTransform:
   m_CorrespondingSourceObject: {fileID: 8904949927724016787, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
   m_PrefabInstance: {fileID: 6925956947398595680}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &2263779219878296875 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 9184948577088448843, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
+  m_PrefabInstance: {fileID: 6925956947398595680}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53d1eadb9414ee94fbd0bde613b9a5c0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoBoardCellController
 --- !u!114 &3859163370593037419 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 6166397137039013899, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
@@ -3678,6 +3915,17 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
+--- !u!114 &2016491877607309184 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 9184948577088448843, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
+  m_PrefabInstance: {fileID: 7245019377331361483}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53d1eadb9414ee94fbd0bde613b9a5c0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoBoardCellController
 --- !u!224 &2242729373319377496 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 8904949927724016787, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
@@ -3791,6 +4039,17 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
+--- !u!114 &2015818795206798255 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 9184948577088448843, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
+  m_PrefabInstance: {fileID: 7245973572123706084}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53d1eadb9414ee94fbd0bde613b9a5c0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoBoardCellController
 --- !u!224 &2241211885320676983 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 8904949927724016787, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
@@ -3904,6 +4163,17 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
+--- !u!114 &1438465489113268061 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 9184948577088448843, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
+  m_PrefabInstance: {fileID: 7818542164456445462}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53d1eadb9414ee94fbd0bde613b9a5c0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoBoardCellController
 --- !u!224 &1663436212179202693 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 8904949927724016787, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
@@ -4017,6 +4287,17 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
+--- !u!114 &1367618261214060981 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 9184948577088448843, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
+  m_PrefabInstance: {fileID: 7894176283319748862}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53d1eadb9414ee94fbd0bde613b9a5c0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoBoardCellController
 --- !u!224 &1592307543663127661 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 8904949927724016787, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
@@ -4130,6 +4411,17 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
+--- !u!114 &1341028128344402919 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 9184948577088448843, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
+  m_PrefabInstance: {fileID: 7920485853834527404}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53d1eadb9414ee94fbd0bde613b9a5c0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoBoardCellController
 --- !u!224 &1621167412087957055 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 8904949927724016787, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
@@ -4259,6 +4551,17 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
+--- !u!114 &686192657138159800 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 9184948577088448843, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
+  m_PrefabInstance: {fileID: 8571096140288997875}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53d1eadb9414ee94fbd0bde613b9a5c0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoBoardCellController
 --- !u!224 &965488033522834784 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 8904949927724016787, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
@@ -4372,6 +4675,17 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
+--- !u!114 &602743740299787305 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 9184948577088448843, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}
+  m_PrefabInstance: {fileID: 8586708814445581666}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53d1eadb9414ee94fbd0bde613b9a5c0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoBoardCellController
 --- !u!224 &918350505340563953 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 8904949927724016787, guid: c2b5188d29b0cc849b7b1ea64607c65e, type: 3}

@@ -1165,6 +1165,36 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         return null;
     }
 
+    public void ProcessAuthorityRerollBoard(ulong clientId)
+    {
+        if (networkBootstrap == null ||
+            !networkBootstrap.IsAuthority ||
+            connectionRegistry == null ||
+            !connectionRegistry.IsReady)
+        {
+            return;
+        }
+
+        if (!connectionRegistry.TryGetBingoUserId(clientId, out string userId))
+        {
+            return;
+        }
+
+        Lobby lobby = FindUserLobby(userId);
+
+        if (lobby?.Controller == null)
+        {
+            return;
+        }
+
+        if (!lobby.Controller.RerollPlayerBoard(userId))
+        {
+            return;
+        }
+
+        BroadcastLobbyView(lobby);
+    }
+
     #endregion
 
     #region Disconnect Handling

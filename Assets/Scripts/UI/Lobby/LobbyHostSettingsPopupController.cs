@@ -24,6 +24,9 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
     [Header("Ball Count")]
     [SerializeField] private TMP_Dropdown ballCountDropdown;
 
+    [Header("Free Cell")]
+    [SerializeField] private Toggle useFreeCellToggle;
+
     [Header("Patterns")]
     [SerializeField] private RectTransform patternListContent;
     [SerializeField] private LobbyHostPatternToggleItem patternTogglePrefab;
@@ -221,6 +224,11 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
 
         SetDropdownValueWithoutNotify(gameModeDropdown, gameModeOptions, workingData.gameModeType);
         SetDropdownValueWithoutNotify(ballCountDropdown, ballCountOptions, workingData.ballCountType);
+
+        if (useFreeCellToggle != null)
+        {
+            useFreeCellToggle.SetIsOnWithoutNotify(workingData.useFreeCell);
+        }
 
         LoadPatternSelection(workingData.patternTypes);
 
@@ -590,6 +598,12 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
             ballCountDropdown.onValueChanged.AddListener(OnBallCountChanged);
         }
 
+        if (useFreeCellToggle != null)
+        {
+            useFreeCellToggle.onValueChanged.RemoveListener(OnUseFreeCellChanged);
+            useFreeCellToggle.onValueChanged.AddListener(OnUseFreeCellChanged);
+        }
+
         if (unlimitedPlayersToggle != null)
         {
             unlimitedPlayersToggle.onValueChanged.RemoveListener(OnUnlimitedPlayersChanged);
@@ -631,6 +645,11 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
         if (ballCountDropdown != null)
         {
             ballCountDropdown.onValueChanged.RemoveListener(OnBallCountChanged);
+        }
+
+        if (useFreeCellToggle != null)
+        {
+            useFreeCellToggle.onValueChanged.RemoveListener(OnUseFreeCellChanged);
         }
 
         if (unlimitedPlayersToggle != null)
@@ -688,6 +707,17 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
         }
 
         workingData.ballCountType = selectedBallCountType;
+        ClearError();
+    }
+
+    private void OnUseFreeCellChanged(bool isOn)
+    {
+        if (isLoadingUi)
+        {
+            return;
+        }
+
+        workingData.useFreeCell = isOn;
         ClearError();
     }
 
@@ -826,6 +856,10 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
             return false;
         }
 
+        bool useFreeCell = useFreeCellToggle != null
+            ? useFreeCellToggle.isOn
+            : workingData.useFreeCell;
+
         UpdateWorkingPatternList();
 
         if (workingData.patternTypes.Count == 0)
@@ -854,6 +888,7 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
         {
             gameModeType = selectedGameModeType,
             ballCountType = selectedBallCountType,
+            useFreeCell = useFreeCell,
             patternTypes = new List<BingoPatternType>(workingData.patternTypes),
             usesDefaultPatterns = workingData.usesDefaultPatterns,
             unlimitedPlayers = unlimitedPlayers,
@@ -875,15 +910,16 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
         }
 
         Debug.Log(
-            $"[LobbyHostSettings] Close / Apply Settings | " +
-            $"Game Mode: {settingsData.gameModeType} | " +
-            $"Ball Count: {settingsData.ballCountType} | " +
-            $"Patterns: [{string.Join(", ", settingsData.patternTypes)}] | " +
-            $"Uses Default Patterns: {settingsData.usesDefaultPatterns} | " +
-            $"Unlimited Players: {settingsData.unlimitedPlayers} | " +
-            $"Max Players: {settingsData.maxPlayers} | " +
-            $"Add Bots: {settingsData.addBots} | " +
-            $"Bot Count: {settingsData.botCount}");
+         $"[LobbyHostSettings] Close / Apply Settings | " +
+         $"Game Mode: {settingsData.gameModeType} | " +
+         $"Ball Count: {settingsData.ballCountType} | " +
+         $"Use Free Cell: {settingsData.useFreeCell} | " +
+         $"Patterns: [{string.Join(", ", settingsData.patternTypes)}] | " +
+         $"Uses Default Patterns: {settingsData.usesDefaultPatterns} | " +
+         $"Unlimited Players: {settingsData.unlimitedPlayers} | " +
+         $"Max Players: {settingsData.maxPlayers} | " +
+         $"Add Bots: {settingsData.addBots} | " +
+         $"Bot Count: {settingsData.botCount}");
 
         LobbyManager lobbyManager =
             LobbyManager.instance;

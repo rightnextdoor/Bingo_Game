@@ -28,10 +28,13 @@ public class LobbyViewData
     public bool usesDefaultPatterns;
 
     public BingoBallCountType ballCountType;
+    public bool useFreeCell;
 
     public int playerCount;
     public int maxPlayers;
     public bool unlimitedPlayers;
+
+    public List<LobbyPlayerBoardViewData> playerBoards;
 
     public bool addBots;
     public int botCount;
@@ -64,12 +67,15 @@ public class LobbyViewData
         usesDefaultPatterns = true;
 
         ballCountType = BingoBallCountType.Ball75;
+        useFreeCell = true;
 
         playerCount = 0;
         maxPlayers = LobbySettings.instance != null
             ? LobbySettings.instance.MinimumPlayers
             : 6;
         unlimitedPlayers = false;
+
+        playerBoards = new List<LobbyPlayerBoardViewData>();
 
         addBots = false;
         botCount = 0;

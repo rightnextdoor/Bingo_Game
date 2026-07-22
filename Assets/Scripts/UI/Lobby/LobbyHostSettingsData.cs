@@ -6,6 +6,7 @@ public class LobbyHostSettingsData
 {
     public BingoGameModeType gameModeType;
     public BingoBallCountType ballCountType;
+    public bool useFreeCell;
 
     public List<BingoPatternType> patternTypes;
     public bool usesDefaultPatterns;
@@ -20,6 +21,7 @@ public class LobbyHostSettingsData
     {
         gameModeType = BingoGameModeType.Traditional;
         ballCountType = BingoBallCountType.Ball75;
+        useFreeCell = true;
 
         patternTypes = new List<BingoPatternType>();
         usesDefaultPatterns = true;
@@ -47,6 +49,7 @@ public class LobbyHostSettingsData
 
         gameModeType = lobbyViewData.gameModeType;
         ballCountType = lobbyViewData.ballCountType;
+        useFreeCell = lobbyViewData.useFreeCell;
 
         patternTypes = lobbyViewData.patternTypes != null
             ? new List<BingoPatternType>(lobbyViewData.patternTypes)

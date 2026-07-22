@@ -75,6 +75,7 @@ public class LobbyController
     [SerializeField] private bool usesDefaultPatterns = true;
 
     [SerializeField] private BingoBallCountType ballCountType = BingoBallCountType.Ball75;
+    [SerializeField] private bool useFreeCell = true;
 
     [SerializeField] private bool addBots;
     [SerializeField] private int botCount;
@@ -88,6 +89,7 @@ public class LobbyController
     public bool UsesDefaultPatterns => usesDefaultPatterns;
 
     public BingoBallCountType BallCountType => ballCountType;
+    public bool UseFreeCell => useFreeCell;
 
     public bool AddBots => addBots;
     public int BotCount => botCount;
@@ -139,6 +141,7 @@ public class LobbyController
         ballCountType = BingoBallCountType.Ball75;
         patternTypes.Clear();
         usesDefaultPatterns = true;
+        useFreeCell = true;
 
         unlimitedPlayers = false;
         maxPlayers = GetMinimumPlayers();
@@ -187,6 +190,7 @@ public class LobbyController
 
         gameModeType = soloSetupData.gameModeType;
         ballCountType = soloSetupData.ballCountType;
+        useFreeCell = soloSetupData.useFreeCell;
         unlimitedPlayers = soloSetupData.unlimitedPlayers;
         maxPlayers = GetValidMaximumPlayers(soloSetupData.maxPlayers, unlimitedPlayers);
     }
@@ -202,6 +206,7 @@ public class LobbyController
 
         gameModeType = onlineSetupData.gameModeType;
         ballCountType = onlineSetupData.ballCountType;
+        useFreeCell = onlineSetupData.useFreeCell;
         unlimitedPlayers = onlineSetupData.unlimitedPlayers;
         maxPlayers = GetValidMaximumPlayers(onlineSetupData.maxPlayers, unlimitedPlayers);
     }
@@ -232,6 +237,7 @@ public class LobbyController
 
         gameModeType = hostSetupData.gameModeType;
         ballCountType = hostSetupData.ballCountType;
+        useFreeCell = hostSetupData.useFreeCell;
         unlimitedPlayers = hostSetupData.unlimitedPlayers;
         maxPlayers = GetValidMaximumPlayers(hostSetupData.maxPlayers, unlimitedPlayers);
 
@@ -336,6 +342,8 @@ public class LobbyController
             return false;
         }
 
+        GeneratePlayerBoard(playerData);
+
         players.Add(playerData);
         RefreshViews();
 
@@ -419,6 +427,48 @@ public class LobbyController
             userId,
             exitReason,
             "The player was not found in the lobby.");
+    }
+
+    #endregion
+
+    #region Boards
+
+    public bool RerollPlayerBoard(string userId)
+    {
+        if (lobby == null || lobby.lobbyState != LobbyState.Open)
+        {
+            return false;
+        }
+
+        LobbyPlayerData playerData = GetPlayer(userId);
+
+        if (playerData == null)
+        {
+            return false;
+        }
+
+        GeneratePlayerBoard(playerData);
+        RefreshViews();
+
+        return true;
+    }
+
+    private void GeneratePlayerBoard(LobbyPlayerData playerData)
+    {
+        if (playerData == null)
+        {
+            return;
+        }
+
+        playerData.boardData = BingoBoardGenerator.Generate(ballCountType, useFreeCell);
+    }
+
+    private void RegenerateAllPlayerBoards()
+    {
+        for (int i = 0; i < players.Count; i++)
+        {
+            GeneratePlayerBoard(players[i]);
+        }
     }
 
     #endregion
@@ -732,8 +782,12 @@ public class LobbyController
             return false;
         }
 
+        BingoBallCountType previousBallCountType = ballCountType;
+        bool previousUseFreeCell = useFreeCell;
+
         gameModeType = ResolveGameModeType(settingsData.gameModeType);
         ballCountType = ResolveBallCountType(settingsData.ballCountType);
+        useFreeCell = settingsData.useFreeCell;
 
         usesDefaultPatterns = settingsData.usesDefaultPatterns;
 
@@ -753,6 +807,16 @@ public class LobbyController
         botCount = addBots ? Mathf.Max(0, settingsData.botCount) : 0;
 
         ResolveGameModeData();
+
+        bool boardGenerationChanged =
+            ballCountType != previousBallCountType ||
+            useFreeCell != previousUseFreeCell;
+
+        if (boardGenerationChanged)
+        {
+            RegenerateAllPlayerBoards();
+        }
+
         RefreshViews();
 
         return true;
@@ -894,9 +958,11 @@ public class LobbyController
             patternTypes = new List<BingoPatternType>(patternTypes),
             usesDefaultPatterns = usesDefaultPatterns,
             ballCountType = ballCountType,
+            useFreeCell = useFreeCell,
             playerCount = GetVisiblePlayerCount(),
             maxPlayers = maxPlayers,
             unlimitedPlayers = unlimitedPlayers,
+            playerBoards = BuildPlayerBoardViewDataList(),
             addBots = addBots,
             botCount = botCount,
             playerNames = BuildPlayerNameList()
@@ -939,6 +1005,29 @@ public class LobbyController
         }
 
         return playerNames;
+    }
+
+    private List<LobbyPlayerBoardViewData> BuildPlayerBoardViewDataList()
+    {
+        List<LobbyPlayerBoardViewData> playerBoards = new List<LobbyPlayerBoardViewData>();
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            LobbyPlayerData playerData = players[i];
+
+            if (playerData?.userData == null ||
+                string.IsNullOrWhiteSpace(playerData.userData.userId))
+            {
+                continue;
+            }
+
+            playerBoards.Add(
+                new LobbyPlayerBoardViewData(
+                    playerData.userData.userId,
+                    playerData.boardData));
+        }
+
+        return playerBoards;
     }
 
     private SessionRuntimeType GetRuntimeType()

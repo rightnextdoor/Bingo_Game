@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 1983071751334013368}
   - component: {fileID: 1787039787461557569}
   - component: {fileID: 4781737775356897590}
+  - component: {fileID: 6166397137039013899}
   m_Layer: 5
   m_Name: BingoBoardCell
   m_TagString: Untagged
@@ -124,6 +125,24 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls: []
+--- !u!114 &6166397137039013899
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 751597810279142339}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d9eaa1631551b3442af2a65431e12f30, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIThemeBoardCellTarget
+  cellImage: {fileID: 1787039787461557569}
+  cellButton: {fileID: 4781737775356897590}
+  calledHighlightImage: {fileID: 785229278206528158}
+  markedHighlightImage: {fileID: 5643193919868821716}
+  winningHighlightImage: {fileID: 5426782580070168947}
+  valueText: {fileID: 4242935026826426650}
 --- !u!1 &2519132863350172025
 GameObject:
   m_ObjectHideFlags: 0

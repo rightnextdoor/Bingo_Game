@@ -16,7 +16,8 @@ public enum UIThemeSectionType
     Dropdown,
     Scroll,
     Slider,
-    Toggle
+    Toggle,
+    Board
 }
 
 public enum UIThemeBackgroundType
@@ -76,4 +77,9 @@ public enum UIThemeToggleType
 {
     RadioButton,
     Checkmark
+}
+
+public enum UIThemeBoardType
+{
+    Default
 }

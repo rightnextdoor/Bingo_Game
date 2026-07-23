@@ -133,10 +133,6 @@ public class BingoPatternValidator : MonoBehaviour
     private const int CellCount = 25;
     private const int FreeCellIndex = 12;
 
-    [Header("Pattern Cells")]
-    [SerializeField] private List<int> diamondCells = new List<int>();
-    [SerializeField] private List<int> starCells = new List<int>();
-
     private static readonly int[] Row0 = { 0, 1, 2, 3, 4 };
     private static readonly int[] Row1 = { 5, 6, 7, 8, 9 };
     private static readonly int[] Row2 = { 10, 11, 12, 13, 14 };
@@ -164,6 +160,24 @@ public class BingoPatternValidator : MonoBehaviour
     {
         0, 6, 12, 18, 24,
         4, 8, 16, 20
+    };
+
+    private static readonly int[] Diamond =
+    {
+        2,
+        6, 7, 8,
+        10, 11, 12, 13, 14,
+        16, 17, 18,
+        22
+    };
+
+    private static readonly int[] Star =
+    {
+        2,
+        6, 8,
+        10, 11, 12, 13, 14,
+        16, 18,
+        22
     };
 
     private static readonly int[] Blackout =
@@ -256,7 +270,7 @@ public class BingoPatternValidator : MonoBehaviour
                     FindFixedPattern(
                         result,
                         BingoPatternType.Diamond,
-                        diamondCells,
+                        Diamond,
                         boardData,
                         pressedCells,
                         calledNumberSet,
@@ -267,7 +281,7 @@ public class BingoPatternValidator : MonoBehaviour
                     FindFixedPattern(
                         result,
                         BingoPatternType.Star,
-                        starCells,
+                        Star,
                         boardData,
                         pressedCells,
                         calledNumberSet,
@@ -288,6 +302,43 @@ public class BingoPatternValidator : MonoBehaviour
         }
 
         return result;
+    }
+
+    #endregion
+
+    #region Pattern Layout
+
+    public IReadOnlyList<int> GetSimulationPatternCells(BingoPatternType patternType)
+    {
+        switch (patternType)
+        {
+            case BingoPatternType.SingleLine:
+                return Row0;
+
+            case BingoPatternType.TwoLines:
+                return CombineLineCells(BingoLineType.Row0, BingoLineType.Row1);
+
+            case BingoPatternType.FourCorners:
+                return FourCorners;
+
+            case BingoPatternType.Cross:
+                return Cross;
+
+            case BingoPatternType.XPattern:
+                return XPattern;
+
+            case BingoPatternType.Diamond:
+                return Diamond;
+
+            case BingoPatternType.Star:
+                return Star;
+
+            case BingoPatternType.Blackout:
+                return Blackout;
+
+            default:
+                return Array.Empty<int>();
+        }
     }
 
     #endregion

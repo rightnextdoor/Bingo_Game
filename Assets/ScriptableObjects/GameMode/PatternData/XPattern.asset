@@ -14,3 +14,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BingoPatternData
   patternType: 4
   description: Complete both diagonal lines to form an X pattern.
+  winningHighlightColor: {r: 0.94509804, g: 0.35686275, b: 0.70980394, a: 1}

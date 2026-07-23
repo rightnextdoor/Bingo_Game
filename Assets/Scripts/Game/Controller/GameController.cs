@@ -12,6 +12,7 @@ public class GameController : MonoBehaviour
     [SerializeField] private BingoChecker bingoChecker;
     [SerializeField] private BingoBoardController boardController;
     [SerializeField] private Button bingoButton;
+    [SerializeField] private bool useDirectBingoButtonInput;
 
     [Header("Test Player")]
     [SerializeField] private string playerId = "TestPlayer";
@@ -36,7 +37,7 @@ public class GameController : MonoBehaviour
         if (bingoChecker != null)
             bingoChecker.CheckCompleted += OnBingoCheckCompleted;
 
-        if (bingoButton != null)
+        if (useDirectBingoButtonInput && bingoButton != null)
             bingoButton.onClick.AddListener(OnBingoPressed);
     }
 

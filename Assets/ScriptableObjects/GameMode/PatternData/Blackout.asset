@@ -14,3 +14,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BingoPatternData
   patternType: 7
   description: Mark every space on your board.
+  winningHighlightColor: {r: 0.1254902, g: 0.7882353, b: 0.5921569, a: 1}

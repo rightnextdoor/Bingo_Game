@@ -123,6 +123,48 @@ public class BingoBoardController : MonoBehaviour
         }
     }
 
+    //for simulation
+    public bool SetCellMarked(int cellIndex, bool marked)
+    {
+        BingoBoardCellController cell = GetCell(cellIndex);
+
+        if (cell == null || cell.CellIndex < 0)
+            return false;
+
+        if (cell.IsFree)
+        {
+            if (!markedCellIndices.Contains(cellIndex))
+                markedCellIndices.Add(cellIndex);
+
+            cell.SetMarked(true);
+            return true;
+        }
+
+        if (marked)
+        {
+            if (!markedCellIndices.Contains(cellIndex))
+                markedCellIndices.Add(cellIndex);
+        }
+        else
+        {
+            markedCellIndices.Remove(cellIndex);
+        }
+
+        cell.SetMarked(marked);
+        return true;
+    }
+
+    public void SetMarkedCells(IReadOnlyCollection<int> cellIndices)
+    {
+        ClearMarks();
+
+        if (cellIndices == null)
+            return;
+
+        foreach (int cellIndex in cellIndices)
+            SetCellMarked(cellIndex, true);
+    }
+
     #endregion
 
     #region Check Highlight

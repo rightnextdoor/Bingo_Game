@@ -14,3 +14,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BingoPatternData
   patternType: 0
   description: Complete any full horizontal, vertical, or diagonal line on your board.
+  winningHighlightColor: {r: 0.48235294, g: 0.5921569, b: 0.19607843, a: 1}

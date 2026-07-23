@@ -60,14 +60,14 @@ public class BingoBoardCellController : MonoBehaviour
         if (cellButton != null)
             cellButton.interactable = !isFree;
 
+        if (valueText != null)
+        {
+            valueText.enableAutoSizing = false;
+            valueText.fontSize = isFree ? FreeFontSize : NumberFontSize;
+            valueText.text = isFree ? "FREE" : number.ToString();
+        }
+
         RefreshHighlights();
-
-        if (valueText == null)
-            return;
-
-        valueText.enableAutoSizing = false;
-        valueText.fontSize = isFree ? FreeFontSize : NumberFontSize;
-        valueText.text = isFree ? "FREE" : number.ToString();
     }
 
     public void Clear()
@@ -81,13 +81,13 @@ public class BingoBoardCellController : MonoBehaviour
         if (cellButton != null)
             cellButton.interactable = false;
 
+        if (valueText != null)
+        {
+            valueText.fontSize = NumberFontSize;
+            valueText.text = string.Empty;
+        }
+
         RefreshHighlights();
-
-        if (valueText == null)
-            return;
-
-        valueText.fontSize = NumberFontSize;
-        valueText.text = string.Empty;
     }
 
     #endregion
@@ -106,12 +106,10 @@ public class BingoBoardCellController : MonoBehaviour
 
     public void ShowCheckHighlight(Color color)
     {
-        if (winningHighlight == null)
-            return;
+        if (winningHighlight != null)
+            winningHighlight.color = color;
 
-        winningHighlight.color = color;
         isCheckHighlighted = true;
-
         RefreshHighlights();
     }
 
@@ -135,15 +133,15 @@ public class BingoBoardCellController : MonoBehaviour
 
     #endregion
 
-    #region Highlight State
+    #region Highlights
 
     private void RefreshHighlights()
     {
-        if (winningHighlight != null)
-            winningHighlight.enabled = isCheckHighlighted;
-
         if (markedHighlight != null)
-            markedHighlight.enabled = isMarked && !isCheckHighlighted;
+            markedHighlight.gameObject.SetActive(isMarked && !isCheckHighlighted);
+
+        if (winningHighlight != null)
+            winningHighlight.gameObject.SetActive(isCheckHighlighted);
     }
 
     #endregion

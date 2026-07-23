@@ -569,6 +569,10 @@ GameObject:
   m_Component:
   - component: {fileID: 111433715}
   - component: {fileID: 111433714}
+  - component: {fileID: 111433719}
+  - component: {fileID: 111433718}
+  - component: {fileID: 111433717}
+  - component: {fileID: 111433716}
   m_Layer: 0
   m_Name: Development
   m_TagString: Untagged
@@ -606,6 +610,67 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &111433716
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 111433713}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fee62df935a43c64598eff2703c5a377, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoCheckAnimationController
+  boardController: {fileID: 1259848678}
+  cellCheckSeconds: 0.3
+  patternResultSeconds: 1
+  finalPatternSeconds: 2
+  failureColor: {r: 1, g: 0, b: 0, a: 1}
+--- !u!114 &111433717
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 111433713}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 74ca514913282e44087d772aca802d01, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoPatternValidator
+  diamondCells: 
+  starCells: 
+--- !u!114 &111433718
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 111433713}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ef2c34adc3644e34fac2323d95d0b3e6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoChecker
+  validator: {fileID: 111433717}
+  animationController: {fileID: 111433716}
+--- !u!114 &111433719
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 111433713}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 737ee52291be94b46b91d50cc05fa867, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GameController
+  bingoChecker: {fileID: 111433718}
+  boardController: {fileID: 1259848678}
+  bingoButton: {fileID: 1724215466}
+  playerId: TestPlayer
 --- !u!1 &118717174
 GameObject:
   m_ObjectHideFlags: 0

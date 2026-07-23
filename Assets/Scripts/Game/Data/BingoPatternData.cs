@@ -10,6 +10,10 @@ public class BingoPatternData : ScriptableObject
     [TextArea(3, 8)]
     [SerializeField] private string description;
 
+    [Header("Highlight")]
+    [SerializeField] private Color winningHighlightColor = Color.white;
+
     public BingoPatternType PatternType => patternType;
     public string Description => description;
+    public Color WinningHighlightColor => winningHighlightColor;
 }

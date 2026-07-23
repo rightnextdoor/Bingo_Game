@@ -38,7 +38,6 @@ public class UIThemeBoardStyle
     [Header("Cell")]
     [SerializeField] private UIThemeStyle cellImage = new();
     [SerializeField] private UIThemeStyle cellVisual = new();
-    [SerializeField] private UIThemeStyle calledHighlightImage = new();
     [SerializeField] private UIThemeStyle markedHighlightImage = new();
     [SerializeField] private UIThemeStyle winningHighlightImage = new();
     [SerializeField] private UIThemeStyle valueText = new();
@@ -68,7 +67,6 @@ public class UIThemeBoardStyle
 
     public UIThemeStyle CellImage => cellImage;
     public UIThemeStyle CellVisual => cellVisual;
-    public UIThemeStyle CalledHighlightImage => calledHighlightImage;
     public UIThemeStyle MarkedHighlightImage => markedHighlightImage;
     public UIThemeStyle WinningHighlightImage => winningHighlightImage;
     public UIThemeStyle ValueText => valueText;

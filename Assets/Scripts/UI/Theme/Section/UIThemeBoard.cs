@@ -199,10 +199,6 @@ public class UIThemeBoard : MonoBehaviour, IUIThemeTarget
             style.CellVisual);
 
         UIThemeApplier.ApplyImageStyle(
-            cell.CalledHighlightImage,
-            style.CalledHighlightImage);
-
-        UIThemeApplier.ApplyImageStyle(
             cell.MarkedHighlightImage,
             style.MarkedHighlightImage);
 

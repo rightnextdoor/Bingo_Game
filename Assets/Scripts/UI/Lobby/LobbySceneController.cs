@@ -54,7 +54,7 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
             bool controlsInteractable = lobbyViewData.lobbyState == LobbyState.Open;
 
             boardSectionController.DisplayBoard(GetCurrentPlayerBoard(lobbyViewData));
-            boardSectionController.SetBoardInteractable(false);
+            //boardSectionController.SetBoardInteractable(false);
             boardSectionController.SetRerollInteractable(controlsInteractable);
             boardSectionController.SetReadyInteractable(controlsInteractable);
         }

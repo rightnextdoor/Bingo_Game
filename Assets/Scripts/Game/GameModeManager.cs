@@ -225,6 +225,27 @@ public class GameModeManager : MonoBehaviour
         return patternData != null;
     }
 
+    public Color GetBingoPatternHighlightColor(BingoPatternType patternType)
+    {
+        BingoPatternData patternData = GetBingoPatternData(patternType);
+
+        if (patternData == null)
+            return Color.white;
+
+        return patternData.WinningHighlightColor;
+    }
+
+    public bool TryGetBingoPatternHighlightColor(BingoPatternType patternType, out Color highlightColor)
+    {
+        highlightColor = Color.white;
+
+        if (!TryGetBingoPatternData(patternType, out BingoPatternData patternData))
+            return false;
+
+        highlightColor = patternData.WinningHighlightColor;
+        return true;
+    }
+
     #endregion
 
     #region Rule Lookup

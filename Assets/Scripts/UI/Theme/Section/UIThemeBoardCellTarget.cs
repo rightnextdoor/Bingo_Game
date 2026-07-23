@@ -10,7 +10,6 @@ public class UIThemeBoardCellTarget : MonoBehaviour
     [SerializeField] private Button cellButton;
 
     [Header("Highlights")]
-    [SerializeField] private Image calledHighlightImage;
     [SerializeField] private Image markedHighlightImage;
     [SerializeField] private Image winningHighlightImage;
 
@@ -20,7 +19,6 @@ public class UIThemeBoardCellTarget : MonoBehaviour
     public Image CellImage => cellImage;
     public Button CellButton => cellButton;
 
-    public Image CalledHighlightImage => calledHighlightImage;
     public Image MarkedHighlightImage => markedHighlightImage;
     public Image WinningHighlightImage => winningHighlightImage;
 

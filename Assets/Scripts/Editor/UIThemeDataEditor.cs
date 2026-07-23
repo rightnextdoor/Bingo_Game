@@ -781,11 +781,6 @@ public class UIThemeDataEditor : Editor
             DrawSelectableVisualFields);
 
         DrawFixedStyle(
-            "Called Highlight Image",
-            boardProperty.FindPropertyRelative("calledHighlightImage"),
-            DrawImageComponentFields);
-
-        DrawFixedStyle(
             "Marked Highlight Image",
             boardProperty.FindPropertyRelative("markedHighlightImage"),
             DrawImageComponentFields);

@@ -1356,6 +1356,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3012afe2633b38e409965f2774bd8c09, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BingoBoardController
+  boardCanvasGroup: {fileID: 4730818296315770234}
   cells:
   - {fileID: 3095261523945456948}
   - {fileID: 4717268405375867366}

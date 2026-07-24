@@ -1001,11 +1001,11 @@ PrefabInstance:
     - target: {fileID: 1792472634856489677, guid: 1081001668a67c9488608f7502962f1a, type: 3}
       propertyPath: iconManager
       value: 
-      objectReference: {fileID: 4776939941188588543}
+      objectReference: {fileID: 0}
     - target: {fileID: 2065434793892903902, guid: 1081001668a67c9488608f7502962f1a, type: 3}
       propertyPath: iconManager
       value: 
-      objectReference: {fileID: 4776939941188588543}
+      objectReference: {fileID: 0}
     - target: {fileID: 6035635953207925447, guid: 1081001668a67c9488608f7502962f1a, type: 3}
       propertyPath: m_Pivot.x
       value: 0.5
@@ -1205,39 +1205,6 @@ MonoBehaviour:
   m_FillOrigin: 0
   m_UseSpriteMesh: 0
   m_PixelsPerUnitMultiplier: 1
---- !u!114 &4776939941188588543
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5736060363417203601}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 73939ba36c170bc498f3a5c1a1d2f6a8, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::UIIconManager
-  playerIcons:
-  - {fileID: 11400000, guid: fc59ac91592ea1d4a957ad92078228eb, type: 2}
-  - {fileID: 11400000, guid: 30ecb379cf775c345a7da1c80e157799, type: 2}
-  - {fileID: 11400000, guid: c7f65145f5155e844bd474990a891c3b, type: 2}
-  - {fileID: 11400000, guid: bcddd98697a4e5e40a8d4522e7e71ace, type: 2}
-  - {fileID: 11400000, guid: fc59ac91592ea1d4a957ad92078228eb, type: 2}
-  - {fileID: 11400000, guid: 30ecb379cf775c345a7da1c80e157799, type: 2}
-  - {fileID: 11400000, guid: c7f65145f5155e844bd474990a891c3b, type: 2}
-  - {fileID: 11400000, guid: bcddd98697a4e5e40a8d4522e7e71ace, type: 2}
-  - {fileID: 11400000, guid: fc59ac91592ea1d4a957ad92078228eb, type: 2}
-  - {fileID: 11400000, guid: 30ecb379cf775c345a7da1c80e157799, type: 2}
-  - {fileID: 11400000, guid: c7f65145f5155e844bd474990a891c3b, type: 2}
-  - {fileID: 11400000, guid: bcddd98697a4e5e40a8d4522e7e71ace, type: 2}
-  - {fileID: 11400000, guid: fc59ac91592ea1d4a957ad92078228eb, type: 2}
-  - {fileID: 11400000, guid: 30ecb379cf775c345a7da1c80e157799, type: 2}
-  - {fileID: 11400000, guid: c7f65145f5155e844bd474990a891c3b, type: 2}
-  - {fileID: 11400000, guid: bcddd98697a4e5e40a8d4522e7e71ace, type: 2}
-  - {fileID: 11400000, guid: fc59ac91592ea1d4a957ad92078228eb, type: 2}
-  - {fileID: 11400000, guid: 30ecb379cf775c345a7da1c80e157799, type: 2}
-  - {fileID: 11400000, guid: c7f65145f5155e844bd474990a891c3b, type: 2}
-  - {fileID: 11400000, guid: bcddd98697a4e5e40a8d4522e7e71ace, type: 2}
 --- !u!114 &5076368676688527651 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 2341541766133821584, guid: 1483d87d144da9a4483bcdcbe82ddb3f, type: 3}
@@ -1283,7 +1250,6 @@ GameObject:
   - component: {fileID: 9120716457640657881}
   - component: {fileID: 1970594543183541006}
   - component: {fileID: 5202949108896841691}
-  - component: {fileID: 4776939941188588543}
   - component: {fileID: 3267518427206547279}
   - component: {fileID: 7382266969421154754}
   - component: {fileID: 497891760714225180}

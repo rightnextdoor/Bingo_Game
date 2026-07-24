@@ -9020,8 +9020,8 @@ RectTransform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 1796906396149693261}
   - {fileID: 6313460735625712014}
+  - {fileID: 7704856518361335132}
   m_Father: {fileID: 4494062195483233576}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
@@ -10634,7 +10634,6 @@ GameObject:
   - component: {fileID: 7976161406458282480}
   - component: {fileID: 3699430874877483333}
   - component: {fileID: 2800254486622665332}
-  - component: {fileID: 4229069502444267482}
   - component: {fileID: 4725540714900711447}
   - component: {fileID: 6719722440119976974}
   - component: {fileID: 8572265095484358775}
@@ -10728,39 +10727,6 @@ MonoBehaviour:
   m_BlockingMask:
     serializedVersion: 2
     m_Bits: 4294967295
---- !u!114 &4229069502444267482
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8836904785578647724}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 73939ba36c170bc498f3a5c1a1d2f6a8, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::UIIconManager
-  playerIcons:
-  - {fileID: 11400000, guid: fc59ac91592ea1d4a957ad92078228eb, type: 2}
-  - {fileID: 11400000, guid: 30ecb379cf775c345a7da1c80e157799, type: 2}
-  - {fileID: 11400000, guid: c7f65145f5155e844bd474990a891c3b, type: 2}
-  - {fileID: 11400000, guid: bcddd98697a4e5e40a8d4522e7e71ace, type: 2}
-  - {fileID: 11400000, guid: fc59ac91592ea1d4a957ad92078228eb, type: 2}
-  - {fileID: 11400000, guid: 30ecb379cf775c345a7da1c80e157799, type: 2}
-  - {fileID: 11400000, guid: c7f65145f5155e844bd474990a891c3b, type: 2}
-  - {fileID: 11400000, guid: bcddd98697a4e5e40a8d4522e7e71ace, type: 2}
-  - {fileID: 11400000, guid: fc59ac91592ea1d4a957ad92078228eb, type: 2}
-  - {fileID: 11400000, guid: 30ecb379cf775c345a7da1c80e157799, type: 2}
-  - {fileID: 11400000, guid: c7f65145f5155e844bd474990a891c3b, type: 2}
-  - {fileID: 11400000, guid: bcddd98697a4e5e40a8d4522e7e71ace, type: 2}
-  - {fileID: 11400000, guid: fc59ac91592ea1d4a957ad92078228eb, type: 2}
-  - {fileID: 11400000, guid: 30ecb379cf775c345a7da1c80e157799, type: 2}
-  - {fileID: 11400000, guid: c7f65145f5155e844bd474990a891c3b, type: 2}
-  - {fileID: 11400000, guid: bcddd98697a4e5e40a8d4522e7e71ace, type: 2}
-  - {fileID: 11400000, guid: fc59ac91592ea1d4a957ad92078228eb, type: 2}
-  - {fileID: 11400000, guid: 30ecb379cf775c345a7da1c80e157799, type: 2}
-  - {fileID: 11400000, guid: c7f65145f5155e844bd474990a891c3b, type: 2}
-  - {fileID: 11400000, guid: bcddd98697a4e5e40a8d4522e7e71ace, type: 2}
 --- !u!114 &4725540714900711447
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -10773,9 +10739,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: dd80554141380f747a9c40651f82ffab, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NotificationManager
-  notificationAreaCanvasGroup: {fileID: 4774580399742427496}
-  notificationBackground: {fileID: 1089030302421625490}
-  notificationText: {fileID: 6196616808410524353}
+  notificationAreaCanvasGroup: {fileID: 0}
+  notificationBackground: {fileID: 0}
+  notificationText: {fileID: 0}
   delayBetweenMessages: 0.35
 --- !u!114 &6719722440119976974
 MonoBehaviour:
@@ -11349,38 +11315,11 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 1483d87d144da9a4483bcdcbe82ddb3f, type: 3}
---- !u!114 &1089030302421625490 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 1027028403210395789, guid: 1483d87d144da9a4483bcdcbe82ddb3f, type: 3}
-  m_PrefabInstance: {fileID: 98445522778294815}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
---- !u!224 &1796906396149693261 stripped
+--- !u!224 &7704856518361335132 stripped
 RectTransform:
-  m_CorrespondingSourceObject: {fileID: 1851642961915064658, guid: 1483d87d144da9a4483bcdcbe82ddb3f, type: 3}
+  m_CorrespondingSourceObject: {fileID: 7759870933005389635, guid: 1483d87d144da9a4483bcdcbe82ddb3f, type: 3}
   m_PrefabInstance: {fileID: 98445522778294815}
   m_PrefabAsset: {fileID: 0}
---- !u!225 &4774580399742427496 stripped
-CanvasGroup:
-  m_CorrespondingSourceObject: {fileID: 4836593586275167095, guid: 1483d87d144da9a4483bcdcbe82ddb3f, type: 3}
-  m_PrefabInstance: {fileID: 98445522778294815}
-  m_PrefabAsset: {fileID: 0}
---- !u!114 &6196616808410524353 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 6098843156104323294, guid: 1483d87d144da9a4483bcdcbe82ddb3f, type: 3}
-  m_PrefabInstance: {fileID: 98445522778294815}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f4688fdb7df04437aeb418b961361dc5, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI
 --- !u!1001 &497318116518558798
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -11715,10 +11654,6 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: 7592597021215990749, guid: 85e18dc4e7071ba4b875de95c2a20708, type: 3}
-      propertyPath: iconManager
-      value: 
-      objectReference: {fileID: 4229069502444267482}
     - target: {fileID: 8982368936365017729, guid: 85e18dc4e7071ba4b875de95c2a20708, type: 3}
       propertyPath: m_Name
       value: TopIconBar
@@ -12853,10 +12788,6 @@ PrefabInstance:
       propertyPath: m_AnchoredPosition.y
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: 4438608982035193306, guid: 1081001668a67c9488608f7502962f1a, type: 3}
-      propertyPath: iconManager
-      value: 
-      objectReference: {fileID: 4229069502444267482}
     - target: {fileID: 4447476712888149591, guid: 1081001668a67c9488608f7502962f1a, type: 3}
       propertyPath: m_AnchorMax.x
       value: 0
@@ -13249,10 +13180,6 @@ PrefabInstance:
       propertyPath: m_Name
       value: PopupRoot
       objectReference: {fileID: 0}
-    - target: {fileID: 5856763147538374296, guid: 1081001668a67c9488608f7502962f1a, type: 3}
-      propertyPath: iconManager
-      value: 
-      objectReference: {fileID: 4229069502444267482}
     - target: {fileID: 5925130288733557329, guid: 1081001668a67c9488608f7502962f1a, type: 3}
       propertyPath: m_AnchorMax.y
       value: 0
@@ -13561,10 +13488,6 @@ PrefabInstance:
       propertyPath: m_AnchorMin.y
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: 7050107958853527417, guid: 1081001668a67c9488608f7502962f1a, type: 3}
-      propertyPath: iconManager
-      value: 
-      objectReference: {fileID: 4229069502444267482}
     - target: {fileID: 7059151672522674033, guid: 1081001668a67c9488608f7502962f1a, type: 3}
       propertyPath: m_AnchorMax.y
       value: 0

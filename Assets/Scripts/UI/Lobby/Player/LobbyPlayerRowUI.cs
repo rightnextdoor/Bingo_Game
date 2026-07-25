@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -63,13 +64,7 @@ public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
 
     #region Setup
 
-    public void Setup(
-        LobbyPlayerViewData playerData,
-        bool canKick,
-        bool showBotIcon,
-        Action<string> onRowClicked,
-        Action<string> onKickRequested,
-        bool isHighlighted)
+    public void Setup(PlayerListPlayerData playerData, Action<string> onRowClicked, Action<string> onKickRequested, bool isHighlighted)
     {
         if (playerData == null)
         {
@@ -83,19 +78,12 @@ public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
         SetPlayerIcon(playerData.iconId);
         SetPlayerName(playerData.playerName, playerData.userId);
 
-        boardPreviewController?.DisplayBoard(playerData.boardData);
+        boardPreviewController?.DisplayBoard(playerData.boardData, playerData.markedCellIndices);
 
-        SetStatusIcon(
-            botIconImage,
-            UIIconType.Bot,
-            showBotIcon && playerData.userTag == UserTag.Bot);
+        SetStatusIcon(botIconImage, UIIconType.Bot, playerData.showBotIcon);
+        SetStatusIcon(readyCheckmarkImage, UIIconType.LobbyCheckmark, playerData.showReadyIcon && playerData.isReady);
 
-        SetStatusIcon(
-            readyCheckmarkImage,
-            UIIconType.LobbyCheckmark,
-            playerData.isReady);
-
-        SetKickButtonState(canKick);
+        SetKickButtonState(playerData.canKick);
         SetHighlighted(isHighlighted);
     }
 
@@ -267,6 +255,21 @@ public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
     public void UpdateBoard(LobbyBoardData boardData)
     {
         boardPreviewController?.DisplayBoard(boardData);
+    }
+
+    public void UpdateBoard(LobbyBoardData boardData, IReadOnlyList<int> markedCellIndices)
+    {
+        boardPreviewController?.DisplayBoard(boardData, markedCellIndices);
+    }
+
+    public void UpdateMarkedCells(IReadOnlyList<int> markedCellIndices)
+    {
+        boardPreviewController?.UpdateMarkedCells(markedCellIndices);
+    }
+
+    public void SetMarkedCell(int cellIndex, bool isMarked)
+    {
+        boardPreviewController?.SetMarkedCell(cellIndex, isMarked);
     }
 
     #endregion

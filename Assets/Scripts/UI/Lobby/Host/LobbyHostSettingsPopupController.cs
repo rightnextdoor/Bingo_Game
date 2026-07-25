@@ -909,18 +909,6 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
             return;
         }
 
-        Debug.Log(
-         $"[LobbyHostSettings] Close / Apply Settings | " +
-         $"Game Mode: {settingsData.gameModeType} | " +
-         $"Ball Count: {settingsData.ballCountType} | " +
-         $"Use Free Cell: {settingsData.useFreeCell} | " +
-         $"Patterns: [{string.Join(", ", settingsData.patternTypes)}] | " +
-         $"Uses Default Patterns: {settingsData.usesDefaultPatterns} | " +
-         $"Unlimited Players: {settingsData.unlimitedPlayers} | " +
-         $"Max Players: {settingsData.maxPlayers} | " +
-         $"Add Bots: {settingsData.addBots} | " +
-         $"Bot Count: {settingsData.botCount}");
-
         LobbyManager lobbyManager =
             LobbyManager.instance;
 

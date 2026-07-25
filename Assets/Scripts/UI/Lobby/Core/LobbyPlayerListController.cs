@@ -70,65 +70,135 @@ public class LobbyPlayerListController : MonoBehaviour
             return;
         }
 
-        UpdatePlayerCount(lobbyViewData);
+        List<PlayerListPlayerData> players = BuildLobbyPlayerListData(lobbyViewData, localUserId);
 
-        string previousSelectedUserId = selectedUserId;
+        DisplayPlayers(players, lobbyViewData.playerCount, lobbyViewData.maxPlayers, lobbyViewData.unlimitedPlayers);
+    }
+
+    public void DisplayPlayers(IReadOnlyList<PlayerListPlayerData> players, int playerCount)
+    {
+        DisplayPlayers(players, playerCount, 0, true);
+    }
+
+    public void DisplayPlayers(
+        IReadOnlyList<PlayerListPlayerData> players,
+        int playerCount,
+        int maxPlayers,
+        bool unlimitedPlayers)
+    {
+        UpdatePlayerCount(playerCount, maxPlayers, unlimitedPlayers);
+
+        string previousSelectedUserId =
+            selectedUserId;
 
         ClearRows();
 
-        if (rowParent == null || rowPrefab == null || lobbyViewData.players == null)
+        if (rowParent == null ||
+            rowPrefab == null ||
+            players == null)
         {
             selectedUserId = string.Empty;
             return;
         }
 
-        bool localPlayerIsHost = IsLocalPlayerHost(lobbyViewData.players, localUserId);
-        bool modeAllowsKick = lobbyViewData.playMode == MainMenuPlayMode.Solo ||
-                              lobbyViewData.playMode == MainMenuPlayMode.Custom;
-
-        for (int i = 0; i < lobbyViewData.players.Count; i++)
+        for (int i = 0; i < players.Count; i++)
         {
-            LobbyPlayerViewData playerData = lobbyViewData.players[i];
+            PlayerListPlayerData playerData =
+                players[i];
 
-            if (playerData == null || string.IsNullOrWhiteSpace(playerData.userId))
+            if (playerData == null ||
+                string.IsNullOrWhiteSpace(
+                    playerData.userId))
             {
                 continue;
             }
 
-            bool canKick =
-                localPlayerIsHost &&
-                modeAllowsKick &&
-                playerData.userId != localUserId &&
-                !playerData.isHost;
+            LobbyPlayerRowUI row =
+                Instantiate(
+                    rowPrefab,
+                    rowParent);
 
-            bool showBotIcon =
-                localPlayerIsHost &&
-                playerData.userTag == UserTag.Bot;
-
-            LobbyPlayerRowUI row = Instantiate(rowPrefab, rowParent);
             row.gameObject.SetActive(true);
 
             bool highlighted =
-                !string.IsNullOrWhiteSpace(previousSelectedUserId) &&
-                previousSelectedUserId == playerData.userId;
+                !string.IsNullOrWhiteSpace(
+                    previousSelectedUserId) &&
+                previousSelectedUserId ==
+                    playerData.userId;
 
             row.Setup(
                 playerData,
-                canKick,
-                showBotIcon,
                 OnRowClicked,
                 OnKickRequested,
                 highlighted);
 
             spawnedRows.Add(row);
-            rowsByUserId[playerData.userId] = row;
+
+            rowsByUserId[
+                playerData.userId] = row;
         }
 
-        selectedUserId = rowsByUserId.ContainsKey(previousSelectedUserId)
-            ? previousSelectedUserId
-            : string.Empty;
+        selectedUserId =
+            rowsByUserId.ContainsKey(
+                previousSelectedUserId)
+                ? previousSelectedUserId
+                : string.Empty;
 
         SetSelectedUser(selectedUserId);
+    }
+
+    private List<PlayerListPlayerData> BuildLobbyPlayerListData(LobbyViewData lobbyViewData, string localUserId)
+    {
+        List<PlayerListPlayerData> players = new List<PlayerListPlayerData>();
+
+        if (lobbyViewData?.players == null)
+        {
+            return players;
+        }
+
+        bool localPlayerIsHost =
+            IsLocalPlayerHost(
+                lobbyViewData.players,
+                localUserId);
+
+        bool modeAllowsKick =
+            lobbyViewData.playMode ==
+                MainMenuPlayMode.Solo ||
+            lobbyViewData.playMode ==
+                MainMenuPlayMode.Custom;
+
+        for (int i = 0; i < lobbyViewData.players.Count; i++)
+        {
+            LobbyPlayerViewData lobbyPlayerData =
+                lobbyViewData.players[i];
+
+            if (lobbyPlayerData == null ||
+                string.IsNullOrWhiteSpace(
+                    lobbyPlayerData.userId))
+            {
+                continue;
+            }
+
+            PlayerListPlayerData playerData =
+                new PlayerListPlayerData(
+                    lobbyPlayerData);
+
+            playerData.canKick =
+                localPlayerIsHost &&
+                modeAllowsKick &&
+                playerData.userId != localUserId &&
+                !playerData.isHost;
+
+            playerData.showBotIcon =
+                localPlayerIsHost &&
+                playerData.userTag == UserTag.Bot;
+
+            playerData.showReadyIcon = true;
+
+            players.Add(playerData);
+        }
+
+        return players;
     }
 
     public void UpdatePlayerBoard(string userId, LobbyBoardData boardData)
@@ -144,6 +214,51 @@ public class LobbyPlayerListController : MonoBehaviour
         }
 
         row.UpdateBoard(boardData);
+    }
+
+    public void UpdatePlayerBoard(string userId, LobbyBoardData boardData, IReadOnlyList<int> markedCellIndices)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return;
+        }
+
+        if (!rowsByUserId.TryGetValue(userId, out LobbyPlayerRowUI row) || row == null)
+        {
+            return;
+        }
+
+        row.UpdateBoard(boardData, markedCellIndices);
+    }
+
+    public void UpdatePlayerMarkedCells(string userId, IReadOnlyList<int> markedCellIndices)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return;
+        }
+
+        if (!rowsByUserId.TryGetValue(userId, out LobbyPlayerRowUI row) || row == null)
+        {
+            return;
+        }
+
+        row.UpdateMarkedCells(markedCellIndices);
+    }
+
+    public void SetPlayerMarkedCell(string userId, int cellIndex, bool isMarked)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return;
+        }
+
+        if (!rowsByUserId.TryGetValue(userId, out LobbyPlayerRowUI row) || row == null)
+        {
+            return;
+        }
+
+        row.SetMarkedCell(cellIndex, isMarked);
     }
 
     public void ClearRows()
@@ -203,16 +318,16 @@ public class LobbyPlayerListController : MonoBehaviour
         }
     }
 
-    private void UpdatePlayerCount(LobbyViewData lobbyViewData)
+    private void UpdatePlayerCount(int playerCount, int maxPlayers, bool unlimitedPlayers)
     {
         if (playerCountText == null)
         {
             return;
         }
 
-        playerCountText.text = lobbyViewData.unlimitedPlayers
-            ? $"Players {lobbyViewData.playerCount}"
-            : $"Players {lobbyViewData.playerCount} / {lobbyViewData.maxPlayers}";
+        playerCountText.text = unlimitedPlayers
+            ? $"Players {playerCount}"
+            : $"Players {playerCount} / {maxPlayers}";
     }
 
     private bool IsLocalPlayerHost(IReadOnlyList<LobbyPlayerViewData> players, string localUserId)

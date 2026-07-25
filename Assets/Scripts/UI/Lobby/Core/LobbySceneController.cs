@@ -8,6 +8,7 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
     [SerializeField] private LobbyHeaderController headerController;
     [SerializeField] private LobbyCustomPanelController customPanelController;
     [SerializeField] private LobbyBoardSectionController boardSectionController;
+    [SerializeField] private LobbyPlayerListController playerListController;
 
     private LobbyController lobbyController;
     private Coroutine bindRoutine;
@@ -17,6 +18,7 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
     {
         SubscribeToHeader();
         SubscribeToBoardSection();
+        SubscribeToPlayerList();
         bindRoutine = StartCoroutine(BindWhenLobbyIsReady());
     }
 
@@ -37,6 +39,7 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
         UnsubscribeFromHeader();
         UnsubscribeFromLobbyManager();
         UnsubscribeFromBoardSection();
+        UnsubscribeFromPlayerList();
         UnbindLobbyController();
     }
 
@@ -46,6 +49,14 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
         {
             return;
         }
+
+        LobbyManager lobbyManager = LobbyManager.instance;
+
+        playerListController?.DisplayLobbyInfo(
+            lobbyViewData,
+            lobbyManager != null
+                ? lobbyManager.CurrentUserId
+                : string.Empty);
 
         headerController?.DisplayLobbyInfo(lobbyViewData, CanOpenHostSettings(lobbyViewData), CanStartLobby(lobbyViewData));
 
@@ -159,16 +170,23 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
         lobbyManager.LobbyViewUpdated -= OnLobbyViewUpdated;
         lobbyManager.LobbyViewUpdated += OnLobbyViewUpdated;
 
+        lobbyManager.LobbyPlayerBoardUpdated -= OnLobbyPlayerBoardUpdated;
+        lobbyManager.LobbyPlayerBoardUpdated += OnLobbyPlayerBoardUpdated;
+
         if (lobbyManager.RuntimeType == SessionRuntimeType.Network)
         {
             UnbindLobbyController();
 
-            LobbyViewData lobbyViewData = lobbyManager.CurrentLobbyViewData ?? lobbyManager.CurrentLobby.Controller.BuildViewData();
+            LobbyViewData lobbyViewData =
+                lobbyManager.CurrentLobbyViewData ??
+                lobbyManager.CurrentLobby.Controller.BuildViewData();
+
             DisplayLobbyInfo(lobbyViewData);
         }
         else
         {
-            BindLobbyController(lobbyManager.CurrentLobby.Controller);
+            BindLobbyController(
+                lobbyManager.CurrentLobby.Controller);
         }
 
         bindRoutine = null;
@@ -177,6 +195,43 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
     private void OnLobbyViewUpdated(LobbyViewData lobbyViewData)
     {
         DisplayLobbyInfo(lobbyViewData);
+    }
+
+    private void OnLobbyPlayerBoardUpdated(
+    LobbyPlayerBoardUpdateData updateData)
+    {
+        if (updateData == null)
+        {
+            return;
+        }
+
+        ApplyPlayerBoardUpdate(
+            updateData.userId,
+            updateData.boardData);
+    }
+
+    private void ApplyPlayerBoardUpdate(
+    string userId,
+    LobbyBoardData boardData)
+    {
+        if (string.IsNullOrWhiteSpace(userId) || boardData == null)
+        {
+            return;
+        }
+
+        playerListController?.UpdatePlayerBoard(
+            userId,
+            boardData);
+
+        LobbyManager lobbyManager = LobbyManager.instance;
+
+        if (lobbyManager == null ||
+            userId != lobbyManager.CurrentUserId)
+        {
+            return;
+        }
+
+        boardSectionController?.DisplayBoard(boardData);
     }
 
     private void SubscribeToHeader()
@@ -210,9 +265,31 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
 
     private void UnsubscribeFromLobbyManager()
     {
-        if (LobbyManager.instance != null)
+        if (LobbyManager.instance == null)
         {
-            LobbyManager.instance.LobbyViewUpdated -= OnLobbyViewUpdated;
+            return;
+        }
+
+        LobbyManager.instance.LobbyViewUpdated -= OnLobbyViewUpdated;
+        LobbyManager.instance.LobbyPlayerBoardUpdated -= OnLobbyPlayerBoardUpdated;
+    }
+
+    private void SubscribeToPlayerList()
+    {
+        if (playerListController == null)
+        {
+            return;
+        }
+
+        playerListController.KickRequested -= KickPlayer;
+        playerListController.KickRequested += KickPlayer;
+    }
+
+    private void UnsubscribeFromPlayerList()
+    {
+        if (playerListController != null)
+        {
+            playerListController.KickRequested -= KickPlayer;
         }
     }
 
@@ -220,14 +297,30 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
     {
         if (lobbyController == controller)
         {
-            lobbyController.RefreshViews();
+            if (lobbyController != null)
+            {
+                lobbyController.PlayerBoardChanged -= OnLocalPlayerBoardChanged;
+                lobbyController.PlayerBoardChanged += OnLocalPlayerBoardChanged;
+
+                lobbyController.RefreshViews();
+            }
+
             return;
         }
 
         UnbindLobbyController();
 
         lobbyController = controller;
-        lobbyController?.BindView(this);
+
+        if (lobbyController == null)
+        {
+            return;
+        }
+
+        lobbyController.PlayerBoardChanged -= OnLocalPlayerBoardChanged;
+        lobbyController.PlayerBoardChanged += OnLocalPlayerBoardChanged;
+
+        lobbyController.BindView(this);
     }
 
     private void UnbindLobbyController()
@@ -237,8 +330,24 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
             return;
         }
 
+        lobbyController.PlayerBoardChanged -= OnLocalPlayerBoardChanged;
         lobbyController.UnbindView(this);
+
         lobbyController = null;
+    }
+
+    private void OnLocalPlayerBoardChanged(
+    LobbyController controller,
+    LobbyPlayerBoardViewData playerBoard)
+    {
+        if (playerBoard == null)
+        {
+            return;
+        }
+
+        ApplyPlayerBoardUpdate(
+            playerBoard.userId,
+            playerBoard.boardData);
     }
 
     private void StartLobby()
@@ -374,6 +483,36 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
 
     private void ReadyPlayer()
     {
+        LobbyManager lobbyManager = LobbyManager.instance;
+
+        if (lobbyManager == null ||
+            lobbyManager.CurrentLobby?.Controller == null ||
+            string.IsNullOrWhiteSpace(lobbyManager.CurrentUserId))
+        {
+            return;
+        }
+
+        if (lobbyManager.RuntimeType == SessionRuntimeType.Local)
+        {
+            lobbyManager.CurrentLobby.Controller.SetPlayerReady(
+                lobbyManager.CurrentUserId,
+                true);
+
+            return;
+        }
+
+        NetworkLobbyConnection lobbyConnection =
+            NetworkLobbyConnection.GetLocalConnection();
+
+        if (lobbyConnection == null)
+        {
+            Debug.LogWarning(
+                "[LobbySceneController] The network lobby connection was not available for Ready.");
+
+            return;
+        }
+
+        lobbyConnection.RequestSetPlayerReady(true);
     }
 
     private void RerollBoard()
@@ -402,5 +541,54 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
         }
 
         lobbyConnection.RequestRerollBoard();
+    }
+
+    private async void KickPlayer(string targetUserId)
+    {
+        LobbyManager lobbyManager = LobbyManager.instance;
+
+        if (lobbyManager == null ||
+            lobbyManager.CurrentLobby?.Controller == null ||
+            string.IsNullOrWhiteSpace(targetUserId))
+        {
+            return;
+        }
+
+        if (lobbyManager.RuntimeType == SessionRuntimeType.Local)
+        {
+            LobbyExitResult result =
+                lobbyManager.CurrentLobby.Controller.KickPlayer(
+                    lobbyManager.CurrentUserId,
+                    targetUserId);
+
+            if (!result.success)
+            {
+                Debug.LogWarning(
+                    $"[LobbySceneController] Kick failed: {result.failureMessage}");
+            }
+
+            return;
+        }
+
+        NetworkLobbyManager networkLobbyManager =
+            NetworkLobbyManager.instance;
+
+        if (networkLobbyManager == null ||
+            !networkLobbyManager.IsReady)
+        {
+            Debug.LogWarning(
+                "[LobbySceneController] NetworkLobbyManager was not ready for Kick.");
+
+            return;
+        }
+
+        LobbyExitResult networkResult =
+            await networkLobbyManager.KickPlayerAsync(targetUserId);
+
+        if (networkResult == null || !networkResult.success)
+        {
+            Debug.LogWarning(
+                $"[LobbySceneController] Kick failed: {networkResult?.failureMessage}");
+        }
     }
 }

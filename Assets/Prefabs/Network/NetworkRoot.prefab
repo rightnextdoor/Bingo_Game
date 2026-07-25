@@ -62,6 +62,7 @@ GameObject:
   - component: {fileID: 1058856209825802477}
   - component: {fileID: 1621890821086182707}
   - component: {fileID: 3480673652361668149}
+  - component: {fileID: 4624164359500256062}
   m_Layer: 0
   m_Name: NetworkRoot
   m_TagString: Untagged
@@ -244,3 +245,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5b24aadf0050abc49b63a7bed0181f5b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MultiplayerPlayModeTestBootstrap
+--- !u!114 &4624164359500256062
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5973456699069445500}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 29c12e7fdabe696438b50878362ab61a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NetworkBotManager

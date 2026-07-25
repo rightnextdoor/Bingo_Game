@@ -37,6 +37,11 @@ public class LobbyController
     [field: NonSerialized]
     public event Action<LobbyController, LobbyExitResult> PlayerExitProcessed;
 
+    [field: NonSerialized]
+    public event Action<LobbyController, LobbyPlayerBoardViewData> PlayerBoardChanged;
+
+    [NonSerialized] private Func<IReadOnlyList<UserData>> botUserProvider;
+
     #endregion
 
     #region Timer Fields
@@ -77,9 +82,6 @@ public class LobbyController
     [SerializeField] private BingoBallCountType ballCountType = BingoBallCountType.Ball75;
     [SerializeField] private bool useFreeCell = true;
 
-    [SerializeField] private bool addBots;
-    [SerializeField] private int botCount;
-
     public BingoGameModeType GameModeType => gameModeType;
 
     public bool HasRule => hasRule;
@@ -91,8 +93,8 @@ public class LobbyController
     public BingoBallCountType BallCountType => ballCountType;
     public bool UseFreeCell => useFreeCell;
 
-    public bool AddBots => addBots;
-    public int BotCount => botCount;
+    public bool AddBots => BotCount > 0;
+    public int BotCount => GetBotCount();
 
     #endregion
 
@@ -145,9 +147,6 @@ public class LobbyController
 
         unlimitedPlayers = false;
         maxPlayers = GetMinimumPlayers();
-
-        addBots = false;
-        botCount = 0;
 
         closeReason = LobbyCloseReason.None;
 
@@ -325,6 +324,11 @@ public class LobbyController
 
     public bool AddPlayer(LobbyPlayerData playerData)
     {
+        return AddPlayerInternal(playerData, true);
+    }
+
+    private bool AddPlayerInternal(LobbyPlayerData playerData, bool refreshViews)
+    {
         if (playerData == null || !playerData.HasValidUser)
         {
             return false;
@@ -345,7 +349,11 @@ public class LobbyController
         GeneratePlayerBoard(playerData);
 
         players.Add(playerData);
-        RefreshViews();
+
+        if (refreshViews)
+        {
+            RefreshViews();
+        }
 
         return true;
     }
@@ -429,6 +437,93 @@ public class LobbyController
             "The player was not found in the lobby.");
     }
 
+    public void SetBotUserProvider(Func<IReadOnlyList<UserData>> provider)
+    {
+        botUserProvider = provider;
+    }
+
+    public bool SetPlayerReady(string userId, bool isReady)
+    {
+        if (lobby == null || lobby.lobbyState != LobbyState.Open)
+        {
+            return false;
+        }
+
+        LobbyPlayerData playerData = GetPlayer(userId);
+
+        if (playerData == null)
+        {
+            return false;
+        }
+
+        if (playerData.userData != null && playerData.userData.userTag == UserTag.Bot)
+        {
+            playerData.isReady = true;
+            return true;
+        }
+
+        if (playerData.isReady == isReady)
+        {
+            return true;
+        }
+
+        playerData.isReady = isReady;
+        RefreshViews();
+
+        return true;
+    }
+
+    public LobbyExitResult KickPlayer(string requesterUserId, string targetUserId)
+    {
+        if (lobby == null ||
+            (lobby.playMode != MainMenuPlayMode.Solo &&
+             lobby.playMode != MainMenuPlayMode.Custom))
+        {
+            return LobbyExitResult.Failed(
+                targetUserId,
+                LobbyPlayerExitReason.Kicked,
+                "This lobby does not support host kicking.");
+        }
+
+        LobbyPlayerData requesterPlayer = GetPlayer(requesterUserId);
+
+        if (requesterPlayer == null || !requesterPlayer.isHost)
+        {
+            return LobbyExitResult.Failed(
+                targetUserId,
+                LobbyPlayerExitReason.Kicked,
+                "Only the lobby host can remove a player.");
+        }
+
+        if (requesterUserId == targetUserId)
+        {
+            return LobbyExitResult.Failed(
+                targetUserId,
+                LobbyPlayerExitReason.Kicked,
+                "The host cannot kick themselves.");
+        }
+
+        LobbyPlayerData targetPlayer = GetPlayer(targetUserId);
+
+        if (targetPlayer == null)
+        {
+            return LobbyExitResult.Failed(
+                targetUserId,
+                LobbyPlayerExitReason.Kicked,
+                "The target player was not found in the lobby.");
+        }
+
+        if (targetPlayer.isHost)
+        {
+            return LobbyExitResult.Failed(
+                targetUserId,
+                LobbyPlayerExitReason.Kicked,
+                "The lobby host cannot be kicked.");
+        }
+
+        return RemovePlayer(targetUserId, LobbyPlayerExitReason.Kicked);
+    }
+
     #endregion
 
     #region Boards
@@ -448,9 +543,26 @@ public class LobbyController
         }
 
         GeneratePlayerBoard(playerData);
-        RefreshViews();
+
+        PlayerBoardChanged?.Invoke(
+            this,
+            new LobbyPlayerBoardViewData(
+                userId,
+                playerData.boardData));
 
         return true;
+    }
+
+    public LobbyPlayerBoardViewData GetPlayerBoardViewData(string userId)
+    {
+        LobbyPlayerData playerData = GetPlayer(userId);
+
+        if (playerData == null)
+        {
+            return null;
+        }
+
+        return new LobbyPlayerBoardViewData(userId, playerData.boardData);
     }
 
     private void GeneratePlayerBoard(LobbyPlayerData playerData)
@@ -469,6 +581,171 @@ public class LobbyController
         {
             GeneratePlayerBoard(players[i]);
         }
+    }
+
+    #endregion
+
+    #region Bots
+
+    public int FillBotsToMinimumPlayers()
+    {
+        int botsNeeded = Mathf.Max(0, GetMinimumPlayers() - PlayerCount);
+
+        if (botsNeeded <= 0)
+        {
+            return 0;
+        }
+
+        int previousBotCount = BotCount;
+
+        SetBotCountInternal(BotCount + botsNeeded);
+
+        if (BotCount != previousBotCount)
+        {
+            RefreshViews();
+        }
+
+        return BotCount - previousBotCount;
+    }
+
+    private bool SetBotCountInternal(int desiredBotCount)
+    {
+        desiredBotCount = Mathf.Max(0, desiredBotCount);
+
+        int currentBotCount = BotCount;
+
+        if (desiredBotCount == currentBotCount)
+        {
+            return false;
+        }
+
+        if (desiredBotCount < currentBotCount)
+        {
+            int botsToRemove = currentBotCount - desiredBotCount;
+            int removedBots = 0;
+
+            for (int i = players.Count - 1; i >= 0 && removedBots < botsToRemove; i--)
+            {
+                LobbyPlayerData playerData = players[i];
+
+                if (playerData?.userData == null ||
+                    playerData.userData.userTag != UserTag.Bot)
+                {
+                    continue;
+                }
+
+                players.RemoveAt(i);
+                removedBots++;
+            }
+
+            return removedBots > 0;
+        }
+
+        int botsToAdd = desiredBotCount - currentBotCount;
+        return AddRandomBotsInternal(botsToAdd, int.MaxValue) > 0;
+    }
+
+    private int AddRandomBotsInternal(int requestedCount, int maximumTotalBots)
+    {
+        if (requestedCount <= 0 || botUserProvider == null)
+        {
+            return 0;
+        }
+
+        List<UserData> eligibleBots = BuildEligibleBotList();
+
+        if (eligibleBots.Count == 0)
+        {
+            return 0;
+        }
+
+        ShuffleBots(eligibleBots);
+
+        int availablePlayerSlots = Mathf.Max(0, maxPlayers - PlayerCount);
+        int remainingBotAllowance = Mathf.Max(0, maximumTotalBots - BotCount);
+
+        int addCount = Mathf.Min(requestedCount, eligibleBots.Count);
+        addCount = Mathf.Min(addCount, availablePlayerSlots);
+        addCount = Mathf.Min(addCount, remainingBotAllowance);
+
+        int addedBots = 0;
+
+        for (int i = 0; i < addCount; i++)
+        {
+            LobbyPlayerData botPlayer = new LobbyPlayerData(eligibleBots[i], false);
+            botPlayer.isLobbySceneReady = true;
+
+            if (AddPlayerInternal(botPlayer, false))
+            {
+                addedBots++;
+            }
+        }
+
+        return addedBots;
+    }
+
+    private List<UserData> BuildEligibleBotList()
+    {
+        List<UserData> eligibleBots = new List<UserData>();
+
+        IReadOnlyList<UserData> availableBots = botUserProvider?.Invoke();
+
+        if (availableBots == null)
+        {
+            return eligibleBots;
+        }
+
+        for (int i = 0; i < availableBots.Count; i++)
+        {
+            UserData botUser = availableBots[i];
+
+            if (botUser == null ||
+                !botUser.HasUser ||
+                botUser.userTag != UserTag.Bot ||
+                HasPlayer(botUser.userId))
+            {
+                continue;
+            }
+
+            eligibleBots.Add(botUser);
+        }
+
+        return eligibleBots;
+    }
+
+    private void ShuffleBots(List<UserData> bots)
+    {
+        if (bots == null)
+        {
+            return;
+        }
+
+        for (int i = bots.Count - 1; i > 0; i--)
+        {
+            int randomIndex = UnityEngine.Random.Range(0, i + 1);
+
+            UserData temp = bots[i];
+            bots[i] = bots[randomIndex];
+            bots[randomIndex] = temp;
+        }
+    }
+
+    private int GetBotCount()
+    {
+        int count = 0;
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            LobbyPlayerData playerData = players[i];
+
+            if (playerData?.userData != null &&
+                playerData.userData.userTag == UserTag.Bot)
+            {
+                count++;
+            }
+        }
+
+        return count;
     }
 
     #endregion
@@ -542,6 +819,11 @@ public class LobbyController
             return false;
         }
 
+        if (PlayerCount < GetMinimumPlayers())
+        {
+            return false;
+        }
+
         return BeginFinalCountdown();
     }
 
@@ -553,6 +835,50 @@ public class LobbyController
             timer == null ||
             !timer.HasReachedFinalCountdown())
         {
+            return false;
+        }
+
+        bool botsChanged = false;
+
+        if (PlayerCount < GetMinimumPlayers())
+        {
+            LobbySettings lobbySettings = LobbySettings.instance;
+
+            if (lobbySettings == null)
+            {
+                return false;
+            }
+
+            int requiredBots = GetMinimumPlayers() - PlayerCount;
+            List<UserData> eligibleBots = BuildEligibleBotList();
+
+            int availablePlayerSlots = Mathf.Max(0, maxPlayers - PlayerCount);
+            int remainingOnlineBotAllowance = Mathf.Max(0, lobbySettings.MaxOnlineBots - BotCount);
+
+            int maximumBotsToAdd = Mathf.Min(eligibleBots.Count, availablePlayerSlots);
+            maximumBotsToAdd = Mathf.Min(maximumBotsToAdd, remainingOnlineBotAllowance);
+
+            if (maximumBotsToAdd > 0)
+            {
+                int requestedBots = maximumBotsToAdd >= requiredBots
+                    ? UnityEngine.Random.Range(requiredBots, maximumBotsToAdd + 1)
+                    : maximumBotsToAdd;
+
+                int addedBots = AddRandomBotsInternal(
+                    requestedBots,
+                    lobbySettings.MaxOnlineBots);
+
+                botsChanged = addedBots > 0;
+            }
+        }
+
+        if (PlayerCount < GetMinimumPlayers())
+        {
+            if (botsChanged)
+            {
+                RefreshViews();
+            }
+
             return false;
         }
 
@@ -819,10 +1145,13 @@ public class LobbyController
         unlimitedPlayers = settingsData.unlimitedPlayers;
         maxPlayers = GetValidMaximumPlayers(settingsData.maxPlayers, unlimitedPlayers);
 
-        addBots = settingsData.addBots;
-        botCount = addBots ? Mathf.Max(0, settingsData.botCount) : 0;
+        int desiredBotCount = settingsData.addBots
+            ? Mathf.Max(0, settingsData.botCount)
+            : 0;
 
         ResolveGameModeData();
+
+        bool botPlayersChanged = SetBotCountInternal(desiredBotCount);
 
         bool boardGenerationChanged =
             ballCountType != previousBallCountType ||
@@ -979,12 +1308,60 @@ public class LobbyController
             maxPlayers = maxPlayers,
             unlimitedPlayers = unlimitedPlayers,
             playerBoards = BuildPlayerBoardViewDataList(),
-            addBots = addBots,
-            botCount = botCount,
+            players = BuildPlayerViewDataList(),
+            addBots = BotCount > 0,
+            botCount = BotCount,
             playerNames = BuildPlayerNameList()
         };
 
         return lobbyViewData;
+    }
+
+    private List<LobbyPlayerViewData> BuildPlayerViewDataList()
+    {
+        List<LobbyPlayerViewData> playerViewData = new List<LobbyPlayerViewData>();
+
+        LobbyPlayerData visibleHost = null;
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            LobbyPlayerData playerData = players[i];
+
+            if (playerData == null ||
+                !playerData.isLobbySceneReady ||
+                !playerData.HasValidUser)
+            {
+                continue;
+            }
+
+            if (playerData.isHost)
+            {
+                visibleHost = playerData;
+                break;
+            }
+        }
+
+        if (visibleHost != null)
+        {
+            playerViewData.Add(new LobbyPlayerViewData(visibleHost));
+        }
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            LobbyPlayerData playerData = players[i];
+
+            if (playerData == null ||
+                playerData == visibleHost ||
+                !playerData.isLobbySceneReady ||
+                !playerData.HasValidUser)
+            {
+                continue;
+            }
+
+            playerViewData.Add(new LobbyPlayerViewData(playerData));
+        }
+
+        return playerViewData;
     }
 
     private int GetVisiblePlayerCount()

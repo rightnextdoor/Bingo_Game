@@ -34,6 +34,7 @@ public class LobbyViewData
     public int maxPlayers;
     public bool unlimitedPlayers;
 
+    public List<LobbyPlayerViewData> players;
     public List<LobbyPlayerBoardViewData> playerBoards;
 
     public bool addBots;
@@ -75,6 +76,7 @@ public class LobbyViewData
             : 6;
         unlimitedPlayers = false;
 
+        players = new List<LobbyPlayerViewData>();
         playerBoards = new List<LobbyPlayerBoardViewData>();
 
         addBots = false;

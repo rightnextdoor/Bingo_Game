@@ -10,8 +10,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: cf3bea8b07ac6df47adce70af02c2a19, type: 3}
-  m_Name: LobbyCheckmark
+  m_Name: LobbyKick_Icon
   m_EditorClassIdentifier: Assembly-CSharp::UserIconData
-  iconId: 8480b47ae6d3f1d4f8170e9e3c965ad9
-  iconType: 4
-  iconSprite: {fileID: -1144630816, guid: bdeaeacf91e805f449e7fa66d480d644, type: 3}
+  iconId: 068644c39875e8c48b1f2b0b2634a2f4
+  iconType: 5
+  iconSprite: {fileID: -367249166, guid: 9c7355b0cb8a5024bba44738f70d9e74, type: 3}

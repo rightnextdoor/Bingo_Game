@@ -25,6 +25,7 @@ public class NetworkLobbyConnection : NetworkBehaviour
 
     public static event Action<LobbyExitNotification> LocalLobbyExitReceived;
     public static event Action<LobbyViewData> LocalLobbyViewReceived;
+    public static event Action<LobbyPlayerBoardUpdateData> LocalPlayerBoardUpdateReceived;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetStaticState()
@@ -33,6 +34,7 @@ public class NetworkLobbyConnection : NetworkBehaviour
         serverConnectionsByClientId.Clear();
         LocalLobbyExitReceived = null;
         LocalLobbyViewReceived = null;
+        LocalPlayerBoardUpdateReceived = null;
     }
 
     public override void OnNetworkSpawn()
@@ -48,6 +50,88 @@ public class NetworkLobbyConnection : NetworkBehaviour
         {
             local = this;
         }
+    }
+
+    public static bool TrySendPlayerBoardUpdate(
+    ulong clientId,
+    LobbyPlayerBoardUpdateData updateData)
+    {
+        if (updateData == null)
+        {
+            return false;
+        }
+
+        if (!serverConnectionsByClientId.TryGetValue(
+                clientId,
+                out NetworkLobbyConnection connection))
+        {
+            return false;
+        }
+
+        if (connection == null || !connection.IsSpawned || !connection.IsServer)
+        {
+            return false;
+        }
+
+        string updateJson = JsonUtility.ToJson(updateData);
+
+        connection.ReceivePlayerBoardUpdateRpc(
+            updateJson,
+            connection.RpcTarget.Single(
+                clientId,
+                RpcTargetUse.Temp));
+
+        return true;
+    }
+
+    [Rpc(SendTo.SpecifiedInParams)]
+    private void ReceivePlayerBoardUpdateRpc(
+        string updateJson,
+        RpcParams rpcParams = default)
+    {
+        LobbyPlayerBoardUpdateData updateData = null;
+
+        try
+        {
+            updateData = JsonUtility.FromJson<LobbyPlayerBoardUpdateData>(updateJson);
+        }
+        catch (Exception exception)
+        {
+            Debug.LogException(exception);
+        }
+
+        if (updateData != null)
+        {
+            LocalPlayerBoardUpdateReceived?.Invoke(updateData);
+        }
+    }
+
+    public void RequestSetPlayerReady(bool isReady)
+    {
+        if (!IsSpawned || !IsOwner)
+        {
+            return;
+        }
+
+        RequestSetPlayerReadyRpc(isReady);
+    }
+
+    [Rpc(
+        SendTo.Server,
+        InvokePermission = RpcInvokePermission.Owner)]
+    private void RequestSetPlayerReadyRpc(
+        bool isReady,
+        RpcParams rpcParams = default)
+    {
+        if (NetworkLobbyManager.instance == null ||
+            !NetworkLobbyManager.instance.IsReady)
+        {
+            return;
+        }
+
+        NetworkLobbyManager.instance.ProcessAuthoritySetPlayerReady(
+            rpcParams.Receive.SenderClientId,
+            isReady);
     }
 
     public override void OnNetworkDespawn()

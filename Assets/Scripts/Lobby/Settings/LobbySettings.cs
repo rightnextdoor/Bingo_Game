@@ -15,12 +15,16 @@ public class LobbySettings : MonoBehaviour
     [SerializeField, Min(0f)] private float onlineTimerMinutes = 5f;
     [SerializeField, Min(0f)] private float finalCountdownSeconds = 10f;
 
+    [Header("Online Bots")]
+    [SerializeField, Min(0)] private int maxOnlineBots = 30;
+
     public int MinimumPlayers => Mathf.Max(1, minimumPlayers);
     public int UnlimitedPlayerCount => Mathf.Max(MinimumPlayers, unlimitedPlayerCount);
 
     public float OnlineTimerMinutes => onlineTimerMinutes;
     public float OnlineTimerSeconds => MinutesToSeconds(onlineTimerMinutes);
     public float FinalCountdownSeconds => finalCountdownSeconds;
+    public int MaxOnlineBots => Mathf.Max(0, maxOnlineBots);
 
     #endregion
 

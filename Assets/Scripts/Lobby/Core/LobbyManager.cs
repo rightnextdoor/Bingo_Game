@@ -59,6 +59,7 @@ public class LobbyManager : MonoBehaviour
     public event Action<LobbyExitResult> LobbyExitFailed;
     public event Action<LobbyExitNotification> LobbyForcedExit;
     public event Action<LobbyViewData> LobbyViewUpdated;
+    public event Action<LobbyPlayerBoardUpdateData> LobbyPlayerBoardUpdated;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetStaticState()
@@ -474,8 +475,7 @@ public class LobbyManager : MonoBehaviour
             $"Message: {finalResult.failureMessage}");
     }
 
-    private void OnLocalLobbyExitReceived(
-        LobbyExitNotification notification)
+    private void OnLocalLobbyExitReceived(LobbyExitNotification notification)
     {
         HandleForcedLobbyExit(notification);
     }
@@ -500,6 +500,66 @@ public class LobbyManager : MonoBehaviour
 
         currentLobbyViewData = lobbyViewData;
         PublishCurrentLobbyView();
+    }
+
+    private void OnLocalPlayerBoardUpdateReceived(LobbyPlayerBoardUpdateData updateData)
+    {
+        if (updateData == null ||
+            currentLobby == null ||
+            currentLobbyViewData == null)
+        {
+            return;
+        }
+
+        if (!string.Equals(
+                updateData.lobbyId,
+                currentLobby.GetLobbyId(),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        ApplyPlayerBoardUpdateToCurrentView(updateData);
+        LobbyPlayerBoardUpdated?.Invoke(updateData);
+    }
+
+    private void ApplyPlayerBoardUpdateToCurrentView(LobbyPlayerBoardUpdateData updateData)
+    {
+        if (currentLobbyViewData.playerBoards != null)
+        {
+            for (int i = 0; i < currentLobbyViewData.playerBoards.Count; i++)
+            {
+                LobbyPlayerBoardViewData playerBoard =
+                    currentLobbyViewData.playerBoards[i];
+
+                if (playerBoard != null &&
+                    playerBoard.userId == updateData.userId)
+                {
+                    playerBoard.boardData =
+                        new LobbyBoardData(updateData.boardData);
+
+                    break;
+                }
+            }
+        }
+
+        if (currentLobbyViewData.players != null)
+        {
+            for (int i = 0; i < currentLobbyViewData.players.Count; i++)
+            {
+                LobbyPlayerViewData playerData =
+                    currentLobbyViewData.players[i];
+
+                if (playerData != null &&
+                    playerData.userId == updateData.userId)
+                {
+                    playerData.boardData =
+                        new LobbyBoardData(updateData.boardData);
+
+                    break;
+                }
+            }
+        }
     }
 
     private void OnNetworkConnectionStateChanged(
@@ -620,6 +680,8 @@ public class LobbyManager : MonoBehaviour
         NetworkLobbyConnection.LocalLobbyExitReceived += OnLocalLobbyExitReceived;
         NetworkLobbyConnection.LocalLobbyViewReceived -= OnLocalLobbyViewReceived;
         NetworkLobbyConnection.LocalLobbyViewReceived += OnLocalLobbyViewReceived;
+        NetworkLobbyConnection.LocalPlayerBoardUpdateReceived -= OnLocalPlayerBoardUpdateReceived;
+        NetworkLobbyConnection.LocalPlayerBoardUpdateReceived += OnLocalPlayerBoardUpdateReceived;
 
         if (isSubscribedToNetworkBootstrap)
         {
@@ -647,6 +709,7 @@ public class LobbyManager : MonoBehaviour
     {
         NetworkLobbyConnection.LocalLobbyExitReceived -= OnLocalLobbyExitReceived;
         NetworkLobbyConnection.LocalLobbyViewReceived -= OnLocalLobbyViewReceived;
+        NetworkLobbyConnection.LocalPlayerBoardUpdateReceived -= OnLocalPlayerBoardUpdateReceived;
 
         if (isSubscribedToNetworkBootstrap &&
             networkBootstrap != null)

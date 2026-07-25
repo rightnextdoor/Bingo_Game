@@ -378,8 +378,8 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
                 out targetClientId);
 
         LobbyExitResult result = lobby.Controller.KickPlayer(
-            targetUserId,
-            LobbyPlayerExitReason.Kicked);
+            requesterUserId,
+            targetUserId);
 
         if (result.success && hasTargetConnection)
         {
@@ -1079,8 +1079,7 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         return LobbyEntryResult.Succeeded(lobby);
     }
 
-    private Lobby CreateLobby(
-        LobbySetupData lobbySetupData)
+    private Lobby CreateLobby(LobbySetupData lobbySetupData)
     {
         if (lobbySetupData == null)
         {
@@ -1091,12 +1090,22 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
             lobbySetupData,
             IsCustomRoomCodeAvailable);
 
-        lobby.Controller.PlayerExitProcessed +=
-            OnLobbyPlayerExitProcessed;
+        lobby.Controller.PlayerExitProcessed += OnLobbyPlayerExitProcessed;
+        lobby.Controller.SetBotUserProvider(GetNetworkBotUsers);
 
         lobbies.Add(lobby);
 
         return lobby;
+    }
+
+    private IReadOnlyList<UserData> GetNetworkBotUsers()
+    {
+        if (NetworkBotManager.instance == null || !NetworkBotManager.instance.IsReady)
+        {
+            return new List<UserData>();
+        }
+
+        return NetworkBotManager.instance.CreateBotCandidateCopies();
     }
 
     private void BroadcastLobbyView(Lobby lobby)
@@ -1192,7 +1201,46 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
             return;
         }
 
-        BroadcastLobbyView(lobby);
+        BroadcastPlayerBoardUpdate(lobby, userId);
+    }
+
+    private void BroadcastPlayerBoardUpdate(Lobby lobby, string userId)
+    {
+        if (lobby?.Controller == null ||
+            connectionRegistry == null ||
+            !connectionRegistry.IsReady)
+        {
+            return;
+        }
+
+        LobbyPlayerBoardViewData playerBoard =
+            lobby.Controller.GetPlayerBoardViewData(userId);
+
+        if (playerBoard == null)
+        {
+            return;
+        }
+
+        LobbyPlayerBoardUpdateData updateData =
+            new LobbyPlayerBoardUpdateData(
+                lobby.GetLobbyId(),
+                userId,
+                playerBoard.boardData);
+
+        IReadOnlyList<LobbyPlayerData> players = lobby.Controller.Players;
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            string targetUserId = players[i]?.userData?.userId;
+
+            if (string.IsNullOrWhiteSpace(targetUserId) ||
+                !connectionRegistry.TryGetClientId(targetUserId, out ulong clientId))
+            {
+                continue;
+            }
+
+            NetworkLobbyConnection.TrySendPlayerBoardUpdate(clientId, updateData);
+        }
     }
 
     #endregion
@@ -1471,6 +1519,12 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
             return false;
         }
 
+        if (NetworkBotManager.instance == null ||
+            !NetworkBotManager.instance.IsReady)
+        {
+            return false;
+        }
+
         return true;
     }
 
@@ -1486,6 +1540,36 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
                     OnLobbyPlayerExitProcessed;
             }
         }
+    }
+
+    public void ProcessAuthoritySetPlayerReady(ulong clientId, bool isReady)
+    {
+        if (networkBootstrap == null ||
+            !networkBootstrap.IsAuthority ||
+            connectionRegistry == null ||
+            !connectionRegistry.IsReady)
+        {
+            return;
+        }
+
+        if (!connectionRegistry.TryGetBingoUserId(clientId, out string userId))
+        {
+            return;
+        }
+
+        Lobby lobby = FindUserLobby(userId);
+
+        if (lobby?.Controller == null)
+        {
+            return;
+        }
+
+        if (!lobby.Controller.SetPlayerReady(userId, isReady))
+        {
+            return;
+        }
+
+        BroadcastLobbyView(lobby);
     }
 
     #endregion

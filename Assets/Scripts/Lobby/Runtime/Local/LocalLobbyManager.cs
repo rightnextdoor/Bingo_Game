@@ -1,3 +1,5 @@
+using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -33,8 +35,13 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
         isReady = false;
     }
 
-    private void Start()
+    private IEnumerator Start()
     {
+        while (BotManager.instance == null || !BotManager.instance.IsReady)
+        {
+            yield return null;
+        }
+
         isReady = true;
     }
 
@@ -125,6 +132,8 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
                 "The player could not be added to the Solo lobby.");
         }
 
+        selectedLobby.Controller.FillBotsToMinimumPlayers();
+
         return LobbyEntryResult.Succeeded(selectedLobby);
     }
 
@@ -195,10 +204,18 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
 
         Lobby lobby = new Lobby(lobbySetupData);
         lobby.Controller.PlayerExitProcessed += OnLobbyPlayerExitProcessed;
+        lobby.Controller.SetBotUserProvider(GetLocalBotUsers);
 
         lobbies.Add(lobby);
 
         return lobby;
+    }
+
+    private IReadOnlyList<UserData> GetLocalBotUsers()
+    {
+        return BotManager.instance != null
+            ? BotManager.instance.GetLocalBotUsers()
+            : Array.Empty<UserData>();
     }
 
     private void OnLobbyPlayerExitProcessed(

@@ -12,9 +12,6 @@ public class LobbySimulationController : MonoBehaviour
     [SerializeField] private BingoGameModeType gameModeType = BingoGameModeType.Traditional;
     [SerializeField] private BingoBallCountType ballCountType = BingoBallCountType.Ball75;
 
-    [Header("Custom Simulation")]
-    [SerializeField] private bool isHost = true;
-
     private IEnumerator Start()
     {
         if (!simulateOnStart)
@@ -120,7 +117,14 @@ public class LobbySimulationController : MonoBehaviour
                 break;
 
             case MainMenuPlayMode.Custom:
-                ConfigureCustomSetup(lobbySetupData.customSetupData);
+                bool shouldHost =
+                    !MultiplayerPlayModeTestContext.IsActive ||
+                    MultiplayerPlayModeTestContext.IsHost;
+
+                ConfigureCustomSetup(
+                    lobbySetupData.customSetupData,
+                    shouldHost);
+
                 break;
         }
     }
@@ -147,16 +151,12 @@ public class LobbySimulationController : MonoBehaviour
         onlineSetupData.ballCountType = ballCountType;
     }
 
-    private void ConfigureCustomSetup(CustomLobbySetupData customSetupData)
+    private void ConfigureCustomSetup(CustomLobbySetupData customSetupData, bool shouldHost)
     {
         if (customSetupData == null)
         {
             return;
         }
-
-        bool shouldHost = MultiplayerPlayModeTestContext.IsActive
-            ? MultiplayerPlayModeTestContext.IsHost
-            : isHost;
 
         customSetupData.actionType = shouldHost
             ? CustomLobbyActionType.HostLobby
@@ -171,39 +171,35 @@ public class LobbySimulationController : MonoBehaviour
         customSetupData.hostSetupData.ballCountType = ballCountType;
     }
 
-    private BingoGameModeType GetGameModeType(LobbySetupData lobbySetupData)
+    public void ApplyNetworkSimulationSetup(LobbySetupData lobbySetupData, bool isHostPlayer)
     {
-        switch (lobbySetupData.playMode)
+        if (lobbySetupData == null)
         {
-            case MainMenuPlayMode.Solo:
-                return lobbySetupData.soloSetupData.gameModeType;
-
-            case MainMenuPlayMode.Online:
-                return lobbySetupData.onlineSetupData.gameModeType;
-
-            case MainMenuPlayMode.Custom:
-                return lobbySetupData.customSetupData.hostSetupData.gameModeType;
-
-            default:
-                return BingoGameModeType.Traditional;
+            return;
         }
-    }
 
-    private BingoBallCountType GetBallCountType(LobbySetupData lobbySetupData)
-    {
-        switch (lobbySetupData.playMode)
+        if (playMode != MainMenuPlayMode.Online &&
+            playMode != MainMenuPlayMode.Custom)
         {
-            case MainMenuPlayMode.Solo:
-                return lobbySetupData.soloSetupData.ballCountType;
+            return;
+        }
 
+        lobbySetupData.playMode = playMode;
+
+        switch (playMode)
+        {
             case MainMenuPlayMode.Online:
-                return lobbySetupData.onlineSetupData.ballCountType;
+                ConfigureOnlineSetup(
+                    lobbySetupData.onlineSetupData);
+
+                break;
 
             case MainMenuPlayMode.Custom:
-                return lobbySetupData.customSetupData.hostSetupData.ballCountType;
+                ConfigureCustomSetup(
+                    lobbySetupData.customSetupData,
+                    isHostPlayer);
 
-            default:
-                return BingoBallCountType.Ball75;
+                break;
         }
     }
 

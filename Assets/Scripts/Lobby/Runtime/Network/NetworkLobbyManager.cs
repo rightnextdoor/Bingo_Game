@@ -193,18 +193,25 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
                 "The lobby user does not match the connected user.");
         }
 
-        Lobby existingUserLobby = FindUserLobby(registeredUserId);
+        ApplyMultiplayerPlayModeSimulationSetup(
+            lobbySetupData,
+            registeredUserId);
+
+        Lobby existingUserLobby =
+            FindUserLobby(registeredUserId);
 
         if (existingUserLobby != null)
         {
-            return LobbyEntryResult.Succeeded(existingUserLobby);
+            return LobbyEntryResult.Succeeded(
+                existingUserLobby);
         }
 
         switch (lobbySetupData.playMode)
         {
             case MainMenuPlayMode.Online:
                 Lobby selectedLobby =
-                    FindOrCreateOnlineLobby(lobbySetupData);
+                    FindOrCreateOnlineLobby(
+                        lobbySetupData);
 
                 if (selectedLobby == null)
                 {
@@ -219,13 +226,39 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
                     false);
 
             case MainMenuPlayMode.Custom:
-                return ProcessCustomLobbyEntry(lobbySetupData);
+                return ProcessCustomLobbyEntry(
+                    lobbySetupData);
 
             default:
                 return LobbyEntryResult.Failed(
                     LobbyEntryFailureType.InvalidSetupData,
                     "The network lobby mode is not valid.");
         }
+    }
+
+    private void ApplyMultiplayerPlayModeSimulationSetup(LobbySetupData lobbySetupData, string registeredUserId)
+    {
+        if (!MultiplayerPlayModeTestContext.IsActive ||
+            lobbySetupData == null)
+        {
+            return;
+        }
+
+        LobbySimulationController simulationController =
+            FindFirstObjectByType<LobbySimulationController>();
+
+        if (simulationController == null)
+        {
+            return;
+        }
+
+        bool isHostPlayer =
+            registeredUserId ==
+            MultiplayerPlayModeTestContext.UserId;
+
+        simulationController.ApplyNetworkSimulationSetup(
+            lobbySetupData,
+            isHostPlayer);
     }
 
     #endregion

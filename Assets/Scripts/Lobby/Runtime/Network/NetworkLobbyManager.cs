@@ -377,7 +377,7 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
                 targetUserId,
                 out targetClientId);
 
-        LobbyExitResult result = lobby.Controller.RemovePlayer(
+        LobbyExitResult result = lobby.Controller.KickPlayer(
             targetUserId,
             LobbyPlayerExitReason.Kicked);
 

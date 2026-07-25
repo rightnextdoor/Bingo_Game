@@ -468,9 +468,42 @@ public class LobbyController
         }
 
         playerData.isReady = isReady;
+
+        if (TryBeginOnlineReadyFinalCountdown())
+        {
+            return true;
+        }
+
         RefreshViews();
 
         return true;
+    }
+
+    private bool TryBeginOnlineReadyFinalCountdown()
+    {
+        if (lobby == null ||
+            lobby.playMode != MainMenuPlayMode.Online ||
+            lobby.lobbyState != LobbyState.Open)
+        {
+            return false;
+        }
+
+        if (PlayerCount < GetMinimumPlayers())
+        {
+            return false;
+        }
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            LobbyPlayerData playerData = players[i];
+
+            if (playerData == null || !playerData.isReady)
+            {
+                return false;
+            }
+        }
+
+        return BeginFinalCountdown();
     }
 
     public LobbyExitResult KickPlayer(string requesterUserId, string targetUserId)

@@ -8,6 +8,10 @@ public class LobbySimulationController : MonoBehaviour
     [SerializeField] private bool simulateOnStart = true;
     [SerializeField] private MainMenuPlayMode playMode = MainMenuPlayMode.Solo;
 
+    [Header("Game Setup")]
+    [SerializeField] private BingoGameModeType gameModeType = BingoGameModeType.Traditional;
+    [SerializeField] private BingoBallCountType ballCountType = BingoBallCountType.Ball75;
+
     [Header("Custom Simulation")]
     [SerializeField] private bool isHost = true;
 
@@ -123,14 +127,24 @@ public class LobbySimulationController : MonoBehaviour
 
     private void ConfigureSoloSetup(SoloLobbySetupData soloSetupData)
     {
-        // Uses the default Solo setup for now.
-        // Add future Solo simulation values here.
+        if (soloSetupData == null)
+        {
+            return;
+        }
+
+        soloSetupData.gameModeType = gameModeType;
+        soloSetupData.ballCountType = ballCountType;
     }
 
     private void ConfigureOnlineSetup(OnlineLobbySetupData onlineSetupData)
     {
-        // Uses the default Online setup for now.
-        // Add future Online simulation values here.
+        if (onlineSetupData == null)
+        {
+            return;
+        }
+
+        onlineSetupData.gameModeType = gameModeType;
+        onlineSetupData.ballCountType = ballCountType;
     }
 
     private void ConfigureCustomSetup(CustomLobbySetupData customSetupData)
@@ -140,7 +154,21 @@ public class LobbySimulationController : MonoBehaviour
             return;
         }
 
-        customSetupData.actionType = CustomLobbyActionType.HostLobby;
+        bool shouldHost = MultiplayerPlayModeTestContext.IsActive
+            ? MultiplayerPlayModeTestContext.IsHost
+            : isHost;
+
+        customSetupData.actionType = shouldHost
+            ? CustomLobbyActionType.HostLobby
+            : CustomLobbyActionType.SearchLobby;
+
+        if (!shouldHost || customSetupData.hostSetupData == null)
+        {
+            return;
+        }
+
+        customSetupData.hostSetupData.gameModeType = gameModeType;
+        customSetupData.hostSetupData.ballCountType = ballCountType;
     }
 
     private BingoGameModeType GetGameModeType(LobbySetupData lobbySetupData)
@@ -193,56 +221,24 @@ public class LobbySimulationController : MonoBehaviour
             yield break;
         }
 
-        if (playMode == MainMenuPlayMode.Custom)
+        if (playMode != MainMenuPlayMode.Online &&
+            playMode != MainMenuPlayMode.Custom)
         {
-            ApplyCustomPlayerSimulation();
+            yield break;
         }
 
-        RefreshLobbyUI();
-    }
+        NetworkLobbyConnection lobbyConnection =
+            NetworkLobbyConnection.GetLocalConnection();
 
-    private void ApplyCustomPlayerSimulation()
-    {
-        if (UserManager.instance == null ||
-            UserManager.instance.CurrentUser == null ||
-            LobbyManager.instance.CurrentLobby?.Controller == null)
+        if (lobbyConnection == null)
         {
-            return;
+            Debug.LogWarning(
+                "[LobbySimulation] The network lobby connection was not available to mark the simulated player scene-ready.");
+
+            yield break;
         }
 
-        string userId = UserManager.instance.CurrentUser.userId;
-
-        LobbyPlayerData playerData =
-            LobbyManager.instance.CurrentLobby.Controller.GetPlayer(userId);
-
-        if (playerData == null)
-        {
-            return;
-        }
-
-        playerData.isHost = isHost;
-
-    }
-
-    private void RefreshLobbyUI()
-    {
-        if (LobbyManager.instance?.CurrentLobby?.Controller == null)
-        {
-            return;
-        }
-
-        LobbySceneController lobbySceneController =
-            FindFirstObjectByType<LobbySceneController>();
-
-        if (lobbySceneController == null)
-        {
-            return;
-        }
-
-        LobbyViewData lobbyViewData =
-            LobbyManager.instance.CurrentLobby.Controller.BuildViewData();
-
-        lobbySceneController.DisplayLobbyInfo(lobbyViewData);
+        lobbyConnection.NotifyLobbySceneReady();
     }
 
 }

@@ -634,14 +634,19 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
     #region Custom Lobby Entry
 
     private bool TryPrepareCustomLobbySearch(
-        LobbySetupData lobbySetupData,
-        out string relayJoinCode,
-        out LobbyEntryResult failureResult)
+    LobbySetupData lobbySetupData,
+    out string relayJoinCode,
+    out LobbyEntryResult failureResult)
     {
         relayJoinCode = string.Empty;
         failureResult = null;
 
         if (!IsCustomLobbySearch(lobbySetupData))
+        {
+            return true;
+        }
+
+        if (MultiplayerPlayModeTestContext.IsActive)
         {
             return true;
         }
@@ -753,6 +758,13 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         Lobby lobby = FindCustomLobby(
             searchSetupData.lobbyCode);
 
+        if (lobby == null &&
+            MultiplayerPlayModeTestContext.IsActive &&
+            string.IsNullOrWhiteSpace(searchSetupData.lobbyCode))
+        {
+            lobby = FindSimulationCustomLobby();
+        }
+
         if (lobby?.Controller == null)
         {
             return LobbyEntryResult.Failed(
@@ -782,6 +794,27 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
             lobby,
             lobbySetupData.userData,
             false);
+    }
+
+    private Lobby FindSimulationCustomLobby()
+    {
+        for (int i = 0; i < lobbies.Count; i++)
+        {
+            Lobby lobby = lobbies[i];
+
+            if (lobby == null ||
+                lobby.playMode != MainMenuPlayMode.Custom ||
+                lobby.lobbyState != LobbyState.Open ||
+                lobby.Controller == null ||
+                lobby.Controller.IsFull)
+            {
+                continue;
+            }
+
+            return lobby;
+        }
+
+        return null;
     }
 
     private Lobby CreateCustomHostLobby(LobbySetupData lobbySetupData)

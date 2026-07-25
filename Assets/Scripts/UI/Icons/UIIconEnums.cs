@@ -1,12 +1,11 @@
 public enum UIIconType
 {
     None,
-
     User,
     Leaderboard,
     Settings,
-
     LobbyCheckmark,
     LobbyKick,
-    LobbyHost
+    LobbyHost,
+    Bot
 }

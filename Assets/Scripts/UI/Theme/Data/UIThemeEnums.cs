@@ -29,7 +29,9 @@ public enum UIThemeBackgroundType
     LeaderboardRowHighlight,
     Pattern,
     PatternHighlight,
-    PatternTooltip
+    PatternTooltip,
+    PlayerListRow,
+    PlayerListRowHighlight
 }
 
 public enum UIThemeButtonType

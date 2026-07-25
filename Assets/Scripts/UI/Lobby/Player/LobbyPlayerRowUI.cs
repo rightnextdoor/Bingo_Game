@@ -7,13 +7,14 @@ using UnityEngine.UI;
 [DisallowMultipleComponent]
 public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
 {
+    #region Fields
+
     [Header("Selection")]
     [SerializeField] private GameObject selectionHighlight;
 
     [Header("Player")]
     [SerializeField] private Image playerIconImage;
     [SerializeField] private TMP_Text playerNameText;
-    [SerializeField, Min(1)] private int maxPlayerNameCharacters = 16;
 
     [Header("Board")]
     [SerializeField] private LobbyPlayerBoardPreviewController boardPreviewController;
@@ -26,10 +27,20 @@ public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
     [SerializeField] private Button kickButton;
 
     private string userId = string.Empty;
+
     private Action<string> rowClicked;
     private Action<string> kickRequested;
 
     public string UserId => userId;
+
+    #endregion
+
+    #region Unity Methods
+
+    private void Awake()
+    {
+        ResetVisualState();
+    }
 
     private void OnEnable()
     {
@@ -47,6 +58,10 @@ public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
             kickButton.onClick.RemoveListener(OnKickClicked);
         }
     }
+
+    #endregion
+
+    #region Setup
 
     public void Setup(
         LobbyPlayerViewData playerData,
@@ -66,37 +81,159 @@ public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
         kickRequested = onKickRequested;
 
         SetPlayerIcon(playerData.iconId);
-
-        if (playerNameText != null)
-        {
-            playerNameText.text = BuildPlayerDisplayName(playerData.playerName, playerData.userId);
-        }
+        SetPlayerName(playerData.playerName, playerData.userId);
 
         boardPreviewController?.DisplayBoard(playerData.boardData);
 
-        if (botIconImage != null)
-        {
-            botIconImage.gameObject.SetActive(showBotIcon && playerData.userTag == UserTag.Bot);
-        }
+        SetStatusIcon(
+            botIconImage,
+            UIIconType.Bot,
+            showBotIcon && playerData.userTag == UserTag.Bot);
 
-        if (readyCheckmarkImage != null)
-        {
-            readyCheckmarkImage.gameObject.SetActive(playerData.isReady);
-        }
+        SetStatusIcon(
+            readyCheckmarkImage,
+            UIIconType.LobbyCheckmark,
+            playerData.isReady);
 
-        if (kickButton != null)
-        {
-            kickButton.gameObject.SetActive(canKick);
-            kickButton.interactable = canKick;
-        }
-
+        SetKickButtonState(canKick);
         SetHighlighted(isHighlighted);
     }
 
-    public void UpdateBoard(LobbyBoardData boardData)
+    private void ResetVisualState()
     {
-        boardPreviewController?.DisplayBoard(boardData);
+        userId = string.Empty;
+        rowClicked = null;
+        kickRequested = null;
+
+        if (playerIconImage != null)
+        {
+            playerIconImage.sprite = null;
+            playerIconImage.enabled = false;
+        }
+
+        if (playerNameText != null)
+        {
+            playerNameText.text = string.Empty;
+        }
+
+        SetImageActive(botIconImage, false);
+        SetImageActive(readyCheckmarkImage, false);
+
+        SetKickButtonState(false);
+        SetHighlighted(false);
+
+        boardPreviewController?.ClearBoard();
     }
+
+    #endregion
+
+    #region Player
+
+    private void SetPlayerIcon(string iconId)
+    {
+        if (playerIconImage == null)
+        {
+            return;
+        }
+
+        Sprite iconSprite = UIIconManager.instance != null
+            ? UIIconManager.instance.GetPlayerIconSpriteById(iconId)
+            : null;
+
+        playerIconImage.sprite = iconSprite;
+        playerIconImage.enabled = iconSprite != null;
+        playerIconImage.preserveAspect = true;
+    }
+
+    private void SetPlayerName(string playerName, string playerUserId)
+    {
+        if (playerNameText == null)
+        {
+            return;
+        }
+
+        string displayName = string.IsNullOrWhiteSpace(playerName)
+            ? "Player"
+            : playerName.Trim();
+
+        string shortId = GetShortUserId(playerUserId);
+
+        playerNameText.text = string.IsNullOrWhiteSpace(shortId)
+            ? displayName
+            : $"{displayName} #{shortId}";
+    }
+
+    private string GetShortUserId(string playerUserId)
+    {
+        if (string.IsNullOrWhiteSpace(playerUserId))
+        {
+            return string.Empty;
+        }
+
+        playerUserId = playerUserId.Trim();
+
+        return playerUserId.Length <= 4
+            ? playerUserId
+            : playerUserId.Substring(0, 4);
+    }
+
+    #endregion
+
+    #region Status
+
+    private void SetStatusIcon(Image iconImage, UIIconType iconType, bool isVisible)
+    {
+        if (iconImage == null)
+        {
+            return;
+        }
+
+        Sprite iconSprite = UIIconManager.instance != null
+            ? UIIconManager.instance.GetNonPlayerIconSprite(iconType)
+            : null;
+
+        iconImage.sprite = iconSprite;
+        iconImage.preserveAspect = true;
+
+        SetImageActive(
+            iconImage,
+            isVisible && iconSprite != null);
+    }
+
+    private void SetImageActive(Image image, bool isActive)
+    {
+        if (image != null)
+        {
+            image.gameObject.SetActive(isActive);
+        }
+    }
+
+    #endregion
+
+    #region Controls
+
+    private void SetKickButtonState(bool canKick)
+    {
+        if (kickButton == null)
+        {
+            return;
+        }
+
+        kickButton.gameObject.SetActive(canKick);
+        kickButton.interactable = canKick;
+    }
+
+    private void OnKickClicked()
+    {
+        if (!string.IsNullOrWhiteSpace(userId))
+        {
+            kickRequested?.Invoke(userId);
+        }
+    }
+
+    #endregion
+
+    #region Selection
 
     public void SetHighlighted(bool highlighted)
     {
@@ -123,59 +260,14 @@ public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
         rowClicked?.Invoke(userId);
     }
 
-    private void OnKickClicked()
+    #endregion
+
+    #region Board
+
+    public void UpdateBoard(LobbyBoardData boardData)
     {
-        if (!string.IsNullOrWhiteSpace(userId))
-        {
-            kickRequested?.Invoke(userId);
-        }
+        boardPreviewController?.DisplayBoard(boardData);
     }
 
-    private void SetPlayerIcon(string iconId)
-    {
-        if (playerIconImage == null)
-        {
-            return;
-        }
-
-        Sprite sprite = UIIconManager.instance != null
-            ? UIIconManager.instance.GetPlayerIconSpriteById(iconId)
-            : null;
-
-        playerIconImage.sprite = sprite;
-        playerIconImage.enabled = sprite != null;
-        playerIconImage.preserveAspect = true;
-    }
-
-    private string BuildPlayerDisplayName(string playerName, string playerUserId)
-    {
-        string displayName = string.IsNullOrWhiteSpace(playerName)
-            ? "Player"
-            : playerName.Trim();
-
-        if (displayName.Length > maxPlayerNameCharacters)
-        {
-            displayName = displayName.Substring(0, maxPlayerNameCharacters);
-        }
-
-        string shortId = GetShortUserId(playerUserId);
-
-        return string.IsNullOrWhiteSpace(shortId)
-            ? displayName
-            : $"{displayName} #{shortId}";
-    }
-
-    private string GetShortUserId(string playerUserId)
-    {
-        if (string.IsNullOrWhiteSpace(playerUserId))
-        {
-            return string.Empty;
-        }
-
-        playerUserId = playerUserId.Trim();
-
-        return playerUserId.Length <= 4
-            ? playerUserId
-            : playerUserId.Substring(0, 4);
-    }
+    #endregion
 }

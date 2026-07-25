@@ -62,7 +62,10 @@ public class LobbyHeaderController : MonoBehaviour
         UpdateTimerDisplay();
     }
 
-    public void DisplayLobbyInfo(LobbyViewData lobbyViewData, bool canOpenHostSettings, bool canStartLobby)
+    public void DisplayLobbyInfo(
+     LobbyViewData lobbyViewData,
+     bool canOpenHostSettings,
+     bool canStartLobby)
     {
         if (lobbyViewData == null)
         {
@@ -71,10 +74,22 @@ public class LobbyHeaderController : MonoBehaviour
 
         currentLobbyViewData = lobbyViewData;
 
+        bool controlsInteractable =
+            lobbyViewData.lobbyState == LobbyState.Open;
+
         SetLobbyTitle(lobbyViewData);
+        SetLeaveInteractable(controlsInteractable);
         SetStartVisible(canStartLobby);
         SetHostSettingsVisible(canOpenHostSettings);
         UpdateTimerDisplay();
+    }
+
+    private void SetLeaveInteractable(bool isInteractable)
+    {
+        if (leaveButton != null)
+        {
+            leaveButton.interactable = isInteractable;
+        }
     }
 
     private void SetStartVisible(bool isVisible)

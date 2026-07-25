@@ -492,11 +492,13 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
             return;
         }
 
+        bool nextReadyState = !GetCurrentPlayerReadyState(lobbyManager);
+
         if (lobbyManager.RuntimeType == SessionRuntimeType.Local)
         {
             lobbyManager.CurrentLobby.Controller.SetPlayerReady(
                 lobbyManager.CurrentUserId,
-                true);
+                nextReadyState);
 
             return;
         }
@@ -512,7 +514,47 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
             return;
         }
 
-        lobbyConnection.RequestSetPlayerReady(true);
+        lobbyConnection.RequestSetPlayerReady(nextReadyState);
+    }
+
+    private bool GetCurrentPlayerReadyState(LobbyManager lobbyManager)
+    {
+        if (lobbyManager == null ||
+            string.IsNullOrWhiteSpace(lobbyManager.CurrentUserId))
+        {
+            return false;
+        }
+
+        if (lobbyManager.RuntimeType == SessionRuntimeType.Local)
+        {
+            LobbyPlayerData playerData =
+                lobbyManager.CurrentLobby?.Controller?.GetPlayer(
+                    lobbyManager.CurrentUserId);
+
+            return playerData != null && playerData.isReady;
+        }
+
+        LobbyViewData lobbyViewData =
+            lobbyManager.CurrentLobbyViewData;
+
+        if (lobbyViewData?.players == null)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < lobbyViewData.players.Count; i++)
+        {
+            LobbyPlayerViewData playerData =
+                lobbyViewData.players[i];
+
+            if (playerData != null &&
+                playerData.userId == lobbyManager.CurrentUserId)
+            {
+                return playerData.isReady;
+            }
+        }
+
+        return false;
     }
 
     private void RerollBoard()

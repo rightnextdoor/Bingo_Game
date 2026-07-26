@@ -5,10 +5,11 @@ using UnityEngine;
 [DisallowMultipleComponent]
 public class NetworkConnectionApproval : MonoBehaviour
 {
+    #region Fields
+
     public static NetworkConnectionApproval instance;
 
     private bool isReady;
-
     private NetworkRoot networkRoot;
     private NetworkManager networkManager;
     private NetworkConnectionRegistry connectionRegistry;
@@ -16,6 +17,9 @@ public class NetworkConnectionApproval : MonoBehaviour
 
     public bool IsReady => isReady;
 
+    #endregion
+
+    #region Unity Methods
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetStaticState()
@@ -44,9 +48,7 @@ public class NetworkConnectionApproval : MonoBehaviour
 
     private void OnDestroy()
     {
-        if (networkManager != null &&
-            networkManager.ConnectionApprovalCallback ==
-                ApprovalCheck)
+        if (networkManager != null && networkManager.ConnectionApprovalCallback == ApprovalCheck)
         {
             networkManager.ConnectionApprovalCallback = null;
         }
@@ -56,6 +58,10 @@ public class NetworkConnectionApproval : MonoBehaviour
             instance = null;
         }
     }
+
+    #endregion
+
+    #region Initialization
 
     public bool Initialize()
     {
@@ -68,9 +74,7 @@ public class NetworkConnectionApproval : MonoBehaviour
 
         if (networkRoot == null)
         {
-            Debug.LogError(
-                "NetworkConnectionApproval could not initialize because NetworkRoot.instance is null.");
-
+            Debug.LogError("NetworkConnectionApproval could not initialize because NetworkRoot.instance is null.");
             return false;
         }
 
@@ -78,47 +82,37 @@ public class NetworkConnectionApproval : MonoBehaviour
 
         if (runtimeConfig == null)
         {
-            Debug.LogError(
-                "NetworkConnectionApproval could not initialize because NetworkRuntimeConfigData is missing.");
-
+            Debug.LogError("NetworkConnectionApproval could not initialize because NetworkRuntimeConfigData is missing.");
             return false;
         }
 
-        networkManager =
-            networkRoot.GetComponent<NetworkManager>();
+        networkManager = networkRoot.GetComponent<NetworkManager>();
+        connectionRegistry = networkRoot.GetComponent<NetworkConnectionRegistry>();
 
         if (networkManager == null)
         {
-            Debug.LogError(
-                "NetworkConnectionApproval could not initialize because NetworkManager is missing.");
-
+            Debug.LogError("NetworkConnectionApproval could not initialize because NetworkManager is missing.");
             return false;
         }
 
-        connectionRegistry =
-            NetworkConnectionRegistry.instance;
-
-        if (connectionRegistry == null ||
-            !connectionRegistry.IsReady)
+        if (connectionRegistry == null || !connectionRegistry.IsReady)
         {
-            Debug.LogError(
-                "NetworkConnectionApproval could not initialize because NetworkConnectionRegistry is not ready.");
-
+            Debug.LogError("NetworkConnectionApproval could not initialize because NetworkConnectionRegistry is not ready.");
             return false;
         }
 
         networkManager.NetworkConfig.ConnectionApproval = true;
-        networkManager.ConnectionApprovalCallback =
-            ApprovalCheck;
+        networkManager.ConnectionApprovalCallback = ApprovalCheck;
 
         isReady = true;
-
         return true;
     }
 
-    private void ApprovalCheck(
-        NetworkManager.ConnectionApprovalRequest request,
-        NetworkManager.ConnectionApprovalResponse response)
+    #endregion
+
+    #region Approval
+
+    private void ApprovalCheck(NetworkManager.ConnectionApprovalRequest request, NetworkManager.ConnectionApprovalResponse response)
     {
         response.Approved = false;
         response.CreatePlayerObject = false;
@@ -127,100 +121,59 @@ public class NetworkConnectionApproval : MonoBehaviour
 
         if (!isReady)
         {
-            Reject(
-                response,
-                "Network connection approval is not ready.");
-
+            Reject(response, "Network connection approval is not ready.");
             return;
         }
 
         byte[] payloadBytes = request.Payload;
 
-        if (payloadBytes == null ||
-            payloadBytes.Length == 0)
+        if (payloadBytes == null || payloadBytes.Length == 0)
         {
-            Reject(
-                response,
-                "Connection payload is missing.");
-
+            Reject(response, "Connection payload is missing.");
             return;
         }
 
-        if (payloadBytes.Length >
-            runtimeConfig.MaximumApprovalPayloadBytes)
+        if (payloadBytes.Length > runtimeConfig.MaximumApprovalPayloadBytes)
         {
-            Reject(
-                response,
-                "Connection payload is too large.");
-
+            Reject(response, "Connection payload is too large.");
             return;
         }
 
-        if (!NetworkConnectionPayload.TryFromBytes(
-                payloadBytes,
-                out NetworkConnectionPayload payload))
+        if (!NetworkConnectionPayload.TryFromBytes(payloadBytes, out NetworkConnectionPayload payload))
         {
-            Reject(
-                response,
-                "Connection payload is invalid.");
-
+            Reject(response, "Connection payload is invalid.");
             return;
         }
 
-        if (payload.ProtocolVersion !=
-            runtimeConfig.ProtocolVersion)
+        if (payload.ProtocolVersion != runtimeConfig.ProtocolVersion)
         {
-            Reject(
-                response,
-                "Network protocol version does not match.");
-
+            Reject(response, "Network protocol version does not match.");
             return;
         }
 
         if (string.IsNullOrWhiteSpace(payload.BingoUserId))
         {
-            Reject(
-                response,
-                "Bingo UserId is missing.");
-
+            Reject(response, "Bingo UserId is missing.");
             return;
         }
 
-        string bingoUserId =
-            payload.BingoUserId.Trim();
+        string bingoUserId = payload.BingoUserId.Trim();
 
-        if (bingoUserId.Length >
-            runtimeConfig.MaximumBingoUserIdLength)
+        if (bingoUserId.Length > runtimeConfig.MaximumBingoUserIdLength)
         {
-            Reject(
-                response,
-                "Bingo UserId is too long.");
-
+            Reject(response, "Bingo UserId is too long.");
             return;
         }
 
-        if (connectionRegistry.ConnectionCount >=
-                runtimeConfig.MaximumConnections &&
-            !connectionRegistry.TryGetBingoUserId(
-                request.ClientNetworkId,
-                out _))
+        if (connectionRegistry.ConnectionCount >= runtimeConfig.MaximumConnections && !connectionRegistry.TryGetBingoUserId(request.ClientNetworkId, out _))
         {
-            Reject(
-                response,
-                "Maximum network connection count reached.");
-
+            Reject(response, "Maximum network connection count reached.");
             return;
         }
 
-        if (!connectionRegistry.TryRegisterApprovedConnection(
-                request.ClientNetworkId,
-                bingoUserId,
-                out string reason))
+        if (!connectionRegistry.TryRegisterApprovedConnection(request.ClientNetworkId, bingoUserId, out string reason))
         {
-            Reject(
-                response,
-                reason);
-
+            Reject(response, reason);
             return;
         }
 
@@ -230,13 +183,13 @@ public class NetworkConnectionApproval : MonoBehaviour
         response.Reason = string.Empty;
     }
 
-    private void Reject(
-        NetworkManager.ConnectionApprovalResponse response,
-        string reason)
+    private void Reject(NetworkManager.ConnectionApprovalResponse response, string reason)
     {
         response.Approved = false;
         response.CreatePlayerObject = false;
         response.Pending = false;
         response.Reason = reason;
     }
+
+    #endregion
 }

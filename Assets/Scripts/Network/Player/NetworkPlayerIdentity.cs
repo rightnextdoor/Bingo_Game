@@ -3,9 +3,10 @@ using Unity.Netcode;
 using UnityEngine;
 
 [DisallowMultipleComponent]
+[RequireComponent(typeof(NetworkObject), typeof(NetworkSessionPlayer))]
 public class NetworkPlayerIdentity : NetworkBehaviour
 {
-    private NetworkConnectionRegistry connectionRegistry;
+    #region Fields
 
     private readonly NetworkVariable<FixedString128Bytes> bingoUserId = new NetworkVariable<FixedString128Bytes>(
         default,
@@ -15,21 +16,20 @@ public class NetworkPlayerIdentity : NetworkBehaviour
     public string BingoUserId => bingoUserId.Value.ToString();
     public ulong ClientId => OwnerClientId;
 
+    #endregion
+
+    #region Network Methods
+
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
-
-        if (transform.parent == null)
-        {
-            DontDestroyOnLoad(gameObject);
-        }
 
         if (!IsServer)
         {
             return;
         }
 
-        connectionRegistry = NetworkConnectionRegistry.instance;
+        NetworkConnectionRegistry connectionRegistry = NetworkConnectionRegistry.instance;
 
         if (connectionRegistry == null || !connectionRegistry.IsReady)
         {
@@ -45,4 +45,6 @@ public class NetworkPlayerIdentity : NetworkBehaviour
 
         bingoUserId.Value = new FixedString128Bytes(registeredBingoUserId);
     }
+
+    #endregion
 }

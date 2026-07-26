@@ -7,19 +7,14 @@ using UnityEngine;
 [DisallowMultipleComponent]
 public class NetworkConnectionRegistry : MonoBehaviour
 {
+    #region Fields
+
     public static NetworkConnectionRegistry instance;
 
-    private readonly Dictionary<ulong, string>
-        clientIdToBingoUserId =
-            new Dictionary<ulong, string>();
-
-    private readonly Dictionary<string, ulong>
-        bingoUserIdToClientId =
-            new Dictionary<string, ulong>(
-                StringComparer.Ordinal);
+    private readonly Dictionary<ulong, string> clientIdToBingoUserId = new Dictionary<ulong, string>();
+    private readonly Dictionary<string, ulong> bingoUserIdToClientId = new Dictionary<string, ulong>(StringComparer.Ordinal);
 
     private bool isReady;
-
     private NetworkRoot networkRoot;
     private NetworkManager networkManager;
 
@@ -29,6 +24,9 @@ public class NetworkConnectionRegistry : MonoBehaviour
     public event Action<ulong, string> ConnectionRegistered;
     public event Action<ulong, string> ConnectionRemoved;
 
+    #endregion
+
+    #region Unity Methods
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetStaticState()
@@ -65,6 +63,10 @@ public class NetworkConnectionRegistry : MonoBehaviour
         }
     }
 
+    #endregion
+
+    #region Initialization
+
     public bool Initialize()
     {
         if (isReady)
@@ -76,9 +78,7 @@ public class NetworkConnectionRegistry : MonoBehaviour
 
         if (networkRoot == null)
         {
-            Debug.LogError(
-                "NetworkConnectionRegistry could not initialize because NetworkRoot.instance is null.");
-
+            Debug.LogError("NetworkConnectionRegistry could not initialize because NetworkRoot.instance is null.");
             return false;
         }
 
@@ -86,23 +86,21 @@ public class NetworkConnectionRegistry : MonoBehaviour
 
         if (networkManager == null)
         {
-            Debug.LogError(
-                "NetworkConnectionRegistry could not initialize because NetworkManager is missing.");
-
+            Debug.LogError("NetworkConnectionRegistry could not initialize because NetworkManager is missing.");
             return false;
         }
 
         RegisterNetworkCallbacks();
 
         isReady = true;
-
         return true;
     }
 
-    public bool TryRegisterApprovedConnection(
-        ulong clientId,
-        string bingoUserId,
-        out string reason)
+    #endregion
+
+    #region Registration
+
+    public bool TryRegisterApprovedConnection(ulong clientId, string bingoUserId, out string reason)
     {
         reason = string.Empty;
 
@@ -120,92 +118,38 @@ public class NetworkConnectionRegistry : MonoBehaviour
 
         string normalizedBingoUserId = bingoUserId.Trim();
 
-        if (clientIdToBingoUserId.TryGetValue(
-                clientId,
-                out string existingBingoUserId))
+        if (clientIdToBingoUserId.TryGetValue(clientId, out string existingBingoUserId))
         {
             if (existingBingoUserId == normalizedBingoUserId)
             {
                 return true;
             }
 
-            reason =
-                "This network client is already registered to another Bingo UserId.";
-
+            reason = "This network client is already registered to another Bingo UserId.";
             return false;
         }
 
-        if (bingoUserIdToClientId.TryGetValue(
-                normalizedBingoUserId,
-                out ulong existingClientId))
+        if (bingoUserIdToClientId.TryGetValue(normalizedBingoUserId, out ulong existingClientId))
         {
             if (existingClientId == clientId)
             {
                 return true;
             }
 
-            reason =
-                "This Bingo user is already connected.";
-
+            reason = "This Bingo user is already connected.";
             return false;
         }
 
-        clientIdToBingoUserId.Add(
-            clientId,
-            normalizedBingoUserId);
+        clientIdToBingoUserId.Add(clientId, normalizedBingoUserId);
+        bingoUserIdToClientId.Add(normalizedBingoUserId, clientId);
 
-        bingoUserIdToClientId.Add(
-            normalizedBingoUserId,
-            clientId);
-
-        ConnectionRegistered?.Invoke(
-            clientId,
-            normalizedBingoUserId);
-
+        ConnectionRegistered?.Invoke(clientId, normalizedBingoUserId);
         return true;
-    }
-
-    public bool TryGetBingoUserId(
-        ulong clientId,
-        out string bingoUserId)
-    {
-        return clientIdToBingoUserId.TryGetValue(
-            clientId,
-            out bingoUserId);
-    }
-
-    public bool TryGetClientId(
-        string bingoUserId,
-        out ulong clientId)
-    {
-        clientId = default;
-
-        if (string.IsNullOrWhiteSpace(bingoUserId))
-        {
-            return false;
-        }
-
-        return bingoUserIdToClientId.TryGetValue(
-            bingoUserId.Trim(),
-            out clientId);
-    }
-
-    public bool IsBingoUserConnected(string bingoUserId)
-    {
-        if (string.IsNullOrWhiteSpace(bingoUserId))
-        {
-            return false;
-        }
-
-        return bingoUserIdToClientId.ContainsKey(
-            bingoUserId.Trim());
     }
 
     public void RemoveConnection(ulong clientId)
     {
-        if (!clientIdToBingoUserId.TryGetValue(
-                clientId,
-                out string bingoUserId))
+        if (!clientIdToBingoUserId.TryGetValue(clientId, out string bingoUserId))
         {
             return;
         }
@@ -213,9 +157,7 @@ public class NetworkConnectionRegistry : MonoBehaviour
         clientIdToBingoUserId.Remove(clientId);
         bingoUserIdToClientId.Remove(bingoUserId);
 
-        ConnectionRemoved?.Invoke(
-            clientId,
-            bingoUserId);
+        ConnectionRemoved?.Invoke(clientId, bingoUserId);
     }
 
     public void ClearConnections()
@@ -224,6 +166,36 @@ public class NetworkConnectionRegistry : MonoBehaviour
         bingoUserIdToClientId.Clear();
     }
 
+    #endregion
+
+    #region Lookup
+
+    public bool TryGetBingoUserId(ulong clientId, out string bingoUserId)
+    {
+        return clientIdToBingoUserId.TryGetValue(clientId, out bingoUserId);
+    }
+
+    public bool TryGetClientId(string bingoUserId, out ulong clientId)
+    {
+        clientId = default;
+
+        if (string.IsNullOrWhiteSpace(bingoUserId))
+        {
+            return false;
+        }
+
+        return bingoUserIdToClientId.TryGetValue(bingoUserId.Trim(), out clientId);
+    }
+
+    public bool IsBingoUserConnected(string bingoUserId)
+    {
+        return !string.IsNullOrWhiteSpace(bingoUserId) && bingoUserIdToClientId.ContainsKey(bingoUserId.Trim());
+    }
+
+    #endregion
+
+    #region Network Callbacks
+
     private void RegisterNetworkCallbacks()
     {
         if (networkManager == null)
@@ -231,26 +203,22 @@ public class NetworkConnectionRegistry : MonoBehaviour
             return;
         }
 
-        networkManager.OnClientDisconnectCallback -=
-            OnClientDisconnected;
-
-        networkManager.OnClientDisconnectCallback +=
-            OnClientDisconnected;
+        networkManager.OnClientDisconnectCallback -= OnClientDisconnected;
+        networkManager.OnClientDisconnectCallback += OnClientDisconnected;
     }
 
     private void UnregisterNetworkCallbacks()
     {
-        if (networkManager == null)
+        if (networkManager != null)
         {
-            return;
+            networkManager.OnClientDisconnectCallback -= OnClientDisconnected;
         }
-
-        networkManager.OnClientDisconnectCallback -=
-            OnClientDisconnected;
     }
 
     private void OnClientDisconnected(ulong clientId)
     {
         RemoveConnection(clientId);
     }
+
+    #endregion
 }

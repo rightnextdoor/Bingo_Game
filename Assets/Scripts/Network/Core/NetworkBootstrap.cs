@@ -10,6 +10,8 @@ using UnityEngine;
 [DisallowMultipleComponent]
 public class NetworkBootstrap : MonoBehaviour
 {
+    #region Fields
+
     private const float ShutdownTimeoutSeconds = 10f;
 
     public static NetworkBootstrap instance;
@@ -20,59 +22,30 @@ public class NetworkBootstrap : MonoBehaviour
     private NetworkRoot networkRoot;
     private NetworkManager networkManager;
     private UnityTransport unityTransport;
-
     private RelayConnectionService relayConnectionService;
-    private NetworkConnectionApproval connectionApproval;
     private NetworkConnectionRegistry connectionRegistry;
     private NetworkRuntimeConfigData runtimeConfig;
 
     private Coroutine shutdownRoutine;
 
-    private NetworkConnectionMode connectionMode =
-        NetworkConnectionMode.Offline;
-
-    private NetworkConnectionState connectionState =
-        NetworkConnectionState.Offline;
-
+    private NetworkConnectionMode connectionMode = NetworkConnectionMode.Offline;
+    private NetworkConnectionState connectionState = NetworkConnectionState.Offline;
     private string relayJoinCode = string.Empty;
 
     public bool IsReady => isReady;
-
-    public NetworkConnectionMode ConnectionMode =>
-        connectionMode;
-
-    public NetworkConnectionState ConnectionState =>
-        connectionState;
-
+    public NetworkConnectionMode ConnectionMode => connectionMode;
+    public NetworkConnectionState ConnectionState => connectionState;
     public string RelayJoinCode => relayJoinCode;
-
-    public bool IsConnected =>
-        networkManager != null &&
-        networkManager.IsListening &&
-        connectionState ==
-            NetworkConnectionState.Connected;
-
-    public bool IsAuthority =>
-        networkManager != null &&
-        networkManager.IsListening &&
-        networkManager.IsServer;
-
-    public bool IsHost =>
-        networkManager != null &&
-        networkManager.IsListening &&
-        networkManager.IsHost;
-
-    public bool IsClient =>
-        networkManager != null &&
-        networkManager.IsListening &&
-        networkManager.IsClient;
+    public bool IsConnected => networkManager != null && networkManager.IsListening && connectionState == NetworkConnectionState.Connected;
+    public bool IsAuthority => networkManager != null && networkManager.IsListening && networkManager.IsServer;
+    public bool IsHost => networkManager != null && networkManager.IsListening && networkManager.IsHost;
+    public bool IsClient => networkManager != null && networkManager.IsListening && networkManager.IsClient;
 
     public ulong LocalClientId
     {
         get
         {
-            if (networkManager == null ||
-                !networkManager.IsListening)
+            if (networkManager == null || !networkManager.IsListening)
             {
                 return ulong.MaxValue;
             }
@@ -81,15 +54,13 @@ public class NetworkBootstrap : MonoBehaviour
         }
     }
 
-    public event Action<NetworkConnectionMode>
-        ConnectionModeChanged;
+    public event Action<NetworkConnectionMode> ConnectionModeChanged;
+    public event Action<NetworkConnectionState> ConnectionStateChanged;
+    public event Action<string> RelayJoinCodeChanged;
 
-    public event Action<NetworkConnectionState>
-        ConnectionStateChanged;
+    #endregion
 
-    public event Action<string>
-        RelayJoinCodeChanged;
-
+    #region Unity Methods
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetStaticState()
@@ -126,6 +97,10 @@ public class NetworkBootstrap : MonoBehaviour
         }
     }
 
+    #endregion
+
+    #region Initialization
+
     public bool Initialize()
     {
         if (isReady)
@@ -137,106 +112,57 @@ public class NetworkBootstrap : MonoBehaviour
 
         if (networkRoot == null)
         {
-            Debug.LogError(
-                "NetworkBootstrap could not initialize because NetworkRoot.instance is null.");
-
+            Debug.LogError("NetworkBootstrap could not initialize because NetworkRoot.instance is null.");
             return false;
         }
 
         runtimeConfig = networkRoot.RuntimeConfig;
+        networkManager = networkRoot.GetComponent<NetworkManager>();
+        unityTransport = networkRoot.GetComponent<UnityTransport>();
+        relayConnectionService = networkRoot.GetComponent<RelayConnectionService>();
+        connectionRegistry = networkRoot.GetComponent<NetworkConnectionRegistry>();
+        NetworkConnectionApproval connectionApproval = networkRoot.GetComponent<NetworkConnectionApproval>();
 
         if (runtimeConfig == null)
         {
-            Debug.LogError(
-                "NetworkBootstrap could not initialize because NetworkRuntimeConfigData is missing.");
-
+            Debug.LogError("NetworkBootstrap could not initialize because NetworkRuntimeConfigData is missing.");
             return false;
         }
 
-        networkManager =
-            networkRoot.GetComponent<NetworkManager>();
-
-        unityTransport =
-            networkRoot.GetComponent<UnityTransport>();
-
         if (networkManager == null)
         {
-            Debug.LogError(
-                "NetworkBootstrap could not initialize because NetworkManager is missing.");
-
+            Debug.LogError("NetworkBootstrap could not initialize because NetworkManager is missing.");
             return false;
         }
 
         if (unityTransport == null)
         {
-            Debug.LogError(
-                "NetworkBootstrap could not initialize because UnityTransport is missing.");
-
+            Debug.LogError("NetworkBootstrap could not initialize because UnityTransport is missing.");
             return false;
         }
 
-        relayConnectionService =
-            RelayConnectionService.instance;
-
-        connectionApproval =
-            NetworkConnectionApproval.instance;
-
-        connectionRegistry =
-            NetworkConnectionRegistry.instance;
-
-        if (relayConnectionService == null ||
-            !relayConnectionService.IsReady)
+        if (connectionApproval == null || !connectionApproval.IsReady)
         {
-            Debug.LogError(
-                "NetworkBootstrap could not initialize because RelayConnectionService is not ready.");
-
+            Debug.LogError("NetworkBootstrap could not initialize because NetworkConnectionApproval is not ready.");
             return false;
         }
 
-        if (connectionApproval == null ||
-            !connectionApproval.IsReady)
+        if (connectionRegistry == null || !connectionRegistry.IsReady)
         {
-            Debug.LogError(
-                "NetworkBootstrap could not initialize because NetworkConnectionApproval is not ready.");
-
-            return false;
-        }
-
-        if (connectionRegistry == null ||
-            !connectionRegistry.IsReady)
-        {
-            Debug.LogError(
-                "NetworkBootstrap could not initialize because NetworkConnectionRegistry is not ready.");
-
+            Debug.LogError("NetworkBootstrap could not initialize because NetworkConnectionRegistry is not ready.");
             return false;
         }
 
         RegisterNetworkCallbacks();
 
-        SetConnectionMode(
-            NetworkConnectionMode.Offline);
-
-        SetConnectionState(
-            NetworkConnectionState.Offline);
+        SetConnectionMode(NetworkConnectionMode.Offline);
+        SetConnectionState(NetworkConnectionState.Offline);
 
         isReady = true;
-
         return true;
     }
 
-    public void PrepareForMultiplayerPlayModeTesting()
-    {
-#if UNITY_EDITOR
-        if (!MultiplayerPlayModeTestContext.IsActive ||
-            networkManager == null ||
-            networkManager.IsListening)
-        {
-            return;
-        }
-
-        networkManager.NetworkConfig.EnableSceneManagement = false;
-#endif
-    }
+    #endregion
 
     #region Offline
 
@@ -244,9 +170,7 @@ public class NetworkBootstrap : MonoBehaviour
     {
         if (!isReady)
         {
-            Debug.LogWarning(
-                "Cannot start Offline mode because NetworkBootstrap is not ready.");
-
+            Debug.LogWarning("Cannot start Offline mode because NetworkBootstrap is not ready.");
             return;
         }
 
@@ -263,92 +187,53 @@ public class NetworkBootstrap : MonoBehaviour
 
     #region Direct Connection
 
-    public bool StartDirectHost(
-        string bingoUserId,
-        string address = null,
-        int port = -1)
+    public bool StartDirectHost(string bingoUserId, string address = null, int port = -1)
     {
-        if (!CanStartConnection())
+        if (!CanStartConnection() || !TryPrepareConnectionPayload(bingoUserId))
         {
             return false;
         }
 
-        if (!TryPrepareConnectionPayload(bingoUserId))
-        {
-            return false;
-        }
+        string resolvedAddress = ResolveDirectAddress(address);
+        ushort resolvedPort = ResolvePort(port);
 
-        string resolvedAddress =
-            ResolveDirectAddress(address);
-
-        ushort resolvedPort =
-            ResolvePort(port);
-
-        unityTransport.SetConnectionData(
-            resolvedAddress,
-            resolvedPort,
-            runtimeConfig.DefaultListenAddress);
+        unityTransport.SetConnectionData(resolvedAddress, resolvedPort, runtimeConfig.DefaultListenAddress);
 
         SetRelayJoinCode(string.Empty);
+        SetConnectionMode(NetworkConnectionMode.DirectHost);
+        SetConnectionState(NetworkConnectionState.Connecting);
 
-        SetConnectionMode(
-            NetworkConnectionMode.DirectHost);
-
-        SetConnectionState(
-            NetworkConnectionState.Connecting);
-
-        bool started =
-            networkManager.StartHost();
+        bool started = networkManager.StartHost();
 
         if (!started)
         {
-            SetConnectionState(
-                NetworkConnectionState.Failed);
+            SetConnectionState(NetworkConnectionState.Failed);
         }
 
         return started;
     }
 
-    public bool StartDirectClient(
-        string bingoUserId,
-        string address,
-        int port = -1)
+    public bool StartDirectClient(string bingoUserId, string address, int port = -1)
     {
-        if (!CanStartConnection())
+        if (!CanStartConnection() || !TryPrepareConnectionPayload(bingoUserId))
         {
             return false;
         }
 
-        if (!TryPrepareConnectionPayload(bingoUserId))
-        {
-            return false;
-        }
+        string resolvedAddress = ResolveDirectAddress(address);
+        ushort resolvedPort = ResolvePort(port);
 
-        string resolvedAddress =
-            ResolveDirectAddress(address);
-
-        ushort resolvedPort =
-            ResolvePort(port);
-
-        unityTransport.SetConnectionData(
-            resolvedAddress,
-            resolvedPort);
+        unityTransport.SetConnectionData(resolvedAddress, resolvedPort);
 
         SetRelayJoinCode(string.Empty);
+        SetConnectionMode(NetworkConnectionMode.DirectClient);
+        SetConnectionState(NetworkConnectionState.Connecting);
 
-        SetConnectionMode(
-            NetworkConnectionMode.DirectClient);
-
-        SetConnectionState(
-            NetworkConnectionState.Connecting);
-
-        bool started =
-            networkManager.StartClient();
+        bool started = networkManager.StartClient();
 
         if (!started)
         {
-            SetConnectionState(
-                NetworkConnectionState.Failed);
+            SetConnectionState(NetworkConnectionState.Failed);
         }
 
         return started;
@@ -358,47 +243,30 @@ public class NetworkBootstrap : MonoBehaviour
 
     #region Relay Connection
 
-    public async Task<bool> StartRelayHostAsync(
-        string bingoUserId)
+    public async Task<bool> StartRelayHostAsync(string bingoUserId)
     {
-        if (!CanStartConnection())
+        if (!CanStartConnection() || !CanUseRelay() || !TryPrepareConnectionPayload(bingoUserId))
         {
             return false;
         }
 
-        if (!TryPrepareConnectionPayload(bingoUserId))
-        {
-            return false;
-        }
-
-        SetConnectionMode(
-            NetworkConnectionMode.RelayHost);
-
-        SetConnectionState(
-            NetworkConnectionState.Initializing);
+        SetConnectionMode(NetworkConnectionMode.RelayHost);
+        SetConnectionState(NetworkConnectionState.Initializing);
 
         try
         {
-            RelayHostConnectionData connectionData =
-                await relayConnectionService
-                    .CreateHostConnectionAsync();
+            RelayHostConnectionData connectionData = await relayConnectionService.CreateHostConnectionAsync();
 
-            unityTransport.SetRelayServerData(
-                connectionData.ServerData);
+            unityTransport.SetRelayServerData(connectionData.ServerData);
 
-            SetRelayJoinCode(
-                connectionData.JoinCode);
+            SetRelayJoinCode(connectionData.JoinCode);
+            SetConnectionState(NetworkConnectionState.Connecting);
 
-            SetConnectionState(
-                NetworkConnectionState.Connecting);
-
-            bool started =
-                networkManager.StartHost();
+            bool started = networkManager.StartHost();
 
             if (!started)
             {
-                SetConnectionState(
-                    NetworkConnectionState.Failed);
+                SetConnectionState(NetworkConnectionState.Failed);
             }
 
             return started;
@@ -406,66 +274,42 @@ public class NetworkBootstrap : MonoBehaviour
         catch (Exception exception)
         {
             Debug.LogException(exception);
-
             SetRelayJoinCode(string.Empty);
-
-            SetConnectionState(
-                NetworkConnectionState.Failed);
-
+            SetConnectionState(NetworkConnectionState.Failed);
             return false;
         }
     }
 
-    public async Task<bool> StartRelayClientAsync(
-        string bingoUserId,
-        string joinCode)
+    public async Task<bool> StartRelayClientAsync(string bingoUserId, string joinCode)
     {
-        if (!CanStartConnection())
-        {
-            return false;
-        }
-
-        if (!TryPrepareConnectionPayload(bingoUserId))
+        if (!CanStartConnection() || !CanUseRelay() || !TryPrepareConnectionPayload(bingoUserId))
         {
             return false;
         }
 
         if (string.IsNullOrWhiteSpace(joinCode))
         {
-            Debug.LogWarning(
-                "Cannot start Relay Client because the join code is empty.");
-
+            Debug.LogWarning("Cannot start Relay Client because the join code is empty.");
             return false;
         }
 
-        SetConnectionMode(
-            NetworkConnectionMode.RelayClient);
-
-        SetConnectionState(
-            NetworkConnectionState.Initializing);
+        SetConnectionMode(NetworkConnectionMode.RelayClient);
+        SetConnectionState(NetworkConnectionState.Initializing);
 
         try
         {
-            RelayServerData relayServerData =
-                await relayConnectionService
-                    .JoinConnectionAsync(joinCode);
+            RelayServerData relayServerData = await relayConnectionService.JoinConnectionAsync(joinCode);
 
-            unityTransport.SetRelayServerData(
-                relayServerData);
+            unityTransport.SetRelayServerData(relayServerData);
 
-            SetRelayJoinCode(
-                joinCode.Trim().ToUpperInvariant());
+            SetRelayJoinCode(joinCode.Trim().ToUpperInvariant());
+            SetConnectionState(NetworkConnectionState.Connecting);
 
-            SetConnectionState(
-                NetworkConnectionState.Connecting);
-
-            bool started =
-                networkManager.StartClient();
+            bool started = networkManager.StartClient();
 
             if (!started)
             {
-                SetConnectionState(
-                    NetworkConnectionState.Failed);
+                SetConnectionState(NetworkConnectionState.Failed);
             }
 
             return started;
@@ -473,12 +317,8 @@ public class NetworkBootstrap : MonoBehaviour
         catch (Exception exception)
         {
             Debug.LogException(exception);
-
             SetRelayJoinCode(string.Empty);
-
-            SetConnectionState(
-                NetworkConnectionState.Failed);
-
+            SetConnectionState(NetworkConnectionState.Failed);
             return false;
         }
     }
@@ -496,9 +336,7 @@ public class NetworkBootstrap : MonoBehaviour
 
         Shutdown();
 
-        float timeoutTime =
-            Time.realtimeSinceStartup +
-            ShutdownTimeoutSeconds;
+        float timeoutTime = Time.realtimeSinceStartup + ShutdownTimeoutSeconds;
 
         while (connectionState != NetworkConnectionState.Offline)
         {
@@ -515,12 +353,7 @@ public class NetworkBootstrap : MonoBehaviour
 
     public void Shutdown()
     {
-        if (!isReady)
-        {
-            return;
-        }
-
-        if (shutdownRoutine != null)
+        if (!isReady || shutdownRoutine != null)
         {
             return;
         }
@@ -532,26 +365,20 @@ public class NetworkBootstrap : MonoBehaviour
         }
 
         isManualShutdown = true;
-
-        SetConnectionState(
-            NetworkConnectionState.Disconnecting);
+        SetConnectionState(NetworkConnectionState.Disconnecting);
 
         networkManager.Shutdown();
-
-        shutdownRoutine =
-            StartCoroutine(WaitForShutdown());
+        shutdownRoutine = StartCoroutine(WaitForShutdown());
     }
 
     private IEnumerator WaitForShutdown()
     {
-        while (networkManager != null &&
-               networkManager.IsListening)
+        while (networkManager != null && networkManager.IsListening)
         {
             yield return null;
         }
 
         shutdownRoutine = null;
-
         CompleteShutdown();
     }
 
@@ -559,19 +386,14 @@ public class NetworkBootstrap : MonoBehaviour
     {
         isManualShutdown = false;
 
-        if (connectionRegistry != null &&
-            connectionRegistry.IsReady)
+        if (connectionRegistry != null && connectionRegistry.IsReady)
         {
             connectionRegistry.ClearConnections();
         }
 
         SetRelayJoinCode(string.Empty);
-
-        SetConnectionMode(
-            NetworkConnectionMode.Offline);
-
-        SetConnectionState(
-            NetworkConnectionState.Offline);
+        SetConnectionMode(NetworkConnectionMode.Offline);
+        SetConnectionState(NetworkConnectionState.Offline);
     }
 
     #endregion
@@ -585,17 +407,11 @@ public class NetworkBootstrap : MonoBehaviour
             return;
         }
 
-        networkManager.OnClientConnectedCallback -=
-            OnClientConnected;
+        networkManager.OnClientConnectedCallback -= OnClientConnected;
+        networkManager.OnClientDisconnectCallback -= OnClientDisconnected;
 
-        networkManager.OnClientDisconnectCallback -=
-            OnClientDisconnected;
-
-        networkManager.OnClientConnectedCallback +=
-            OnClientConnected;
-
-        networkManager.OnClientDisconnectCallback +=
-            OnClientDisconnected;
+        networkManager.OnClientConnectedCallback += OnClientConnected;
+        networkManager.OnClientDisconnectCallback += OnClientDisconnected;
     }
 
     private void UnregisterNetworkCallbacks()
@@ -605,11 +421,8 @@ public class NetworkBootstrap : MonoBehaviour
             return;
         }
 
-        networkManager.OnClientConnectedCallback -=
-            OnClientConnected;
-
-        networkManager.OnClientDisconnectCallback -=
-            OnClientDisconnected;
+        networkManager.OnClientConnectedCallback -= OnClientConnected;
+        networkManager.OnClientDisconnectCallback -= OnClientDisconnected;
     }
 
     private void OnClientConnected(ulong clientId)
@@ -619,48 +432,33 @@ public class NetworkBootstrap : MonoBehaviour
             return;
         }
 
-        if (networkManager.IsServer &&
-            clientId != networkManager.LocalClientId)
+        if (networkManager.IsServer && clientId != networkManager.LocalClientId)
         {
             return;
         }
 
-        SetConnectionState(
-            NetworkConnectionState.Connected);
+        SetConnectionState(NetworkConnectionState.Connected);
     }
 
     private void OnClientDisconnected(ulong clientId)
     {
-        if (isManualShutdown)
+        if (isManualShutdown || networkManager == null)
         {
             return;
         }
 
-        if (networkManager == null)
+        if (networkManager.IsServer && networkManager.IsClient && clientId != networkManager.LocalClientId)
         {
             return;
         }
 
-        if (networkManager.IsServer &&
-            networkManager.IsClient &&
-            clientId != networkManager.LocalClientId)
+        if (connectionState == NetworkConnectionState.Connecting || connectionState == NetworkConnectionState.Initializing)
         {
+            SetConnectionState(NetworkConnectionState.Failed);
             return;
         }
 
-        if (connectionState ==
-                NetworkConnectionState.Connecting ||
-            connectionState ==
-                NetworkConnectionState.Initializing)
-        {
-            SetConnectionState(
-                NetworkConnectionState.Failed);
-
-            return;
-        }
-
-        SetConnectionState(
-            NetworkConnectionState.Disconnected);
+        SetConnectionState(NetworkConnectionState.Disconnected);
     }
 
     #endregion
@@ -671,87 +469,70 @@ public class NetworkBootstrap : MonoBehaviour
     {
         if (!isReady)
         {
-            Debug.LogWarning(
-                "Cannot start network connection because NetworkBootstrap is not ready.");
-
+            Debug.LogWarning("Cannot start network connection because NetworkBootstrap is not ready.");
             return false;
         }
 
         if (networkManager == null)
         {
-            Debug.LogWarning(
-                "Cannot start network connection because NetworkManager is missing.");
-
+            Debug.LogWarning("Cannot start network connection because NetworkManager is missing.");
             return false;
         }
 
         if (networkManager.IsListening)
         {
-            Debug.LogWarning(
-                "Cannot start another network connection while NetworkManager is already running.");
-
+            Debug.LogWarning("Cannot start another network connection while NetworkManager is already running.");
             return false;
         }
 
-        if (connectionState ==
-                NetworkConnectionState.Initializing ||
-            connectionState ==
-                NetworkConnectionState.Connecting ||
-            connectionState ==
-                NetworkConnectionState.Disconnecting)
+        if (connectionState == NetworkConnectionState.Initializing ||
+            connectionState == NetworkConnectionState.Connecting ||
+            connectionState == NetworkConnectionState.Disconnecting)
         {
-            Debug.LogWarning(
-                "Cannot start another network connection while a connection operation is already running.");
-
+            Debug.LogWarning("Cannot start another network connection while a connection operation is already running.");
             return false;
         }
 
         return true;
     }
 
-    private bool TryPrepareConnectionPayload(
-        string bingoUserId)
+    private bool CanUseRelay()
+    {
+        if (relayConnectionService != null && relayConnectionService.IsReady)
+        {
+            return true;
+        }
+
+        Debug.LogWarning("Cannot start Relay connection because RelayConnectionService is not available or ready.");
+        return false;
+    }
+
+    private bool TryPrepareConnectionPayload(string bingoUserId)
     {
         if (string.IsNullOrWhiteSpace(bingoUserId))
         {
-            Debug.LogWarning(
-                "Cannot start network connection because Bingo UserId is missing.");
-
+            Debug.LogWarning("Cannot start network connection because Bingo UserId is missing.");
             return false;
         }
 
-        string normalizedBingoUserId =
-            bingoUserId.Trim();
+        string normalizedBingoUserId = bingoUserId.Trim();
 
-        if (normalizedBingoUserId.Length >
-            runtimeConfig.MaximumBingoUserIdLength)
+        if (normalizedBingoUserId.Length > runtimeConfig.MaximumBingoUserIdLength)
         {
-            Debug.LogWarning(
-                "Cannot start network connection because Bingo UserId is too long.");
-
+            Debug.LogWarning("Cannot start network connection because Bingo UserId is too long.");
             return false;
         }
 
-        NetworkConnectionPayload payload =
-            new NetworkConnectionPayload(
-                runtimeConfig.ProtocolVersion,
-                normalizedBingoUserId);
+        NetworkConnectionPayload payload = new NetworkConnectionPayload(runtimeConfig.ProtocolVersion, normalizedBingoUserId);
+        byte[] payloadBytes = payload.ToBytes();
 
-        byte[] payloadBytes =
-            payload.ToBytes();
-
-        if (payloadBytes.Length >
-            runtimeConfig.MaximumApprovalPayloadBytes)
+        if (payloadBytes.Length > runtimeConfig.MaximumApprovalPayloadBytes)
         {
-            Debug.LogWarning(
-                "Cannot start network connection because the connection payload is too large.");
-
+            Debug.LogWarning("Cannot start network connection because the connection payload is too large.");
             return false;
         }
 
-        networkManager.NetworkConfig.ConnectionData =
-            payloadBytes;
-
+        networkManager.NetworkConfig.ConnectionData = payloadBytes;
         return true;
     }
 
@@ -761,26 +542,15 @@ public class NetworkBootstrap : MonoBehaviour
 
     private string ResolveDirectAddress(string address)
     {
-        if (string.IsNullOrWhiteSpace(address))
-        {
-            return runtimeConfig.DefaultDirectAddress;
-        }
-
-        return address.Trim();
+        return string.IsNullOrWhiteSpace(address) ? runtimeConfig.DefaultDirectAddress : address.Trim();
     }
 
     private ushort ResolvePort(int port)
     {
-        if (port < 1 || port > 65535)
-        {
-            return runtimeConfig.DefaultPort;
-        }
-
-        return (ushort)port;
+        return port < 1 || port > 65535 ? runtimeConfig.DefaultPort : (ushort)port;
     }
 
-    private void SetConnectionMode(
-        NetworkConnectionMode newMode)
+    private void SetConnectionMode(NetworkConnectionMode newMode)
     {
         if (connectionMode == newMode)
         {
@@ -788,13 +558,10 @@ public class NetworkBootstrap : MonoBehaviour
         }
 
         connectionMode = newMode;
-
-        ConnectionModeChanged?.Invoke(
-            connectionMode);
+        ConnectionModeChanged?.Invoke(connectionMode);
     }
 
-    private void SetConnectionState(
-        NetworkConnectionState newState)
+    private void SetConnectionState(NetworkConnectionState newState)
     {
         if (connectionState == newState)
         {
@@ -802,13 +569,10 @@ public class NetworkBootstrap : MonoBehaviour
         }
 
         connectionState = newState;
-
-        ConnectionStateChanged?.Invoke(
-            connectionState);
+        ConnectionStateChanged?.Invoke(connectionState);
     }
 
-    private void SetRelayJoinCode(
-        string newJoinCode)
+    private void SetRelayJoinCode(string newJoinCode)
     {
         newJoinCode ??= string.Empty;
 
@@ -818,9 +582,7 @@ public class NetworkBootstrap : MonoBehaviour
         }
 
         relayJoinCode = newJoinCode;
-
-        RelayJoinCodeChanged?.Invoke(
-            relayJoinCode);
+        RelayJoinCodeChanged?.Invoke(relayJoinCode);
     }
 
     #endregion

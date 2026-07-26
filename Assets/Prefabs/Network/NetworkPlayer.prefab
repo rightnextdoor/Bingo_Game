@@ -10,6 +10,7 @@ GameObject:
   m_Component:
   - component: {fileID: 3206258285578808556}
   - component: {fileID: 1818975995879051312}
+  - component: {fileID: 9027680535879904940}
   - component: {fileID: 3650148243495850056}
   - component: {fileID: 4724227582955914483}
   - component: {fileID: 2667502396298881271}
@@ -61,6 +62,19 @@ MonoBehaviour:
   AutoObjectParentSync: 1
   SyncOwnerTransformWhenParented: 1
   AllowOwnerToParent: 0
+--- !u!114 &9027680535879904940
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3318498085834272149}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ffb5791745f7e3246b94de8c25c4b880, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NetworkSessionPlayer
+  ShowTopMostFoldoutHeaderGroup: 1
 --- !u!114 &3650148243495850056
 MonoBehaviour:
   m_ObjectHideFlags: 0

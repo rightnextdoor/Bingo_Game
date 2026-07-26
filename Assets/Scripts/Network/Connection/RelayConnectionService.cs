@@ -11,17 +11,20 @@ using UnityEngine;
 [DisallowMultipleComponent]
 public class RelayConnectionService : MonoBehaviour
 {
+    #region Fields
+
     public static RelayConnectionService instance;
 
     private bool isReady;
-
     private NetworkRoot networkRoot;
     private NetworkRuntimeConfigData runtimeConfig;
-
     private Task servicesInitializationTask;
 
     public bool IsReady => isReady;
 
+    #endregion
+
+    #region Unity Methods
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetStaticState()
@@ -56,6 +59,10 @@ public class RelayConnectionService : MonoBehaviour
         }
     }
 
+    #endregion
+
+    #region Initialization
+
     public bool Initialize()
     {
         if (isReady)
@@ -67,9 +74,7 @@ public class RelayConnectionService : MonoBehaviour
 
         if (networkRoot == null)
         {
-            Debug.LogError(
-                "RelayConnectionService could not initialize because NetworkRoot.instance is null.");
-
+            Debug.LogError("RelayConnectionService could not initialize because NetworkRoot.instance is null.");
             return false;
         }
 
@@ -77,92 +82,69 @@ public class RelayConnectionService : MonoBehaviour
 
         if (runtimeConfig == null)
         {
-            Debug.LogError(
-                "RelayConnectionService could not initialize because NetworkRuntimeConfigData is missing.");
-
+            Debug.LogError("RelayConnectionService could not initialize because NetworkRuntimeConfigData is missing.");
             return false;
         }
 
         isReady = true;
-
         return true;
     }
+
+    #endregion
+
+    #region Relay Connection
 
     public async Task<RelayHostConnectionData> CreateHostConnectionAsync()
     {
         if (!isReady)
         {
-            throw new InvalidOperationException(
-                "RelayConnectionService is not ready.");
+            throw new InvalidOperationException("RelayConnectionService is not ready.");
         }
 
         await EnsureServicesReadyAsync();
 
-        int maximumConnections =
-            runtimeConfig.MaximumRelayJoinConnections;
+        int maximumConnections = runtimeConfig.MaximumRelayJoinConnections;
+        Allocation allocation = await RelayService.Instance.CreateAllocationAsync(maximumConnections);
+        string joinCode = await RelayService.Instance.GetJoinCodeAsync(allocation.AllocationId);
+        RelayServerData relayServerData = AllocationUtils.ToRelayServerData(allocation, GetRelayConnectionType());
 
-        Allocation allocation =
-            await RelayService.Instance.CreateAllocationAsync(
-                maximumConnections);
-
-        string joinCode =
-            await RelayService.Instance.GetJoinCodeAsync(
-                allocation.AllocationId);
-
-        RelayServerData relayServerData =
-            AllocationUtils.ToRelayServerData(
-                allocation,
-                GetRelayConnectionType());
-
-        return new RelayHostConnectionData(
-            joinCode,
-            relayServerData);
+        return new RelayHostConnectionData(joinCode, relayServerData);
     }
 
-    public async Task<RelayServerData> JoinConnectionAsync(
-        string joinCode)
+    public async Task<RelayServerData> JoinConnectionAsync(string joinCode)
     {
         if (!isReady)
         {
-            throw new InvalidOperationException(
-                "RelayConnectionService is not ready.");
+            throw new InvalidOperationException("RelayConnectionService is not ready.");
         }
 
         if (string.IsNullOrWhiteSpace(joinCode))
         {
-            throw new ArgumentException(
-                "Relay join code cannot be empty.",
-                nameof(joinCode));
+            throw new ArgumentException("Relay join code cannot be empty.", nameof(joinCode));
         }
 
         await EnsureServicesReadyAsync();
 
-        string normalizedJoinCode =
-            joinCode.Trim().ToUpperInvariant();
+        string normalizedJoinCode = joinCode.Trim().ToUpperInvariant();
+        JoinAllocation allocation = await RelayService.Instance.JoinAllocationAsync(normalizedJoinCode);
 
-        JoinAllocation allocation =
-            await RelayService.Instance.JoinAllocationAsync(
-                normalizedJoinCode);
-
-        return AllocationUtils.ToRelayServerData(
-            allocation,
-            GetRelayConnectionType());
+        return AllocationUtils.ToRelayServerData(allocation, GetRelayConnectionType());
     }
+
+    #endregion
+
+    #region Unity Services
 
     private async Task EnsureServicesReadyAsync()
     {
-        if (UnityServices.State ==
-                ServicesInitializationState.Initialized &&
-            AuthenticationService.Instance.IsSignedIn)
+        if (UnityServices.State == ServicesInitializationState.Initialized && AuthenticationService.Instance.IsSignedIn)
         {
             return;
         }
 
-        if (servicesInitializationTask == null ||
-            servicesInitializationTask.IsCompleted)
+        if (servicesInitializationTask == null || servicesInitializationTask.IsCompleted)
         {
-            servicesInitializationTask =
-                InitializeServicesAsync();
+            servicesInitializationTask = InitializeServicesAsync();
         }
 
         try
@@ -178,18 +160,20 @@ public class RelayConnectionService : MonoBehaviour
 
     private async Task InitializeServicesAsync()
     {
-        if (UnityServices.State !=
-            ServicesInitializationState.Initialized)
+        if (UnityServices.State != ServicesInitializationState.Initialized)
         {
             await UnityServices.InitializeAsync();
         }
 
         if (!AuthenticationService.Instance.IsSignedIn)
         {
-            await AuthenticationService.Instance
-                .SignInAnonymouslyAsync();
+            await AuthenticationService.Instance.SignInAnonymouslyAsync();
         }
     }
+
+    #endregion
+
+    #region Helpers
 
     private string GetRelayConnectionType()
     {
@@ -206,19 +190,26 @@ public class RelayConnectionService : MonoBehaviour
                 return "dtls";
         }
     }
+
+    #endregion
 }
 
 public readonly struct RelayHostConnectionData
 {
+    #region Fields
+
     public string JoinCode { get; }
     public RelayServerData ServerData { get; }
 
+    #endregion
 
-    public RelayHostConnectionData(
-        string joinCode,
-        RelayServerData serverData)
+    #region Constructors
+
+    public RelayHostConnectionData(string joinCode, RelayServerData serverData)
     {
         JoinCode = joinCode;
         ServerData = serverData;
     }
+
+    #endregion
 }

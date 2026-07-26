@@ -31,9 +31,16 @@ public class NotificationManager : MonoBehaviour
     [SerializeField] private CanvasGroup notificationAreaCanvasGroup;
     [SerializeField] private Image notificationBackground;
     [SerializeField] private TMP_Text notificationText;
+    private Sprite defaultBackgroundImage;
+
+    [Header("Notification Size")]
+    [SerializeField, Min(1f)] private float maximumWidth = 850f;
+    [SerializeField, Min(1)] private int minimumFontSize = 24;
 
     [Header("Queue Timing")]
     [SerializeField] private float delayBetweenMessages = 0.35f;
+
+    private RectTransform notificationAreaRect;
 
     private readonly Queue<NotificationRequest> notificationQueue = new Queue<NotificationRequest>();
 
@@ -60,7 +67,18 @@ public class NotificationManager : MonoBehaviour
 
         instance = this;
 
+        notificationAreaRect = notificationAreaCanvasGroup != null ? notificationAreaCanvasGroup.transform as RectTransform : null;
+
+        SaveDefaultBackgroundImage();
         HideNotificationInstant();
+    }
+
+    private void SaveDefaultBackgroundImage()
+    {
+        if (notificationBackground != null)
+        {
+            defaultBackgroundImage = notificationBackground.sprite;
+        }
     }
 
     private void OnDestroy()
@@ -159,6 +177,8 @@ public class NotificationManager : MonoBehaviour
             notificationBackground.gameObject.SetActive(true);
             notificationBackground.color = messageData.BackgroundColor;
             notificationBackground.raycastTarget = false;
+
+            ApplyBackgroundImage(messageData.ImageMode, messageData.CustomImage);
         }
 
         if (notificationText == null)
@@ -166,21 +186,101 @@ public class NotificationManager : MonoBehaviour
             return;
         }
 
+        string message = string.IsNullOrWhiteSpace(messageOverride) ? messageData.BuildMessage() : messageOverride;
+
         notificationText.gameObject.SetActive(true);
         notificationText.richText = true;
-        notificationText.text = string.IsNullOrWhiteSpace(messageOverride) ? messageData.BuildMessage() : messageOverride;
 
         if (messageData.FontAsset != null)
         {
             notificationText.font = messageData.FontAsset;
         }
 
-        notificationText.fontSize = messageData.FontSize;
         notificationText.color = messageData.TextColor;
-        notificationText.textWrappingMode = TextWrappingModes.Normal;
-        notificationText.overflowMode = TextOverflowModes.Ellipsis;
         notificationText.enableAutoSizing = false;
         notificationText.alignment = TextAlignmentOptions.Center;
+        notificationText.overflowMode = TextOverflowModes.Ellipsis;
+        notificationText.text = message;
+
+        FitNotificationToMessage(message, messageData.FontSize);
+    }
+
+    private void FitNotificationToMessage(string message, int requestedFontSize)
+    {
+        if (notificationAreaRect == null || notificationText == null)
+        {
+            return;
+        }
+
+        RectTransform textRect = notificationText.rectTransform;
+
+        float leftPadding = textRect.offsetMin.x;
+        float rightPadding = -textRect.offsetMax.x;
+        float horizontalPadding = leftPadding + rightPadding;
+
+        float maxTextWidth = Mathf.Max(1f, maximumWidth - horizontalPadding);
+
+        int startingFontSize = Mathf.Max(minimumFontSize, requestedFontSize);
+        int resolvedFontSize = startingFontSize;
+
+        notificationText.textWrappingMode = TextWrappingModes.NoWrap;
+
+        while (resolvedFontSize > minimumFontSize)
+        {
+            notificationText.fontSize = resolvedFontSize;
+
+            Vector2 preferredSize = notificationText.GetPreferredValues(message, 0f, 0f);
+
+            if (preferredSize.x <= maxTextWidth)
+            {
+                break;
+            }
+
+            resolvedFontSize--;
+        }
+
+        notificationText.fontSize = resolvedFontSize;
+
+        Vector2 finalPreferredSize = notificationText.GetPreferredValues(message, 0f, 0f);
+
+        if (finalPreferredSize.x <= maxTextWidth)
+        {
+            float notificationWidth = finalPreferredSize.x + horizontalPadding;
+
+            notificationAreaRect.SetSizeWithCurrentAnchors(
+                RectTransform.Axis.Horizontal,
+                Mathf.Min(notificationWidth, maximumWidth));
+
+            notificationText.textWrappingMode = TextWrappingModes.NoWrap;
+            return;
+        }
+
+        notificationAreaRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, maximumWidth);
+        notificationText.fontSize = minimumFontSize;
+        notificationText.textWrappingMode = TextWrappingModes.Normal;
+    }
+
+    private void ApplyBackgroundImage(TooltipImageMode imageMode, Sprite customImage)
+    {
+        if (notificationBackground == null)
+        {
+            return;
+        }
+
+        switch (imageMode)
+        {
+            case TooltipImageMode.Default:
+                notificationBackground.sprite = defaultBackgroundImage;
+                break;
+
+            case TooltipImageMode.Custom:
+                notificationBackground.sprite = customImage != null ? customImage : defaultBackgroundImage;
+                break;
+
+            case TooltipImageMode.None:
+                notificationBackground.sprite = null;
+                break;
+        }
     }
 
     #endregion

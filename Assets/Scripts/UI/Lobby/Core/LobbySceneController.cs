@@ -302,6 +302,9 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
                 lobbyController.PlayerBoardChanged -= OnLocalPlayerBoardChanged;
                 lobbyController.PlayerBoardChanged += OnLocalPlayerBoardChanged;
 
+                lobbyController.FinalCountdownStarted -= OnLocalFinalCountdownStarted;
+                lobbyController.FinalCountdownStarted += OnLocalFinalCountdownStarted;
+
                 lobbyController.RefreshViews();
             }
 
@@ -320,6 +323,9 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
         lobbyController.PlayerBoardChanged -= OnLocalPlayerBoardChanged;
         lobbyController.PlayerBoardChanged += OnLocalPlayerBoardChanged;
 
+        lobbyController.FinalCountdownStarted -= OnLocalFinalCountdownStarted;
+        lobbyController.FinalCountdownStarted += OnLocalFinalCountdownStarted;
+
         lobbyController.BindView(this);
     }
 
@@ -331,9 +337,15 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
         }
 
         lobbyController.PlayerBoardChanged -= OnLocalPlayerBoardChanged;
+        lobbyController.FinalCountdownStarted -= OnLocalFinalCountdownStarted;
         lobbyController.UnbindView(this);
 
         lobbyController = null;
+    }
+
+    private void OnLocalFinalCountdownStarted(LobbyController controller)
+    {
+        NotificationService.instance?.SendLocal(UIMessageType.GameAboutToStart);
     }
 
     private void OnLocalPlayerBoardChanged(
@@ -354,19 +366,23 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
     {
         LobbyManager lobbyManager = LobbyManager.instance;
 
-        if (lobbyManager == null ||
-            lobbyManager.CurrentLobby?.Controller == null)
+        if (lobbyManager == null || lobbyManager.CurrentLobby?.Controller == null)
         {
-            Debug.LogWarning(
-                "[LobbySceneController] Could not start the Lobby because the current Lobby was not found.");
-
+            Debug.LogWarning("[LobbySceneController] Could not start the Lobby because the current Lobby was not found.");
             return;
         }
 
         if (lobbyManager.RuntimeType == SessionRuntimeType.Local)
         {
-            LobbyController controller =
-                lobbyManager.CurrentLobby.Controller;
+            LobbyController controller = lobbyManager.CurrentLobby.Controller;
+            LobbySettings lobbySettings = LobbySettings.instance;
+
+            if (lobbySettings != null && controller.PlayerCount < lobbySettings.MinimumPlayers)
+            {
+                string message = $"At least {lobbySettings.MinimumPlayers} players are required to start the game.";
+                NotificationService.instance?.SendLocal(UIMessageType.NotEnoughPlayers, message);
+                return;
+            }
 
             if (!controller.BeginFinalCountdown(lobbyManager.CurrentUserId))
             {
@@ -378,21 +394,15 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
                 StopCoroutine(localStartRoutine);
             }
 
-            localStartRoutine =
-                StartCoroutine(
-                    WaitForLocalFinalCountdown(controller));
-
+            localStartRoutine = StartCoroutine(WaitForLocalFinalCountdown(controller));
             return;
         }
 
-        NetworkLobbyConnection lobbyConnection =
-            NetworkLobbyConnection.GetLocalConnection();
+        NetworkLobbyConnection lobbyConnection = NetworkLobbyConnection.GetLocalConnection();
 
         if (lobbyConnection == null)
         {
-            Debug.LogWarning(
-                "[LobbySceneController] Could not start the Custom Lobby because the network Lobby connection was not available.");
-
+            Debug.LogWarning("[LobbySceneController] Could not start the Custom Lobby because the network Lobby connection was not available.");
             return;
         }
 

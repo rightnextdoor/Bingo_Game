@@ -24,6 +24,8 @@ GameObject:
   - component: {fileID: 6910353490865770210}
   - component: {fileID: 2387506421031424793}
   - component: {fileID: 9213971337090501165}
+  - component: {fileID: 6480048657164182875}
+  - component: {fileID: 2222644560770358961}
   m_Layer: 0
   m_Name: GameManager
   m_TagString: Untagged
@@ -111,6 +113,9 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 95f48b6a09f7a964d91fbae1624bcad4, type: 2}
   - {fileID: 11400000, guid: 739ed1a0b16223b47b94129555507cf7, type: 2}
   - {fileID: 11400000, guid: ea2fb9c7699c4d64f8223aca4d7c8017, type: 2}
+  - {fileID: 11400000, guid: 8480b47ae6d3f1d4f8170e9e3c965ad9, type: 2}
+  - {fileID: 11400000, guid: 068644c39875e8c48b1f2b0b2634a2f4, type: 2}
+  - {fileID: 11400000, guid: f9931919e6c40394189a81b3e36ca8d5, type: 2}
 --- !u!114 &3196395910649869613
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -304,5 +309,36 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::LobbySettings
   minimumPlayers: 6
   unlimitedPlayerCount: 100000
-  onlineTimerMinutes: 5
+  onlineTimerMinutes: 1
   finalCountdownSeconds: 10
+  maxOnlineBots: 30
+--- !u!114 &6480048657164182875
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8215340122209812844}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3eee77daf80c4434a897d2bbd8d6bf54, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIMessageCatalog
+  messages:
+  - {fileID: 11400000, guid: 84b3d49cfa002e04392b1b49fc1c6fef, type: 2}
+  - {fileID: 11400000, guid: b1d78bce337e3874fb32c35b34f6b4c5, type: 2}
+  - {fileID: 11400000, guid: 5bec5c43d31197540a4171061924b568, type: 2}
+  - {fileID: 11400000, guid: 46218c28a6bb0be4b87cec7b9e12859a, type: 2}
+  - {fileID: 11400000, guid: 0bc73dc7f3109bc41af89f03d9dc1393, type: 2}
+--- !u!114 &2222644560770358961
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8215340122209812844}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bb7f340403ea8134a8bae9caa62bc761, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NotificationService

@@ -203,6 +203,7 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
         }
 
         Lobby lobby = new Lobby(lobbySetupData);
+
         lobby.Controller.PlayerExitProcessed += OnLobbyPlayerExitProcessed;
         lobby.Controller.SetBotUserProvider(GetLocalBotUsers);
 

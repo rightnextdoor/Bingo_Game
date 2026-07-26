@@ -14,13 +14,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::UIMessageData
   messageType: 4
   messageText: Not enough player in lobby to start!
-  imageMode: 0
+  imageMode: 2
   customImage: {fileID: 0}
   fontAsset: {fileID: 0}
-  fontSize: 24
+  fontSize: 41
   textColor: {r: 0.97304577, g: 0.055588238, b: 0.019670676, a: 1}
-  numberColor: {r: 0.078431375, g: 0.078431375, b: 0.078431375, a: 1}
-  backgroundColor: {r: 0.22745098, g: 0.25882354, b: 0.3137255, a: 1}
-  displaySeconds: 1.5
+  numberColor: {r: 1, g: 1, b: 1, a: 1}
+  backgroundColor: {r: 0.07816702, g: 0.07110881, b: 0.07110881, a: 1}
+  displaySeconds: 3.5
   fadeOutSeconds: 0.35
   tooltipOffset: {x: 18, y: -18}

@@ -556,15 +556,12 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
 
         if (lobby.Controller != null)
         {
-            lobby.Controller.PlayerExitProcessed -=
-                OnLobbyPlayerExitProcessed;
+            lobby.Controller.PlayerExitProcessed -= OnLobbyPlayerExitProcessed;
+            lobby.Controller.FinalCountdownStarted -= OnLobbyFinalCountdownStarted;
         }
 
-        relayJoinCodeByLobbyId.Remove(
-            lobby.GetLobbyId());
-
+        relayJoinCodeByLobbyId.Remove(lobby.GetLobbyId());
         lobbies.Remove(lobby);
-
     }
 
     private bool TryResolveConnectedUser(
@@ -1152,16 +1149,48 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
             return null;
         }
 
-        Lobby lobby = new Lobby(
-            lobbySetupData,
-            IsCustomRoomCodeAvailable);
+        Lobby lobby = new Lobby(lobbySetupData, IsCustomRoomCodeAvailable);
 
         lobby.Controller.PlayerExitProcessed += OnLobbyPlayerExitProcessed;
+        lobby.Controller.FinalCountdownStarted += OnLobbyFinalCountdownStarted;
         lobby.Controller.SetBotUserProvider(GetNetworkBotUsers);
 
         lobbies.Add(lobby);
 
         return lobby;
+    }
+
+    private void OnLobbyFinalCountdownStarted(LobbyController controller)
+    {
+        if (controller == null || networkBootstrap == null || !networkBootstrap.IsAuthority || NotificationService.instance == null)
+        {
+            return;
+        }
+
+        Lobby lobby = FindLobbyByController(controller);
+
+        if (lobby == null)
+        {
+            return;
+        }
+
+        IReadOnlyList<LobbyPlayerData> players = controller.Players;
+        List<string> userIds = new List<string>();
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            LobbyPlayerData playerData = players[i];
+            string userId = playerData?.userData?.userId;
+
+            if (string.IsNullOrWhiteSpace(userId) || playerData.userData.userTag == UserTag.Bot)
+            {
+                continue;
+            }
+
+            userIds.Add(userId);
+        }
+
+        NotificationService.instance.SendToUsers(userIds, UIMessageType.GameAboutToStart);
     }
 
     private IReadOnlyList<UserData> GetNetworkBotUsers()
@@ -1600,11 +1629,13 @@ public class NetworkLobbyManager : MonoBehaviour, ILobbyService
         {
             Lobby lobby = lobbies[i];
 
-            if (lobby?.Controller != null)
+            if (lobby?.Controller == null)
             {
-                lobby.Controller.PlayerExitProcessed -=
-                    OnLobbyPlayerExitProcessed;
+                continue;
             }
+
+            lobby.Controller.PlayerExitProcessed -= OnLobbyPlayerExitProcessed;
+            lobby.Controller.FinalCountdownStarted -= OnLobbyFinalCountdownStarted;
         }
     }
 

@@ -93,12 +93,12 @@ public class GlobalIconBarController : MonoBehaviour
         {
             UIIconType iconType = OrderedIcons[i];
             Sprite iconSprite = GetSpriteForIcon(iconType);
-            UIMessageData tooltipMessageData = GetTooltipMessage(iconType);
+            UIMessageType tooltipMessageType = GetTooltipMessageType(iconType);
 
             UITopBarIconSlot slot = Instantiate(topIconSlotPrefab, topIconGroup);
 
             slot.name = $"UITopBarIconSlot_{iconType}";
-            slot.Setup(iconSprite, () => HandleTopBarAction(iconType), tooltipMessageData);
+            slot.Setup(iconSprite, () => HandleTopBarAction(iconType), tooltipMessageType);
 
             runtimeIcons.Add(new RuntimeTopBarIcon(iconType, slot));
         }
@@ -241,17 +241,6 @@ public class GlobalIconBarController : MonoBehaviour
     #endregion
 
     #region Messages
-
-    private UIMessageData GetTooltipMessage(UIIconType iconType)
-    {
-        if (UIMessageCatalog.instance == null)
-        {
-            Debug.LogWarning("GlobalIconBarController could not find UIMessageCatalog.instance.");
-            return null;
-        }
-
-        return UIMessageCatalog.instance.GetMessage(GetTooltipMessageType(iconType));
-    }
 
     private UIMessageType GetTooltipMessageType(UIIconType iconType)
     {

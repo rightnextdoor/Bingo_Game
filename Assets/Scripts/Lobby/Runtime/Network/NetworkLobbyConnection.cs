@@ -928,9 +928,7 @@ public class NetworkLobbyConnection : NetworkBehaviour
         RequestStartLobbyRpc();
     }
 
-    [Rpc(
-    SendTo.Server,
-    InvokePermission = RpcInvokePermission.Owner)]
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Owner)]
     private void RequestStartLobbyRpc(RpcParams rpcParams = default)
     {
         if (authorityLobby?.Controller == null)
@@ -938,19 +936,31 @@ public class NetworkLobbyConnection : NetworkBehaviour
             return;
         }
 
-        NetworkConnectionRegistry connectionRegistry =
-            NetworkConnectionRegistry.instance;
+        NetworkConnectionRegistry connectionRegistry = NetworkConnectionRegistry.instance;
 
-        if (connectionRegistry == null ||
-            !connectionRegistry.IsReady ||
-            !connectionRegistry.TryGetBingoUserId(
-                rpcParams.Receive.SenderClientId,
-                out string requesterUserId))
+        if (connectionRegistry == null || !connectionRegistry.IsReady || !connectionRegistry.TryGetBingoUserId(rpcParams.Receive.SenderClientId, out string requesterUserId))
         {
             return;
         }
 
-        if (!authorityLobby.Controller.BeginFinalCountdown(requesterUserId))
+        LobbyController controller = authorityLobby.Controller;
+        LobbyPlayerData requesterPlayer = controller.GetPlayer(requesterUserId);
+
+        if (requesterPlayer == null || !requesterPlayer.isHost)
+        {
+            return;
+        }
+
+        LobbySettings lobbySettings = LobbySettings.instance;
+
+        if (lobbySettings != null && controller.PlayerCount < lobbySettings.MinimumPlayers)
+        {
+            string message = $"At least {lobbySettings.MinimumPlayers} players are required to start the game.";
+            NotificationService.instance?.SendToUser(requesterUserId, UIMessageType.NotEnoughPlayers, message);
+            return;
+        }
+
+        if (!controller.BeginFinalCountdown(requesterUserId))
         {
             return;
         }
@@ -962,9 +972,7 @@ public class NetworkLobbyConnection : NetworkBehaviour
             StopCoroutine(startLobbyRoutine);
         }
 
-        startLobbyRoutine =
-            StartCoroutine(
-                WaitForAuthorityFinalCountdown());
+        startLobbyRoutine = StartCoroutine(WaitForAuthorityFinalCountdown());
     }
 
     private void TryStartAuthorityOnlineCountdown(Lobby lobby)

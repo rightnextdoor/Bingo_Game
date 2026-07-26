@@ -52,6 +52,8 @@ public class LobbyController
     public bool IsTimerActive => timer != null && timer.IsActive;
     public double TimerEndTime => timer != null ? timer.EndTime : 0d;
 
+    [field: NonSerialized] public event Action<LobbyController> FinalCountdownStarted;
+
     #endregion
 
     #region Custom Lobby Fields
@@ -832,6 +834,7 @@ public class LobbyController
         timer.StartFinalCountdown();
 
         RefreshViews();
+        FinalCountdownStarted?.Invoke(this);
 
         return true;
     }
@@ -862,11 +865,7 @@ public class LobbyController
 
     public bool TryBeginOnlineFinalCountdown()
     {
-        if (lobby == null ||
-            lobby.playMode != MainMenuPlayMode.Online ||
-            lobby.lobbyState != LobbyState.Open ||
-            timer == null ||
-            !timer.HasReachedFinalCountdown())
+        if (lobby == null || lobby.playMode != MainMenuPlayMode.Online || lobby.lobbyState != LobbyState.Open || timer == null || !timer.HasReachedFinalCountdown())
         {
             return false;
         }
@@ -893,13 +892,8 @@ public class LobbyController
 
             if (maximumBotsToAdd > 0)
             {
-                int requestedBots = maximumBotsToAdd >= requiredBots
-                    ? UnityEngine.Random.Range(requiredBots, maximumBotsToAdd + 1)
-                    : maximumBotsToAdd;
-
-                int addedBots = AddRandomBotsInternal(
-                    requestedBots,
-                    lobbySettings.MaxOnlineBots);
+                int requestedBots = maximumBotsToAdd >= requiredBots ? UnityEngine.Random.Range(requiredBots, maximumBotsToAdd + 1) : maximumBotsToAdd;
+                int addedBots = AddRandomBotsInternal(requestedBots, lobbySettings.MaxOnlineBots);
 
                 botsChanged = addedBots > 0;
             }
@@ -916,7 +910,9 @@ public class LobbyController
         }
 
         lobby.lobbyState = LobbyState.FinalCountdown;
+
         RefreshViews();
+        FinalCountdownStarted?.Invoke(this);
 
         return true;
     }

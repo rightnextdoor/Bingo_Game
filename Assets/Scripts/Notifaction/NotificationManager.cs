@@ -9,15 +9,23 @@ public class NotificationManager : MonoBehaviour
 {
     public static NotificationManager instance;
 
+    #region Data
+
     private class NotificationRequest
     {
         public UIMessageData MessageData { get; }
+        public string MessageOverride { get; }
 
-        public NotificationRequest(UIMessageData messageData)
+        public NotificationRequest(UIMessageData messageData, string messageOverride)
         {
             MessageData = messageData;
+            MessageOverride = messageOverride;
         }
     }
+
+    #endregion
+
+    #region Fields
 
     [Header("Notification UI")]
     [SerializeField] private CanvasGroup notificationAreaCanvasGroup;
@@ -31,6 +39,10 @@ public class NotificationManager : MonoBehaviour
 
     private Coroutine notificationRoutine;
     private bool isPlayingNotification;
+
+    #endregion
+
+    #region Unity Lifecycle
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetStaticState()
@@ -59,15 +71,26 @@ public class NotificationManager : MonoBehaviour
         }
     }
 
-    public void SendNotification(UIMessageData messageData)
+    #endregion
+
+    #region Notifications
+
+    public void SendNotification(UIMessageType messageType, string messageOverride = null)
     {
-        if (messageData == null)
+        if (UIMessageCatalog.instance == null)
         {
-            Debug.LogWarning("Cannot send notification because UIMessageData is null.");
+            Debug.LogWarning("Cannot send notification because UIMessageCatalog.instance was not found.");
             return;
         }
 
-        notificationQueue.Enqueue(new NotificationRequest(messageData));
+        UIMessageData messageData = UIMessageCatalog.instance.GetMessage(messageType);
+
+        if (messageData == null)
+        {
+            return;
+        }
+
+        notificationQueue.Enqueue(new NotificationRequest(messageData, messageOverride));
 
         if (!isPlayingNotification)
         {
@@ -111,7 +134,7 @@ public class NotificationManager : MonoBehaviour
         UIMessageData messageData = request.MessageData;
 
         ShowNotificationInstant();
-        ApplyNotificationVisuals(messageData);
+        ApplyNotificationVisuals(messageData, request.MessageOverride);
 
         float displaySeconds = Mathf.Max(0f, messageData.DisplaySeconds);
         float fadeOutSeconds = Mathf.Max(0f, messageData.FadeOutSeconds);
@@ -129,7 +152,7 @@ public class NotificationManager : MonoBehaviour
         HideNotificationInstant();
     }
 
-    private void ApplyNotificationVisuals(UIMessageData messageData)
+    private void ApplyNotificationVisuals(UIMessageData messageData, string messageOverride)
     {
         if (notificationBackground != null)
         {
@@ -138,26 +161,31 @@ public class NotificationManager : MonoBehaviour
             notificationBackground.raycastTarget = false;
         }
 
-        if (notificationText != null)
+        if (notificationText == null)
         {
-            notificationText.gameObject.SetActive(true);
-            notificationText.richText = true;
-            notificationText.text = messageData.BuildMessage();
-
-            if (messageData.FontAsset != null)
-            {
-                notificationText.font = messageData.FontAsset;
-            }
-
-            notificationText.fontSize = messageData.FontSize;
-            notificationText.color = messageData.TextColor;
-
-            notificationText.textWrappingMode = TextWrappingModes.Normal;
-            notificationText.overflowMode = TextOverflowModes.Ellipsis;
-            notificationText.enableAutoSizing = false;
-            notificationText.alignment = TextAlignmentOptions.Center;
+            return;
         }
+
+        notificationText.gameObject.SetActive(true);
+        notificationText.richText = true;
+        notificationText.text = string.IsNullOrWhiteSpace(messageOverride) ? messageData.BuildMessage() : messageOverride;
+
+        if (messageData.FontAsset != null)
+        {
+            notificationText.font = messageData.FontAsset;
+        }
+
+        notificationText.fontSize = messageData.FontSize;
+        notificationText.color = messageData.TextColor;
+        notificationText.textWrappingMode = TextWrappingModes.Normal;
+        notificationText.overflowMode = TextOverflowModes.Ellipsis;
+        notificationText.enableAutoSizing = false;
+        notificationText.alignment = TextAlignmentOptions.Center;
     }
+
+    #endregion
+
+    #region Display
 
     private IEnumerator FadeOutNotification(float fadeOutSeconds)
     {
@@ -218,7 +246,8 @@ public class NotificationManager : MonoBehaviour
 
     private bool HasRequiredUI()
     {
-        return notificationAreaCanvasGroup != null &&
-               notificationText != null;
+        return notificationAreaCanvasGroup != null && notificationText != null;
     }
+
+    #endregion
 }

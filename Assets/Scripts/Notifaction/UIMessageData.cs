@@ -6,12 +6,13 @@ using UnityEngine;
 public class UIMessageData : ScriptableObject
 {
     [Header("Message")]
+    [SerializeField] private UIMessageType messageType;
+
     [TextArea(2, 8)]
     [SerializeField] private string messageText;
 
     [Header("Tooltip Image")]
-    [SerializeField]
-    private TooltipImageMode imageMode = TooltipImageMode.Default;
+    [SerializeField] private TooltipImageMode imageMode = TooltipImageMode.Default;
     [SerializeField] private Sprite customImage;
 
     [Header("Font")]
@@ -30,6 +31,7 @@ public class UIMessageData : ScriptableObject
     [Header("Tooltip Position")]
     [SerializeField] private Vector2 tooltipOffset = new Vector2(18f, -18f);
 
+    public UIMessageType MessageType => messageType;
     public string MessageText => messageText;
     public TooltipImageMode ImageMode => imageMode;
     public Sprite CustomImage => customImage;
@@ -67,34 +69,5 @@ public class UIMessageData : ScriptableObject
     public string GetNumberColorHex()
     {
         return ColorUtility.ToHtmlStringRGBA(numberColor);
-    }
-
-    public static UIMessageData CreateRuntimeMessage(
-    string message,
-    int fontSize,
-    Color textColor,
-    Color numberColor,
-    Color backgroundColor,
-    float displaySeconds,
-    float fadeOutSeconds,
-    Vector2 tooltipOffset,
-    TooltipImageMode imageMode = TooltipImageMode.Default,
-    Sprite customImage = null)
-    {
-        UIMessageData data = CreateInstance<UIMessageData>();
-
-        data.messageText = message;
-        data.fontSize = fontSize;
-        data.textColor = textColor;
-        data.numberColor = numberColor;
-        data.backgroundColor = backgroundColor;
-        data.displaySeconds = displaySeconds;
-        data.fadeOutSeconds = fadeOutSeconds;
-        data.tooltipOffset = tooltipOffset;
-
-        data.imageMode = imageMode;
-        data.customImage = customImage;
-
-        return data;
     }
 }

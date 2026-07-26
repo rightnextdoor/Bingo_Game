@@ -526,6 +526,29 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &581085909 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 8215340122209812844, guid: f7e0f34e7bbfde64d932d6d233ff8e28, type: 3}
+  m_PrefabInstance: {fileID: 1186014578}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &581085926
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 581085909}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3eee77daf80c4434a897d2bbd8d6bf54, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIMessageCatalog
+  messages:
+  - {fileID: 11400000, guid: 84b3d49cfa002e04392b1b49fc1c6fef, type: 2}
+  - {fileID: 11400000, guid: b1d78bce337e3874fb32c35b34f6b4c5, type: 2}
+  - {fileID: 11400000, guid: 5bec5c43d31197540a4171061924b568, type: 2}
+  - {fileID: 11400000, guid: 46218c28a6bb0be4b87cec7b9e12859a, type: 2}
+  - {fileID: 11400000, guid: 0bc73dc7f3109bc41af89f03d9dc1393, type: 2}
 --- !u!1 &619394800
 GameObject:
   m_ObjectHideFlags: 0
@@ -689,7 +712,10 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 8215340122209812844, guid: f7e0f34e7bbfde64d932d6d233ff8e28, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 581085926}
   m_SourcePrefab: {fileID: 100100000, guid: f7e0f34e7bbfde64d932d6d233ff8e28, type: 3}
 --- !u!224 &1259408114 stripped
 RectTransform:

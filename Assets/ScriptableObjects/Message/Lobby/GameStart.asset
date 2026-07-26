@@ -10,10 +10,10 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 6b33075be95cdb746abd148dfc70db25, type: 3}
-  m_Name: User_Message
+  m_Name: GameStart
   m_EditorClassIdentifier: Assembly-CSharp::UIMessageData
-  messageType: 1
-  messageText: User Profile
+  messageType: 5
+  messageText: Game about to stat!
   imageMode: 0
   customImage: {fileID: 0}
   fontAsset: {fileID: 0}

@@ -113,15 +113,7 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
             return false;
         }
 
-        LobbyManager lobbyManager = LobbyManager.instance;
-
-        if (lobbyManager == null || lobbyManager.CurrentLobby?.Controller == null)
-        {
-            return false;
-        }
-
-        LobbyPlayerData currentPlayer = lobbyManager.CurrentLobby.Controller.GetPlayer(lobbyManager.CurrentUserId);
-        return currentPlayer != null && currentPlayer.isHost;
+        return IsCurrentPlayerHost(lobbyViewData);
     }
 
     private bool CanStartLobby(LobbyViewData lobbyViewData)
@@ -141,26 +133,37 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
             return false;
         }
 
+        return IsCurrentPlayerHost(lobbyViewData);
+    }
+
+    private bool IsCurrentPlayerHost(LobbyViewData lobbyViewData)
+    {
         LobbyManager lobbyManager = LobbyManager.instance;
 
-        if (lobbyManager == null || lobbyManager.CurrentLobby?.Controller == null)
+        if (lobbyManager == null || lobbyViewData?.players == null || string.IsNullOrWhiteSpace(lobbyManager.CurrentUserId))
         {
             return false;
         }
 
-        LobbyPlayerData currentPlayer =
-            lobbyManager.CurrentLobby.Controller.GetPlayer(
-                lobbyManager.CurrentUserId);
+        for (int i = 0; i < lobbyViewData.players.Count; i++)
+        {
+            LobbyPlayerViewData playerData = lobbyViewData.players[i];
 
-        return currentPlayer != null && currentPlayer.isHost;
+            if (playerData != null && playerData.userId == lobbyManager.CurrentUserId)
+            {
+                return playerData.isHost;
+            }
+        }
+
+        return false;
     }
 
     private IEnumerator BindWhenLobbyIsReady()
     {
         while (LobbyManager.instance == null ||
                !LobbyManager.instance.HasEnteredLobby ||
-               LobbyManager.instance.CurrentLobby == null ||
-               LobbyManager.instance.CurrentLobby.Controller == null)
+               LobbyManager.instance.CurrentLobbyViewData == null ||
+               (LobbyManager.instance.RuntimeType == SessionRuntimeType.Local && LobbyManager.instance.CurrentLobby?.Controller == null))
         {
             yield return null;
         }
@@ -177,11 +180,7 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
         {
             UnbindLobbyController();
 
-            LobbyViewData lobbyViewData =
-                lobbyManager.CurrentLobbyViewData ??
-                lobbyManager.CurrentLobby.Controller.BuildViewData();
-
-            DisplayLobbyInfo(lobbyViewData);
+            DisplayLobbyInfo(lobbyManager.CurrentLobbyViewData);
         }
         else
         {
@@ -366,7 +365,7 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
     {
         LobbyManager lobbyManager = LobbyManager.instance;
 
-        if (lobbyManager == null || lobbyManager.CurrentLobby?.Controller == null)
+        if (lobbyManager == null || !lobbyManager.HasEnteredLobby)
         {
             Debug.LogWarning("[LobbySceneController] Could not start the Lobby because the current Lobby was not found.");
             return;
@@ -374,7 +373,12 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
 
         if (lobbyManager.RuntimeType == SessionRuntimeType.Local)
         {
-            LobbyController controller = lobbyManager.CurrentLobby.Controller;
+            LobbyController controller = lobbyManager.CurrentLobby?.Controller;
+
+            if (controller == null)
+            {
+                return;
+            }
             LobbySettings lobbySettings = LobbySettings.instance;
 
             if (lobbySettings != null && controller.PlayerCount < lobbySettings.MinimumPlayers)
@@ -398,15 +402,15 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
             return;
         }
 
-        NetworkLobbyConnection lobbyConnection = NetworkLobbyConnection.GetLocalConnection();
+        NetworkLobbyService lobbyService = NetworkLobbyService.instance;
 
-        if (lobbyConnection == null)
+        if (lobbyService == null || !lobbyService.IsReady)
         {
-            Debug.LogWarning("[LobbySceneController] Could not start the Custom Lobby because the network Lobby connection was not available.");
+            Debug.LogWarning("[LobbySceneController] Could not start the Custom Lobby because the network Lobby service was not available.");
             return;
         }
 
-        lobbyConnection.RequestStartLobby();
+        lobbyService.StartLobby();
     }
 
     private IEnumerator WaitForLocalFinalCountdown(LobbyController controller)
@@ -496,7 +500,7 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
         LobbyManager lobbyManager = LobbyManager.instance;
 
         if (lobbyManager == null ||
-            lobbyManager.CurrentLobby?.Controller == null ||
+            !lobbyManager.HasEnteredLobby ||
             string.IsNullOrWhiteSpace(lobbyManager.CurrentUserId))
         {
             return;
@@ -513,18 +517,15 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
             return;
         }
 
-        NetworkLobbyConnection lobbyConnection =
-            NetworkLobbyConnection.GetLocalConnection();
+        NetworkLobbyService lobbyService = NetworkLobbyService.instance;
 
-        if (lobbyConnection == null)
+        if (lobbyService == null || !lobbyService.IsReady)
         {
-            Debug.LogWarning(
-                "[LobbySceneController] The network lobby connection was not available for Ready.");
-
+            Debug.LogWarning("[LobbySceneController] The network lobby service was not available for Ready.");
             return;
         }
 
-        lobbyConnection.RequestSetPlayerReady(nextReadyState);
+        lobbyService.SetPlayerReady(nextReadyState);
     }
 
     private bool GetCurrentPlayerReadyState(LobbyManager lobbyManager)
@@ -572,7 +573,7 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
         LobbyManager lobbyManager = LobbyManager.instance;
 
         if (lobbyManager == null ||
-            lobbyManager.CurrentLobby == null ||
+            !lobbyManager.HasEnteredLobby ||
             string.IsNullOrWhiteSpace(lobbyManager.CurrentUserId))
         {
             return;
@@ -580,19 +581,19 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
 
         if (lobbyManager.RuntimeType == SessionRuntimeType.Local)
         {
-            lobbyManager.CurrentLobby.Controller?.RerollPlayerBoard(lobbyManager.CurrentUserId);
+            lobbyManager.CurrentLobby?.Controller?.RerollPlayerBoard(lobbyManager.CurrentUserId);
             return;
         }
 
-        NetworkLobbyConnection lobbyConnection = NetworkLobbyConnection.GetLocalConnection();
+        NetworkLobbyService lobbyService = NetworkLobbyService.instance;
 
-        if (lobbyConnection == null)
+        if (lobbyService == null || !lobbyService.IsReady)
         {
-            Debug.LogWarning("[LobbySceneController] The network lobby connection was not available for board reroll.");
+            Debug.LogWarning("[LobbySceneController] The network lobby service was not available for board reroll.");
             return;
         }
 
-        lobbyConnection.RequestRerollBoard();
+        lobbyService.RerollBoard();
     }
 
     private async void KickPlayer(string targetUserId)
@@ -600,7 +601,7 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
         LobbyManager lobbyManager = LobbyManager.instance;
 
         if (lobbyManager == null ||
-            lobbyManager.CurrentLobby?.Controller == null ||
+            !lobbyManager.HasEnteredLobby ||
             string.IsNullOrWhiteSpace(targetUserId))
         {
             return;
@@ -622,20 +623,15 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
             return;
         }
 
-        NetworkLobbyManager networkLobbyManager =
-            NetworkLobbyManager.instance;
+        NetworkLobbyService lobbyService = NetworkLobbyService.instance;
 
-        if (networkLobbyManager == null ||
-            !networkLobbyManager.IsReady)
+        if (lobbyService == null || !lobbyService.IsReady)
         {
-            Debug.LogWarning(
-                "[LobbySceneController] NetworkLobbyManager was not ready for Kick.");
-
+            Debug.LogWarning("[LobbySceneController] NetworkLobbyService was not ready for Kick.");
             return;
         }
 
-        LobbyExitResult networkResult =
-            await networkLobbyManager.KickPlayerAsync(targetUserId);
+        LobbyExitResult networkResult = await lobbyService.KickPlayerAsync(targetUserId);
 
         if (networkResult == null || !networkResult.success)
         {

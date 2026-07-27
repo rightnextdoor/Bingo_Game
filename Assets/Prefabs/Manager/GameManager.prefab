@@ -26,6 +26,7 @@ GameObject:
   - component: {fileID: 9213971337090501165}
   - component: {fileID: 6480048657164182875}
   - component: {fileID: 2222644560770358961}
+  - component: {fileID: 8181335114522364486}
   m_Layer: 0
   m_Name: GameManager
   m_TagString: Untagged
@@ -342,3 +343,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: bb7f340403ea8134a8bae9caa62bc761, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NotificationService
+--- !u!114 &8181335114522364486
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8215340122209812844}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2705500cd69a2cd4cacf73956c3c58d7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NetworkLobbyService

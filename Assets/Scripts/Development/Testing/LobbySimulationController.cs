@@ -4,6 +4,8 @@ using UnityEngine;
 [DisallowMultipleComponent]
 public class LobbySimulationController : MonoBehaviour
 {
+    #region Fields
+
     [Header("Simulation")]
     [SerializeField] private bool simulateOnStart = true;
     [SerializeField] private MainMenuPlayMode playMode = MainMenuPlayMode.Solo;
@@ -11,6 +13,10 @@ public class LobbySimulationController : MonoBehaviour
     [Header("Game Setup")]
     [SerializeField] private BingoGameModeType gameModeType = BingoGameModeType.Traditional;
     [SerializeField] private BingoBallCountType ballCountType = BingoBallCountType.Ball75;
+
+    #endregion
+
+    #region Unity Methods
 
     private IEnumerator Start()
     {
@@ -31,22 +37,22 @@ public class LobbySimulationController : MonoBehaviour
 #endif
     }
 
+    #endregion
+
+    #region Simulation Setup
+
     private IEnumerator WaitForSceneReady()
     {
-        while (LobbyManager.instance == null ||
-               UserManager.instance == null ||
-               SceneReadyController.instance == null)
+        while (LobbyManager.instance == null || UserManager.instance == null || SceneReadyController.instance == null)
         {
             yield return null;
         }
 
-        while (!UserManager.instance.IsReady ||
-               !SceneReadyController.instance.AreAllReady())
+        while (!UserManager.instance.IsReady || !SceneReadyController.instance.AreAllReady())
         {
             yield return null;
         }
 
-        // Allow systems that react to readiness to finish their current frame.
         yield return null;
     }
 
@@ -54,9 +60,7 @@ public class LobbySimulationController : MonoBehaviour
     {
         LobbyManager lobbyManager = LobbyManager.instance;
 
-        if (lobbyManager.HasEnteredLobby ||
-            lobbyManager.IsEnteringLobby ||
-            lobbyManager.HasPendingLobbySetupData)
+        if (lobbyManager.HasEnteredLobby || lobbyManager.IsEnteringLobby || lobbyManager.HasPendingLobbySetupData)
         {
             return false;
         }
@@ -87,7 +91,6 @@ public class LobbySimulationController : MonoBehaviour
 
         LobbyManager.instance.SetPendingLobbySetupData(lobbySetupData);
         LobbyManager.instance.BeginPendingLobbyEntry();
-
         StartCoroutine(ApplyPostEntrySimulation());
     }
 
@@ -100,7 +103,6 @@ public class LobbySimulationController : MonoBehaviour
         };
 
         ConfigureModeSetup(lobbySetupData);
-
         return lobbySetupData;
     }
 
@@ -117,14 +119,8 @@ public class LobbySimulationController : MonoBehaviour
                 break;
 
             case MainMenuPlayMode.Custom:
-                bool shouldHost =
-                    !MultiplayerPlayModeTestContext.IsActive ||
-                    MultiplayerPlayModeTestContext.IsHost;
-
-                ConfigureCustomSetup(
-                    lobbySetupData.customSetupData,
-                    shouldHost);
-
+                bool shouldHost = !MultiplayerPlayModeTestContext.IsActive || MultiplayerPlayModeTestContext.IsHost;
+                ConfigureCustomSetup(lobbySetupData.customSetupData, shouldHost);
                 break;
         }
     }
@@ -158,9 +154,7 @@ public class LobbySimulationController : MonoBehaviour
             return;
         }
 
-        customSetupData.actionType = shouldHost
-            ? CustomLobbyActionType.HostLobby
-            : CustomLobbyActionType.SearchLobby;
+        customSetupData.actionType = shouldHost ? CustomLobbyActionType.HostLobby : CustomLobbyActionType.SearchLobby;
 
         if (!shouldHost || customSetupData.hostSetupData == null)
         {
@@ -171,70 +165,37 @@ public class LobbySimulationController : MonoBehaviour
         customSetupData.hostSetupData.ballCountType = ballCountType;
     }
 
-    public void ApplyNetworkSimulationSetup(LobbySetupData lobbySetupData, bool isHostPlayer)
-    {
-        if (lobbySetupData == null)
-        {
-            return;
-        }
+    #endregion
 
-        if (playMode != MainMenuPlayMode.Online &&
-            playMode != MainMenuPlayMode.Custom)
-        {
-            return;
-        }
-
-        lobbySetupData.playMode = playMode;
-
-        switch (playMode)
-        {
-            case MainMenuPlayMode.Online:
-                ConfigureOnlineSetup(
-                    lobbySetupData.onlineSetupData);
-
-                break;
-
-            case MainMenuPlayMode.Custom:
-                ConfigureCustomSetup(
-                    lobbySetupData.customSetupData,
-                    isHostPlayer);
-
-                break;
-        }
-    }
+    #region Post Entry
 
     private IEnumerator ApplyPostEntrySimulation()
     {
-        while (LobbyManager.instance != null &&
-               LobbyManager.instance.IsEnteringLobby)
+        while (LobbyManager.instance != null && LobbyManager.instance.IsEnteringLobby)
         {
             yield return null;
         }
 
-        if (LobbyManager.instance == null ||
-            !LobbyManager.instance.HasEnteredLobby)
+        if (LobbyManager.instance == null || !LobbyManager.instance.HasEnteredLobby)
         {
             yield break;
         }
 
-        if (playMode != MainMenuPlayMode.Online &&
-            playMode != MainMenuPlayMode.Custom)
+        if (playMode != MainMenuPlayMode.Online && playMode != MainMenuPlayMode.Custom)
         {
             yield break;
         }
 
-        NetworkLobbyConnection lobbyConnection =
-            NetworkLobbyConnection.GetLocalConnection();
+        NetworkLobbyService lobbyService = NetworkLobbyService.instance;
 
-        if (lobbyConnection == null)
+        if (lobbyService == null || !lobbyService.IsReady)
         {
-            Debug.LogWarning(
-                "[LobbySimulation] The network lobby connection was not available to mark the simulated player scene-ready.");
-
+            Debug.LogWarning("[LobbySimulation] The network lobby service was not available to mark the simulated player scene-ready.");
             yield break;
         }
 
-        lobbyConnection.NotifyLobbySceneReady();
+        lobbyService.NotifyLobbySceneReady();
     }
 
+    #endregion
 }

@@ -118,7 +118,7 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
                !GameModeManager.instance.IsReady ||
                LobbyManager.instance == null ||
                !LobbyManager.instance.HasEnteredLobby ||
-               LobbyManager.instance.CurrentLobby == null)
+               LobbyManager.instance.CurrentLobbyViewData == null)
         {
             yield return null;
         }
@@ -187,28 +187,17 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
     {
         LobbyManager lobbyManager = LobbyManager.instance;
 
-        if (lobbyManager == null ||
-            !lobbyManager.HasEnteredLobby ||
-            lobbyManager.CurrentLobby == null)
+        if (lobbyManager == null || !lobbyManager.HasEnteredLobby)
         {
             return null;
         }
 
-        if (lobbyManager.RuntimeType == SessionRuntimeType.Local)
+        if (lobbyManager.RuntimeType == SessionRuntimeType.Local && lobbyManager.CurrentLobby?.Controller != null)
         {
-            return lobbyManager.CurrentLobby.Controller != null
-                ? lobbyManager.CurrentLobby.Controller.BuildViewData()
-                : null;
+            return lobbyManager.CurrentLobby.Controller.BuildViewData();
         }
 
-        if (lobbyManager.CurrentLobbyViewData != null)
-        {
-            return lobbyManager.CurrentLobbyViewData;
-        }
-
-        return lobbyManager.CurrentLobby.Controller != null
-            ? lobbyManager.CurrentLobby.Controller.BuildViewData()
-            : null;
+        return lobbyManager.CurrentLobbyViewData;
     }
 
     private void LoadLobbyViewData(LobbyViewData lobbyViewData)
@@ -912,8 +901,7 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
         LobbyManager lobbyManager =
             LobbyManager.instance;
 
-        if (lobbyManager == null ||
-            lobbyManager.CurrentLobby == null)
+        if (lobbyManager == null || !lobbyManager.HasEnteredLobby)
         {
             ShowError(
                 "The current lobby could not be found.");
@@ -925,8 +913,7 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
 
         if (lobbyManager.RuntimeType == SessionRuntimeType.Local)
         {
-            LobbyController lobbyController =
-                lobbyManager.CurrentLobby.Controller;
+            LobbyController lobbyController = lobbyManager.CurrentLobby?.Controller;
 
             settingsApplied =
                 lobbyController != null &&
@@ -936,21 +923,15 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
         }
         else
         {
-            NetworkLobbyConnection lobbyConnection =
-                NetworkLobbyConnection.GetLocalConnection();
+            NetworkLobbyService lobbyService = NetworkLobbyService.instance;
 
-            if (lobbyConnection == null)
+            if (lobbyService == null || !lobbyService.IsReady)
             {
-                ShowError(
-                    "The network lobby connection is not available.");
-
+                ShowError("The network lobby service is not available.");
                 return;
             }
 
-            settingsApplied =
-                await lobbyConnection
-                    .RequestApplyHostSettingsAsync(
-                        settingsData);
+            settingsApplied = await lobbyService.ApplyHostSettingsAsync(settingsData);
         }
 
         if (!settingsApplied)

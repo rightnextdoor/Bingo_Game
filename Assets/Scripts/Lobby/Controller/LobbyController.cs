@@ -40,6 +40,7 @@ public class LobbyController
     [field: NonSerialized]
     public event Action<LobbyController, LobbyPlayerBoardViewData> PlayerBoardChanged;
 
+    [SerializeField] private bool addBots;
     [NonSerialized] private Func<IReadOnlyList<UserData>> botUserProvider;
 
     #endregion
@@ -95,7 +96,7 @@ public class LobbyController
     public BingoBallCountType BallCountType => ballCountType;
     public bool UseFreeCell => useFreeCell;
 
-    public bool AddBots => BotCount > 0;
+    public bool AddBots => addBots;
     public int BotCount => GetBotCount();
 
     #endregion
@@ -149,6 +150,7 @@ public class LobbyController
 
         unlimitedPlayers = false;
         maxPlayers = GetMinimumPlayers();
+        addBots = false;
 
         closeReason = LobbyCloseReason.None;
 
@@ -1182,13 +1184,15 @@ public class LobbyController
         unlimitedPlayers = settingsData.unlimitedPlayers;
         maxPlayers = GetValidMaximumPlayers(settingsData.maxPlayers, unlimitedPlayers);
 
-        int desiredBotCount = settingsData.addBots
-            ? Mathf.Max(0, settingsData.botCount)
-            : 0;
+        addBots = settingsData.addBots;
+        int requestedBotCount = addBots ? Mathf.Max(0, settingsData.botCount) : 0;
 
         ResolveGameModeData();
 
-        SetBotCountInternal(desiredBotCount);
+        if (requestedBotCount > 0)
+        {
+            AddRandomBotsInternal(requestedBotCount, int.MaxValue);
+        }
 
         bool boardGenerationChanged =
             ballCountType != previousBallCountType ||
@@ -1345,7 +1349,7 @@ public class LobbyController
             maxPlayers = maxPlayers,
             unlimitedPlayers = unlimitedPlayers,
             players = BuildPlayerViewDataList(),
-            addBots = BotCount > 0,
+            addBots = addBots,
             botCount = BotCount
         };
 

@@ -1,6 +1,14 @@
 using System;
 using System.Collections.Generic;
 
+public enum LobbyStateApplyResult
+{
+    Invalid,
+    Ignored,
+    Applied,
+    RequiresResync
+}
+
 public class LobbyClientState
 {
     #region Fields
@@ -9,16 +17,23 @@ public class LobbyClientState
 
     private string lobbyId = string.Empty;
     private LobbyViewData viewData;
+    private long revision;
 
     public string LobbyId => lobbyId;
     public LobbyViewData ViewData => viewData;
+    public long Revision => revision;
     public bool HasLobby => !string.IsNullOrWhiteSpace(lobbyId) && viewData != null;
 
     #endregion
 
-    #region Lobby State
+    #region Snapshot State
 
     public bool SetSnapshot(string expectedLobbyId, LobbyViewData lobbyViewData)
+    {
+        return SetSnapshot(expectedLobbyId, lobbyViewData, revision);
+    }
+
+    public bool SetSnapshot(string expectedLobbyId, LobbyViewData lobbyViewData, long snapshotRevision)
     {
         if (lobbyViewData == null)
         {
@@ -40,6 +55,7 @@ public class LobbyClientState
         lobbyViewData.lobbyId = resolvedLobbyId;
         lobbyId = resolvedLobbyId;
         viewData = lobbyViewData;
+        revision = Math.Max(0, snapshotRevision);
         return true;
     }
 
@@ -50,22 +66,157 @@ public class LobbyClientState
 
     public bool HasPlayer(string userId)
     {
-        if (!HasLobby || string.IsNullOrWhiteSpace(userId) || viewData.players == null)
+        return FindPlayerIndex(userId) >= 0;
+    }
+
+    #endregion
+
+    #region Player Deltas
+
+    public LobbyStateApplyResult ApplyPlayerJoined(LobbyPlayerJoinedData data)
+    {
+        if (data?.playerData == null || string.IsNullOrWhiteSpace(data.playerData.userId) || viewData?.players == null)
         {
-            return false;
+            return LobbyStateApplyResult.Invalid;
         }
 
-        for (int i = 0; i < viewData.players.Count; i++)
-        {
-            LobbyPlayerViewData playerData = viewData.players[i];
+        LobbyStateApplyResult revisionResult = ValidateRevision(data.lobbyId, data.revision);
 
-            if (playerData != null && string.Equals(playerData.userId, userId, StringComparison.Ordinal))
-            {
-                return true;
-            }
+        if (revisionResult != LobbyStateApplyResult.Applied)
+        {
+            return revisionResult;
         }
 
-        return false;
+        int existingIndex = FindPlayerIndex(data.playerData.userId);
+
+        if (existingIndex >= 0)
+        {
+            viewData.players[existingIndex] = data.playerData;
+        }
+        else if (data.playerData.isHost)
+        {
+            viewData.players.Insert(0, data.playerData);
+        }
+        else
+        {
+            viewData.players.Add(data.playerData);
+        }
+
+        viewData.playerCount = data.playerCount;
+        viewData.botCount = data.botCount;
+        viewData.addBots = data.botCount > 0;
+        return LobbyStateApplyResult.Applied;
+    }
+
+    public LobbyStateApplyResult ApplyPlayerLeft(LobbyPlayerLeftData data)
+    {
+        if (data == null || string.IsNullOrWhiteSpace(data.userId) || viewData?.players == null)
+        {
+            return LobbyStateApplyResult.Invalid;
+        }
+
+        LobbyStateApplyResult revisionResult = ValidateRevision(data.lobbyId, data.revision);
+
+        if (revisionResult != LobbyStateApplyResult.Applied)
+        {
+            return revisionResult;
+        }
+
+        int playerIndex = FindPlayerIndex(data.userId);
+
+        if (playerIndex >= 0)
+        {
+            viewData.players.RemoveAt(playerIndex);
+        }
+
+        boardsByUserId.Remove(data.userId);
+        viewData.playerCount = data.playerCount;
+        viewData.botCount = data.botCount;
+        viewData.addBots = data.botCount > 0;
+        return LobbyStateApplyResult.Applied;
+    }
+
+    public LobbyStateApplyResult ApplyPlayerReadyChanged(LobbyPlayerReadyChangedData data)
+    {
+        if (data == null || string.IsNullOrWhiteSpace(data.userId))
+        {
+            return LobbyStateApplyResult.Invalid;
+        }
+
+        int playerIndex = FindPlayerIndex(data.userId);
+
+        if (playerIndex < 0)
+        {
+            return LobbyStateApplyResult.Invalid;
+        }
+
+        LobbyStateApplyResult revisionResult = ValidateRevision(data.lobbyId, data.revision);
+
+        if (revisionResult != LobbyStateApplyResult.Applied)
+        {
+            return revisionResult;
+        }
+
+        viewData.players[playerIndex].isReady = data.isReady;
+        return LobbyStateApplyResult.Applied;
+    }
+
+    #endregion
+
+    #region Lobby Deltas
+
+    public LobbyStateApplyResult ApplySettingsChanged(LobbySettingsChangedData data)
+    {
+        if (data == null || viewData == null)
+        {
+            return LobbyStateApplyResult.Invalid;
+        }
+
+        LobbyStateApplyResult revisionResult = ValidateRevision(data.lobbyId, data.revision);
+
+        if (revisionResult != LobbyStateApplyResult.Applied)
+        {
+            return revisionResult;
+        }
+
+        viewData.lobbyName = data.lobbyName ?? string.Empty;
+        viewData.roomCode = data.roomCode ?? string.Empty;
+        viewData.hasPassword = data.hasPassword;
+        viewData.lobbyPassword = data.lobbyPassword ?? string.Empty;
+        viewData.gameModeType = data.gameModeType;
+        viewData.gameModeName = data.gameModeName ?? string.Empty;
+        viewData.hasRule = data.hasRule;
+        viewData.ruleType = data.ruleType;
+        viewData.patternTypes = data.patternTypes != null ? new List<BingoPatternType>(data.patternTypes) : new List<BingoPatternType>();
+        viewData.usesDefaultPatterns = data.usesDefaultPatterns;
+        viewData.ballCountType = data.ballCountType;
+        viewData.useFreeCell = data.useFreeCell;
+        viewData.playerCount = data.playerCount;
+        viewData.maxPlayers = data.maxPlayers;
+        viewData.unlimitedPlayers = data.unlimitedPlayers;
+        viewData.addBots = data.addBots;
+        viewData.botCount = data.botCount;
+        return LobbyStateApplyResult.Applied;
+    }
+
+    public LobbyStateApplyResult ApplyStateChanged(LobbyStateChangedData data)
+    {
+        if (data == null || viewData == null)
+        {
+            return LobbyStateApplyResult.Invalid;
+        }
+
+        LobbyStateApplyResult revisionResult = ValidateRevision(data.lobbyId, data.revision);
+
+        if (revisionResult != LobbyStateApplyResult.Applied)
+        {
+            return revisionResult;
+        }
+
+        viewData.lobbyState = data.lobbyState;
+        viewData.isTimerActive = data.isTimerActive;
+        viewData.timerEndTime = data.timerEndTime;
+        return LobbyStateApplyResult.Applied;
     }
 
     #endregion
@@ -85,7 +236,8 @@ public class LobbyClientState
         }
 
         boardsByUserId.Clear();
-        return ApplyBoardCollection(boardCollectionData);
+        ApplyBoardValues(boardCollectionData);
+        return true;
     }
 
     public bool ApplyBoardCollection(LobbyBoardCollectionData boardCollectionData)
@@ -100,24 +252,26 @@ public class LobbyClientState
             return false;
         }
 
-        if (boardCollectionData.boards == null)
-        {
-            return true;
-        }
-
-        for (int i = 0; i < boardCollectionData.boards.Count; i++)
-        {
-            LobbyPlayerBoardViewData playerBoard = boardCollectionData.boards[i];
-
-            if (playerBoard == null || string.IsNullOrWhiteSpace(playerBoard.userId))
-            {
-                continue;
-            }
-
-            boardsByUserId[playerBoard.userId] = new LobbyBoardData(playerBoard.boardData);
-        }
-
+        ApplyBoardValues(boardCollectionData);
         return true;
+    }
+
+    public LobbyStateApplyResult ApplyNetworkBoardCollection(LobbyBoardCollectionData boardCollectionData)
+    {
+        if (boardCollectionData == null || string.IsNullOrWhiteSpace(boardCollectionData.lobbyId))
+        {
+            return LobbyStateApplyResult.Invalid;
+        }
+
+        LobbyStateApplyResult revisionResult = ValidateRevision(boardCollectionData.lobbyId, boardCollectionData.revision);
+
+        if (revisionResult != LobbyStateApplyResult.Applied)
+        {
+            return revisionResult;
+        }
+
+        ApplyBoardValues(boardCollectionData);
+        return LobbyStateApplyResult.Applied;
     }
 
     public bool ApplyBoardUpdate(LobbyPlayerBoardUpdateData updateData)
@@ -131,6 +285,24 @@ public class LobbyClientState
         return true;
     }
 
+    public LobbyStateApplyResult ApplyNetworkBoardUpdate(LobbyPlayerBoardUpdateData updateData)
+    {
+        if (updateData == null || string.IsNullOrWhiteSpace(updateData.userId))
+        {
+            return LobbyStateApplyResult.Invalid;
+        }
+
+        LobbyStateApplyResult revisionResult = ValidateRevision(updateData.lobbyId, updateData.revision);
+
+        if (revisionResult != LobbyStateApplyResult.Applied)
+        {
+            return revisionResult;
+        }
+
+        boardsByUserId[updateData.userId] = new LobbyBoardData(updateData.boardData);
+        return LobbyStateApplyResult.Applied;
+    }
+
     public LobbyBoardData GetPlayerBoard(string userId)
     {
         if (string.IsNullOrWhiteSpace(userId) || !boardsByUserId.TryGetValue(userId, out LobbyBoardData boardData))
@@ -141,6 +313,71 @@ public class LobbyClientState
         return boardData;
     }
 
+    private void ApplyBoardValues(LobbyBoardCollectionData boardCollectionData)
+    {
+        if (boardCollectionData?.boards == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < boardCollectionData.boards.Count; i++)
+        {
+            LobbyPlayerBoardViewData playerBoard = boardCollectionData.boards[i];
+
+            if (playerBoard == null || string.IsNullOrWhiteSpace(playerBoard.userId))
+            {
+                continue;
+            }
+
+            boardsByUserId[playerBoard.userId] = new LobbyBoardData(playerBoard.boardData);
+        }
+    }
+
+    #endregion
+
+    #region Revision
+
+    private LobbyStateApplyResult ValidateRevision(string incomingLobbyId, long incomingRevision)
+    {
+        if (!IsCurrentLobby(incomingLobbyId) || incomingRevision < 1)
+        {
+            return LobbyStateApplyResult.Invalid;
+        }
+
+        if (incomingRevision <= revision)
+        {
+            return LobbyStateApplyResult.Ignored;
+        }
+
+        if (incomingRevision != revision + 1)
+        {
+            return LobbyStateApplyResult.RequiresResync;
+        }
+
+        revision = incomingRevision;
+        return LobbyStateApplyResult.Applied;
+    }
+
+    private int FindPlayerIndex(string userId)
+    {
+        if (!HasLobby || string.IsNullOrWhiteSpace(userId) || viewData.players == null)
+        {
+            return -1;
+        }
+
+        for (int i = 0; i < viewData.players.Count; i++)
+        {
+            LobbyPlayerViewData playerData = viewData.players[i];
+
+            if (playerData != null && string.Equals(playerData.userId, userId, StringComparison.Ordinal))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
     #endregion
 
     #region Clear
@@ -149,6 +386,7 @@ public class LobbyClientState
     {
         lobbyId = string.Empty;
         viewData = null;
+        revision = 0;
         boardsByUserId.Clear();
     }
 

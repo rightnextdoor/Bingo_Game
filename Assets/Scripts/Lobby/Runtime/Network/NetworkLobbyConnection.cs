@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Text;
 using System.Threading.Tasks;
 using Unity.Netcode;
 using UnityEngine;
@@ -23,6 +22,12 @@ public class NetworkLobbyConnection : NetworkBehaviour
     public static event Action<LobbyViewData> LocalLobbyViewReceived;
     public static event Action<LobbyPlayerBoardUpdateData> LocalPlayerBoardUpdateReceived;
     public static event Action<LobbyBoardCollectionData> LocalPlayerBoardCollectionReceived;
+    public static event Action<LobbyPlayerJoinedData> LocalPlayerJoinedReceived;
+    public static event Action<LobbyPlayerLeftData> LocalPlayerLeftReceived;
+    public static event Action<LobbyPlayerReadyChangedData> LocalPlayerReadyChangedReceived;
+    public static event Action<LobbySettingsChangedData> LocalLobbySettingsChangedReceived;
+    public static event Action<LobbyStateChangedData> LocalLobbyStateChangedReceived;
+    public static event Action<LobbySyncSnapshotData> LocalLobbySyncSnapshotReceived;
 
     #endregion
 
@@ -36,6 +41,12 @@ public class NetworkLobbyConnection : NetworkBehaviour
         LocalLobbyViewReceived = null;
         LocalPlayerBoardUpdateReceived = null;
         LocalPlayerBoardCollectionReceived = null;
+        LocalPlayerJoinedReceived = null;
+        LocalPlayerLeftReceived = null;
+        LocalPlayerReadyChangedReceived = null;
+        LocalLobbySettingsChangedReceived = null;
+        LocalLobbyStateChangedReceived = null;
+        LocalLobbySyncSnapshotReceived = null;
     }
 
     public override void OnNetworkSpawn()
@@ -216,6 +227,14 @@ public class NetworkLobbyConnection : NetworkBehaviour
         }
     }
 
+    public void RequestLobbyResync()
+    {
+        if (IsSpawned && IsOwner)
+        {
+            RequestLobbyResyncRpc();
+        }
+    }
+
     #endregion
 
     #region Authority Request RPCs
@@ -250,6 +269,7 @@ public class NetworkLobbyConnection : NetworkBehaviour
         }
 
         string resultJson = JsonUtility.ToJson(result);
+
 
         ReceiveLobbyEntryResultRpc(requestId, resultJson, RpcTarget.Single(senderClientId, RpcTargetUse.Temp));
     }
@@ -335,6 +355,12 @@ public class NetworkLobbyConnection : NetworkBehaviour
         NetworkLobbyManager.instance?.ProcessAuthorityRerollBoard(rpcParams.Receive.SenderClientId);
     }
 
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Owner)]
+    private void RequestLobbyResyncRpc(RpcParams rpcParams = default)
+    {
+        NetworkLobbyManager.instance?.ProcessAuthorityLobbyResync(rpcParams.Receive.SenderClientId);
+    }
+
     #endregion
 
     #region Authority Sends
@@ -384,6 +410,72 @@ public class NetworkLobbyConnection : NetworkBehaviour
 
         string boardCollectionJson = JsonUtility.ToJson(boardCollectionData);
         connection.ReceivePlayerBoardCollectionRpc(boardCollectionJson, connection.RpcTarget.Single(clientId, RpcTargetUse.Temp));
+        return true;
+    }
+
+    public static bool TrySendPlayerJoined(ulong clientId, LobbyPlayerJoinedData data)
+    {
+        if (data == null || !TryGetServerConnection(clientId, out NetworkLobbyConnection connection))
+        {
+            return false;
+        }
+
+        connection.ReceivePlayerJoinedRpc(JsonUtility.ToJson(data), connection.RpcTarget.Single(clientId, RpcTargetUse.Temp));
+        return true;
+    }
+
+    public static bool TrySendPlayerLeft(ulong clientId, LobbyPlayerLeftData data)
+    {
+        if (data == null || !TryGetServerConnection(clientId, out NetworkLobbyConnection connection))
+        {
+            return false;
+        }
+
+        connection.ReceivePlayerLeftRpc(JsonUtility.ToJson(data), connection.RpcTarget.Single(clientId, RpcTargetUse.Temp));
+        return true;
+    }
+
+    public static bool TrySendPlayerReadyChanged(ulong clientId, LobbyPlayerReadyChangedData data)
+    {
+        if (data == null || !TryGetServerConnection(clientId, out NetworkLobbyConnection connection))
+        {
+            return false;
+        }
+
+        connection.ReceivePlayerReadyChangedRpc(JsonUtility.ToJson(data), connection.RpcTarget.Single(clientId, RpcTargetUse.Temp));
+        return true;
+    }
+
+    public static bool TrySendLobbySettingsChanged(ulong clientId, LobbySettingsChangedData data)
+    {
+        if (data == null || !TryGetServerConnection(clientId, out NetworkLobbyConnection connection))
+        {
+            return false;
+        }
+
+        connection.ReceiveLobbySettingsChangedRpc(JsonUtility.ToJson(data), connection.RpcTarget.Single(clientId, RpcTargetUse.Temp));
+        return true;
+    }
+
+    public static bool TrySendLobbyStateChanged(ulong clientId, LobbyStateChangedData data)
+    {
+        if (data == null || !TryGetServerConnection(clientId, out NetworkLobbyConnection connection))
+        {
+            return false;
+        }
+
+        connection.ReceiveLobbyStateChangedRpc(JsonUtility.ToJson(data), connection.RpcTarget.Single(clientId, RpcTargetUse.Temp));
+        return true;
+    }
+
+    public static bool TrySendLobbySyncSnapshot(ulong clientId, LobbySyncSnapshotData snapshotData)
+    {
+        if (snapshotData == null || !TryGetServerConnection(clientId, out NetworkLobbyConnection connection))
+        {
+            return false;
+        }
+
+        connection.ReceiveLobbySyncSnapshotRpc(JsonUtility.ToJson(snapshotData), connection.RpcTarget.Single(clientId, RpcTargetUse.Temp));
         return true;
     }
 
@@ -525,6 +617,90 @@ public class NetworkLobbyConnection : NetworkBehaviour
         if (boardCollectionData != null)
         {
             LocalPlayerBoardCollectionReceived?.Invoke(boardCollectionData);
+        }
+    }
+
+    [Rpc(SendTo.SpecifiedInParams)]
+    private void ReceivePlayerJoinedRpc(string dataJson, RpcParams rpcParams = default)
+    {
+        LobbyPlayerJoinedData data = ReadJson<LobbyPlayerJoinedData>(dataJson);
+
+        if (data != null)
+        {
+            LocalPlayerJoinedReceived?.Invoke(data);
+        }
+    }
+
+    [Rpc(SendTo.SpecifiedInParams)]
+    private void ReceivePlayerLeftRpc(string dataJson, RpcParams rpcParams = default)
+    {
+        LobbyPlayerLeftData data = ReadJson<LobbyPlayerLeftData>(dataJson);
+
+        if (data != null)
+        {
+            LocalPlayerLeftReceived?.Invoke(data);
+        }
+    }
+
+    [Rpc(SendTo.SpecifiedInParams)]
+    private void ReceivePlayerReadyChangedRpc(string dataJson, RpcParams rpcParams = default)
+    {
+        LobbyPlayerReadyChangedData data = ReadJson<LobbyPlayerReadyChangedData>(dataJson);
+
+        if (data != null)
+        {
+            LocalPlayerReadyChangedReceived?.Invoke(data);
+        }
+    }
+
+    [Rpc(SendTo.SpecifiedInParams)]
+    private void ReceiveLobbySettingsChangedRpc(string dataJson, RpcParams rpcParams = default)
+    {
+        LobbySettingsChangedData data = ReadJson<LobbySettingsChangedData>(dataJson);
+
+        if (data != null)
+        {
+            LocalLobbySettingsChangedReceived?.Invoke(data);
+        }
+    }
+
+    [Rpc(SendTo.SpecifiedInParams)]
+    private void ReceiveLobbyStateChangedRpc(string dataJson, RpcParams rpcParams = default)
+    {
+        LobbyStateChangedData data = ReadJson<LobbyStateChangedData>(dataJson);
+
+        if (data != null)
+        {
+            LocalLobbyStateChangedReceived?.Invoke(data);
+        }
+    }
+
+    [Rpc(SendTo.SpecifiedInParams)]
+    private void ReceiveLobbySyncSnapshotRpc(string dataJson, RpcParams rpcParams = default)
+    {
+        LobbySyncSnapshotData data = ReadJson<LobbySyncSnapshotData>(dataJson);
+
+        if (data != null)
+        {
+            LocalLobbySyncSnapshotReceived?.Invoke(data);
+        }
+    }
+
+    private T ReadJson<T>(string json) where T : class
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonUtility.FromJson<T>(json);
+        }
+        catch (Exception exception)
+        {
+            Debug.LogException(exception);
+            return null;
         }
     }
 

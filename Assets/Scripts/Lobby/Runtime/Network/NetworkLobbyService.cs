@@ -243,6 +243,11 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
         return lobbyConnection != null && await lobbyConnection.RequestApplyHostSettingsAsync(settingsData);
     }
 
+    public void RequestLobbyResync()
+    {
+        NetworkLobbyConnection.GetLocalConnection()?.RequestLobbyResync();
+    }
+
     #endregion
 
     #region Network Connection

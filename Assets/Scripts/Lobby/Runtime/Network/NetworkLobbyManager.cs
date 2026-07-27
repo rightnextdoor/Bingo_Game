@@ -14,6 +14,7 @@ public class NetworkLobbyManager : MonoBehaviour
     private readonly List<Lobby> lobbies = new List<Lobby>();
     private readonly Dictionary<string, string> relayJoinCodeByLobbyId = new Dictionary<string, string>();
     private readonly Dictionary<string, Coroutine> lobbyRuntimeRoutines = new Dictionary<string, Coroutine>();
+    private readonly Dictionary<string, long> lobbyRevisions = new Dictionary<string, long>();
 
     private bool isReady;
     private bool isSubscribedToConnectionRegistry;
@@ -210,12 +211,16 @@ public class NetworkLobbyManager : MonoBehaviour
             return;
         }
 
-        if (!lobby.Controller.SetLobbySceneReady(userId, true))
+        LobbyPlayerData playerData = lobby.Controller.GetPlayer(userId);
+        bool wasSceneReady = playerData != null && playerData.isLobbySceneReady;
+
+        if (!lobby.Controller.SetLobbySceneReady(userId, true) || wasSceneReady)
         {
             return;
         }
 
-        BroadcastLobbyView(lobby);
+        BroadcastPlayerJoined(lobby, userId, userId);
+        SendLobbySyncSnapshot(lobby, clientId);
         BroadcastPlayerBoardUpdate(lobby, userId);
     }
 
@@ -251,7 +256,7 @@ public class NetworkLobbyManager : MonoBehaviour
             return;
         }
 
-        BroadcastLobbyView(lobby);
+        BroadcastPlayerLeft(lobby, exitResult.userId);
     }
 
     private void CloseAndDeleteLobby(Lobby lobby, LobbyCloseReason closeReason)
@@ -299,6 +304,7 @@ public class NetworkLobbyManager : MonoBehaviour
 
         StopLobbyRuntime(lobby);
         relayJoinCodeByLobbyId.Remove(lobby.GetLobbyId());
+        lobbyRevisions.Remove(lobby.GetLobbyId());
         lobbies.Remove(lobby);
     }
 
@@ -743,8 +749,6 @@ public class NetworkLobbyManager : MonoBehaviour
             return LobbyEntryResult.Failed(LobbyEntryFailureType.LobbyJoinFailed, "The player could not be added to the lobby.");
         }
 
-        BroadcastLobbyView(lobby);
-
         return BuildNetworkEntryResult(lobby);
     }
 
@@ -757,13 +761,15 @@ public class NetworkLobbyManager : MonoBehaviour
 
         LobbyViewData lobbyViewData = lobby.Controller.BuildViewData();
         LobbyBoardCollectionData lobbyBoardData = lobby.Controller.BuildPlayerBoardCollectionData();
+        long revision = GetLobbyRevision(lobby);
 
         if (lobbyViewData == null || lobbyBoardData == null)
         {
             return LobbyEntryResult.Failed(LobbyEntryFailureType.LobbyJoinFailed, "The lobby state could not be created.");
         }
 
-        return LobbyEntryResult.Succeeded(lobby.GetLobbyId(), lobbyViewData, lobbyBoardData);
+        lobbyBoardData.revision = revision;
+        return LobbyEntryResult.Succeeded(lobby.GetLobbyId(), revision, lobbyViewData, lobbyBoardData);
     }
 
     private Lobby CreateLobby(LobbySetupData lobbySetupData)
@@ -780,6 +786,7 @@ public class NetworkLobbyManager : MonoBehaviour
         lobby.Controller.SetBotUserProvider(GetNetworkBotUsers);
 
         lobbies.Add(lobby);
+        lobbyRevisions[lobby.GetLobbyId()] = 0;
         StartLobbyRuntime(lobby);
 
         return lobby;
@@ -828,14 +835,36 @@ public class NetworkLobbyManager : MonoBehaviour
         return NetworkBotManager.instance.CreateBotCandidateCopies();
     }
 
-    private void BroadcastLobbyView(Lobby lobby)
+    private long GetLobbyRevision(Lobby lobby)
     {
-        if (lobby?.Controller == null || networkBootstrap == null || !networkBootstrap.IsAuthority || connectionRegistry == null)
+        if (lobby == null || !lobbyRevisions.TryGetValue(lobby.GetLobbyId(), out long revision))
+        {
+            return 0;
+        }
+
+        return revision;
+    }
+
+    private long GetNextLobbyRevision(Lobby lobby)
+    {
+        if (lobby == null)
+        {
+            return 0;
+        }
+
+        string lobbyId = lobby.GetLobbyId();
+        long nextRevision = GetLobbyRevision(lobby) + 1;
+        lobbyRevisions[lobbyId] = nextRevision;
+        return nextRevision;
+    }
+
+    private void SendToLobbyPlayers(Lobby lobby, System.Action<ulong> sendAction, string excludedUserId = null)
+    {
+        if (lobby?.Controller == null || connectionRegistry == null || !connectionRegistry.IsReady || sendAction == null)
         {
             return;
         }
 
-        LobbyViewData lobbyViewData = lobby.Controller.BuildViewData();
         IReadOnlyList<LobbyPlayerData> players = lobby.Controller.Players;
 
         for (int i = 0; i < players.Count; i++)
@@ -843,12 +872,215 @@ public class NetworkLobbyManager : MonoBehaviour
             LobbyPlayerData playerData = players[i];
             string userId = playerData?.userData?.userId;
 
-            if (string.IsNullOrWhiteSpace(userId) || !connectionRegistry.TryGetClientId(userId, out ulong clientId))
+            if (playerData == null || !playerData.isLobbySceneReady || string.IsNullOrWhiteSpace(userId) ||
+                (!string.IsNullOrWhiteSpace(excludedUserId) && userId == excludedUserId) ||
+                !connectionRegistry.TryGetClientId(userId, out ulong clientId))
             {
                 continue;
             }
 
-            NetworkLobbyConnection.TrySendLobbyView(clientId, lobbyViewData);
+            sendAction(clientId);
+        }
+    }
+
+    private void BroadcastPlayerJoined(Lobby lobby, string userId, string excludedUserId = null)
+    {
+        if (lobby?.Controller == null || string.IsNullOrWhiteSpace(userId))
+        {
+            return;
+        }
+
+        LobbyPlayerData playerData = lobby.Controller.GetPlayer(userId);
+        LobbyViewData viewData = lobby.Controller.BuildViewData();
+
+        if (playerData == null || !playerData.isLobbySceneReady || viewData == null)
+        {
+            return;
+        }
+
+        long revision = GetNextLobbyRevision(lobby);
+        LobbyPlayerJoinedData data = new LobbyPlayerJoinedData(lobby.GetLobbyId(), revision, new LobbyPlayerViewData(playerData), viewData.playerCount, viewData.botCount);
+        SendToLobbyPlayers(lobby, clientId => NetworkLobbyConnection.TrySendPlayerJoined(clientId, data), excludedUserId);
+    }
+
+    private void BroadcastPlayerLeft(Lobby lobby, string userId)
+    {
+        if (lobby?.Controller == null || string.IsNullOrWhiteSpace(userId))
+        {
+            return;
+        }
+
+        LobbyViewData viewData = lobby.Controller.BuildViewData();
+
+        if (viewData == null)
+        {
+            return;
+        }
+
+        long revision = GetNextLobbyRevision(lobby);
+        LobbyPlayerLeftData data = new LobbyPlayerLeftData(lobby.GetLobbyId(), revision, userId, viewData.playerCount, viewData.botCount);
+        SendToLobbyPlayers(lobby, clientId => NetworkLobbyConnection.TrySendPlayerLeft(clientId, data));
+    }
+
+    private void BroadcastPlayerReadyChanged(Lobby lobby, string userId, bool isReady)
+    {
+        if (lobby == null || string.IsNullOrWhiteSpace(userId))
+        {
+            return;
+        }
+
+        long revision = GetNextLobbyRevision(lobby);
+        LobbyPlayerReadyChangedData data = new LobbyPlayerReadyChangedData(lobby.GetLobbyId(), revision, userId, isReady);
+        SendToLobbyPlayers(lobby, clientId => NetworkLobbyConnection.TrySendPlayerReadyChanged(clientId, data));
+    }
+
+    private void BroadcastLobbySettingsChanged(Lobby lobby, LobbyViewData viewData = null)
+    {
+        if (lobby?.Controller == null)
+        {
+            return;
+        }
+
+        viewData ??= lobby.Controller.BuildViewData();
+
+        if (viewData == null)
+        {
+            return;
+        }
+
+        long revision = GetNextLobbyRevision(lobby);
+        LobbySettingsChangedData data = new LobbySettingsChangedData(lobby.GetLobbyId(), revision, viewData);
+        SendToLobbyPlayers(lobby, clientId => NetworkLobbyConnection.TrySendLobbySettingsChanged(clientId, data));
+    }
+
+    private void BroadcastLobbyStateChanged(Lobby lobby)
+    {
+        if (lobby?.Controller == null)
+        {
+            return;
+        }
+
+        LobbyViewData viewData = lobby.Controller.BuildViewData();
+
+        if (viewData == null)
+        {
+            return;
+        }
+
+        long revision = GetNextLobbyRevision(lobby);
+        LobbyStateChangedData data = new LobbyStateChangedData(lobby.GetLobbyId(), revision, viewData);
+        SendToLobbyPlayers(lobby, clientId => NetworkLobbyConnection.TrySendLobbyStateChanged(clientId, data));
+    }
+
+    private bool HasLobbyStateChanged(Lobby lobby, LobbyController controller, LobbyState previousState, bool previousTimerActive, double previousTimerEndTime)
+    {
+        return lobby != null && controller != null &&
+               (lobby.lobbyState != previousState || controller.IsTimerActive != previousTimerActive || controller.TimerEndTime != previousTimerEndTime);
+    }
+
+    private List<string> GetAddedVisibleUserIds(LobbyViewData previousViewData, LobbyViewData currentViewData)
+    {
+        HashSet<string> previousUserIds = BuildVisibleUserIdSet(previousViewData);
+        List<string> addedUserIds = new List<string>();
+
+        if (currentViewData?.players == null)
+        {
+            return addedUserIds;
+        }
+
+        for (int i = 0; i < currentViewData.players.Count; i++)
+        {
+            string userId = currentViewData.players[i]?.userId;
+
+            if (!string.IsNullOrWhiteSpace(userId) && !previousUserIds.Contains(userId))
+            {
+                addedUserIds.Add(userId);
+            }
+        }
+
+        return addedUserIds;
+    }
+
+    private List<string> GetRemovedVisibleUserIds(LobbyViewData previousViewData, LobbyViewData currentViewData)
+    {
+        HashSet<string> currentUserIds = BuildVisibleUserIdSet(currentViewData);
+        List<string> removedUserIds = new List<string>();
+
+        if (previousViewData?.players == null)
+        {
+            return removedUserIds;
+        }
+
+        for (int i = 0; i < previousViewData.players.Count; i++)
+        {
+            string userId = previousViewData.players[i]?.userId;
+
+            if (!string.IsNullOrWhiteSpace(userId) && !currentUserIds.Contains(userId))
+            {
+                removedUserIds.Add(userId);
+            }
+        }
+
+        return removedUserIds;
+    }
+
+    private HashSet<string> BuildVisibleUserIdSet(LobbyViewData viewData)
+    {
+        HashSet<string> userIds = new HashSet<string>();
+
+        if (viewData?.players == null)
+        {
+            return userIds;
+        }
+
+        for (int i = 0; i < viewData.players.Count; i++)
+        {
+            string userId = viewData.players[i]?.userId;
+
+            if (!string.IsNullOrWhiteSpace(userId))
+            {
+                userIds.Add(userId);
+            }
+        }
+
+        return userIds;
+    }
+
+    private void BroadcastJoinedPlayers(Lobby lobby, IReadOnlyList<string> userIds, LobbyViewData currentViewData)
+    {
+        if (lobby?.Controller == null || userIds == null || currentViewData == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < userIds.Count; i++)
+        {
+            string userId = userIds[i];
+            LobbyPlayerData playerData = lobby.Controller.GetPlayer(userId);
+
+            if (playerData == null)
+            {
+                continue;
+            }
+
+            long revision = GetNextLobbyRevision(lobby);
+            LobbyPlayerJoinedData data = new LobbyPlayerJoinedData(lobby.GetLobbyId(), revision, new LobbyPlayerViewData(playerData), currentViewData.playerCount, currentViewData.botCount);
+            SendToLobbyPlayers(lobby, clientId => NetworkLobbyConnection.TrySendPlayerJoined(clientId, data));
+        }
+    }
+
+    private void BroadcastRemovedPlayers(Lobby lobby, IReadOnlyList<string> userIds, LobbyViewData currentViewData)
+    {
+        if (lobby == null || userIds == null || currentViewData == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < userIds.Count; i++)
+        {
+            long revision = GetNextLobbyRevision(lobby);
+            LobbyPlayerLeftData data = new LobbyPlayerLeftData(lobby.GetLobbyId(), revision, userIds[i], currentViewData.playerCount, currentViewData.botCount);
+            SendToLobbyPlayers(lobby, clientId => NetworkLobbyConnection.TrySendPlayerLeft(clientId, data));
         }
     }
 
@@ -919,6 +1151,44 @@ public class NetworkLobbyManager : MonoBehaviour
         BroadcastPlayerBoardUpdate(lobby, userId);
     }
 
+    public void ProcessAuthorityLobbyResync(ulong clientId)
+    {
+        if (!TryGetConnectedUserId(clientId, out string userId))
+        {
+            return;
+        }
+
+        Lobby lobby = FindUserLobby(userId);
+
+        if (lobby?.Controller == null)
+        {
+            return;
+        }
+
+        SendLobbySyncSnapshot(lobby, clientId);
+    }
+
+    private void SendLobbySyncSnapshot(Lobby lobby, ulong clientId)
+    {
+        if (lobby?.Controller == null)
+        {
+            return;
+        }
+
+        long revision = GetLobbyRevision(lobby);
+        LobbyViewData lobbyViewData = lobby.Controller.BuildViewData();
+        LobbyBoardCollectionData lobbyBoardData = lobby.Controller.BuildPlayerBoardCollectionData();
+
+        if (lobbyViewData == null || lobbyBoardData == null)
+        {
+            return;
+        }
+
+        lobbyBoardData.revision = revision;
+        LobbySyncSnapshotData snapshotData = new LobbySyncSnapshotData(lobby.GetLobbyId(), revision, lobbyViewData, lobbyBoardData);
+        NetworkLobbyConnection.TrySendLobbySyncSnapshot(clientId, snapshotData);
+    }
+
     private void BroadcastPlayerBoardUpdate(Lobby lobby, string userId)
     {
         if (lobby?.Controller == null || connectionRegistry == null || !connectionRegistry.IsReady)
@@ -926,72 +1196,67 @@ public class NetworkLobbyManager : MonoBehaviour
             return;
         }
 
-        LobbyPlayerBoardViewData playerBoard =
-            lobby.Controller.GetPlayerBoardViewData(userId);
+        LobbyPlayerBoardViewData playerBoard = lobby.Controller.GetPlayerBoardViewData(userId);
 
         if (playerBoard == null)
         {
             return;
         }
 
-        LobbyPlayerBoardUpdateData updateData =
-            new LobbyPlayerBoardUpdateData(lobby.GetLobbyId(), userId, playerBoard.boardData);
-
-        IReadOnlyList<LobbyPlayerData> players = lobby.Controller.Players;
-
-        for (int i = 0; i < players.Count; i++)
-        {
-            string targetUserId = players[i]?.userData?.userId;
-
-            if (string.IsNullOrWhiteSpace(targetUserId) || !connectionRegistry.TryGetClientId(targetUserId, out ulong clientId))
-            {
-                continue;
-            }
-
-            NetworkLobbyConnection.TrySendPlayerBoardUpdate(clientId, updateData);
-        }
+        long revision = GetNextLobbyRevision(lobby);
+        LobbyPlayerBoardUpdateData updateData = new LobbyPlayerBoardUpdateData(lobby.GetLobbyId(), revision, userId, playerBoard.boardData);
+        SendToLobbyPlayers(lobby, clientId => NetworkLobbyConnection.TrySendPlayerBoardUpdate(clientId, updateData));
     }
 
-    private void BroadcastPlayerBoardCollection(Lobby lobby)
+    private void BroadcastPlayerBoardCollection(Lobby lobby, IReadOnlyCollection<string> userIds)
     {
         if (lobby?.Controller == null || connectionRegistry == null || !connectionRegistry.IsReady)
         {
             return;
         }
 
-        LobbyBoardCollectionData fullCollection = lobby.Controller.BuildPlayerBoardCollectionData();
+        List<LobbyPlayerBoardViewData> selectedBoards = new List<LobbyPlayerBoardViewData>();
 
-        if (fullCollection?.boards == null || fullCollection.boards.Count == 0)
+        if (userIds == null)
+        {
+            LobbyBoardCollectionData fullCollection = lobby.Controller.BuildPlayerBoardCollectionData();
+
+            if (fullCollection?.boards != null)
+            {
+                selectedBoards.AddRange(fullCollection.boards);
+            }
+        }
+        else
+        {
+            foreach (string userId in userIds)
+            {
+                LobbyPlayerBoardViewData playerBoard = lobby.Controller.GetPlayerBoardViewData(userId);
+
+                if (playerBoard != null)
+                {
+                    selectedBoards.Add(playerBoard);
+                }
+            }
+        }
+
+        if (selectedBoards.Count == 0)
         {
             return;
         }
 
-        IReadOnlyList<LobbyPlayerData> players = lobby.Controller.Players;
-
-        for (int startIndex = 0; startIndex < fullCollection.boards.Count; startIndex += BoardCollectionBatchSize)
+        for (int startIndex = 0; startIndex < selectedBoards.Count; startIndex += BoardCollectionBatchSize)
         {
-            int batchCount = Mathf.Min(BoardCollectionBatchSize, fullCollection.boards.Count - startIndex);
+            int batchCount = Mathf.Min(BoardCollectionBatchSize, selectedBoards.Count - startIndex);
             List<LobbyPlayerBoardViewData> batchBoards = new List<LobbyPlayerBoardViewData>(batchCount);
 
             for (int i = 0; i < batchCount; i++)
             {
-                batchBoards.Add(fullCollection.boards[startIndex + i]);
+                batchBoards.Add(selectedBoards[startIndex + i]);
             }
 
-            LobbyBoardCollectionData batchData = new LobbyBoardCollectionData(lobby.GetLobbyId(), batchBoards);
-            string batchJson = JsonUtility.ToJson(batchData);
-
-            for (int i = 0; i < players.Count; i++)
-            {
-                string targetUserId = players[i]?.userData?.userId;
-
-                if (string.IsNullOrWhiteSpace(targetUserId) || !connectionRegistry.TryGetClientId(targetUserId, out ulong clientId))
-                {
-                    continue;
-                }
-
-                NetworkLobbyConnection.TrySendPlayerBoardCollection(clientId, batchData);
-            }
+            long revision = GetNextLobbyRevision(lobby);
+            LobbyBoardCollectionData batchData = new LobbyBoardCollectionData(lobby.GetLobbyId(), revision, batchBoards);
+            SendToLobbyPlayers(lobby, clientId => NetworkLobbyConnection.TrySendPlayerBoardCollection(clientId, batchData));
         }
     }
 
@@ -1033,29 +1298,31 @@ public class NetworkLobbyManager : MonoBehaviour
                 break;
             }
 
-            bool stateChanged = false;
-            int playerCountBeforeUpdate = controller.PlayerCount;
-
-            if (lobby.playMode == MainMenuPlayMode.Online && lobby.lobbyState == LobbyState.Open && controller.TryBeginOnlineFinalCountdown())
+            if (lobby.playMode == MainMenuPlayMode.Online && lobby.lobbyState == LobbyState.Open)
             {
-                stateChanged = true;
-            }
+                LobbyViewData previousViewData = controller.BuildViewData();
 
-            bool playerCollectionChanged = controller.PlayerCount != playerCountBeforeUpdate;
+                if (controller.TryBeginOnlineFinalCountdown())
+                {
+                    LobbyViewData currentViewData = controller.BuildViewData();
+                    List<string> addedUserIds = GetAddedVisibleUserIds(previousViewData, currentViewData);
+                    List<string> removedUserIds = GetRemovedVisibleUserIds(previousViewData, currentViewData);
+
+                    BroadcastRemovedPlayers(lobby, removedUserIds, currentViewData);
+                    BroadcastJoinedPlayers(lobby, addedUserIds, currentViewData);
+
+                    if (addedUserIds.Count > 0)
+                    {
+                        BroadcastPlayerBoardCollection(lobby, addedUserIds);
+                    }
+
+                    BroadcastLobbyStateChanged(lobby);
+                }
+            }
 
             if (lobby.lobbyState == LobbyState.FinalCountdown && controller.CompleteFinalCountdown())
             {
-                stateChanged = true;
-            }
-
-            if (stateChanged)
-            {
-                BroadcastLobbyView(lobby);
-
-                if (playerCollectionChanged)
-                {
-                    BroadcastPlayerBoardCollection(lobby);
-                }
+                BroadcastLobbyStateChanged(lobby);
             }
 
             if (lobby.lobbyState == LobbyState.InGame)
@@ -1226,12 +1493,27 @@ public class NetworkLobbyManager : MonoBehaviour
             return;
         }
 
-        if (!lobby.Controller.SetPlayerReady(userId, isReady))
+        LobbyController controller = lobby.Controller;
+        LobbyPlayerData playerData = controller.GetPlayer(userId);
+        bool previousReady = playerData != null && playerData.isReady;
+        LobbyState previousState = lobby.lobbyState;
+        bool previousTimerActive = controller.IsTimerActive;
+        double previousTimerEndTime = controller.TimerEndTime;
+
+        if (!controller.SetPlayerReady(userId, isReady))
         {
             return;
         }
 
-        BroadcastLobbyView(lobby);
+        if (playerData != null && playerData.isReady != previousReady)
+        {
+            BroadcastPlayerReadyChanged(lobby, userId, playerData.isReady);
+        }
+
+        if (HasLobbyStateChanged(lobby, controller, previousState, previousTimerActive, previousTimerEndTime))
+        {
+            BroadcastLobbyStateChanged(lobby);
+        }
     }
 
 
@@ -1251,22 +1533,31 @@ public class NetworkLobbyManager : MonoBehaviour
         }
 
         LobbyController controller = lobby.Controller;
+        LobbyViewData previousViewData = controller.BuildViewData();
         BingoBallCountType previousBallCountType = controller.BallCountType;
         bool previousUseFreeCell = controller.UseFreeCell;
-        int previousPlayerCount = controller.PlayerCount;
 
         if (!controller.ApplyHostSettings(userId, settingsData))
         {
             return false;
         }
 
-        bool boardCollectionChanged = previousBallCountType != controller.BallCountType || previousUseFreeCell != controller.UseFreeCell || controller.PlayerCount > previousPlayerCount;
+        LobbyViewData currentViewData = controller.BuildViewData();
+        List<string> addedUserIds = GetAddedVisibleUserIds(previousViewData, currentViewData);
+        List<string> removedUserIds = GetRemovedVisibleUserIds(previousViewData, currentViewData);
+        bool boardGenerationChanged = previousBallCountType != controller.BallCountType || previousUseFreeCell != controller.UseFreeCell;
 
-        BroadcastLobbyView(lobby);
+        BroadcastLobbySettingsChanged(lobby, currentViewData);
+        BroadcastRemovedPlayers(lobby, removedUserIds, currentViewData);
+        BroadcastJoinedPlayers(lobby, addedUserIds, currentViewData);
 
-        if (boardCollectionChanged)
+        if (boardGenerationChanged)
         {
-            BroadcastPlayerBoardCollection(lobby);
+            BroadcastPlayerBoardCollection(lobby, null);
+        }
+        else if (addedUserIds.Count > 0)
+        {
+            BroadcastPlayerBoardCollection(lobby, addedUserIds);
         }
 
         return true;
@@ -1305,7 +1596,7 @@ public class NetworkLobbyManager : MonoBehaviour
 
         if (controller.BeginFinalCountdown(userId))
         {
-            BroadcastLobbyView(lobby);
+            BroadcastLobbyStateChanged(lobby);
         }
     }
 

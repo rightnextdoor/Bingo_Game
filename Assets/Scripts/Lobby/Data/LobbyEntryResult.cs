@@ -9,6 +9,7 @@ public class LobbyEntryResult
     public LobbyEntryFailureType failureType;
     public string failureMessage;
     public string lobbyId;
+    public long revision;
     public LobbyViewData lobbyViewData;
     public LobbyBoardCollectionData lobbyBoardData;
 
@@ -24,6 +25,7 @@ public class LobbyEntryResult
         failureType = LobbyEntryFailureType.Unknown;
         failureMessage = string.Empty;
         lobbyId = string.Empty;
+        revision = 0;
         lobbyViewData = null;
         lobbyBoardData = null;
         localLobby = null;
@@ -54,6 +56,7 @@ public class LobbyEntryResult
             failureType = LobbyEntryFailureType.None,
             failureMessage = string.Empty,
             lobbyId = lobby.GetLobbyId(),
+            revision = 0,
             lobbyViewData = lobbyViewData,
             lobbyBoardData = lobbyBoardData,
             localLobby = lobby
@@ -61,6 +64,11 @@ public class LobbyEntryResult
     }
 
     public static LobbyEntryResult Succeeded(string lobbyId, LobbyViewData lobbyViewData, LobbyBoardCollectionData lobbyBoardData)
+    {
+        return Succeeded(lobbyId, 0, lobbyViewData, lobbyBoardData);
+    }
+
+    public static LobbyEntryResult Succeeded(string lobbyId, long revision, LobbyViewData lobbyViewData, LobbyBoardCollectionData lobbyBoardData)
     {
         if (string.IsNullOrWhiteSpace(lobbyId) || lobbyViewData == null || lobbyBoardData == null)
         {
@@ -73,6 +81,7 @@ public class LobbyEntryResult
             failureType = LobbyEntryFailureType.None,
             failureMessage = string.Empty,
             lobbyId = lobbyId,
+            revision = revision,
             lobbyViewData = lobbyViewData,
             lobbyBoardData = lobbyBoardData,
             localLobby = null
@@ -87,6 +96,7 @@ public class LobbyEntryResult
             failureType = failureType,
             failureMessage = string.IsNullOrWhiteSpace(failureMessage) ? "The lobby could not be entered." : failureMessage,
             lobbyId = string.Empty,
+            revision = 0,
             lobbyViewData = null,
             lobbyBoardData = null,
             localLobby = null

@@ -32,6 +32,7 @@ public class LobbyManager : MonoBehaviour
 
     private bool isEnteringLobby;
     private bool isLeavingLobby;
+    private bool isLobbyResyncPending;
 
     private NetworkBootstrap networkBootstrap;
     private bool isSubscribedToNetworkBootstrap;
@@ -230,7 +231,7 @@ public class LobbyManager : MonoBehaviour
             currentLobby = null;
         }
 
-        if (!lobbyClientState.SetSnapshot(result.lobbyId, result.lobbyViewData) || !lobbyClientState.SetBoardSnapshot(result.lobbyBoardData))
+        if (!lobbyClientState.SetSnapshot(result.lobbyId, result.lobbyViewData, result.revision) || !lobbyClientState.SetBoardSnapshot(result.lobbyBoardData))
         {
             currentLobby = null;
             CompleteLobbyEntryFailure(LobbyEntryResult.Failed(LobbyEntryFailureType.LobbyJoinFailed, "The returned lobby state could not be applied."));
@@ -478,28 +479,31 @@ public class LobbyManager : MonoBehaviour
 
     private void OnLocalPlayerBoardUpdateReceived(LobbyPlayerBoardUpdateData updateData)
     {
-        if (updateData == null || lobbyClientState.ViewData == null || !lobbyClientState.IsCurrentLobby(updateData.lobbyId))
+        if (updateData == null || lobbyClientState.ViewData == null || !lobbyClientState.IsCurrentLobby(updateData.lobbyId) || isLobbyResyncPending)
         {
             return;
         }
 
-        ApplyPlayerBoardUpdateToCurrentView(updateData);
-        LobbyPlayerBoardUpdated?.Invoke(updateData);
-    }
+        LobbyStateApplyResult applyResult = lobbyClientState.ApplyNetworkBoardUpdate(updateData);
 
-    private void ApplyPlayerBoardUpdateToCurrentView(LobbyPlayerBoardUpdateData updateData)
-    {
-        lobbyClientState.ApplyBoardUpdate(updateData);
+        if (!HandleNetworkApplyResult(applyResult))
+        {
+            return;
+        }
+
+        LobbyPlayerBoardUpdated?.Invoke(updateData);
     }
 
     private void OnLocalPlayerBoardCollectionReceived(LobbyBoardCollectionData boardCollectionData)
     {
-        if (boardCollectionData == null || !lobbyClientState.IsCurrentLobby(boardCollectionData.lobbyId) || !lobbyClientState.ApplyBoardCollection(boardCollectionData))
+        if (boardCollectionData == null || !lobbyClientState.IsCurrentLobby(boardCollectionData.lobbyId) || isLobbyResyncPending)
         {
             return;
         }
 
-        if (boardCollectionData.boards == null)
+        LobbyStateApplyResult applyResult = lobbyClientState.ApplyNetworkBoardCollection(boardCollectionData);
+
+        if (!HandleNetworkApplyResult(applyResult) || boardCollectionData.boards == null)
         {
             return;
         }
@@ -515,6 +519,124 @@ public class LobbyManager : MonoBehaviour
 
             LobbyPlayerBoardUpdated?.Invoke(new LobbyPlayerBoardUpdateData(boardCollectionData.lobbyId, playerBoard.userId, playerBoard.boardData));
         }
+    }
+
+    private void OnLocalPlayerJoinedReceived(LobbyPlayerJoinedData data)
+    {
+        if (data == null || isLobbyResyncPending)
+        {
+            return;
+        }
+
+        if (HandleNetworkApplyResult(lobbyClientState.ApplyPlayerJoined(data)))
+        {
+            PublishCurrentLobbyView();
+        }
+    }
+
+    private void OnLocalPlayerLeftReceived(LobbyPlayerLeftData data)
+    {
+        if (data == null || isLobbyResyncPending)
+        {
+            return;
+        }
+
+        if (HandleNetworkApplyResult(lobbyClientState.ApplyPlayerLeft(data)))
+        {
+            PublishCurrentLobbyView();
+        }
+    }
+
+    private void OnLocalPlayerReadyChangedReceived(LobbyPlayerReadyChangedData data)
+    {
+        if (data == null || isLobbyResyncPending)
+        {
+            return;
+        }
+
+        if (HandleNetworkApplyResult(lobbyClientState.ApplyPlayerReadyChanged(data)))
+        {
+            PublishCurrentLobbyView();
+        }
+    }
+
+    private void OnLocalLobbySettingsChangedReceived(LobbySettingsChangedData data)
+    {
+        if (data == null || isLobbyResyncPending)
+        {
+            return;
+        }
+
+        if (HandleNetworkApplyResult(lobbyClientState.ApplySettingsChanged(data)))
+        {
+            PublishCurrentLobbyView();
+        }
+    }
+
+    private void OnLocalLobbyStateChangedReceived(LobbyStateChangedData data)
+    {
+        if (data == null || isLobbyResyncPending)
+        {
+            return;
+        }
+
+        if (HandleNetworkApplyResult(lobbyClientState.ApplyStateChanged(data)))
+        {
+            PublishCurrentLobbyView();
+        }
+    }
+
+    private void OnLocalLobbySyncSnapshotReceived(LobbySyncSnapshotData snapshotData)
+    {
+        if (snapshotData == null || string.IsNullOrWhiteSpace(snapshotData.lobbyId) || !lobbyClientState.IsCurrentLobby(snapshotData.lobbyId) || snapshotData.revision < lobbyClientState.Revision)
+        {
+            return;
+        }
+
+        if (!lobbyClientState.SetSnapshot(snapshotData.lobbyId, snapshotData.lobbyViewData, snapshotData.revision) ||
+            !lobbyClientState.SetBoardSnapshot(snapshotData.lobbyBoardData))
+        {
+            return;
+        }
+
+        isLobbyResyncPending = false;
+        PublishCurrentLobbyView();
+    }
+
+    private bool HandleNetworkApplyResult(LobbyStateApplyResult applyResult)
+    {
+        switch (applyResult)
+        {
+            case LobbyStateApplyResult.Applied:
+                return true;
+
+            case LobbyStateApplyResult.RequiresResync:
+                RequestLobbyResync();
+                return false;
+
+            case LobbyStateApplyResult.Ignored:
+            case LobbyStateApplyResult.Invalid:
+            default:
+                return false;
+        }
+    }
+
+    private void RequestLobbyResync()
+    {
+        if (runtimeType != SessionRuntimeType.Network || !lobbyClientState.HasLobby || isLobbyResyncPending)
+        {
+            return;
+        }
+
+        NetworkLobbyService lobbyService = NetworkLobbyService.instance;
+
+        if (lobbyService == null)
+        {
+            return;
+        }
+
+        isLobbyResyncPending = true;
+        lobbyService.RequestLobbyResync();
     }
 
     private void OnNetworkConnectionStateChanged(NetworkConnectionState connectionState)
@@ -560,6 +682,7 @@ public class LobbyManager : MonoBehaviour
         currentLobby = null;
         lobbyClientState.Clear();
         pendingNetworkLobbyViewData = null;
+        isLobbyResyncPending = false;
         currentUserId = string.Empty;
         activeLobbyService = null;
         lastEntryResult = null;
@@ -673,6 +796,18 @@ public class LobbyManager : MonoBehaviour
         NetworkLobbyConnection.LocalPlayerBoardUpdateReceived += OnLocalPlayerBoardUpdateReceived;
         NetworkLobbyConnection.LocalPlayerBoardCollectionReceived -= OnLocalPlayerBoardCollectionReceived;
         NetworkLobbyConnection.LocalPlayerBoardCollectionReceived += OnLocalPlayerBoardCollectionReceived;
+        NetworkLobbyConnection.LocalPlayerJoinedReceived -= OnLocalPlayerJoinedReceived;
+        NetworkLobbyConnection.LocalPlayerJoinedReceived += OnLocalPlayerJoinedReceived;
+        NetworkLobbyConnection.LocalPlayerLeftReceived -= OnLocalPlayerLeftReceived;
+        NetworkLobbyConnection.LocalPlayerLeftReceived += OnLocalPlayerLeftReceived;
+        NetworkLobbyConnection.LocalPlayerReadyChangedReceived -= OnLocalPlayerReadyChangedReceived;
+        NetworkLobbyConnection.LocalPlayerReadyChangedReceived += OnLocalPlayerReadyChangedReceived;
+        NetworkLobbyConnection.LocalLobbySettingsChangedReceived -= OnLocalLobbySettingsChangedReceived;
+        NetworkLobbyConnection.LocalLobbySettingsChangedReceived += OnLocalLobbySettingsChangedReceived;
+        NetworkLobbyConnection.LocalLobbyStateChangedReceived -= OnLocalLobbyStateChangedReceived;
+        NetworkLobbyConnection.LocalLobbyStateChangedReceived += OnLocalLobbyStateChangedReceived;
+        NetworkLobbyConnection.LocalLobbySyncSnapshotReceived -= OnLocalLobbySyncSnapshotReceived;
+        NetworkLobbyConnection.LocalLobbySyncSnapshotReceived += OnLocalLobbySyncSnapshotReceived;
 
         if (isSubscribedToNetworkBootstrap)
         {
@@ -702,6 +837,12 @@ public class LobbyManager : MonoBehaviour
         NetworkLobbyConnection.LocalLobbyViewReceived -= OnLocalLobbyViewReceived;
         NetworkLobbyConnection.LocalPlayerBoardUpdateReceived -= OnLocalPlayerBoardUpdateReceived;
         NetworkLobbyConnection.LocalPlayerBoardCollectionReceived -= OnLocalPlayerBoardCollectionReceived;
+        NetworkLobbyConnection.LocalPlayerJoinedReceived -= OnLocalPlayerJoinedReceived;
+        NetworkLobbyConnection.LocalPlayerLeftReceived -= OnLocalPlayerLeftReceived;
+        NetworkLobbyConnection.LocalPlayerReadyChangedReceived -= OnLocalPlayerReadyChangedReceived;
+        NetworkLobbyConnection.LocalLobbySettingsChangedReceived -= OnLocalLobbySettingsChangedReceived;
+        NetworkLobbyConnection.LocalLobbyStateChangedReceived -= OnLocalLobbyStateChangedReceived;
+        NetworkLobbyConnection.LocalLobbySyncSnapshotReceived -= OnLocalLobbySyncSnapshotReceived;
 
         if (isSubscribedToNetworkBootstrap && networkBootstrap != null)
         {
@@ -769,6 +910,7 @@ public class LobbyManager : MonoBehaviour
         currentLobby = null;
         lobbyClientState.Clear();
         pendingNetworkLobbyViewData = null;
+        isLobbyResyncPending = false;
 
         lastEntryResult =
             result ??

@@ -61,6 +61,6 @@ public class LobbyHostSettingsData
         maxPlayers = lobbyViewData.maxPlayers;
 
         addBots = lobbyViewData.addBots;
-        botCount = lobbyViewData.botCount;
+        botCount = addBots ? 1 : 0;
     }
 }

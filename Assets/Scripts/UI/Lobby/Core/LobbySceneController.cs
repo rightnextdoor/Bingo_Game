@@ -298,9 +298,6 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
         {
             if (lobbyController != null)
             {
-                lobbyController.PlayerBoardChanged -= OnLocalPlayerBoardChanged;
-                lobbyController.PlayerBoardChanged += OnLocalPlayerBoardChanged;
-
                 lobbyController.FinalCountdownStarted -= OnLocalFinalCountdownStarted;
                 lobbyController.FinalCountdownStarted += OnLocalFinalCountdownStarted;
 
@@ -319,9 +316,6 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
             return;
         }
 
-        lobbyController.PlayerBoardChanged -= OnLocalPlayerBoardChanged;
-        lobbyController.PlayerBoardChanged += OnLocalPlayerBoardChanged;
-
         lobbyController.FinalCountdownStarted -= OnLocalFinalCountdownStarted;
         lobbyController.FinalCountdownStarted += OnLocalFinalCountdownStarted;
 
@@ -335,7 +329,6 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
             return;
         }
 
-        lobbyController.PlayerBoardChanged -= OnLocalPlayerBoardChanged;
         lobbyController.FinalCountdownStarted -= OnLocalFinalCountdownStarted;
         lobbyController.UnbindView(this);
 
@@ -347,19 +340,6 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
         NotificationService.instance?.SendLocal(UIMessageType.GameAboutToStart);
     }
 
-    private void OnLocalPlayerBoardChanged(
-    LobbyController controller,
-    LobbyPlayerBoardViewData playerBoard)
-    {
-        if (playerBoard == null)
-        {
-            return;
-        }
-
-        ApplyPlayerBoardUpdate(
-            playerBoard.userId,
-            playerBoard.boardData);
-    }
 
     private void StartLobby()
     {
@@ -450,24 +430,12 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
     {
         LobbyManager lobbyManager = LobbyManager.instance;
 
-        if (lobbyManager == null ||
-            string.IsNullOrWhiteSpace(lobbyManager.CurrentUserId) ||
-            lobbyViewData?.playerBoards == null)
+        if (lobbyManager == null || string.IsNullOrWhiteSpace(lobbyManager.CurrentUserId))
         {
             return null;
         }
 
-        for (int i = 0; i < lobbyViewData.playerBoards.Count; i++)
-        {
-            LobbyPlayerBoardViewData playerBoard = lobbyViewData.playerBoards[i];
-
-            if (playerBoard != null && playerBoard.userId == lobbyManager.CurrentUserId)
-            {
-                return playerBoard.boardData;
-            }
-        }
-
-        return null;
+        return lobbyManager.GetPlayerBoard(lobbyManager.CurrentUserId);
     }
 
     private void SubscribeToBoardSection()

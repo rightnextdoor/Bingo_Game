@@ -4,6 +4,8 @@ using System.Collections.Generic;
 [Serializable]
 public class LobbyViewData
 {
+    #region Fields
+
     public SessionRuntimeType runtimeType;
 
     public string lobbyId;
@@ -35,12 +37,13 @@ public class LobbyViewData
     public bool unlimitedPlayers;
 
     public List<LobbyPlayerViewData> players;
-    public List<LobbyPlayerBoardViewData> playerBoards;
 
     public bool addBots;
     public int botCount;
 
-    public List<string> playerNames;
+    #endregion
+
+    #region Constructors
 
     public LobbyViewData()
     {
@@ -71,17 +74,14 @@ public class LobbyViewData
         useFreeCell = true;
 
         playerCount = 0;
-        maxPlayers = LobbySettings.instance != null
-            ? LobbySettings.instance.MinimumPlayers
-            : 6;
+        maxPlayers = LobbySettings.instance != null ? LobbySettings.instance.MinimumPlayers : 6;
         unlimitedPlayers = false;
 
         players = new List<LobbyPlayerViewData>();
-        playerBoards = new List<LobbyPlayerBoardViewData>();
 
         addBots = false;
         botCount = 0;
-
-        playerNames = new List<string>();
     }
+
+    #endregion
 }

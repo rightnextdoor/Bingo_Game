@@ -3,6 +3,8 @@ using System;
 [Serializable]
 public class LobbyPlayerViewData
 {
+    #region Fields
+
     public string userId;
     public UserTag userTag;
     public string playerName;
@@ -11,7 +13,9 @@ public class LobbyPlayerViewData
     public bool isHost;
     public bool isReady;
 
-    public LobbyBoardData boardData;
+    #endregion
+
+    #region Constructors
 
     public LobbyPlayerViewData()
     {
@@ -19,11 +23,8 @@ public class LobbyPlayerViewData
         userTag = UserTag.Player;
         playerName = string.Empty;
         iconId = string.Empty;
-
         isHost = false;
         isReady = false;
-
-        boardData = new LobbyBoardData();
     }
 
     public LobbyPlayerViewData(LobbyPlayerData playerData) : this()
@@ -37,10 +38,9 @@ public class LobbyPlayerViewData
         userTag = playerData.userData.userTag;
         playerName = playerData.userData.playerName ?? string.Empty;
         iconId = playerData.userData.iconId ?? string.Empty;
-
         isHost = playerData.isHost;
         isReady = playerData.isReady;
-
-        boardData = new LobbyBoardData(playerData.boardData);
     }
+
+    #endregion
 }

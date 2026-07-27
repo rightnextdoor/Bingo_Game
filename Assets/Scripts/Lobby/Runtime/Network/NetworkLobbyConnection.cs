@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using System.Threading.Tasks;
 using Unity.Netcode;
 using UnityEngine;
@@ -21,6 +22,7 @@ public class NetworkLobbyConnection : NetworkBehaviour
     public static event Action<LobbyExitNotification> LocalLobbyExitReceived;
     public static event Action<LobbyViewData> LocalLobbyViewReceived;
     public static event Action<LobbyPlayerBoardUpdateData> LocalPlayerBoardUpdateReceived;
+    public static event Action<LobbyBoardCollectionData> LocalPlayerBoardCollectionReceived;
 
     #endregion
 
@@ -33,6 +35,7 @@ public class NetworkLobbyConnection : NetworkBehaviour
         LocalLobbyExitReceived = null;
         LocalLobbyViewReceived = null;
         LocalPlayerBoardUpdateReceived = null;
+        LocalPlayerBoardCollectionReceived = null;
     }
 
     public override void OnNetworkSpawn()
@@ -247,6 +250,7 @@ public class NetworkLobbyConnection : NetworkBehaviour
         }
 
         string resultJson = JsonUtility.ToJson(result);
+
         ReceiveLobbyEntryResultRpc(requestId, resultJson, RpcTarget.Single(senderClientId, RpcTargetUse.Temp));
     }
 
@@ -371,6 +375,18 @@ public class NetworkLobbyConnection : NetworkBehaviour
         return true;
     }
 
+    public static bool TrySendPlayerBoardCollection(ulong clientId, LobbyBoardCollectionData boardCollectionData)
+    {
+        if (boardCollectionData == null || !TryGetServerConnection(clientId, out NetworkLobbyConnection connection))
+        {
+            return false;
+        }
+
+        string boardCollectionJson = JsonUtility.ToJson(boardCollectionData);
+        connection.ReceivePlayerBoardCollectionRpc(boardCollectionJson, connection.RpcTarget.Single(clientId, RpcTargetUse.Temp));
+        return true;
+    }
+
     #endregion
 
     #region Client Receive RPCs
@@ -489,6 +505,26 @@ public class NetworkLobbyConnection : NetworkBehaviour
         if (updateData != null)
         {
             LocalPlayerBoardUpdateReceived?.Invoke(updateData);
+        }
+    }
+
+    [Rpc(SendTo.SpecifiedInParams)]
+    private void ReceivePlayerBoardCollectionRpc(string boardCollectionJson, RpcParams rpcParams = default)
+    {
+        LobbyBoardCollectionData boardCollectionData = null;
+
+        try
+        {
+            boardCollectionData = JsonUtility.FromJson<LobbyBoardCollectionData>(boardCollectionJson);
+        }
+        catch (Exception exception)
+        {
+            Debug.LogException(exception);
+        }
+
+        if (boardCollectionData != null)
+        {
+            LocalPlayerBoardCollectionReceived?.Invoke(boardCollectionData);
         }
     }
 

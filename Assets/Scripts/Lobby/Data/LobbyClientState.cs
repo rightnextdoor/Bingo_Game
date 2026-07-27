@@ -1,8 +1,11 @@
 using System;
+using System.Collections.Generic;
 
 public class LobbyClientState
 {
     #region Fields
+
+    private readonly Dictionary<string, LobbyBoardData> boardsByUserId = new Dictionary<string, LobbyBoardData>(StringComparer.Ordinal);
 
     private string lobbyId = string.Empty;
     private LobbyViewData viewData;
@@ -13,7 +16,7 @@ public class LobbyClientState
 
     #endregion
 
-    #region State
+    #region Lobby State
 
     public bool SetSnapshot(string expectedLobbyId, LobbyViewData lobbyViewData)
     {
@@ -65,10 +68,88 @@ public class LobbyClientState
         return false;
     }
 
+    #endregion
+
+    #region Board State
+
+    public bool SetBoardSnapshot(LobbyBoardCollectionData boardCollectionData)
+    {
+        if (boardCollectionData == null || string.IsNullOrWhiteSpace(boardCollectionData.lobbyId))
+        {
+            return false;
+        }
+
+        if (HasLobby && !IsCurrentLobby(boardCollectionData.lobbyId))
+        {
+            return false;
+        }
+
+        boardsByUserId.Clear();
+        return ApplyBoardCollection(boardCollectionData);
+    }
+
+    public bool ApplyBoardCollection(LobbyBoardCollectionData boardCollectionData)
+    {
+        if (boardCollectionData == null || string.IsNullOrWhiteSpace(boardCollectionData.lobbyId))
+        {
+            return false;
+        }
+
+        if (HasLobby && !IsCurrentLobby(boardCollectionData.lobbyId))
+        {
+            return false;
+        }
+
+        if (boardCollectionData.boards == null)
+        {
+            return true;
+        }
+
+        for (int i = 0; i < boardCollectionData.boards.Count; i++)
+        {
+            LobbyPlayerBoardViewData playerBoard = boardCollectionData.boards[i];
+
+            if (playerBoard == null || string.IsNullOrWhiteSpace(playerBoard.userId))
+            {
+                continue;
+            }
+
+            boardsByUserId[playerBoard.userId] = new LobbyBoardData(playerBoard.boardData);
+        }
+
+        return true;
+    }
+
+    public bool ApplyBoardUpdate(LobbyPlayerBoardUpdateData updateData)
+    {
+        if (updateData == null || string.IsNullOrWhiteSpace(updateData.userId) || !IsCurrentLobby(updateData.lobbyId))
+        {
+            return false;
+        }
+
+        boardsByUserId[updateData.userId] = new LobbyBoardData(updateData.boardData);
+        return true;
+    }
+
+    public LobbyBoardData GetPlayerBoard(string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId) || !boardsByUserId.TryGetValue(userId, out LobbyBoardData boardData))
+        {
+            return null;
+        }
+
+        return boardData;
+    }
+
+    #endregion
+
+    #region Clear
+
     public void Clear()
     {
         lobbyId = string.Empty;
         viewData = null;
+        boardsByUserId.Clear();
     }
 
     #endregion

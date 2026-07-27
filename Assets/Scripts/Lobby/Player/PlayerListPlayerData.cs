@@ -4,6 +4,8 @@ using System.Collections.Generic;
 [Serializable]
 public class PlayerListPlayerData
 {
+    #region Fields
+
     public string userId;
     public UserTag userTag;
     public string playerName;
@@ -19,19 +21,20 @@ public class PlayerListPlayerData
     public bool showBotIcon;
     public bool showReadyIcon;
 
+    #endregion
+
+    #region Constructors
+
     public PlayerListPlayerData()
     {
         userId = string.Empty;
         userTag = UserTag.Player;
         playerName = string.Empty;
         iconId = string.Empty;
-
         isHost = false;
         isReady = false;
-
         boardData = new LobbyBoardData();
         markedCellIndices = new List<int>();
-
         canKick = false;
         showBotIcon = false;
         showReadyIcon = false;
@@ -48,10 +51,9 @@ public class PlayerListPlayerData
         userTag = playerData.userTag;
         playerName = playerData.playerName ?? string.Empty;
         iconId = playerData.iconId ?? string.Empty;
-
         isHost = playerData.isHost;
         isReady = playerData.isReady;
-
-        boardData = new LobbyBoardData(playerData.boardData);
     }
+
+    #endregion
 }

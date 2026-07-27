@@ -10,6 +10,7 @@ public class LobbyEntryResult
     public string failureMessage;
     public string lobbyId;
     public LobbyViewData lobbyViewData;
+    public LobbyBoardCollectionData lobbyBoardData;
 
     [NonSerialized] public Lobby localLobby;
 
@@ -24,6 +25,7 @@ public class LobbyEntryResult
         failureMessage = string.Empty;
         lobbyId = string.Empty;
         lobbyViewData = null;
+        lobbyBoardData = null;
         localLobby = null;
     }
 
@@ -39,10 +41,11 @@ public class LobbyEntryResult
         }
 
         LobbyViewData lobbyViewData = lobby.Controller.BuildViewData();
+        LobbyBoardCollectionData lobbyBoardData = lobby.Controller.BuildPlayerBoardCollectionData();
 
-        if (lobbyViewData == null)
+        if (lobbyViewData == null || lobbyBoardData == null)
         {
-            return Failed(LobbyEntryFailureType.LobbyJoinFailed, "The lobby view was not available.");
+            return Failed(LobbyEntryFailureType.LobbyJoinFailed, "The lobby state was not available.");
         }
 
         return new LobbyEntryResult
@@ -52,13 +55,14 @@ public class LobbyEntryResult
             failureMessage = string.Empty,
             lobbyId = lobby.GetLobbyId(),
             lobbyViewData = lobbyViewData,
+            lobbyBoardData = lobbyBoardData,
             localLobby = lobby
         };
     }
 
-    public static LobbyEntryResult Succeeded(string lobbyId, LobbyViewData lobbyViewData)
+    public static LobbyEntryResult Succeeded(string lobbyId, LobbyViewData lobbyViewData, LobbyBoardCollectionData lobbyBoardData)
     {
-        if (string.IsNullOrWhiteSpace(lobbyId) || lobbyViewData == null)
+        if (string.IsNullOrWhiteSpace(lobbyId) || lobbyViewData == null || lobbyBoardData == null)
         {
             return Failed(LobbyEntryFailureType.LobbyJoinFailed, "The lobby data was not available.");
         }
@@ -70,6 +74,7 @@ public class LobbyEntryResult
             failureMessage = string.Empty,
             lobbyId = lobbyId,
             lobbyViewData = lobbyViewData,
+            lobbyBoardData = lobbyBoardData,
             localLobby = null
         };
     }
@@ -83,6 +88,7 @@ public class LobbyEntryResult
             failureMessage = string.IsNullOrWhiteSpace(failureMessage) ? "The lobby could not be entered." : failureMessage,
             lobbyId = string.Empty,
             lobbyViewData = null,
+            lobbyBoardData = null,
             localLobby = null
         };
     }

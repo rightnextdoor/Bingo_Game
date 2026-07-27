@@ -352,6 +352,8 @@ public class LobbyController
 
         players.Add(playerData);
 
+        NotifyPlayerBoardChanged(playerData);
+
         if (refreshViews)
         {
             RefreshViews();
@@ -579,11 +581,7 @@ public class LobbyController
 
         GeneratePlayerBoard(playerData);
 
-        PlayerBoardChanged?.Invoke(
-            this,
-            new LobbyPlayerBoardViewData(
-                userId,
-                playerData.boardData));
+        NotifyPlayerBoardChanged(playerData);
 
         return true;
     }
@@ -600,6 +598,21 @@ public class LobbyController
         return new LobbyPlayerBoardViewData(userId, playerData.boardData);
     }
 
+    public LobbyBoardCollectionData BuildPlayerBoardCollectionData()
+    {
+        return new LobbyBoardCollectionData(lobby != null ? lobby.GetLobbyId() : string.Empty, BuildPlayerBoardViewDataList());
+    }
+
+    private void NotifyPlayerBoardChanged(LobbyPlayerData playerData)
+    {
+        if (playerData?.userData == null || string.IsNullOrWhiteSpace(playerData.userData.userId))
+        {
+            return;
+        }
+
+        PlayerBoardChanged?.Invoke(this, new LobbyPlayerBoardViewData(playerData.userData.userId, playerData.boardData));
+    }
+
     private void GeneratePlayerBoard(LobbyPlayerData playerData)
     {
         if (playerData == null)
@@ -614,7 +627,9 @@ public class LobbyController
     {
         for (int i = 0; i < players.Count; i++)
         {
-            GeneratePlayerBoard(players[i]);
+            LobbyPlayerData playerData = players[i];
+            GeneratePlayerBoard(playerData);
+            NotifyPlayerBoardChanged(playerData);
         }
     }
 
@@ -979,17 +994,10 @@ public class LobbyController
 
     public bool IsPasswordValid(string requestedPassword)
     {
-        if (!HasPassword)
-        {
-            return true;
-        }
-
+        string currentPassword = password ?? string.Empty;
         requestedPassword ??= string.Empty;
 
-        return string.Equals(
-            password,
-            requestedPassword,
-            StringComparison.Ordinal);
+        return string.Equals(currentPassword, requestedPassword, StringComparison.Ordinal);
     }
 
     public bool EnsureCustomRoomCode(Func<string, bool> isRoomCodeAvailable)
@@ -1180,7 +1188,7 @@ public class LobbyController
 
         ResolveGameModeData();
 
-        bool botPlayersChanged = SetBotCountInternal(desiredBotCount);
+        SetBotCountInternal(desiredBotCount);
 
         bool boardGenerationChanged =
             ballCountType != previousBallCountType ||
@@ -1336,11 +1344,9 @@ public class LobbyController
             playerCount = GetVisiblePlayerCount(),
             maxPlayers = maxPlayers,
             unlimitedPlayers = unlimitedPlayers,
-            playerBoards = BuildPlayerBoardViewDataList(),
             players = BuildPlayerViewDataList(),
             addBots = BotCount > 0,
-            botCount = BotCount,
-            playerNames = BuildPlayerNameList()
+            botCount = BotCount
         };
 
         return lobbyViewData;
@@ -1408,25 +1414,6 @@ public class LobbyController
         }
 
         return visiblePlayerCount;
-    }
-
-    private List<string> BuildPlayerNameList()
-    {
-        List<string> playerNames = new List<string>();
-
-        for (int i = 0; i < players.Count; i++)
-        {
-            LobbyPlayerData playerData = players[i];
-
-            if (playerData?.userData == null || !playerData.isLobbySceneReady || string.IsNullOrWhiteSpace(playerData.userData.playerName))
-            {
-                continue;
-            }
-
-            playerNames.Add(playerData.userData.playerName);
-        }
-
-        return playerNames;
     }
 
     private List<LobbyPlayerBoardViewData> BuildPlayerBoardViewDataList()

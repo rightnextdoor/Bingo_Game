@@ -183,6 +183,13 @@ public class LobbyPlayerListController : MonoBehaviour
                 new PlayerListPlayerData(
                     lobbyPlayerData);
 
+            LobbyBoardData boardData = LobbyManager.instance != null ? LobbyManager.instance.GetPlayerBoard(playerData.userId) : null;
+
+            if (boardData != null)
+            {
+                playerData.boardData = new LobbyBoardData(boardData);
+            }
+
             playerData.canKick =
                 localPlayerIsHost &&
                 modeAllowsKick &&

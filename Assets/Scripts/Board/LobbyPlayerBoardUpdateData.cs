@@ -3,9 +3,15 @@ using System;
 [Serializable]
 public class LobbyPlayerBoardUpdateData
 {
+    #region Fields
+
     public string lobbyId;
     public string userId;
     public LobbyBoardData boardData;
+
+    #endregion
+
+    #region Constructors
 
     public LobbyPlayerBoardUpdateData()
     {
@@ -20,4 +26,6 @@ public class LobbyPlayerBoardUpdateData
         this.userId = userId ?? string.Empty;
         this.boardData = new LobbyBoardData(boardData);
     }
+
+    #endregion
 }

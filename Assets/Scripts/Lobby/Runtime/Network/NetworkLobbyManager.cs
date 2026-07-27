@@ -9,6 +9,8 @@ public class NetworkLobbyManager : MonoBehaviour
 
     public static NetworkLobbyManager instance;
 
+    private const int BoardCollectionBatchSize = 10;
+
     private readonly List<Lobby> lobbies = new List<Lobby>();
     private readonly Dictionary<string, string> relayJoinCodeByLobbyId = new Dictionary<string, string>();
     private readonly Dictionary<string, Coroutine> lobbyRuntimeRoutines = new Dictionary<string, Coroutine>();
@@ -214,6 +216,7 @@ public class NetworkLobbyManager : MonoBehaviour
         }
 
         BroadcastLobbyView(lobby);
+        BroadcastPlayerBoardUpdate(lobby, userId);
     }
 
     private LobbyExitResult RemovePlayerFromLobby(string userId, LobbyPlayerExitReason exitReason)
@@ -361,7 +364,7 @@ public class NetworkLobbyManager : MonoBehaviour
 
         LobbyController controller = lobby.Controller;
 
-        if (controller.HasPassword && !controller.IsPasswordValid(searchSetupData?.password))
+        if (!controller.IsPasswordValid(searchSetupData?.password))
         {
             failureResult = LobbyEntryResult.Failed(LobbyEntryFailureType.InvalidPassword, "The Custom lobby password is incorrect.");
 
@@ -442,7 +445,7 @@ public class NetworkLobbyManager : MonoBehaviour
 
         LobbyController controller = lobby.Controller;
 
-        if (controller.HasPassword && !controller.IsPasswordValid(searchSetupData.password))
+        if (!controller.IsPasswordValid(searchSetupData.password))
         {
             return LobbyEntryResult.Failed(LobbyEntryFailureType.InvalidPassword, "The Custom lobby password is incorrect.");
         }
@@ -753,13 +756,14 @@ public class NetworkLobbyManager : MonoBehaviour
         }
 
         LobbyViewData lobbyViewData = lobby.Controller.BuildViewData();
+        LobbyBoardCollectionData lobbyBoardData = lobby.Controller.BuildPlayerBoardCollectionData();
 
-        if (lobbyViewData == null)
+        if (lobbyViewData == null || lobbyBoardData == null)
         {
-            return LobbyEntryResult.Failed(LobbyEntryFailureType.LobbyJoinFailed, "The lobby view could not be created.");
+            return LobbyEntryResult.Failed(LobbyEntryFailureType.LobbyJoinFailed, "The lobby state could not be created.");
         }
 
-        return LobbyEntryResult.Succeeded(lobby.GetLobbyId(), lobbyViewData);
+        return LobbyEntryResult.Succeeded(lobby.GetLobbyId(), lobbyViewData, lobbyBoardData);
     }
 
     private Lobby CreateLobby(LobbySetupData lobbySetupData)
@@ -948,6 +952,50 @@ public class NetworkLobbyManager : MonoBehaviour
         }
     }
 
+    private void BroadcastPlayerBoardCollection(Lobby lobby)
+    {
+        if (lobby?.Controller == null || connectionRegistry == null || !connectionRegistry.IsReady)
+        {
+            return;
+        }
+
+        LobbyBoardCollectionData fullCollection = lobby.Controller.BuildPlayerBoardCollectionData();
+
+        if (fullCollection?.boards == null || fullCollection.boards.Count == 0)
+        {
+            return;
+        }
+
+        IReadOnlyList<LobbyPlayerData> players = lobby.Controller.Players;
+
+        for (int startIndex = 0; startIndex < fullCollection.boards.Count; startIndex += BoardCollectionBatchSize)
+        {
+            int batchCount = Mathf.Min(BoardCollectionBatchSize, fullCollection.boards.Count - startIndex);
+            List<LobbyPlayerBoardViewData> batchBoards = new List<LobbyPlayerBoardViewData>(batchCount);
+
+            for (int i = 0; i < batchCount; i++)
+            {
+                batchBoards.Add(fullCollection.boards[startIndex + i]);
+            }
+
+            LobbyBoardCollectionData batchData = new LobbyBoardCollectionData(lobby.GetLobbyId(), batchBoards);
+            string batchJson = JsonUtility.ToJson(batchData);
+
+            for (int i = 0; i < players.Count; i++)
+            {
+                string targetUserId = players[i]?.userData?.userId;
+
+                if (string.IsNullOrWhiteSpace(targetUserId) || !connectionRegistry.TryGetClientId(targetUserId, out ulong clientId))
+                {
+                    continue;
+                }
+
+                NetworkLobbyConnection.TrySendPlayerBoardCollection(clientId, batchData);
+            }
+        }
+    }
+
+
     #endregion
 
     #region Lobby Runtime
@@ -986,11 +1034,14 @@ public class NetworkLobbyManager : MonoBehaviour
             }
 
             bool stateChanged = false;
+            int playerCountBeforeUpdate = controller.PlayerCount;
 
             if (lobby.playMode == MainMenuPlayMode.Online && lobby.lobbyState == LobbyState.Open && controller.TryBeginOnlineFinalCountdown())
             {
                 stateChanged = true;
             }
+
+            bool playerCollectionChanged = controller.PlayerCount != playerCountBeforeUpdate;
 
             if (lobby.lobbyState == LobbyState.FinalCountdown && controller.CompleteFinalCountdown())
             {
@@ -1000,6 +1051,11 @@ public class NetworkLobbyManager : MonoBehaviour
             if (stateChanged)
             {
                 BroadcastLobbyView(lobby);
+
+                if (playerCollectionChanged)
+                {
+                    BroadcastPlayerBoardCollection(lobby);
+                }
             }
 
             if (lobby.lobbyState == LobbyState.InGame)
@@ -1189,12 +1245,30 @@ public class NetworkLobbyManager : MonoBehaviour
 
         Lobby lobby = FindUserLobby(userId);
 
-        if (lobby?.Controller == null || !lobby.Controller.ApplyHostSettings(userId, settingsData))
+        if (lobby?.Controller == null)
         {
             return false;
         }
 
+        LobbyController controller = lobby.Controller;
+        BingoBallCountType previousBallCountType = controller.BallCountType;
+        bool previousUseFreeCell = controller.UseFreeCell;
+        int previousPlayerCount = controller.PlayerCount;
+
+        if (!controller.ApplyHostSettings(userId, settingsData))
+        {
+            return false;
+        }
+
+        bool boardCollectionChanged = previousBallCountType != controller.BallCountType || previousUseFreeCell != controller.UseFreeCell || controller.PlayerCount > previousPlayerCount;
+
         BroadcastLobbyView(lobby);
+
+        if (boardCollectionChanged)
+        {
+            BroadcastPlayerBoardCollection(lobby);
+        }
+
         return true;
     }
 

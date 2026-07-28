@@ -27,6 +27,7 @@ public class MultiplayerStressSimulation : MonoBehaviour
     [Header("Stress Setup")]
     [SerializeField] private MultiplayerStressLobbyMode lobbyMode = MultiplayerStressLobbyMode.Random;
     [SerializeField, Min(1)] private int lobbyCount = 4;
+    [SerializeField] private bool useMaxLobbySize;
     [SerializeField] private List<MultiplayerStressLobbyPreset> presetLobbies = new List<MultiplayerStressLobbyPreset>();
 
     [Header("Random Lobby Setup")]
@@ -53,9 +54,26 @@ public class MultiplayerStressSimulation : MonoBehaviour
     private double runStartedTime;
     private bool isRunning;
 
+    [SerializeField, HideInInspector] private int inspectorDefaultsVersion;
+
+    private const int CurrentInspectorDefaultsVersion = 1;
+
     #endregion
 
     #region Unity Methods
+
+#if UNITY_EDITOR
+    private void OnValidate()
+    {
+        if (inspectorDefaultsVersion >= CurrentInspectorDefaultsVersion)
+        {
+            return;
+        }
+
+        useMaxLobbySize = false;
+        inspectorDefaultsVersion = CurrentInspectorDefaultsVersion;
+    }
+#endif
 
     private void Update()
     {
@@ -250,7 +268,15 @@ public class MultiplayerStressSimulation : MonoBehaviour
             return false;
         }
 
-        StressFakePlayerJoinRequest joinRequest = BuildJoinRequest(lobby.GetLobbyId(), definition.targetPlayers, definition.playMode == MainMenuPlayMode.Custom);
+        int requestedPlayerCount = GetRequestedJoinPlayerCount(lobby, definition.targetPlayers);
+
+        if (requestedPlayerCount <= 0)
+        {
+            failureReason = $"Lobby {lobby.GetLobbyId()} is already full before its fake-player join wave could start.";
+            return false;
+        }
+
+        StressFakePlayerJoinRequest joinRequest = BuildJoinRequest(lobby.GetLobbyId(), requestedPlayerCount, definition.playMode == MainMenuPlayMode.Custom);
         int operationId = StressFakePlayerManager.instance.StartJoinWave(joinRequest);
 
         if (operationId <= 0)
@@ -262,7 +288,7 @@ public class MultiplayerStressSimulation : MonoBehaviour
         activeLobby = new ActiveStressLobby
         {
             lobbyId = lobby.GetLobbyId(),
-            targetPlayers = definition.targetPlayers,
+            targetPlayers = requestedPlayerCount,
             joinOperationId = operationId
         };
 
@@ -316,8 +342,24 @@ public class MultiplayerStressSimulation : MonoBehaviour
             maximumJoinDelaySeconds = maximumJoinDelaySeconds,
             minimumLoadDelaySeconds = minimumLoadDelaySeconds,
             maximumLoadDelaySeconds = maximumLoadDelaySeconds,
-            firstPlayerIsHost = firstPlayerIsHost
+            firstPlayerIsHost = firstPlayerIsHost,
+            limitToAvailableLobbyCapacity = true
         };
+    }
+
+    private int GetRequestedJoinPlayerCount(Lobby lobby, int fallbackPlayerCount)
+    {
+        if (lobby?.Controller == null)
+        {
+            return 0;
+        }
+
+        if (!useMaxLobbySize)
+        {
+            return Mathf.Max(1, fallbackPlayerCount);
+        }
+
+        return Mathf.Max(0, lobby.Controller.MaxPlayers - lobby.Controller.PlayerCount);
     }
 
     private bool TryBeginCustomCountdown(ActiveStressLobby activeLobby, Lobby lobby, out string failureReason)
@@ -406,12 +448,13 @@ public class MultiplayerStressSimulation : MonoBehaviour
         StringBuilder builder = new StringBuilder();
         builder.AppendLine($"Mode: {lobbyMode}");
         builder.AppendLine($"Requested Lobbies: {definitions.Count}");
+        builder.AppendLine($"Use Max Lobby Size: {useMaxLobbySize}");
 
         if (lobbyMode == MultiplayerStressLobbyMode.Random)
         {
             int minimum = Mathf.Max(1, Mathf.Min(minimumPlayersPerLobby, maximumPlayersPerLobby));
             int maximum = Mathf.Max(minimum, Mathf.Max(minimumPlayersPerLobby, maximumPlayersPerLobby));
-            builder.AppendLine($"Player Range: {minimum} - {maximum}");
+            builder.AppendLine(useMaxLobbySize ? $"Lobby Size Range: {minimum} - {maximum}" : $"Player Range: {minimum} - {maximum}");
             builder.AppendLine($"Online Enabled: {includeOnlineLobbies}");
             builder.Append($"Custom Enabled: {includeCustomLobbies}");
         }

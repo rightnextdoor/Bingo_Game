@@ -11,6 +11,7 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
     [SerializeField] private MultiplayerStressTargetPlayer targetPlayer = MultiplayerStressTargetPlayer.Player1;
 
     [Header("Fake Player Join")]
+    [SerializeField] private bool useMaxLobbySize;
     [SerializeField, Min(1)] private int playersToAdd = 50;
     [SerializeField, Min(1)] private int minimumJoinBatch = 1;
     [SerializeField, Min(1)] private int maximumJoinBatch = 8;
@@ -30,6 +31,7 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
 
     private int joinOperationId;
     private int joinStressRunId;
+    private int activeJoinRequestedPlayers;
     private int rerollStressRunId;
     private string activeJoinLobbyId = string.Empty;
     private string activeRerollLobbyId = string.Empty;
@@ -38,9 +40,26 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
     private int failedRerolls;
     private bool rerollRunning;
 
+    [SerializeField, HideInInspector] private int inspectorDefaultsVersion;
+
+    private const int CurrentInspectorDefaultsVersion = 1;
+
     #endregion
 
     #region Unity Methods
+
+#if UNITY_EDITOR
+    private void OnValidate()
+    {
+        if (inspectorDefaultsVersion >= CurrentInspectorDefaultsVersion)
+        {
+            return;
+        }
+
+        useMaxLobbySize = false;
+        inspectorDefaultsVersion = CurrentInspectorDefaultsVersion;
+    }
+#endif
 
     private void Update()
     {
@@ -108,7 +127,16 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
             return;
         }
 
-        string setupSummary = BuildJoinSetupSummary(lobby);
+        int requestedPlayerCount = GetRequestedJoinPlayerCount(lobby);
+
+        if (requestedPlayerCount <= 0)
+        {
+            addPlayers = false;
+            StressHealthReporter.instance?.ReportTestNotStarted("Current Lobby Fake Player Join", StressSimulationCoordinator.instance?.ActiveRunName, "The target Lobby is already full.");
+            return;
+        }
+
+        string setupSummary = BuildJoinSetupSummary(lobby, requestedPlayerCount);
 
         if (!StressSimulationCoordinator.instance.TryBeginRun("Current Lobby Fake Player Join", setupSummary, out joinStressRunId, out _))
         {
@@ -116,10 +144,12 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
             return;
         }
 
+        activeJoinRequestedPlayers = requestedPlayerCount;
+
         StressFakePlayerJoinRequest request = new StressFakePlayerJoinRequest
         {
             lobbyId = lobby.GetLobbyId(),
-            playerCount = Mathf.Max(1, playersToAdd),
+            playerCount = requestedPlayerCount,
             minimumJoinBatch = minimumJoinBatch,
             maximumJoinBatch = maximumJoinBatch,
             minimumJoinDelaySeconds = minimumJoinDelaySeconds,
@@ -158,13 +188,14 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
         }
         else
         {
-            summary.Append($"Requested: {Mathf.Max(1, playersToAdd)}");
+            summary.Append($"Requested: {Mathf.Max(1, activeJoinRequestedPlayers)}");
         }
 
         StressSimulationCoordinator.instance?.CompleteRun(joinStressRunId, success, summary.ToString(), failureReason);
 
         joinOperationId = 0;
         joinStressRunId = 0;
+        activeJoinRequestedPlayers = 0;
         activeJoinLobbyId = string.Empty;
         addPlayers = false;
     }
@@ -366,14 +397,31 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
 
     #region Helpers
 
-    private string BuildJoinSetupSummary(Lobby lobby)
+    private int GetRequestedJoinPlayerCount(Lobby lobby)
+    {
+        if (lobby?.Controller == null)
+        {
+            return 0;
+        }
+
+        if (!useMaxLobbySize)
+        {
+            return Mathf.Max(1, playersToAdd);
+        }
+
+        return Mathf.Max(0, lobby.Controller.MaxPlayers - lobby.Controller.PlayerCount);
+    }
+
+    private string BuildJoinSetupSummary(Lobby lobby, int requestedPlayerCount)
     {
         StringBuilder builder = new StringBuilder();
         builder.AppendLine($"Target Player: {targetPlayer}");
         builder.AppendLine($"Lobby: {lobby.GetLobbyId()}");
-        builder.AppendLine($"Players To Add: {Mathf.Max(1, playersToAdd)}");
+        builder.AppendLine($"Use Max Lobby Size: {useMaxLobbySize}");
+        builder.AppendLine($"Players To Add: {requestedPlayerCount}");
         builder.AppendLine($"Current Players: {lobby.Controller.PlayerCount}");
         builder.AppendLine(lobby.Controller.UnlimitedPlayers ? "Lobby Capacity: Unlimited" : $"Lobby Capacity: {lobby.Controller.MaxPlayers}");
+
         builder.AppendLine($"Join Batch: {Mathf.Max(1, minimumJoinBatch)} - {Mathf.Max(1, maximumJoinBatch)}");
         builder.AppendLine($"Join Delay: {Mathf.Max(0f, minimumJoinDelaySeconds):F2}s - {Mathf.Max(0f, maximumJoinDelaySeconds):F2}s");
         builder.Append($"Load Delay: {Mathf.Max(0f, minimumLoadDelaySeconds):F2}s - {Mathf.Max(0f, maximumLoadDelaySeconds):F2}s");

@@ -8,6 +8,8 @@ using UnityEngine.UI;
 [DisallowMultipleComponent]
 public class LobbyPlayerListController : MonoBehaviour
 {
+    #region Fields
+
     private const float ArrowKeyInitialRepeatDelay = 0.35f;
     private const float ArrowKeyRepeatRate = 0.08f;
 
@@ -23,9 +25,15 @@ public class LobbyPlayerListController : MonoBehaviour
     [SerializeField] private ContentSizeFitter contentSizeFitter;
     [SerializeField] private ScrollRect scrollRect;
 
-    private readonly List<LobbyPlayerRowUI> spawnedRows = new List<LobbyPlayerRowUI>();
-    private readonly Dictionary<string, LobbyPlayerRowUI> rowsByUserId = new Dictionary<string, LobbyPlayerRowUI>();
+    [Header("Virtualization")]
+    [SerializeField, Min(0f)] private float rowHeightOverride;
+    [SerializeField, Min(0)] private int extraVisibleRows = 2;
 
+    private readonly List<PlayerListPlayerData> players = new List<PlayerListPlayerData>();
+    private readonly Dictionary<string, int> playerIndexByUserId = new Dictionary<string, int>(StringComparer.Ordinal);
+    private readonly Dictionary<string, LobbyPlayerRowUI> visibleRowsByUserId = new Dictionary<string, LobbyPlayerRowUI>(StringComparer.Ordinal);
+
+    private VirtualizedScrollList virtualizedList;
     private string selectedUserId = string.Empty;
 
     private int heldArrowDirection;
@@ -33,7 +41,31 @@ public class LobbyPlayerListController : MonoBehaviour
 
     public event Action<string> KickRequested;
 
+    #endregion
+
+    #region Unity Methods
+
     private void Awake()
+    {
+        ResolveReferences();
+        InitializeVirtualizedList();
+    }
+
+    private void OnDestroy()
+    {
+        UnsubscribeFromVirtualizedList();
+    }
+
+    private void Update()
+    {
+        HandleArrowKeySelection();
+    }
+
+    #endregion
+
+    #region Setup
+
+    private void ResolveReferences()
     {
         if (rowParent == null)
         {
@@ -54,14 +86,55 @@ public class LobbyPlayerListController : MonoBehaviour
         {
             scrollRect = GetComponentInChildren<ScrollRect>();
         }
-
-        ClearRows();
     }
 
-    private void Update()
+    private void InitializeVirtualizedList()
     {
-        HandleArrowKeySelection();
+        if (rowParent is not RectTransform contentRect || rowPrefab == null || scrollRect == null)
+        {
+            return;
+        }
+
+        virtualizedList = GetComponent<VirtualizedScrollList>();
+
+        if (virtualizedList == null)
+        {
+            virtualizedList = gameObject.AddComponent<VirtualizedScrollList>();
+        }
+
+        UnsubscribeFromVirtualizedList();
+
+        if (!virtualizedList.Initialize(
+                scrollRect,
+                contentRect,
+                rowPrefab.gameObject,
+                verticalLayoutGroup,
+                contentSizeFitter,
+                rowHeightOverride,
+                extraVisibleRows))
+        {
+            virtualizedList = null;
+            return;
+        }
+
+        virtualizedList.ItemBound += OnVirtualItemBound;
+        virtualizedList.ItemReleased += OnVirtualItemReleased;
     }
+
+    private void UnsubscribeFromVirtualizedList()
+    {
+        if (virtualizedList == null)
+        {
+            return;
+        }
+
+        virtualizedList.ItemBound -= OnVirtualItemBound;
+        virtualizedList.ItemReleased -= OnVirtualItemReleased;
+    }
+
+    #endregion
+
+    #region Display
 
     public void DisplayLobbyInfo(LobbyViewData lobbyViewData, string localUserId)
     {
@@ -70,195 +143,196 @@ public class LobbyPlayerListController : MonoBehaviour
             return;
         }
 
-        List<PlayerListPlayerData> players = BuildLobbyPlayerListData(lobbyViewData, localUserId);
-
-        DisplayPlayers(players, lobbyViewData.playerCount, lobbyViewData.maxPlayers, lobbyViewData.unlimitedPlayers);
+        BuildLobbyPlayerListData(lobbyViewData, localUserId);
+        DisplayCurrentPlayers(lobbyViewData.playerCount, lobbyViewData.maxPlayers, lobbyViewData.unlimitedPlayers);
     }
 
-    public void DisplayPlayers(IReadOnlyList<PlayerListPlayerData> players, int playerCount)
+    public void DisplayPlayers(IReadOnlyList<PlayerListPlayerData> playerData, int playerCount)
     {
-        DisplayPlayers(players, playerCount, 0, true);
+        DisplayPlayers(playerData, playerCount, 0, true);
     }
 
-    public void DisplayPlayers(
-        IReadOnlyList<PlayerListPlayerData> players,
-        int playerCount,
-        int maxPlayers,
-        bool unlimitedPlayers)
+    public void DisplayPlayers(IReadOnlyList<PlayerListPlayerData> playerData, int playerCount, int maxPlayers, bool unlimitedPlayers)
+    {
+        players.Clear();
+        playerIndexByUserId.Clear();
+
+        if (playerData != null)
+        {
+            for (int i = 0; i < playerData.Count; i++)
+            {
+                PlayerListPlayerData data = playerData[i];
+
+                if (data == null || string.IsNullOrWhiteSpace(data.userId))
+                {
+                    continue;
+                }
+
+                playerIndexByUserId[data.userId] = players.Count;
+                players.Add(data);
+            }
+        }
+
+        DisplayCurrentPlayers(playerCount, maxPlayers, unlimitedPlayers);
+    }
+
+    private void DisplayCurrentPlayers(int playerCount, int maxPlayers, bool unlimitedPlayers)
     {
         UpdatePlayerCount(playerCount, maxPlayers, unlimitedPlayers);
 
-        string previousSelectedUserId = selectedUserId;
-
-        if (rowParent == null || rowPrefab == null || players == null)
+        if (!string.IsNullOrWhiteSpace(selectedUserId) && !playerIndexByUserId.ContainsKey(selectedUserId))
         {
-            ClearRows();
             selectedUserId = string.Empty;
-            return;
         }
 
-        HashSet<string> desiredUserIds = new HashSet<string>();
-
-        for (int i = 0; i < players.Count; i++)
+        if (virtualizedList == null)
         {
-            string userId = players[i]?.userId;
-
-            if (!string.IsNullOrWhiteSpace(userId))
-            {
-                desiredUserIds.Add(userId);
-            }
+            InitializeVirtualizedList();
         }
 
-        List<string> removedUserIds = new List<string>();
-
-        foreach (KeyValuePair<string, LobbyPlayerRowUI> rowEntry in rowsByUserId)
-        {
-            if (!desiredUserIds.Contains(rowEntry.Key))
-            {
-                removedUserIds.Add(rowEntry.Key);
-            }
-        }
-
-        for (int i = 0; i < removedUserIds.Count; i++)
-        {
-            string userId = removedUserIds[i];
-
-            if (!rowsByUserId.TryGetValue(userId, out LobbyPlayerRowUI removedRow))
-            {
-                continue;
-            }
-
-            rowsByUserId.Remove(userId);
-            spawnedRows.Remove(removedRow);
-
-            if (removedRow != null)
-            {
-                DestroyChildObject(removedRow.gameObject);
-            }
-        }
-
-        List<LobbyPlayerRowUI> orderedRows = new List<LobbyPlayerRowUI>();
-
-        for (int i = 0; i < players.Count; i++)
-        {
-            PlayerListPlayerData playerData = players[i];
-
-            if (playerData == null || string.IsNullOrWhiteSpace(playerData.userId))
-            {
-                continue;
-            }
-
-            bool isNewRow = !rowsByUserId.TryGetValue(playerData.userId, out LobbyPlayerRowUI row) || row == null;
-
-            if (isNewRow)
-            {
-                row = Instantiate(rowPrefab, rowParent);
-                row.gameObject.SetActive(true);
-                rowsByUserId[playerData.userId] = row;
-            }
-
-            bool highlighted = !string.IsNullOrWhiteSpace(previousSelectedUserId) && previousSelectedUserId == playerData.userId;
-            row.Setup(playerData, OnRowClicked, OnKickRequested, highlighted, isNewRow);
-            row.transform.SetAsLastSibling();
-            orderedRows.Add(row);
-        }
-
-        spawnedRows.Clear();
-        spawnedRows.AddRange(orderedRows);
-
-        selectedUserId = rowsByUserId.ContainsKey(previousSelectedUserId) ? previousSelectedUserId : string.Empty;
-        SetSelectedUser(selectedUserId);
+        virtualizedList?.SetItemCount(players.Count);
+        RefreshVisibleSelection();
     }
 
-    private List<PlayerListPlayerData> BuildLobbyPlayerListData(LobbyViewData lobbyViewData, string localUserId)
+    private void BuildLobbyPlayerListData(LobbyViewData lobbyViewData, string localUserId)
     {
-        List<PlayerListPlayerData> players = new List<PlayerListPlayerData>();
+        players.Clear();
+        playerIndexByUserId.Clear();
 
         if (lobbyViewData?.players == null)
         {
-            return players;
+            return;
         }
 
-        bool localPlayerIsHost =
-            IsLocalPlayerHost(
-                lobbyViewData.players,
-                localUserId);
-
-        bool modeAllowsKick =
-            lobbyViewData.playMode ==
-                MainMenuPlayMode.Solo ||
-            lobbyViewData.playMode ==
-                MainMenuPlayMode.Custom;
+        bool localPlayerIsHost = IsLocalPlayerHost(lobbyViewData.players, localUserId);
+        bool modeAllowsKick = lobbyViewData.playMode == MainMenuPlayMode.Solo || lobbyViewData.playMode == MainMenuPlayMode.Custom;
 
         for (int i = 0; i < lobbyViewData.players.Count; i++)
         {
-            LobbyPlayerViewData lobbyPlayerData =
-                lobbyViewData.players[i];
+            LobbyPlayerViewData lobbyPlayerData = lobbyViewData.players[i];
 
-            if (lobbyPlayerData == null ||
-                string.IsNullOrWhiteSpace(
-                    lobbyPlayerData.userId))
+            if (lobbyPlayerData == null || string.IsNullOrWhiteSpace(lobbyPlayerData.userId))
             {
                 continue;
             }
 
-            PlayerListPlayerData playerData =
-                new PlayerListPlayerData(
-                    lobbyPlayerData);
-
-            LobbyBoardData boardData = LobbyManager.instance != null ? LobbyManager.instance.GetPlayerBoard(playerData.userId) : null;
-
-            if (boardData != null)
-            {
-                playerData.boardData = new LobbyBoardData(boardData);
-            }
-
-            playerData.canKick =
-                localPlayerIsHost &&
-                modeAllowsKick &&
-                playerData.userId != localUserId &&
-                !playerData.isHost;
-
-            playerData.showBotIcon =
-                localPlayerIsHost &&
-                playerData.userTag == UserTag.Bot;
-
+            PlayerListPlayerData playerData = BuildPlayerData(lobbyPlayerData);
+            playerData.canKick = localPlayerIsHost && modeAllowsKick && playerData.userId != localUserId && !playerData.isHost;
+            playerData.showBotIcon = localPlayerIsHost && playerData.userTag == UserTag.Bot;
             playerData.showReadyIcon = true;
 
+            playerIndexByUserId[playerData.userId] = players.Count;
             players.Add(playerData);
         }
-
-        return players;
     }
+
+    private PlayerListPlayerData BuildPlayerData(LobbyPlayerViewData lobbyPlayerData)
+    {
+        PlayerListPlayerData playerData = new PlayerListPlayerData(lobbyPlayerData);
+        LobbyBoardData latestBoard = LobbyManager.instance != null ? LobbyManager.instance.GetPlayerBoard(playerData.userId) : null;
+
+        if (latestBoard != null)
+        {
+            playerData.boardData = new LobbyBoardData(latestBoard);
+        }
+
+        return playerData;
+    }
+
+    #endregion
+
+    #region Virtualized Rows
+
+    private void OnVirtualItemBound(GameObject itemObject, int playerIndex)
+    {
+        if (itemObject == null || playerIndex < 0 || playerIndex >= players.Count)
+        {
+            return;
+        }
+
+        LobbyPlayerRowUI row = itemObject.GetComponent<LobbyPlayerRowUI>();
+        PlayerListPlayerData playerData = players[playerIndex];
+
+        if (row == null || playerData == null || string.IsNullOrWhiteSpace(playerData.userId))
+        {
+            return;
+        }
+
+        RemoveVisibleRowMapping(row);
+
+        LobbyBoardData latestBoard = LobbyManager.instance != null ? LobbyManager.instance.GetPlayerBoard(playerData.userId) : null;
+
+        if (latestBoard != null)
+        {
+            playerData.boardData = latestBoard;
+        }
+
+        bool highlighted = !string.IsNullOrWhiteSpace(selectedUserId) && selectedUserId == playerData.userId;
+        row.Setup(playerData, OnRowClicked, OnKickRequested, highlighted);
+        visibleRowsByUserId[playerData.userId] = row;
+    }
+
+    private void OnVirtualItemReleased(GameObject itemObject, int _)
+    {
+        if (itemObject == null)
+        {
+            return;
+        }
+
+        LobbyPlayerRowUI row = itemObject.GetComponent<LobbyPlayerRowUI>();
+        RemoveVisibleRowMapping(row);
+    }
+
+    private void RemoveVisibleRowMapping(LobbyPlayerRowUI row)
+    {
+        if (row == null || string.IsNullOrWhiteSpace(row.UserId))
+        {
+            return;
+        }
+
+        if (visibleRowsByUserId.TryGetValue(row.UserId, out LobbyPlayerRowUI mappedRow) && mappedRow == row)
+        {
+            visibleRowsByUserId.Remove(row.UserId);
+        }
+    }
+
+    public void ClearRows()
+    {
+        players.Clear();
+        playerIndexByUserId.Clear();
+        visibleRowsByUserId.Clear();
+        selectedUserId = string.Empty;
+        virtualizedList?.SetItemCount(0);
+    }
+
+    #endregion
+
+    #region Board Updates
 
     public void UpdatePlayerBoard(string userId, LobbyBoardData boardData)
     {
-        if (string.IsNullOrWhiteSpace(userId))
+        if (string.IsNullOrWhiteSpace(userId) || boardData == null)
         {
             return;
         }
 
-        if (!rowsByUserId.TryGetValue(userId, out LobbyPlayerRowUI row) || row == null)
+        if (visibleRowsByUserId.TryGetValue(userId, out LobbyPlayerRowUI row) && row != null)
         {
-            return;
+            row.UpdateBoard(boardData);
         }
-
-        row.UpdateBoard(boardData);
     }
 
     public void UpdatePlayerBoard(string userId, LobbyBoardData boardData, IReadOnlyList<int> markedCellIndices)
     {
-        if (string.IsNullOrWhiteSpace(userId))
+        if (string.IsNullOrWhiteSpace(userId) || boardData == null)
         {
             return;
         }
 
-        if (!rowsByUserId.TryGetValue(userId, out LobbyPlayerRowUI row) || row == null)
+        if (visibleRowsByUserId.TryGetValue(userId, out LobbyPlayerRowUI row) && row != null)
         {
-            return;
+            row.UpdateBoard(boardData, markedCellIndices);
         }
-
-        row.UpdateBoard(boardData, markedCellIndices);
     }
 
     public void UpdatePlayerMarkedCells(string userId, IReadOnlyList<int> markedCellIndices)
@@ -268,12 +342,10 @@ public class LobbyPlayerListController : MonoBehaviour
             return;
         }
 
-        if (!rowsByUserId.TryGetValue(userId, out LobbyPlayerRowUI row) || row == null)
+        if (visibleRowsByUserId.TryGetValue(userId, out LobbyPlayerRowUI row) && row != null)
         {
-            return;
+            row.UpdateMarkedCells(markedCellIndices);
         }
-
-        row.UpdateMarkedCells(markedCellIndices);
     }
 
     public void SetPlayerMarkedCell(string userId, int cellIndex, bool isMarked)
@@ -283,45 +355,19 @@ public class LobbyPlayerListController : MonoBehaviour
             return;
         }
 
-        if (!rowsByUserId.TryGetValue(userId, out LobbyPlayerRowUI row) || row == null)
+        if (visibleRowsByUserId.TryGetValue(userId, out LobbyPlayerRowUI row) && row != null)
         {
-            return;
+            row.SetMarkedCell(cellIndex, isMarked);
         }
-
-        row.SetMarkedCell(cellIndex, isMarked);
     }
 
-    public void ClearRows()
-    {
-        if (rowParent != null)
-        {
-            for (int i = rowParent.childCount - 1; i >= 0; i--)
-            {
-                Transform child = rowParent.GetChild(i);
+    #endregion
 
-                if (rowPrefab != null && child == rowPrefab.transform)
-                {
-                    child.gameObject.SetActive(false);
-                    continue;
-                }
-
-                DestroyChildObject(child.gameObject);
-            }
-        }
-
-        spawnedRows.Clear();
-        rowsByUserId.Clear();
-    }
+    #region Selection
 
     private void OnRowClicked(string userId)
     {
-        if (selectedUserId == userId)
-        {
-            SetSelectedUser(string.Empty);
-            return;
-        }
-
-        SetSelectedUser(userId);
+        SetSelectedUser(selectedUserId == userId ? string.Empty : userId);
     }
 
     private void OnKickRequested(string userId)
@@ -332,53 +378,20 @@ public class LobbyPlayerListController : MonoBehaviour
     private void SetSelectedUser(string userId)
     {
         selectedUserId = userId ?? string.Empty;
-
-        for (int i = 0; i < spawnedRows.Count; i++)
-        {
-            LobbyPlayerRowUI row = spawnedRows[i];
-
-            if (row == null)
-            {
-                continue;
-            }
-
-            row.SetHighlighted(
-                !string.IsNullOrWhiteSpace(selectedUserId) &&
-                row.UserId == selectedUserId);
-        }
+        RefreshVisibleSelection();
     }
 
-    private void UpdatePlayerCount(int playerCount, int maxPlayers, bool unlimitedPlayers)
+    private void RefreshVisibleSelection()
     {
-        if (playerCountText == null)
+        foreach (KeyValuePair<string, LobbyPlayerRowUI> pair in visibleRowsByUserId)
         {
-            return;
-        }
+            LobbyPlayerRowUI row = pair.Value;
 
-        playerCountText.text = unlimitedPlayers
-            ? $"Players {playerCount}"
-            : $"Players {playerCount} / {maxPlayers}";
-    }
-
-    private bool IsLocalPlayerHost(IReadOnlyList<LobbyPlayerViewData> players, string localUserId)
-    {
-        if (players == null || string.IsNullOrWhiteSpace(localUserId))
-        {
-            return false;
-        }
-
-        for (int i = 0; i < players.Count; i++)
-        {
-            LobbyPlayerViewData playerData = players[i];
-
-            if (playerData != null &&
-                playerData.userId == localUserId)
+            if (row != null)
             {
-                return playerData.isHost;
+                row.SetHighlighted(!string.IsNullOrWhiteSpace(selectedUserId) && row.UserId == selectedUserId);
             }
         }
-
-        return false;
     }
 
     private void HandleArrowKeySelection()
@@ -434,141 +447,63 @@ public class LobbyPlayerListController : MonoBehaviour
 
     private void MoveSelectedRow(int direction)
     {
-        int selectedIndex = GetSelectedRowIndex();
-
-        if (selectedIndex < 0)
+        if (!playerIndexByUserId.TryGetValue(selectedUserId, out int selectedIndex))
         {
             return;
         }
 
-        int nextIndex = Mathf.Clamp(selectedIndex + direction, 0, spawnedRows.Count - 1);
+        int nextIndex = Mathf.Clamp(selectedIndex + direction, 0, players.Count - 1);
 
-        if (nextIndex == selectedIndex)
+        if (nextIndex == selectedIndex || nextIndex < 0 || nextIndex >= players.Count)
         {
             return;
         }
 
-        LobbyPlayerRowUI nextRow = spawnedRows[nextIndex];
+        PlayerListPlayerData nextPlayer = players[nextIndex];
 
-        if (nextRow == null)
+        if (nextPlayer == null || string.IsNullOrWhiteSpace(nextPlayer.userId))
         {
             return;
         }
 
-        SetSelectedUser(nextRow.UserId);
-        ScrollRowIntoView(nextRow);
+        selectedUserId = nextPlayer.userId;
+        virtualizedList?.ScrollToIndex(nextIndex);
+        RefreshVisibleSelection();
     }
 
-    private int GetSelectedRowIndex()
-    {
-        for (int i = 0; i < spawnedRows.Count; i++)
-        {
-            LobbyPlayerRowUI row = spawnedRows[i];
+    #endregion
 
-            if (row != null && row.UserId == selectedUserId)
+    #region Helpers
+
+    private void UpdatePlayerCount(int playerCount, int maxPlayers, bool unlimitedPlayers)
+    {
+        if (playerCountText == null)
+        {
+            return;
+        }
+
+        playerCountText.text = unlimitedPlayers ? $"Players {playerCount}" : $"Players {playerCount} / {maxPlayers}";
+    }
+
+    private bool IsLocalPlayerHost(IReadOnlyList<LobbyPlayerViewData> lobbyPlayers, string localUserId)
+    {
+        if (lobbyPlayers == null || string.IsNullOrWhiteSpace(localUserId))
+        {
+            return false;
+        }
+
+        for (int i = 0; i < lobbyPlayers.Count; i++)
+        {
+            LobbyPlayerViewData playerData = lobbyPlayers[i];
+
+            if (playerData != null && playerData.userId == localUserId)
             {
-                return i;
+                return playerData.isHost;
             }
         }
 
-        return -1;
+        return false;
     }
 
-    private void ScrollRowIntoView(LobbyPlayerRowUI row)
-    {
-        if (row == null || scrollRect == null || scrollRect.content == null)
-        {
-            return;
-        }
-
-        RectTransform contentRect = scrollRect.content;
-        RectTransform viewportRect = scrollRect.viewport;
-
-        if (viewportRect == null)
-        {
-            viewportRect = scrollRect.GetComponent<RectTransform>();
-        }
-
-        RectTransform rowRect = row.GetComponent<RectTransform>();
-
-        if (rowRect == null || viewportRect == null)
-        {
-            return;
-        }
-
-        Canvas.ForceUpdateCanvases();
-
-        float contentHeight = contentRect.rect.height;
-        float viewportHeight = viewportRect.rect.height;
-
-        if (contentHeight <= viewportHeight)
-        {
-            return;
-        }
-
-        float rowTop = GetRowTopFromContentTop(rowRect);
-        float rowBottom = rowTop + rowRect.rect.height;
-
-        float viewTop = contentRect.anchoredPosition.y;
-        float viewBottom = viewTop + viewportHeight;
-
-        float targetY = contentRect.anchoredPosition.y;
-
-        if (rowTop < viewTop)
-        {
-            targetY = rowTop;
-        }
-        else if (rowBottom > viewBottom)
-        {
-            targetY = rowBottom - viewportHeight;
-        }
-
-        float maxY = Mathf.Max(0f, contentHeight - viewportHeight);
-        targetY = Mathf.Clamp(targetY, 0f, maxY);
-
-        int rowIndex = spawnedRows.IndexOf(row);
-
-        if (rowIndex == 0)
-        {
-            targetY = 0f;
-        }
-        else if (rowIndex == spawnedRows.Count - 1)
-        {
-            targetY = maxY;
-        }
-
-        contentRect.anchoredPosition = new Vector2(contentRect.anchoredPosition.x, targetY);
-        scrollRect.StopMovement();
-
-        if (rowIndex == 0)
-        {
-            scrollRect.verticalNormalizedPosition = 1f;
-        }
-        else if (rowIndex == spawnedRows.Count - 1)
-        {
-            scrollRect.verticalNormalizedPosition = 0f;
-        }
-    }
-
-    private float GetRowTopFromContentTop(RectTransform rowRect)
-    {
-        return -rowRect.anchoredPosition.y - ((1f - rowRect.pivot.y) * rowRect.rect.height);
-    }
-
-    private void DestroyChildObject(GameObject childObject)
-    {
-        if (childObject == null)
-        {
-            return;
-        }
-
-        if (Application.isPlaying)
-        {
-            Destroy(childObject);
-        }
-        else
-        {
-            DestroyImmediate(childObject);
-        }
-    }
+    #endregion
 }

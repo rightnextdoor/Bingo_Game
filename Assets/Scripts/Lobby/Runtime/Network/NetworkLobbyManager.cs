@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -10,11 +11,18 @@ public class NetworkLobbyManager : MonoBehaviour
     public static NetworkLobbyManager instance;
 
     private const int BoardCollectionBatchSize = 10;
+    private const int LobbyWorkBatchSize = 10;
+    private const int InitialSyncBatchSize = 10;
 
     private readonly List<Lobby> lobbies = new List<Lobby>();
     private readonly Dictionary<string, string> relayJoinCodeByLobbyId = new Dictionary<string, string>();
     private readonly Dictionary<string, Coroutine> lobbyRuntimeRoutines = new Dictionary<string, Coroutine>();
+    private readonly Dictionary<string, Queue<string>> pendingMemberPublicationsByLobbyId = new Dictionary<string, Queue<string>>();
+    private readonly Dictionary<string, HashSet<string>> pendingMemberPublicationIdsByLobbyId = new Dictionary<string, HashSet<string>>();
+    private readonly Dictionary<ulong, Coroutine> initialSyncRoutines = new Dictionary<ulong, Coroutine>();
+    private readonly HashSet<ulong> initialSyncClientIds = new HashSet<ulong>();
     private readonly Dictionary<string, long> lobbyRevisions = new Dictionary<string, long>();
+    private readonly Dictionary<string, double> pendingJoinStartedTimeByUserId = new Dictionary<string, double>();
 
     private bool isReady;
     private bool isSubscribedToConnectionRegistry;
@@ -26,6 +34,11 @@ public class NetworkLobbyManager : MonoBehaviour
     public bool IsReady => isReady;
     public IReadOnlyList<Lobby> Lobbies => lobbies;
     public bool HasActiveLobbies => lobbies.Count > 0;
+
+    public event Action<Lobby> LobbyCreated;
+    public event Action<Lobby> LobbyFinalCountdownCompleted;
+    public event Action<Lobby> LobbyGameCreated;
+    public event Action<Lobby, LobbyCloseReason> LobbyClosed;
 
     #endregion
 
@@ -78,6 +91,7 @@ public class NetworkLobbyManager : MonoBehaviour
         UnsubscribeFromConnectionRegistry();
         UnsubscribeFromAllLobbyControllers();
         StopAllLobbyRuntimeRoutines();
+        StopAllInitialSyncRoutines();
 
         if (instance == this)
         {
@@ -156,6 +170,7 @@ public class NetworkLobbyManager : MonoBehaviour
             return failureResult;
         }
 
+        StopInitialSync(senderClientId);
         return RemovePlayerFromLobby(userId, LobbyPlayerExitReason.VoluntaryLeave);
     }
 
@@ -187,6 +202,7 @@ public class NetworkLobbyManager : MonoBehaviour
 
         if (result.success && hasTargetConnection)
         {
+            StopInitialSync(targetClientId);
             NetworkLobbyConnection.TrySendForcedLobbyExit(targetClientId, LobbyExitNotification.Kicked(lobby.GetLobbyId()));
         }
 
@@ -194,12 +210,7 @@ public class NetworkLobbyManager : MonoBehaviour
     }
     public void ProcessAuthorityLobbySceneReady(ulong clientId)
     {
-        if (networkBootstrap == null || !networkBootstrap.IsAuthority || connectionRegistry == null || !connectionRegistry.IsReady)
-        {
-            return;
-        }
-
-        if (!connectionRegistry.TryGetBingoUserId(clientId, out string userId))
+        if (!TryGetConnectedUserId(clientId, out string userId))
         {
             return;
         }
@@ -219,13 +230,31 @@ public class NetworkLobbyManager : MonoBehaviour
             return;
         }
 
-        BroadcastPlayerJoined(lobby, userId, userId);
-        SendLobbySyncSnapshot(lobby, clientId);
-        BroadcastPlayerBoardUpdate(lobby, userId);
+        pendingJoinStartedTimeByUserId.Remove(userId);
+        QueueMemberPublication(lobby, userId);
+    }
+
+    public void ProcessAuthorityLobbyInitialSync(ulong clientId)
+    {
+        if (!TryGetConnectedUserId(clientId, out string userId))
+        {
+            return;
+        }
+
+        Lobby lobby = FindUserLobby(userId);
+
+        if (lobby?.Controller == null)
+        {
+            return;
+        }
+
+        StartInitialSync(lobby, clientId);
     }
 
     private LobbyExitResult RemovePlayerFromLobby(string userId, LobbyPlayerExitReason exitReason)
     {
+        pendingJoinStartedTimeByUserId.Remove(userId);
+
         Lobby lobby = FindUserLobby(userId);
 
         if (lobby?.Controller == null)
@@ -268,6 +297,8 @@ public class NetworkLobbyManager : MonoBehaviour
 
         string lobbyId = lobby.GetLobbyId();
 
+        ClearPendingJoinTrackingForLobby(lobby);
+
         List<string> remainingUserIds =
             lobby.Controller.CloseLobby(closeReason);
 
@@ -286,6 +317,7 @@ public class NetworkLobbyManager : MonoBehaviour
             }
         }
 
+        LobbyClosed?.Invoke(lobby, closeReason);
         DeleteLobby(lobby);
     }
 
@@ -296,6 +328,8 @@ public class NetworkLobbyManager : MonoBehaviour
             return;
         }
 
+        ClearPendingJoinTrackingForLobby(lobby);
+
         if (lobby.Controller != null)
         {
             lobby.Controller.PlayerExitProcessed -= OnLobbyPlayerExitProcessed;
@@ -305,6 +339,8 @@ public class NetworkLobbyManager : MonoBehaviour
         StopLobbyRuntime(lobby);
         relayJoinCodeByLobbyId.Remove(lobby.GetLobbyId());
         lobbyRevisions.Remove(lobby.GetLobbyId());
+        pendingMemberPublicationsByLobbyId.Remove(lobby.GetLobbyId());
+        pendingMemberPublicationIdsByLobbyId.Remove(lobby.GetLobbyId());
         lobbies.Remove(lobby);
     }
 
@@ -374,6 +410,12 @@ public class NetworkLobbyManager : MonoBehaviour
         {
             failureResult = LobbyEntryResult.Failed(LobbyEntryFailureType.InvalidPassword, "The Custom lobby password is incorrect.");
 
+            return false;
+        }
+
+        if (controller.IsJoinLocked)
+        {
+            failureResult = LobbyEntryResult.Failed(LobbyEntryFailureType.LobbyStarted, "The lobby has already started.");
             return false;
         }
 
@@ -456,6 +498,11 @@ public class NetworkLobbyManager : MonoBehaviour
             return LobbyEntryResult.Failed(LobbyEntryFailureType.InvalidPassword, "The Custom lobby password is incorrect.");
         }
 
+        if (controller.IsJoinLocked)
+        {
+            return LobbyEntryResult.Failed(LobbyEntryFailureType.LobbyStarted, "The lobby has already started.");
+        }
+
         if (controller.IsFull)
         {
             return LobbyEntryResult.Failed(LobbyEntryFailureType.LobbyFull, "The Custom lobby is full.");
@@ -474,6 +521,7 @@ public class NetworkLobbyManager : MonoBehaviour
                 lobby.playMode != MainMenuPlayMode.Custom ||
                 lobby.lobbyState != LobbyState.Open ||
                 lobby.Controller == null ||
+                lobby.Controller.IsJoinLocked ||
                 lobby.Controller.IsFull)
             {
                 continue;
@@ -710,6 +758,7 @@ public class NetworkLobbyManager : MonoBehaviour
                lobby.playMode == MainMenuPlayMode.Online &&
                lobby.lobbyState == LobbyState.Open &&
                lobby.Controller != null &&
+               !lobby.Controller.IsJoinLocked &&
                !lobby.Controller.IsFull;
     }
 
@@ -736,6 +785,11 @@ public class NetworkLobbyManager : MonoBehaviour
             return BuildNetworkEntryResult(lobby);
         }
 
+        if (controller.IsJoinLocked)
+        {
+            return LobbyEntryResult.Failed(LobbyEntryFailureType.LobbyStarted, "The lobby has already started.");
+        }
+
         if (controller.IsFull)
         {
             return LobbyEntryResult.Failed(LobbyEntryFailureType.LobbyFull, "The lobby is full.");
@@ -749,6 +803,11 @@ public class NetworkLobbyManager : MonoBehaviour
             return LobbyEntryResult.Failed(LobbyEntryFailureType.LobbyJoinFailed, "The player could not be added to the lobby.");
         }
 
+        if (userData.userTag != UserTag.Bot)
+        {
+            pendingJoinStartedTimeByUserId[userData.userId] = LobbyTimer.GetCurrentTime();
+        }
+
         return BuildNetworkEntryResult(lobby);
     }
 
@@ -759,16 +818,15 @@ public class NetworkLobbyManager : MonoBehaviour
             return LobbyEntryResult.Failed(LobbyEntryFailureType.LobbyNotFound, "The lobby could not be found.");
         }
 
-        LobbyViewData lobbyViewData = lobby.Controller.BuildViewData();
-        LobbyBoardCollectionData lobbyBoardData = lobby.Controller.BuildPlayerBoardCollectionData();
+        LobbyViewData lobbyViewData = lobby.Controller.BuildViewData(false);
         long revision = GetLobbyRevision(lobby);
+        LobbyBoardCollectionData lobbyBoardData = new LobbyBoardCollectionData(lobby.GetLobbyId(), revision, new List<LobbyPlayerBoardViewData>());
 
-        if (lobbyViewData == null || lobbyBoardData == null)
+        if (lobbyViewData == null)
         {
             return LobbyEntryResult.Failed(LobbyEntryFailureType.LobbyJoinFailed, "The lobby state could not be created.");
         }
 
-        lobbyBoardData.revision = revision;
         return LobbyEntryResult.Succeeded(lobby.GetLobbyId(), revision, lobbyViewData, lobbyBoardData);
     }
 
@@ -787,7 +845,10 @@ public class NetworkLobbyManager : MonoBehaviour
 
         lobbies.Add(lobby);
         lobbyRevisions[lobby.GetLobbyId()] = 0;
+        pendingMemberPublicationsByLobbyId[lobby.GetLobbyId()] = new Queue<string>();
+        pendingMemberPublicationIdsByLobbyId[lobby.GetLobbyId()] = new HashSet<string>();
         StartLobbyRuntime(lobby);
+        LobbyCreated?.Invoke(lobby);
 
         return lobby;
     }
@@ -860,6 +921,12 @@ public class NetworkLobbyManager : MonoBehaviour
 
     private void SendToLobbyPlayers(Lobby lobby, System.Action<ulong> sendAction, string excludedUserId = null)
     {
+        HashSet<string> excludedUserIds = string.IsNullOrWhiteSpace(excludedUserId) ? null : new HashSet<string> { excludedUserId };
+        SendToLobbyPlayers(lobby, sendAction, excludedUserIds);
+    }
+
+    private void SendToLobbyPlayers(Lobby lobby, System.Action<ulong> sendAction, ISet<string> excludedUserIds)
+    {
         if (lobby?.Controller == null || connectionRegistry == null || !connectionRegistry.IsReady || sendAction == null)
         {
             return;
@@ -872,9 +939,10 @@ public class NetworkLobbyManager : MonoBehaviour
             LobbyPlayerData playerData = players[i];
             string userId = playerData?.userData?.userId;
 
-            if (playerData == null || !playerData.isLobbySceneReady || string.IsNullOrWhiteSpace(userId) ||
-                (!string.IsNullOrWhiteSpace(excludedUserId) && userId == excludedUserId) ||
-                !connectionRegistry.TryGetClientId(userId, out ulong clientId))
+            if (playerData == null || string.IsNullOrWhiteSpace(userId) ||
+                (excludedUserIds != null && excludedUserIds.Contains(userId)) ||
+                !connectionRegistry.TryGetClientId(userId, out ulong clientId) ||
+                initialSyncClientIds.Contains(clientId))
             {
                 continue;
             }
@@ -891,16 +959,13 @@ public class NetworkLobbyManager : MonoBehaviour
         }
 
         LobbyPlayerData playerData = lobby.Controller.GetPlayer(userId);
-        LobbyViewData viewData = lobby.Controller.BuildViewData();
 
-        if (playerData == null || !playerData.isLobbySceneReady || viewData == null)
+        if (playerData == null)
         {
             return;
         }
 
-        long revision = GetNextLobbyRevision(lobby);
-        LobbyPlayerJoinedData data = new LobbyPlayerJoinedData(lobby.GetLobbyId(), revision, new LobbyPlayerViewData(playerData), viewData.playerCount, viewData.botCount);
-        SendToLobbyPlayers(lobby, clientId => NetworkLobbyConnection.TrySendPlayerJoined(clientId, data), excludedUserId);
+        BroadcastJoinedPlayers(lobby, new List<LobbyPlayerViewData> { new LobbyPlayerViewData(playerData) }, excludedUserId);
     }
 
     private void BroadcastPlayerLeft(Lobby lobby, string userId)
@@ -910,7 +975,7 @@ public class NetworkLobbyManager : MonoBehaviour
             return;
         }
 
-        LobbyViewData viewData = lobby.Controller.BuildViewData();
+        LobbyViewData viewData = lobby.Controller.BuildViewData(false);
 
         if (viewData == null)
         {
@@ -941,7 +1006,7 @@ public class NetworkLobbyManager : MonoBehaviour
             return;
         }
 
-        viewData ??= lobby.Controller.BuildViewData();
+        viewData ??= lobby.Controller.BuildViewData(false);
 
         if (viewData == null)
         {
@@ -960,7 +1025,7 @@ public class NetworkLobbyManager : MonoBehaviour
             return;
         }
 
-        LobbyViewData viewData = lobby.Controller.BuildViewData();
+        LobbyViewData viewData = lobby.Controller.BuildViewData(false);
 
         if (viewData == null)
         {
@@ -1046,27 +1111,108 @@ public class NetworkLobbyManager : MonoBehaviour
         return userIds;
     }
 
-    private void BroadcastJoinedPlayers(Lobby lobby, IReadOnlyList<string> userIds, LobbyViewData currentViewData)
+    private void QueueMemberPublication(Lobby lobby, string userId)
     {
-        if (lobby?.Controller == null || userIds == null || currentViewData == null)
+        if (lobby == null || string.IsNullOrWhiteSpace(userId))
         {
             return;
         }
 
-        for (int i = 0; i < userIds.Count; i++)
+        string lobbyId = lobby.GetLobbyId();
+
+        if (!pendingMemberPublicationsByLobbyId.TryGetValue(lobbyId, out Queue<string> pendingUserIds))
         {
-            string userId = userIds[i];
+            pendingUserIds = new Queue<string>();
+            pendingMemberPublicationsByLobbyId[lobbyId] = pendingUserIds;
+        }
+
+        if (!pendingMemberPublicationIdsByLobbyId.TryGetValue(lobbyId, out HashSet<string> queuedUserIds))
+        {
+            queuedUserIds = new HashSet<string>();
+            pendingMemberPublicationIdsByLobbyId[lobbyId] = queuedUserIds;
+        }
+
+        if (queuedUserIds.Add(userId))
+        {
+            pendingUserIds.Enqueue(userId);
+        }
+    }
+
+    private void ProcessPendingMemberPublications(Lobby lobby)
+    {
+        if (lobby?.Controller == null)
+        {
+            return;
+        }
+
+        string lobbyId = lobby.GetLobbyId();
+
+        if (!pendingMemberPublicationsByLobbyId.TryGetValue(lobbyId, out Queue<string> pendingUserIds) || pendingUserIds.Count == 0)
+        {
+            return;
+        }
+
+        pendingMemberPublicationIdsByLobbyId.TryGetValue(lobbyId, out HashSet<string> queuedUserIds);
+
+        List<LobbyPlayerViewData> playerBatch = new List<LobbyPlayerViewData>();
+        List<LobbyPlayerBoardViewData> boardBatch = new List<LobbyPlayerBoardViewData>();
+        int processedCount = 0;
+
+        while (pendingUserIds.Count > 0 && processedCount < LobbyWorkBatchSize)
+        {
+            string userId = pendingUserIds.Dequeue();
+            processedCount++;
+            queuedUserIds?.Remove(userId);
+
             LobbyPlayerData playerData = lobby.Controller.GetPlayer(userId);
 
-            if (playerData == null)
+            if (playerData == null || !playerData.isLobbySceneReady)
             {
                 continue;
             }
 
-            long revision = GetNextLobbyRevision(lobby);
-            LobbyPlayerJoinedData data = new LobbyPlayerJoinedData(lobby.GetLobbyId(), revision, new LobbyPlayerViewData(playerData), currentViewData.playerCount, currentViewData.botCount);
-            SendToLobbyPlayers(lobby, clientId => NetworkLobbyConnection.TrySendPlayerJoined(clientId, data));
+            playerBatch.Add(new LobbyPlayerViewData(playerData));
+
+            LobbyPlayerBoardViewData boardData = lobby.Controller.GetPlayerBoardViewData(userId);
+
+            if (boardData != null)
+            {
+                boardBatch.Add(boardData);
+            }
         }
+
+        if (playerBatch.Count == 0)
+        {
+            return;
+        }
+
+        BroadcastJoinedPlayers(lobby, playerBatch, (ISet<string>)null);
+        BroadcastPlayerBoardCollection(lobby, boardBatch, (ISet<string>)null);
+    }
+
+    private void BroadcastJoinedPlayers(Lobby lobby, IReadOnlyList<LobbyPlayerViewData> players, string excludedUserId = null)
+    {
+        HashSet<string> excludedUserIds = string.IsNullOrWhiteSpace(excludedUserId) ? null : new HashSet<string> { excludedUserId };
+        BroadcastJoinedPlayers(lobby, players, excludedUserIds);
+    }
+
+    private void BroadcastJoinedPlayers(Lobby lobby, IReadOnlyList<LobbyPlayerViewData> players, ISet<string> excludedUserIds)
+    {
+        if (lobby?.Controller == null || players == null || players.Count == 0)
+        {
+            return;
+        }
+
+        LobbyViewData currentViewData = lobby.Controller.BuildViewData(false);
+
+        if (currentViewData == null)
+        {
+            return;
+        }
+
+        long revision = GetNextLobbyRevision(lobby);
+        LobbyPlayerJoinedBatchData data = new LobbyPlayerJoinedBatchData(lobby.GetLobbyId(), revision, players, currentViewData.playerCount, currentViewData.botCount);
+        SendToLobbyPlayers(lobby, clientId => NetworkLobbyConnection.TrySendPlayerJoinedBatch(clientId, data), excludedUserIds);
     }
 
     private void BroadcastRemovedPlayers(Lobby lobby, IReadOnlyList<string> userIds, LobbyViewData currentViewData)
@@ -1153,19 +1299,7 @@ public class NetworkLobbyManager : MonoBehaviour
 
     public void ProcessAuthorityLobbyResync(ulong clientId)
     {
-        if (!TryGetConnectedUserId(clientId, out string userId))
-        {
-            return;
-        }
-
-        Lobby lobby = FindUserLobby(userId);
-
-        if (lobby?.Controller == null)
-        {
-            return;
-        }
-
-        SendLobbySyncSnapshot(lobby, clientId);
+        ProcessAuthorityLobbyInitialSync(clientId);
     }
 
     private void SendLobbySyncSnapshot(Lobby lobby, ulong clientId)
@@ -1208,9 +1342,9 @@ public class NetworkLobbyManager : MonoBehaviour
         SendToLobbyPlayers(lobby, clientId => NetworkLobbyConnection.TrySendPlayerBoardUpdate(clientId, updateData));
     }
 
-    private void BroadcastPlayerBoardCollection(Lobby lobby, IReadOnlyCollection<string> userIds)
+    private void BroadcastPlayerBoardCollection(Lobby lobby, IReadOnlyCollection<string> userIds, string excludedUserId = null)
     {
-        if (lobby?.Controller == null || connectionRegistry == null || !connectionRegistry.IsReady)
+        if (lobby?.Controller == null)
         {
             return;
         }
@@ -1239,7 +1373,18 @@ public class NetworkLobbyManager : MonoBehaviour
             }
         }
 
-        if (selectedBoards.Count == 0)
+        BroadcastPlayerBoardCollection(lobby, selectedBoards, excludedUserId);
+    }
+
+    private void BroadcastPlayerBoardCollection(Lobby lobby, IReadOnlyList<LobbyPlayerBoardViewData> selectedBoards, string excludedUserId = null)
+    {
+        HashSet<string> excludedUserIds = string.IsNullOrWhiteSpace(excludedUserId) ? null : new HashSet<string> { excludedUserId };
+        BroadcastPlayerBoardCollection(lobby, selectedBoards, excludedUserIds);
+    }
+
+    private void BroadcastPlayerBoardCollection(Lobby lobby, IReadOnlyList<LobbyPlayerBoardViewData> selectedBoards, ISet<string> excludedUserIds)
+    {
+        if (lobby?.Controller == null || selectedBoards == null || selectedBoards.Count == 0)
         {
             return;
         }
@@ -1251,15 +1396,290 @@ public class NetworkLobbyManager : MonoBehaviour
 
             for (int i = 0; i < batchCount; i++)
             {
-                batchBoards.Add(selectedBoards[startIndex + i]);
+                LobbyPlayerBoardViewData boardData = selectedBoards[startIndex + i];
+
+                if (boardData != null)
+                {
+                    batchBoards.Add(boardData);
+                }
+            }
+
+            if (batchBoards.Count == 0)
+            {
+                continue;
             }
 
             long revision = GetNextLobbyRevision(lobby);
             LobbyBoardCollectionData batchData = new LobbyBoardCollectionData(lobby.GetLobbyId(), revision, batchBoards);
-            SendToLobbyPlayers(lobby, clientId => NetworkLobbyConnection.TrySendPlayerBoardCollection(clientId, batchData));
+            SendToLobbyPlayers(lobby, clientId => NetworkLobbyConnection.TrySendPlayerBoardCollection(clientId, batchData), excludedUserIds);
         }
     }
 
+
+
+    #endregion
+
+    #region Initial Sync
+
+    private void StartInitialSync(Lobby lobby, ulong clientId)
+    {
+        StopInitialSync(clientId);
+        initialSyncClientIds.Add(clientId);
+        initialSyncRoutines[clientId] = StartCoroutine(RunInitialSync(lobby, clientId));
+    }
+
+    private IEnumerator RunInitialSync(Lobby lobby, ulong clientId)
+    {
+        yield return null;
+
+        while (lobby?.Controller != null && lobbies.Contains(lobby))
+        {
+            LobbyController controller = lobby.Controller;
+            long snapshotRevision = GetLobbyRevision(lobby);
+            LobbyViewData snapshotView = controller.BuildViewData(false);
+            List<string> userIds = new List<string>();
+            IReadOnlyList<LobbyPlayerData> players = controller.Players;
+
+            for (int i = 0; i < players.Count; i++)
+            {
+                string userId = players[i]?.userData?.userId;
+
+                if (!string.IsNullOrWhiteSpace(userId))
+                {
+                    userIds.Add(userId);
+                }
+            }
+
+            if (userIds.Count == 0)
+            {
+                if (snapshotRevision != GetLobbyRevision(lobby))
+                {
+                    yield return null;
+                    continue;
+                }
+
+                LobbyInitialSyncBatchData emptyBatch = new LobbyInitialSyncBatchData(lobby.GetLobbyId(), snapshotRevision, true, true, snapshotView, null, null);
+                NetworkLobbyConnection.TrySendLobbyInitialSyncBatch(clientId, emptyBatch);
+                break;
+            }
+
+            bool restartSync = false;
+
+            for (int startIndex = 0; startIndex < userIds.Count; startIndex += InitialSyncBatchSize)
+            {
+                List<LobbyPlayerViewData> playerBatch = new List<LobbyPlayerViewData>();
+                List<LobbyPlayerBoardViewData> boardBatch = new List<LobbyPlayerBoardViewData>();
+                int batchCount = Mathf.Min(InitialSyncBatchSize, userIds.Count - startIndex);
+
+                for (int i = 0; i < batchCount; i++)
+                {
+                    string userId = userIds[startIndex + i];
+                    LobbyPlayerData playerData = controller.GetPlayer(userId);
+
+                    if (playerData == null)
+                    {
+                        continue;
+                    }
+
+                    if (playerData.isLobbySceneReady)
+                    {
+                        playerBatch.Add(new LobbyPlayerViewData(playerData));
+                    }
+
+                    LobbyPlayerBoardViewData boardData = controller.GetPlayerBoardViewData(userId);
+
+                    if (boardData != null)
+                    {
+                        boardBatch.Add(boardData);
+                    }
+                }
+
+                bool isLastBatch = startIndex + batchCount >= userIds.Count;
+
+                if (isLastBatch && snapshotRevision != GetLobbyRevision(lobby))
+                {
+                    restartSync = true;
+                    break;
+                }
+
+                LobbyInitialSyncBatchData batchData = new LobbyInitialSyncBatchData(
+                    lobby.GetLobbyId(),
+                    snapshotRevision,
+                    startIndex == 0,
+                    isLastBatch,
+                    startIndex == 0 ? snapshotView : null,
+                    playerBatch,
+                    boardBatch);
+
+                if (!NetworkLobbyConnection.TrySendLobbyInitialSyncBatch(clientId, batchData))
+                {
+                    restartSync = false;
+                    break;
+                }
+
+                if (!isLastBatch)
+                {
+                    yield return null;
+                }
+            }
+
+            if (!restartSync)
+            {
+                break;
+            }
+
+            yield return null;
+        }
+
+        initialSyncClientIds.Remove(clientId);
+        initialSyncRoutines.Remove(clientId);
+    }
+
+    private void StopInitialSync(ulong clientId)
+    {
+        if (initialSyncRoutines.TryGetValue(clientId, out Coroutine routine) && routine != null)
+        {
+            StopCoroutine(routine);
+        }
+
+        initialSyncRoutines.Remove(clientId);
+        initialSyncClientIds.Remove(clientId);
+    }
+
+    private void StopAllInitialSyncRoutines()
+    {
+        foreach (Coroutine routine in initialSyncRoutines.Values)
+        {
+            if (routine != null)
+            {
+                StopCoroutine(routine);
+            }
+        }
+
+        initialSyncRoutines.Clear();
+        initialSyncClientIds.Clear();
+    }
+
+    #endregion
+
+    #region Pending Lobby Entry
+
+    private void ProcessPendingJoinTimeouts(Lobby lobby)
+    {
+        if (lobby?.Controller == null || LobbySettings.instance == null)
+        {
+            return;
+        }
+
+        double currentTime = LobbyTimer.GetCurrentTime();
+        float timeoutSeconds = LobbySettings.instance.PendingJoinTimeoutSeconds;
+        List<string> timedOutUserIds = new List<string>();
+        IReadOnlyList<LobbyPlayerData> players = lobby.Controller.Players;
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            LobbyPlayerData playerData = players[i];
+            string userId = playerData?.userData?.userId;
+
+            if (playerData == null ||
+                playerData.isLobbySceneReady ||
+                playerData.userData == null ||
+                playerData.userData.userTag == UserTag.Bot ||
+                string.IsNullOrWhiteSpace(userId) ||
+                !pendingJoinStartedTimeByUserId.TryGetValue(userId, out double startedTime))
+            {
+                continue;
+            }
+
+            if (currentTime - startedTime >= timeoutSeconds)
+            {
+                timedOutUserIds.Add(userId);
+            }
+        }
+
+        for (int i = 0; i < timedOutUserIds.Count; i++)
+        {
+            RemovePendingPlayer(lobby, timedOutUserIds[i], false);
+        }
+    }
+
+    private void RemovePendingPlayersForLobbyStart(Lobby lobby)
+    {
+        if (lobby?.Controller == null)
+        {
+            return;
+        }
+
+        List<string> pendingUserIds = new List<string>();
+        IReadOnlyList<LobbyPlayerData> players = lobby.Controller.Players;
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            LobbyPlayerData playerData = players[i];
+            string userId = playerData?.userData?.userId;
+
+            if (playerData == null ||
+                playerData.isLobbySceneReady ||
+                playerData.userData == null ||
+                playerData.userData.userTag == UserTag.Bot ||
+                string.IsNullOrWhiteSpace(userId))
+            {
+                continue;
+            }
+
+            pendingUserIds.Add(userId);
+        }
+
+        for (int i = 0; i < pendingUserIds.Count; i++)
+        {
+            RemovePendingPlayer(lobby, pendingUserIds[i], true);
+        }
+    }
+
+    private void RemovePendingPlayer(Lobby lobby, string userId, bool lobbyStarted)
+    {
+        if (lobby?.Controller == null || string.IsNullOrWhiteSpace(userId))
+        {
+            return;
+        }
+
+        pendingJoinStartedTimeByUserId.Remove(userId);
+
+        if (connectionRegistry != null && connectionRegistry.TryGetClientId(userId, out ulong clientId))
+        {
+            StopInitialSync(clientId);
+
+            LobbyExitNotification notification = lobbyStarted
+                ? LobbyExitNotification.LobbyStarted(lobby.GetLobbyId())
+                : LobbyExitNotification.JoinTimedOut(lobby.GetLobbyId());
+
+            NetworkLobbyConnection.TrySendForcedLobbyExit(clientId, notification);
+        }
+
+        lobby.Controller.RemovePlayer(
+            userId,
+            lobbyStarted ? LobbyPlayerExitReason.LobbyStarted : LobbyPlayerExitReason.JoinTimedOut);
+    }
+
+    private void ClearPendingJoinTrackingForLobby(Lobby lobby)
+    {
+        if (lobby?.Controller == null)
+        {
+            return;
+        }
+
+        IReadOnlyList<LobbyPlayerData> players = lobby.Controller.Players;
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            string userId = players[i]?.userData?.userId;
+
+            if (!string.IsNullOrWhiteSpace(userId))
+            {
+                pendingJoinStartedTimeByUserId.Remove(userId);
+            }
+        }
+    }
 
     #endregion
 
@@ -1298,8 +1718,49 @@ public class NetworkLobbyManager : MonoBehaviour
                 break;
             }
 
+            if (controller.HasPendingWork && controller.ProcessPendingWorkBatch(LobbyWorkBatchSize, out LobbyWorkBatchResult workBatch))
+            {
+                HashSet<string> addedUserIds = new HashSet<string>();
+
+                for (int i = 0; i < workBatch.addedPlayers.Count; i++)
+                {
+                    string addedUserId = workBatch.addedPlayers[i]?.userId;
+
+                    if (!string.IsNullOrWhiteSpace(addedUserId))
+                    {
+                        addedUserIds.Add(addedUserId);
+                        QueueMemberPublication(lobby, addedUserId);
+                    }
+                }
+
+                if (workBatch.changedBoards.Count > 0)
+                {
+                    List<LobbyPlayerBoardViewData> changedExistingBoards = new List<LobbyPlayerBoardViewData>();
+
+                    for (int i = 0; i < workBatch.changedBoards.Count; i++)
+                    {
+                        LobbyPlayerBoardViewData boardData = workBatch.changedBoards[i];
+
+                        if (boardData != null && !addedUserIds.Contains(boardData.userId))
+                        {
+                            changedExistingBoards.Add(boardData);
+                        }
+                    }
+
+                    BroadcastPlayerBoardCollection(lobby, changedExistingBoards);
+                }
+            }
+
+            ProcessPendingMemberPublications(lobby);
+            ProcessPendingJoinTimeouts(lobby);
+
             if (lobby.playMode == MainMenuPlayMode.Online && lobby.lobbyState == LobbyState.Open)
             {
+                if (controller.IsOnlineFinalCountdownDue())
+                {
+                    RemovePendingPlayersForLobbyStart(lobby);
+                }
+
                 LobbyViewData previousViewData = controller.BuildViewData();
 
                 if (controller.TryBeginOnlineFinalCountdown())
@@ -1309,11 +1770,27 @@ public class NetworkLobbyManager : MonoBehaviour
                     List<string> removedUserIds = GetRemovedVisibleUserIds(previousViewData, currentViewData);
 
                     BroadcastRemovedPlayers(lobby, removedUserIds, currentViewData);
-                    BroadcastJoinedPlayers(lobby, addedUserIds, currentViewData);
 
-                    if (addedUserIds.Count > 0)
+                    List<LobbyPlayerViewData> addedPlayers = new List<LobbyPlayerViewData>();
+
+                    for (int i = 0; i < addedUserIds.Count; i++)
                     {
-                        BroadcastPlayerBoardCollection(lobby, addedUserIds);
+                        LobbyPlayerData addedPlayer = controller.GetPlayer(addedUserIds[i]);
+
+                        if (addedPlayer != null)
+                        {
+                            addedPlayers.Add(new LobbyPlayerViewData(addedPlayer));
+                        }
+                    }
+
+                    for (int i = 0; i < addedPlayers.Count; i++)
+                    {
+                        string addedUserId = addedPlayers[i]?.userId;
+
+                        if (!string.IsNullOrWhiteSpace(addedUserId))
+                        {
+                            QueueMemberPublication(lobby, addedUserId);
+                        }
                     }
 
                     BroadcastLobbyStateChanged(lobby);
@@ -1322,7 +1799,9 @@ public class NetworkLobbyManager : MonoBehaviour
 
             if (lobby.lobbyState == LobbyState.FinalCountdown && controller.CompleteFinalCountdown())
             {
+                LobbyFinalCountdownCompleted?.Invoke(lobby);
                 BroadcastLobbyStateChanged(lobby);
+                LobbyGameCreated?.Invoke(lobby);
             }
 
             if (lobby.lobbyState == LobbyState.InGame)
@@ -1417,6 +1896,8 @@ public class NetworkLobbyManager : MonoBehaviour
 
     private void OnConnectionRemoved(ulong clientId, string userId)
     {
+        StopInitialSync(clientId);
+
         if (networkBootstrap == null || !networkBootstrap.IsAuthority)
         {
             return;
@@ -1469,6 +1950,170 @@ public class NetworkLobbyManager : MonoBehaviour
             lobby.Controller.FinalCountdownStarted -= OnLobbyFinalCountdownStarted;
         }
     }
+
+    #endregion
+
+    #region Stress Testing API
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+
+    public bool TryGetStressLobby(string lobbyId, out Lobby lobby)
+    {
+        lobby = null;
+
+        if (string.IsNullOrWhiteSpace(lobbyId))
+        {
+            return false;
+        }
+
+        for (int i = 0; i < lobbies.Count; i++)
+        {
+            Lobby candidate = lobbies[i];
+
+            if (candidate != null && string.Equals(candidate.GetLobbyId(), lobbyId, StringComparison.Ordinal))
+            {
+                lobby = candidate;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public bool TryGetStressLobbyForUser(string userId, out Lobby lobby)
+    {
+        lobby = FindUserLobby(userId);
+        return lobby?.Controller != null;
+    }
+
+    public bool TryCreateStressLobby(LobbySetupData lobbySetupData, out Lobby lobby, out string failureReason)
+    {
+        lobby = null;
+        failureReason = string.Empty;
+
+        if (networkBootstrap == null || !networkBootstrap.IsAuthority)
+        {
+            failureReason = "This process is not the network authority.";
+            return false;
+        }
+
+        if (lobbySetupData == null ||
+            (lobbySetupData.playMode != MainMenuPlayMode.Online && lobbySetupData.playMode != MainMenuPlayMode.Custom))
+        {
+            failureReason = "Stress lobbies must use Online or Custom multiplayer mode.";
+            return false;
+        }
+
+        lobby = lobbySetupData.playMode == MainMenuPlayMode.Custom
+            ? CreateCustomHostLobby(lobbySetupData)
+            : CreateLobby(lobbySetupData);
+
+        if (lobby?.Controller == null)
+        {
+            failureReason = "The stress lobby could not be created.";
+            lobby = null;
+            return false;
+        }
+
+        return true;
+    }
+
+    public bool TryAddStressPlayer(string lobbyId, UserData userData, bool isHost, out string failureReason)
+    {
+        failureReason = string.Empty;
+
+        if (!TryGetStressLobby(lobbyId, out Lobby lobby) || lobby.Controller == null)
+        {
+            failureReason = "The target lobby could not be found.";
+            return false;
+        }
+
+        LobbyEntryResult result = AddPlayerToLobby(lobby, userData, isHost);
+
+        if (result == null || !result.success)
+        {
+            failureReason = result?.failureMessage ?? "The fake player could not join the lobby.";
+            return false;
+        }
+
+        return true;
+    }
+
+    public bool TrySetStressPlayerSceneReady(string lobbyId, string userId, out string failureReason)
+    {
+        failureReason = string.Empty;
+
+        if (!TryGetStressLobby(lobbyId, out Lobby lobby) || lobby.Controller == null)
+        {
+            failureReason = "The target lobby could not be found.";
+            return false;
+        }
+
+        LobbyPlayerData playerData = lobby.Controller.GetPlayer(userId);
+
+        if (playerData == null)
+        {
+            failureReason = "The fake player is no longer in the lobby.";
+            return false;
+        }
+
+        if (playerData.isLobbySceneReady)
+        {
+            return true;
+        }
+
+        if (!lobby.Controller.SetLobbySceneReady(userId, true))
+        {
+            failureReason = "The fake player could not finish Lobby loading.";
+            return false;
+        }
+
+        pendingJoinStartedTimeByUserId.Remove(userId);
+        QueueMemberPublication(lobby, userId);
+        return true;
+    }
+
+    public bool TryRerollStressPlayerBoard(string lobbyId, string userId, out string failureReason)
+    {
+        failureReason = string.Empty;
+
+        if (!TryGetStressLobby(lobbyId, out Lobby lobby) || lobby.Controller == null)
+        {
+            failureReason = "The target lobby could not be found.";
+            return false;
+        }
+
+        if (!lobby.Controller.RerollPlayerBoard(userId))
+        {
+            failureReason = "The fake player's board could not be rerolled.";
+            return false;
+        }
+
+        BroadcastPlayerBoardUpdate(lobby, userId);
+        return true;
+    }
+
+    public bool TryBeginStressFinalCountdown(string lobbyId, string requesterUserId, out string failureReason)
+    {
+        failureReason = string.Empty;
+
+        if (!TryGetStressLobby(lobbyId, out Lobby lobby) || lobby.Controller == null)
+        {
+            failureReason = "The target lobby could not be found.";
+            return false;
+        }
+
+        if (!lobby.Controller.BeginFinalCountdown(requesterUserId))
+        {
+            failureReason = "The stress lobby could not begin its final countdown.";
+            return false;
+        }
+
+        BroadcastLobbyStateChanged(lobby);
+        return true;
+    }
+
+#endif
 
     #endregion
 
@@ -1527,39 +2172,12 @@ public class NetworkLobbyManager : MonoBehaviour
 
         Lobby lobby = FindUserLobby(userId);
 
-        if (lobby?.Controller == null)
+        if (lobby?.Controller == null || !lobby.Controller.ApplyHostSettings(userId, settingsData))
         {
             return false;
         }
 
-        LobbyController controller = lobby.Controller;
-        LobbyViewData previousViewData = controller.BuildViewData();
-        BingoBallCountType previousBallCountType = controller.BallCountType;
-        bool previousUseFreeCell = controller.UseFreeCell;
-
-        if (!controller.ApplyHostSettings(userId, settingsData))
-        {
-            return false;
-        }
-
-        LobbyViewData currentViewData = controller.BuildViewData();
-        List<string> addedUserIds = GetAddedVisibleUserIds(previousViewData, currentViewData);
-        List<string> removedUserIds = GetRemovedVisibleUserIds(previousViewData, currentViewData);
-        bool boardGenerationChanged = previousBallCountType != controller.BallCountType || previousUseFreeCell != controller.UseFreeCell;
-
-        BroadcastLobbySettingsChanged(lobby, currentViewData);
-        BroadcastRemovedPlayers(lobby, removedUserIds, currentViewData);
-        BroadcastJoinedPlayers(lobby, addedUserIds, currentViewData);
-
-        if (boardGenerationChanged)
-        {
-            BroadcastPlayerBoardCollection(lobby, null);
-        }
-        else if (addedUserIds.Count > 0)
-        {
-            BroadcastPlayerBoardCollection(lobby, addedUserIds);
-        }
-
+        BroadcastLobbySettingsChanged(lobby, lobby.Controller.BuildViewData(false));
         return true;
     }
 
@@ -1587,12 +2205,14 @@ public class NetworkLobbyManager : MonoBehaviour
 
         LobbySettings lobbySettings = LobbySettings.instance;
 
-        if (lobbySettings != null && controller.PlayerCount < lobbySettings.MinimumPlayers)
+        if (lobbySettings != null && controller.SceneReadyPlayerCount < lobbySettings.MinimumPlayers)
         {
             string message = $"At least {lobbySettings.MinimumPlayers} players are required to start the game.";
             NotificationService.instance?.SendToUser(userId, UIMessageType.NotEnoughPlayers, message);
             return;
         }
+
+        RemovePendingPlayersForLobbyStart(lobby);
 
         if (controller.BeginFinalCountdown(userId))
         {

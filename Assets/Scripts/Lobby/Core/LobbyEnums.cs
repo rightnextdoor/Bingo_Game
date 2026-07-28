@@ -24,6 +24,8 @@ public enum LobbyPlayerExitReason
     VoluntaryLeave,
     Kicked,
     Disconnected,
+    LobbyStarted,
+    JoinTimedOut,
     LobbyClosed
 }
 
@@ -52,5 +54,7 @@ public enum LobbyEntryFailureType
     KickedFromLobby,
     LobbyClosed,
     ConnectionLost,
+    LobbyStarted,
+    JoinTimedOut,
     Unknown
 }

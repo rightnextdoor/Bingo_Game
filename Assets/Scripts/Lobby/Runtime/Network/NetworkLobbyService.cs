@@ -237,6 +237,11 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
         NetworkLobbyConnection.GetLocalConnection()?.NotifyLobbySceneReady();
     }
 
+    public void RequestLobbyInitialSync()
+    {
+        NetworkLobbyConnection.GetLocalConnection()?.RequestLobbyInitialSync();
+    }
+
     public async Task<bool> ApplyHostSettingsAsync(LobbyHostSettingsData settingsData)
     {
         NetworkLobbyConnection lobbyConnection = NetworkLobbyConnection.GetLocalConnection();
@@ -266,28 +271,7 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
 
         if (MultiplayerPlayModeTestContext.IsActive)
         {
-            float timeoutTime = Time.realtimeSinceStartup + ConnectionTimeoutSeconds;
-
-            while (!HasUsableNetworkConnection())
-            {
-                if (Time.realtimeSinceStartup >= timeoutTime)
-                {
-                    Debug.LogWarning(
-                        "[Bingo] Multiplayer Play Mode connection timed out.\n" +
-                        $"Player: {MultiplayerPlayModeTestContext.PlayerNumber}\n" +
-                        $"Connection State: {networkBootstrap.ConnectionState}\n" +
-                        $"Is Connected: {networkBootstrap.IsConnected}\n" +
-                        $"Is Client: {networkBootstrap.IsClient}\n" +
-                        $"Is Authority: {networkBootstrap.IsAuthority}\n" +
-                        $"Has Lobby Connection: {NetworkLobbyConnection.GetLocalConnection() != null}");
-
-                    return false;
-                }
-
-                await Task.Yield();
-            }
-
-            return true;
+            return await EnsureMultiplayerPlayModeConnectionAsync(lobbySetupData.userData.userId);
         }
 
         if (networkBootstrap.IsConnected)
@@ -361,6 +345,79 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
             }
 
             if (Time.realtimeSinceStartup >= connectionTimeoutTime)
+            {
+                return false;
+            }
+
+            await Task.Yield();
+        }
+
+        return true;
+    }
+
+    private async Task<bool> EnsureMultiplayerPlayModeConnectionAsync(string userId)
+    {
+        if (HasUsableNetworkConnection())
+        {
+            return true;
+        }
+
+        if (networkBootstrap.ConnectionState == NetworkConnectionState.Initializing ||
+            networkBootstrap.ConnectionState == NetworkConnectionState.Connecting ||
+            networkBootstrap.ConnectionState == NetworkConnectionState.Connected)
+        {
+            float existingConnectionTimeout = Time.realtimeSinceStartup + LobbyConnectionTimeoutSeconds;
+
+            while (!HasUsableNetworkConnection() && Time.realtimeSinceStartup < existingConnectionTimeout)
+            {
+                if (networkBootstrap.ConnectionState == NetworkConnectionState.Failed || networkBootstrap.ConnectionState == NetworkConnectionState.Disconnected)
+                {
+                    break;
+                }
+
+                await Task.Yield();
+            }
+
+            if (HasUsableNetworkConnection())
+            {
+                return true;
+            }
+        }
+
+        if (MultiplayerPlayModeTestContext.IsHost && networkBootstrap.IsAuthority && NetworkLobbyManager.instance != null && NetworkLobbyManager.instance.HasActiveLobbies)
+        {
+            return false;
+        }
+
+        if (networkBootstrap.ConnectionState != NetworkConnectionState.Offline || networkBootstrap.IsClient || networkBootstrap.IsAuthority)
+        {
+            if (!await networkBootstrap.ShutdownAsync())
+            {
+                return false;
+            }
+
+            await Task.Yield();
+        }
+
+        bool started = MultiplayerPlayModeTestContext.IsHost
+            ? networkBootstrap.StartDirectHost(userId)
+            : networkBootstrap.StartDirectClient(userId, MultiplayerPlayModeTestContext.DirectAddress);
+
+        if (!started)
+        {
+            return false;
+        }
+
+        float timeoutTime = Time.realtimeSinceStartup + ConnectionTimeoutSeconds;
+
+        while (!HasUsableNetworkConnection())
+        {
+            if (networkBootstrap.ConnectionState == NetworkConnectionState.Failed || networkBootstrap.ConnectionState == NetworkConnectionState.Disconnected)
+            {
+                return false;
+            }
+
+            if (Time.realtimeSinceStartup >= timeoutTime)
             {
                 return false;
             }

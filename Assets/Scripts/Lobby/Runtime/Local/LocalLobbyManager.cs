@@ -11,6 +11,8 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
 
     public static LocalLobbyManager instance;
 
+    private const int WorkBatchSize = 10;
+
     private readonly List<Lobby> lobbies = new List<Lobby>();
     private bool isReady;
 
@@ -48,6 +50,25 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
         }
 
         isReady = true;
+    }
+
+
+    private void Update()
+    {
+        if (!isReady)
+        {
+            return;
+        }
+
+        for (int i = 0; i < lobbies.Count; i++)
+        {
+            LobbyController controller = lobbies[i]?.Controller;
+
+            if (controller != null && controller.HasPendingWork)
+            {
+                controller.ProcessPendingWorkBatch(WorkBatchSize, out _);
+            }
+        }
     }
 
     private void OnDestroy()

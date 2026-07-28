@@ -33,9 +33,10 @@ public class LobbyManager : MonoBehaviour
     private bool isEnteringLobby;
     private bool isLeavingLobby;
     private bool isLobbyResyncPending;
+    private int entryAttemptVersion;
 
-    private NetworkBootstrap networkBootstrap;
-    private bool isSubscribedToNetworkBootstrap;
+    private MultiplayerSessionLifecycle multiplayerSessionLifecycle;
+    private bool isSubscribedToMultiplayerSessionLifecycle;
     private GameSceneManager gameSceneManager;
     private bool isSubscribedToGameSceneManager;
 
@@ -156,6 +157,8 @@ public class LobbyManager : MonoBehaviour
         isEnteringLobby = true;
         lastEntryResult = null;
 
+        int currentEntryAttemptVersion = ++entryAttemptVersion;
+
         if (!TryValidatePendingSetupData(out LobbyEntryResult validationFailure))
         {
             CompleteLobbyEntryFailure(validationFailure);
@@ -169,6 +172,11 @@ public class LobbyManager : MonoBehaviour
 
         activeLobbyService =
             await WaitForLobbyServiceAsync(runtimeType);
+
+        if (currentEntryAttemptVersion != entryAttemptVersion)
+        {
+            return;
+        }
 
         if (activeLobbyService == null)
         {
@@ -195,6 +203,11 @@ public class LobbyManager : MonoBehaviour
             Debug.LogException(exception);
 
             result = LobbyEntryResult.Failed(LobbyEntryFailureType.Unknown, "An unexpected error occurred while entering the lobby.");
+        }
+
+        if (currentEntryAttemptVersion != entryAttemptVersion)
+        {
+            return;
         }
 
         if (result == null || !result.success)
@@ -244,6 +257,11 @@ public class LobbyManager : MonoBehaviour
 
         ApplyPendingNetworkLobbyViewData();
         PublishCurrentLobbyView();
+
+        if (runtimeType == SessionRuntimeType.Network)
+        {
+            networkLobbyService?.RequestLobbyInitialSync();
+        }
 
         pendingLobbySetupData = null;
         isEnteringLobby = false;
@@ -534,6 +552,54 @@ public class LobbyManager : MonoBehaviour
         }
     }
 
+    private void OnLocalPlayerJoinedBatchReceived(LobbyPlayerJoinedBatchData data)
+    {
+        if (data == null || isLobbyResyncPending)
+        {
+            return;
+        }
+
+        if (HandleNetworkApplyResult(lobbyClientState.ApplyPlayerJoinedBatch(data)))
+        {
+            PublishCurrentLobbyView();
+        }
+    }
+
+    private void OnLocalLobbyInitialSyncBatchReceived(LobbyInitialSyncBatchData data)
+    {
+        if (data == null || !lobbyClientState.IsCurrentLobby(data.lobbyId))
+        {
+            return;
+        }
+
+        if (!lobbyClientState.ApplyInitialSyncBatch(data))
+        {
+            return;
+        }
+
+        if (data.isFinalBatch)
+        {
+            isLobbyResyncPending = false;
+        }
+
+        PublishCurrentLobbyView();
+
+        if (data.boards == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < data.boards.Count; i++)
+        {
+            LobbyPlayerBoardViewData boardData = data.boards[i];
+
+            if (boardData != null)
+            {
+                LobbyPlayerBoardUpdated?.Invoke(new LobbyPlayerBoardUpdateData(data.lobbyId, boardData.userId, boardData.boardData));
+            }
+        }
+    }
+
     private void OnLocalPlayerLeftReceived(LobbyPlayerLeftData data)
     {
         if (data == null || isLobbyResyncPending)
@@ -639,19 +705,47 @@ public class LobbyManager : MonoBehaviour
         lobbyService.RequestLobbyResync();
     }
 
-    private void OnNetworkConnectionStateChanged(NetworkConnectionState connectionState)
+    private void OnMultiplayerConnectionLost(NetworkConnectionState _)
     {
-        if (runtimeType != SessionRuntimeType.Network || !lobbyClientState.HasLobby || isLeavingLobby)
+        HandleMultiplayerConnectionLost();
+    }
+
+    public void HandleMultiplayerConnectionLost()
+    {
+        if (runtimeType != SessionRuntimeType.Network || isLeavingLobby)
         {
             return;
         }
 
-        if (connectionState != NetworkConnectionState.Disconnected && connectionState != NetworkConnectionState.Failed)
+        entryAttemptVersion++;
+
+        if (lobbyClientState.HasLobby)
+        {
+            HandleForcedLobbyExit(LobbyExitNotification.ConnectionLost(lobbyClientState.LobbyId));
+            return;
+        }
+
+        if (!isEnteringLobby && entryState != LobbyEntryState.Connecting &&
+            entryState != LobbyEntryState.Searching &&
+            entryState != LobbyEntryState.Joining &&
+            entryState != LobbyEntryState.AddingPlayer)
         {
             return;
         }
 
-        HandleForcedLobbyExit(LobbyExitNotification.ConnectionLost(lobbyClientState.LobbyId));
+        isEnteringLobby = false;
+        pendingLobbySetupData = null;
+        pendingNetworkLobbyViewData = null;
+        activeLobbyService = null;
+
+        LobbyEntryResult failureResult = LobbyEntryResult.Failed(
+            LobbyEntryFailureType.ConnectionLost,
+            "The multiplayer connection was lost.");
+
+        lastEntryResult = failureResult;
+        SetEntryState(LobbyEntryState.Failed);
+        LobbyEntryFailed?.Invoke(failureResult);
+        ReturnToMainScene();
     }
 
     private void HandleForcedLobbyExit(LobbyExitNotification notification)
@@ -728,12 +822,7 @@ public class LobbyManager : MonoBehaviour
             return;
         }
 
-        if (gameSceneManager.IsLoadingScene)
-        {
-            return;
-        }
-
-        gameSceneManager.LoadMainScene();
+        gameSceneManager.ReturnToMainSceneAfterLobbyFailure();
     }
 
     #endregion
@@ -798,6 +887,10 @@ public class LobbyManager : MonoBehaviour
         NetworkLobbyConnection.LocalPlayerBoardCollectionReceived += OnLocalPlayerBoardCollectionReceived;
         NetworkLobbyConnection.LocalPlayerJoinedReceived -= OnLocalPlayerJoinedReceived;
         NetworkLobbyConnection.LocalPlayerJoinedReceived += OnLocalPlayerJoinedReceived;
+        NetworkLobbyConnection.LocalPlayerJoinedBatchReceived -= OnLocalPlayerJoinedBatchReceived;
+        NetworkLobbyConnection.LocalPlayerJoinedBatchReceived += OnLocalPlayerJoinedBatchReceived;
+        NetworkLobbyConnection.LocalLobbyInitialSyncBatchReceived -= OnLocalLobbyInitialSyncBatchReceived;
+        NetworkLobbyConnection.LocalLobbyInitialSyncBatchReceived += OnLocalLobbyInitialSyncBatchReceived;
         NetworkLobbyConnection.LocalPlayerLeftReceived -= OnLocalPlayerLeftReceived;
         NetworkLobbyConnection.LocalPlayerLeftReceived += OnLocalPlayerLeftReceived;
         NetworkLobbyConnection.LocalPlayerReadyChangedReceived -= OnLocalPlayerReadyChangedReceived;
@@ -809,26 +902,23 @@ public class LobbyManager : MonoBehaviour
         NetworkLobbyConnection.LocalLobbySyncSnapshotReceived -= OnLocalLobbySyncSnapshotReceived;
         NetworkLobbyConnection.LocalLobbySyncSnapshotReceived += OnLocalLobbySyncSnapshotReceived;
 
-        if (isSubscribedToNetworkBootstrap)
+        if (isSubscribedToMultiplayerSessionLifecycle)
         {
             return;
         }
 
-        if (networkBootstrap == null)
+        if (multiplayerSessionLifecycle == null)
         {
-            networkBootstrap =
-                NetworkBootstrap.instance;
+            multiplayerSessionLifecycle = MultiplayerSessionLifecycle.instance;
         }
 
-        if (networkBootstrap == null)
+        if (multiplayerSessionLifecycle == null)
         {
             return;
         }
 
-        networkBootstrap.ConnectionStateChanged +=
-            OnNetworkConnectionStateChanged;
-
-        isSubscribedToNetworkBootstrap = true;
+        multiplayerSessionLifecycle.ConnectionLost += OnMultiplayerConnectionLost;
+        isSubscribedToMultiplayerSessionLifecycle = true;
     }
 
     private void UnsubscribeFromNetworkEvents()
@@ -838,19 +928,20 @@ public class LobbyManager : MonoBehaviour
         NetworkLobbyConnection.LocalPlayerBoardUpdateReceived -= OnLocalPlayerBoardUpdateReceived;
         NetworkLobbyConnection.LocalPlayerBoardCollectionReceived -= OnLocalPlayerBoardCollectionReceived;
         NetworkLobbyConnection.LocalPlayerJoinedReceived -= OnLocalPlayerJoinedReceived;
+        NetworkLobbyConnection.LocalPlayerJoinedBatchReceived -= OnLocalPlayerJoinedBatchReceived;
+        NetworkLobbyConnection.LocalLobbyInitialSyncBatchReceived -= OnLocalLobbyInitialSyncBatchReceived;
         NetworkLobbyConnection.LocalPlayerLeftReceived -= OnLocalPlayerLeftReceived;
         NetworkLobbyConnection.LocalPlayerReadyChangedReceived -= OnLocalPlayerReadyChangedReceived;
         NetworkLobbyConnection.LocalLobbySettingsChangedReceived -= OnLocalLobbySettingsChangedReceived;
         NetworkLobbyConnection.LocalLobbyStateChangedReceived -= OnLocalLobbyStateChangedReceived;
         NetworkLobbyConnection.LocalLobbySyncSnapshotReceived -= OnLocalLobbySyncSnapshotReceived;
 
-        if (isSubscribedToNetworkBootstrap && networkBootstrap != null)
+        if (isSubscribedToMultiplayerSessionLifecycle && multiplayerSessionLifecycle != null)
         {
-            networkBootstrap.ConnectionStateChanged -=
-                OnNetworkConnectionStateChanged;
+            multiplayerSessionLifecycle.ConnectionLost -= OnMultiplayerConnectionLost;
         }
 
-        isSubscribedToNetworkBootstrap = false;
+        isSubscribedToMultiplayerSessionLifecycle = false;
     }
 
     #endregion

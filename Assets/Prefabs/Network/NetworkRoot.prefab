@@ -19,6 +19,8 @@ GameObject:
   - component: {fileID: 1621890821086182707}
   - component: {fileID: 3480673652361668149}
   - component: {fileID: 4624164359500256062}
+  - component: {fileID: 3490199574268021784}
+  - component: {fileID: 283096166107711725}
   m_Layer: 0
   m_Name: NetworkRoot
   m_TagString: Untagged
@@ -212,3 +214,31 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 29c12e7fdabe696438b50878362ab61a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NetworkBotManager
+--- !u!114 &3490199574268021784
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5973456699069445500}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d2198c8369ea83e4f95571e7c7f4ca59, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MultiplayerSessionLifecycle
+--- !u!114 &283096166107711725
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5973456699069445500}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c82372a0d820b49468c090cc5d856dc4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MultiplayerNetworkScheduler
+  bytesPerSecondBudget: 1048576
+  maximumBurstBytes: 32768
+  maximumItemsPerFrame: 64
+  softMaximumQueuedBytes: 4194304

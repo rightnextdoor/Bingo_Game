@@ -1074,6 +1074,8 @@ MonoBehaviour:
   notificationAreaCanvasGroup: {fileID: 0}
   notificationBackground: {fileID: 0}
   notificationText: {fileID: 0}
+  maximumWidth: 850
+  minimumFontSize: 24
   delayBetweenMessages: 0.35
 --- !u!1 &3271532768769956467
 GameObject:

@@ -52,6 +52,30 @@ public class LobbyExitNotification
         };
     }
 
+    public static LobbyExitNotification LobbyStarted(string lobbyId)
+    {
+        return new LobbyExitNotification
+        {
+            lobbyId = lobbyId ?? string.Empty,
+            exitReason = LobbyPlayerExitReason.LobbyStarted,
+            closeReason = LobbyCloseReason.None,
+            failureType = LobbyEntryFailureType.LobbyStarted,
+            message = "The lobby has already started."
+        };
+    }
+
+    public static LobbyExitNotification JoinTimedOut(string lobbyId)
+    {
+        return new LobbyExitNotification
+        {
+            lobbyId = lobbyId ?? string.Empty,
+            exitReason = LobbyPlayerExitReason.JoinTimedOut,
+            closeReason = LobbyCloseReason.None,
+            failureType = LobbyEntryFailureType.JoinTimedOut,
+            message = "The lobby took too long to finish loading."
+        };
+    }
+
     public static LobbyExitNotification ConnectionLost(string lobbyId)
     {
         return new LobbyExitNotification

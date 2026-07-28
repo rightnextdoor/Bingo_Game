@@ -14,6 +14,8 @@ public class LobbySettings : MonoBehaviour
     [Header("Lobby Timers")]
     [SerializeField, Min(0f)] private float onlineTimerMinutes = 5f;
     [SerializeField, Min(0f)] private float finalCountdownSeconds = 10f;
+    [SerializeField, Min(0f)] private float joinLockSeconds = 10f;
+    [SerializeField, Min(1f)] private float pendingJoinTimeoutSeconds = 60f;
 
     [Header("Online Bots")]
     [SerializeField, Min(0)] private int maxOnlineBots = 30;
@@ -24,6 +26,8 @@ public class LobbySettings : MonoBehaviour
     public float OnlineTimerMinutes => onlineTimerMinutes;
     public float OnlineTimerSeconds => MinutesToSeconds(onlineTimerMinutes);
     public float FinalCountdownSeconds => finalCountdownSeconds;
+    public float JoinLockSeconds => Mathf.Max(0f, joinLockSeconds);
+    public float PendingJoinTimeoutSeconds => Mathf.Max(1f, pendingJoinTimeoutSeconds);
     public int MaxOnlineBots => Mathf.Max(0, maxOnlineBots);
 
     #endregion

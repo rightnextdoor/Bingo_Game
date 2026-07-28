@@ -255,140 +255,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &111433713
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 111433715}
-  - component: {fileID: 111433714}
-  - component: {fileID: 111433720}
-  - component: {fileID: 111433719}
-  - component: {fileID: 111433718}
-  - component: {fileID: 111433717}
-  - component: {fileID: 111433716}
-  m_Layer: 0
-  m_Name: Development
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &111433714
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 111433713}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fc8879c34ab292c49bd3216c3a9fa12b, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::LobbySimulationController
-  simulateOnStart: 1
-  playMode: 1
-  gameModeType: 0
-  ballCountType: 75
---- !u!4 &111433715
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 111433713}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 548.8369, y: 234.56435, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &111433716
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 111433713}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fee62df935a43c64598eff2703c5a377, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::BingoCheckAnimationController
-  boardController: {fileID: 1259848678}
-  cellCheckSeconds: 0.3
-  patternResultSeconds: 1
-  finalPatternSeconds: 2
-  failureColor: {r: 1, g: 0, b: 0, a: 1}
---- !u!114 &111433717
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 111433713}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 74ca514913282e44087d772aca802d01, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::BingoPatternValidator
---- !u!114 &111433718
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 111433713}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ef2c34adc3644e34fac2323d95d0b3e6, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::BingoChecker
-  validator: {fileID: 111433717}
-  animationController: {fileID: 111433716}
---- !u!114 &111433719
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 111433713}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 737ee52291be94b46b91d50cc05fa867, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::GameController
-  bingoChecker: {fileID: 111433718}
-  boardController: {fileID: 1259848678}
-  bingoButton: {fileID: 5127194673264450072}
-  useDirectBingoButtonInput: 0
-  playerId: TestPlayer
---- !u!114 &111433720
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 111433713}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2fa1b0a3700eb1a4798fa5913991658a, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::GameSimulationController
-  lobbyBoardSectionController: {fileID: 2819732170223013765}
-  gameController: {fileID: 111433719}
-  boardController: {fileID: 1259848678}
-  validator: {fileID: 111433717}
-  enableSimulation: 0
-  patternTypes: 0500000006000000
-  simulateWinning: 1
-  gameOver: 1
-  resetSimulation: 0
 --- !u!1 &519420028
 GameObject:
   m_ObjectHideFlags: 0
@@ -8282,6 +8148,83 @@ MonoBehaviour:
   m_FillOrigin: 0
   m_UseSpriteMesh: 0
   m_PixelsPerUnitMultiplier: 1
+--- !u!1001 &4354940823293770546
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 1290380241951259866, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 548.8369
+      objectReference: {fileID: 0}
+    - target: {fileID: 1290380241951259866, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 234.56435
+      objectReference: {fileID: 0}
+    - target: {fileID: 1290380241951259866, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1290380241951259866, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1290380241951259866, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1290380241951259866, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1290380241951259866, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1290380241951259866, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1290380241951259866, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1290380241951259866, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2715090340337549302, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
+      propertyPath: bingoButton
+      value: 
+      objectReference: {fileID: 5127194673264450072}
+    - target: {fileID: 2715090340337549302, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
+      propertyPath: boardController
+      value: 
+      objectReference: {fileID: 1259848678}
+    - target: {fileID: 4922679368307309324, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
+      propertyPath: m_Name
+      value: Development
+      objectReference: {fileID: 0}
+    - target: {fileID: 5177889571896862763, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
+      propertyPath: boardController
+      value: 
+      objectReference: {fileID: 1259848678}
+    - target: {fileID: 5179758250553139109, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
+      propertyPath: boardController
+      value: 
+      objectReference: {fileID: 1259848678}
+    - target: {fileID: 5179758250553139109, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
+      propertyPath: lobbyBoardSectionController
+      value: 
+      objectReference: {fileID: 2819732170223013765}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
 --- !u!1 &4356384136360377398
 GameObject:
   m_ObjectHideFlags: 0
@@ -14125,7 +14068,7 @@ SceneRoots:
   m_Roots:
   - {fileID: 1186014578}
   - {fileID: 42203252}
-  - {fileID: 111433715}
+  - {fileID: 4354940823293770546}
   - {fileID: 519420032}
   - {fileID: 619394802}
   - {fileID: 68669352}

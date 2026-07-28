@@ -117,6 +117,16 @@ public class NetworkRoot : MonoBehaviour
             return;
         }
 
+        if (!InitializeMultiplayerSessionLifecycle())
+        {
+            return;
+        }
+
+        if (!InitializeMultiplayerNetworkScheduler())
+        {
+            return;
+        }
+
         isReady = true;
         Ready?.Invoke();
     }
@@ -199,6 +209,20 @@ public class NetworkRoot : MonoBehaviour
         }
 
         return networkBootstrap.Initialize();
+    }
+
+    private bool InitializeMultiplayerSessionLifecycle()
+    {
+        MultiplayerSessionLifecycle sessionLifecycle = GetComponent<MultiplayerSessionLifecycle>();
+
+        return sessionLifecycle != null && sessionLifecycle.Initialize();
+    }
+
+    private bool InitializeMultiplayerNetworkScheduler()
+    {
+        MultiplayerNetworkScheduler networkScheduler = GetComponent<MultiplayerNetworkScheduler>();
+
+        return networkScheduler != null && networkScheduler.Initialize();
     }
 
     #endregion

@@ -23,6 +23,8 @@ public class NetworkLobbyConnection : NetworkBehaviour
     public static event Action<LobbyPlayerBoardUpdateData> LocalPlayerBoardUpdateReceived;
     public static event Action<LobbyBoardCollectionData> LocalPlayerBoardCollectionReceived;
     public static event Action<LobbyPlayerJoinedData> LocalPlayerJoinedReceived;
+    public static event Action<LobbyPlayerJoinedBatchData> LocalPlayerJoinedBatchReceived;
+    public static event Action<LobbyInitialSyncBatchData> LocalLobbyInitialSyncBatchReceived;
     public static event Action<LobbyPlayerLeftData> LocalPlayerLeftReceived;
     public static event Action<LobbyPlayerReadyChangedData> LocalPlayerReadyChangedReceived;
     public static event Action<LobbySettingsChangedData> LocalLobbySettingsChangedReceived;
@@ -42,6 +44,8 @@ public class NetworkLobbyConnection : NetworkBehaviour
         LocalPlayerBoardUpdateReceived = null;
         LocalPlayerBoardCollectionReceived = null;
         LocalPlayerJoinedReceived = null;
+        LocalPlayerJoinedBatchReceived = null;
+        LocalLobbyInitialSyncBatchReceived = null;
         LocalPlayerLeftReceived = null;
         LocalPlayerReadyChangedReceived = null;
         LocalLobbySettingsChangedReceived = null;
@@ -203,6 +207,14 @@ public class NetworkLobbyConnection : NetworkBehaviour
         }
     }
 
+    public void RequestLobbyInitialSync()
+    {
+        if (IsSpawned && IsOwner)
+        {
+            RequestLobbyInitialSyncRpc();
+        }
+    }
+
     public void RequestSetPlayerReady(bool isReady)
     {
         if (IsSpawned && IsOwner)
@@ -270,8 +282,13 @@ public class NetworkLobbyConnection : NetworkBehaviour
 
         string resultJson = JsonUtility.ToJson(result);
 
-
-        ReceiveLobbyEntryResultRpc(requestId, resultJson, RpcTarget.Single(senderClientId, RpcTargetUse.Temp));
+        ScheduleAuthoritySend(
+            result?.lobbyId,
+            resultJson,
+            MultiplayerNetworkPriority.Critical,
+            MultiplayerNetworkWorkType.Event,
+            string.Empty,
+            () => TrySend(this, senderClientId, () => ReceiveLobbyEntryResultRpc(requestId, resultJson, RpcTarget.Single(senderClientId, RpcTargetUse.Temp))));
     }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Owner)]
@@ -290,7 +307,14 @@ public class NetworkLobbyConnection : NetworkBehaviour
         }
 
         string resultJson = JsonUtility.ToJson(result);
-        ReceiveLobbyExitResultRpc(requestId, resultJson, RpcTarget.Single(senderClientId, RpcTargetUse.Temp));
+
+        ScheduleAuthoritySend(
+            string.Empty,
+            resultJson,
+            MultiplayerNetworkPriority.Critical,
+            MultiplayerNetworkWorkType.Event,
+            string.Empty,
+            () => TrySend(this, senderClientId, () => ReceiveLobbyExitResultRpc(requestId, resultJson, RpcTarget.Single(senderClientId, RpcTargetUse.Temp))));
     }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Owner)]
@@ -309,7 +333,14 @@ public class NetworkLobbyConnection : NetworkBehaviour
         }
 
         string resultJson = JsonUtility.ToJson(result);
-        ReceiveLobbyExitResultRpc(requestId, resultJson, RpcTarget.Single(senderClientId, RpcTargetUse.Temp));
+
+        ScheduleAuthoritySend(
+            string.Empty,
+            resultJson,
+            MultiplayerNetworkPriority.Critical,
+            MultiplayerNetworkWorkType.Event,
+            string.Empty,
+            () => TrySend(this, senderClientId, () => ReceiveLobbyExitResultRpc(requestId, resultJson, RpcTarget.Single(senderClientId, RpcTargetUse.Temp))));
     }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Owner)]
@@ -328,7 +359,20 @@ public class NetworkLobbyConnection : NetworkBehaviour
         }
 
         bool success = settingsData != null && NetworkLobbyManager.instance != null && NetworkLobbyManager.instance.IsReady && NetworkLobbyManager.instance.ProcessAuthorityApplyHostSettings(senderClientId, settingsData);
-        ReceiveHostSettingsResultRpc(requestId, success, RpcTarget.Single(senderClientId, RpcTargetUse.Temp));
+
+        ScheduleAuthoritySend(
+            string.Empty,
+            1,
+            MultiplayerNetworkPriority.Critical,
+            MultiplayerNetworkWorkType.Event,
+            string.Empty,
+            () => TrySend(this, senderClientId, () => ReceiveHostSettingsResultRpc(requestId, success, RpcTarget.Single(senderClientId, RpcTargetUse.Temp))));
+    }
+
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Owner)]
+    private void RequestLobbyInitialSyncRpc(RpcParams rpcParams = default)
+    {
+        NetworkLobbyManager.instance?.ProcessAuthorityLobbyInitialSync(rpcParams.Receive.SenderClientId);
     }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Owner)]
@@ -372,9 +416,15 @@ public class NetworkLobbyConnection : NetworkBehaviour
             return false;
         }
 
-        string lobbyViewJson = JsonUtility.ToJson(lobbyViewData);
-        connection.ReceiveLobbyViewRpc(lobbyViewJson, connection.RpcTarget.Single(clientId, RpcTargetUse.Temp));
-        return true;
+        string json = JsonUtility.ToJson(lobbyViewData);
+
+        return ScheduleAuthoritySend(
+            lobbyViewData.lobbyId,
+            json,
+            MultiplayerNetworkPriority.Normal,
+            MultiplayerNetworkWorkType.State,
+            $"lobby-view:{clientId}",
+            () => TrySend(connection, clientId, () => connection.ReceiveLobbyViewRpc(json, connection.RpcTarget.Single(clientId, RpcTargetUse.Temp))));
     }
 
     public static bool TrySendForcedLobbyExit(ulong clientId, LobbyExitNotification notification)
@@ -384,9 +434,15 @@ public class NetworkLobbyConnection : NetworkBehaviour
             return false;
         }
 
-        string notificationJson = JsonUtility.ToJson(notification);
-        connection.ReceiveForcedLobbyExitRpc(notificationJson, connection.RpcTarget.Single(clientId, RpcTargetUse.Temp));
-        return true;
+        string json = JsonUtility.ToJson(notification);
+
+        return ScheduleAuthoritySend(
+            notification.lobbyId,
+            json,
+            MultiplayerNetworkPriority.Critical,
+            MultiplayerNetworkWorkType.Event,
+            string.Empty,
+            () => TrySend(connection, clientId, () => connection.ReceiveForcedLobbyExitRpc(json, connection.RpcTarget.Single(clientId, RpcTargetUse.Temp))));
     }
 
     public static bool TrySendPlayerBoardUpdate(ulong clientId, LobbyPlayerBoardUpdateData updateData)
@@ -396,9 +452,15 @@ public class NetworkLobbyConnection : NetworkBehaviour
             return false;
         }
 
-        string updateJson = JsonUtility.ToJson(updateData);
-        connection.ReceivePlayerBoardUpdateRpc(updateJson, connection.RpcTarget.Single(clientId, RpcTargetUse.Temp));
-        return true;
+        string json = JsonUtility.ToJson(updateData);
+
+        return ScheduleAuthoritySend(
+            updateData.lobbyId,
+            json,
+            MultiplayerNetworkPriority.High,
+            MultiplayerNetworkWorkType.Event,
+            string.Empty,
+            () => TrySend(connection, clientId, () => connection.ReceivePlayerBoardUpdateRpc(json, connection.RpcTarget.Single(clientId, RpcTargetUse.Temp))));
     }
 
     public static bool TrySendPlayerBoardCollection(ulong clientId, LobbyBoardCollectionData boardCollectionData)
@@ -408,9 +470,15 @@ public class NetworkLobbyConnection : NetworkBehaviour
             return false;
         }
 
-        string boardCollectionJson = JsonUtility.ToJson(boardCollectionData);
-        connection.ReceivePlayerBoardCollectionRpc(boardCollectionJson, connection.RpcTarget.Single(clientId, RpcTargetUse.Temp));
-        return true;
+        string json = JsonUtility.ToJson(boardCollectionData);
+
+        return ScheduleAuthoritySend(
+            boardCollectionData.lobbyId,
+            json,
+            MultiplayerNetworkPriority.High,
+            MultiplayerNetworkWorkType.Event,
+            string.Empty,
+            () => TrySend(connection, clientId, () => connection.ReceivePlayerBoardCollectionRpc(json, connection.RpcTarget.Single(clientId, RpcTargetUse.Temp))));
     }
 
     public static bool TrySendPlayerJoined(ulong clientId, LobbyPlayerJoinedData data)
@@ -420,8 +488,51 @@ public class NetworkLobbyConnection : NetworkBehaviour
             return false;
         }
 
-        connection.ReceivePlayerJoinedRpc(JsonUtility.ToJson(data), connection.RpcTarget.Single(clientId, RpcTargetUse.Temp));
-        return true;
+        string json = JsonUtility.ToJson(data);
+
+        return ScheduleAuthoritySend(
+            data.lobbyId,
+            json,
+            MultiplayerNetworkPriority.High,
+            MultiplayerNetworkWorkType.Event,
+            string.Empty,
+            () => TrySend(connection, clientId, () => connection.ReceivePlayerJoinedRpc(json, connection.RpcTarget.Single(clientId, RpcTargetUse.Temp))));
+    }
+
+    public static bool TrySendPlayerJoinedBatch(ulong clientId, LobbyPlayerJoinedBatchData data)
+    {
+        if (data == null || !TryGetServerConnection(clientId, out NetworkLobbyConnection connection))
+        {
+            return false;
+        }
+
+        string json = JsonUtility.ToJson(data);
+
+        return ScheduleAuthoritySend(
+            data.lobbyId,
+            json,
+            MultiplayerNetworkPriority.High,
+            MultiplayerNetworkWorkType.Event,
+            string.Empty,
+            () => TrySend(connection, clientId, () => connection.ReceivePlayerJoinedBatchRpc(json, connection.RpcTarget.Single(clientId, RpcTargetUse.Temp))));
+    }
+
+    public static bool TrySendLobbyInitialSyncBatch(ulong clientId, LobbyInitialSyncBatchData data)
+    {
+        if (data == null || !TryGetServerConnection(clientId, out NetworkLobbyConnection connection))
+        {
+            return false;
+        }
+
+        string json = JsonUtility.ToJson(data);
+
+        return ScheduleAuthoritySend(
+            data.lobbyId,
+            json,
+            MultiplayerNetworkPriority.High,
+            MultiplayerNetworkWorkType.Event,
+            string.Empty,
+            () => TrySend(connection, clientId, () => connection.ReceiveLobbyInitialSyncBatchRpc(json, connection.RpcTarget.Single(clientId, RpcTargetUse.Temp))));
     }
 
     public static bool TrySendPlayerLeft(ulong clientId, LobbyPlayerLeftData data)
@@ -431,8 +542,15 @@ public class NetworkLobbyConnection : NetworkBehaviour
             return false;
         }
 
-        connection.ReceivePlayerLeftRpc(JsonUtility.ToJson(data), connection.RpcTarget.Single(clientId, RpcTargetUse.Temp));
-        return true;
+        string json = JsonUtility.ToJson(data);
+
+        return ScheduleAuthoritySend(
+            data.lobbyId,
+            json,
+            MultiplayerNetworkPriority.High,
+            MultiplayerNetworkWorkType.Event,
+            string.Empty,
+            () => TrySend(connection, clientId, () => connection.ReceivePlayerLeftRpc(json, connection.RpcTarget.Single(clientId, RpcTargetUse.Temp))));
     }
 
     public static bool TrySendPlayerReadyChanged(ulong clientId, LobbyPlayerReadyChangedData data)
@@ -442,8 +560,15 @@ public class NetworkLobbyConnection : NetworkBehaviour
             return false;
         }
 
-        connection.ReceivePlayerReadyChangedRpc(JsonUtility.ToJson(data), connection.RpcTarget.Single(clientId, RpcTargetUse.Temp));
-        return true;
+        string json = JsonUtility.ToJson(data);
+
+        return ScheduleAuthoritySend(
+            data.lobbyId,
+            json,
+            MultiplayerNetworkPriority.High,
+            MultiplayerNetworkWorkType.Event,
+            string.Empty,
+            () => TrySend(connection, clientId, () => connection.ReceivePlayerReadyChangedRpc(json, connection.RpcTarget.Single(clientId, RpcTargetUse.Temp))));
     }
 
     public static bool TrySendLobbySettingsChanged(ulong clientId, LobbySettingsChangedData data)
@@ -453,8 +578,15 @@ public class NetworkLobbyConnection : NetworkBehaviour
             return false;
         }
 
-        connection.ReceiveLobbySettingsChangedRpc(JsonUtility.ToJson(data), connection.RpcTarget.Single(clientId, RpcTargetUse.Temp));
-        return true;
+        string json = JsonUtility.ToJson(data);
+
+        return ScheduleAuthoritySend(
+            data.lobbyId,
+            json,
+            MultiplayerNetworkPriority.High,
+            MultiplayerNetworkWorkType.Event,
+            string.Empty,
+            () => TrySend(connection, clientId, () => connection.ReceiveLobbySettingsChangedRpc(json, connection.RpcTarget.Single(clientId, RpcTargetUse.Temp))));
     }
 
     public static bool TrySendLobbyStateChanged(ulong clientId, LobbyStateChangedData data)
@@ -464,8 +596,15 @@ public class NetworkLobbyConnection : NetworkBehaviour
             return false;
         }
 
-        connection.ReceiveLobbyStateChangedRpc(JsonUtility.ToJson(data), connection.RpcTarget.Single(clientId, RpcTargetUse.Temp));
-        return true;
+        string json = JsonUtility.ToJson(data);
+
+        return ScheduleAuthoritySend(
+            data.lobbyId,
+            json,
+            MultiplayerNetworkPriority.High,
+            MultiplayerNetworkWorkType.Event,
+            string.Empty,
+            () => TrySend(connection, clientId, () => connection.ReceiveLobbyStateChangedRpc(json, connection.RpcTarget.Single(clientId, RpcTargetUse.Temp))));
     }
 
     public static bool TrySendLobbySyncSnapshot(ulong clientId, LobbySyncSnapshotData snapshotData)
@@ -475,7 +614,63 @@ public class NetworkLobbyConnection : NetworkBehaviour
             return false;
         }
 
-        connection.ReceiveLobbySyncSnapshotRpc(JsonUtility.ToJson(snapshotData), connection.RpcTarget.Single(clientId, RpcTargetUse.Temp));
+        string json = JsonUtility.ToJson(snapshotData);
+
+        return ScheduleAuthoritySend(
+            snapshotData.lobbyId,
+            json,
+            MultiplayerNetworkPriority.Critical,
+            MultiplayerNetworkWorkType.State,
+            $"lobby-snapshot:{clientId}",
+            () => TrySend(connection, clientId, () => connection.ReceiveLobbySyncSnapshotRpc(json, connection.RpcTarget.Single(clientId, RpcTargetUse.Temp))));
+    }
+
+    private static bool ScheduleAuthoritySend(
+        string sessionId,
+        int estimatedBytes,
+        MultiplayerNetworkPriority priority,
+        MultiplayerNetworkWorkType workType,
+        string coalesceKey,
+        Func<bool> sendAction)
+    {
+        MultiplayerNetworkScheduler scheduler = MultiplayerNetworkScheduler.instance;
+
+        if (scheduler == null || !scheduler.IsReady)
+        {
+            return sendAction();
+        }
+
+        return scheduler.Enqueue(sessionId, estimatedBytes, priority, workType, coalesceKey, sendAction);
+    }
+
+    private static bool ScheduleAuthoritySend(
+        string sessionId,
+        string serializedPayload,
+        MultiplayerNetworkPriority priority,
+        MultiplayerNetworkWorkType workType,
+        string coalesceKey,
+        Func<bool> sendAction)
+    {
+        return ScheduleAuthoritySend(
+            sessionId,
+            MultiplayerNetworkScheduler.EstimateUtf8Bytes(serializedPayload),
+            priority,
+            workType,
+            coalesceKey,
+            sendAction);
+    }
+
+    private static bool TrySend(NetworkLobbyConnection connection, ulong clientId, Action sendAction)
+    {
+        if (connection == null ||
+            !connection.IsSpawned ||
+            !connection.IsServer ||
+            sendAction == null)
+        {
+            return false;
+        }
+
+        sendAction();
         return true;
     }
 
@@ -628,6 +823,28 @@ public class NetworkLobbyConnection : NetworkBehaviour
         if (data != null)
         {
             LocalPlayerJoinedReceived?.Invoke(data);
+        }
+    }
+
+    [Rpc(SendTo.SpecifiedInParams)]
+    private void ReceivePlayerJoinedBatchRpc(string dataJson, RpcParams rpcParams = default)
+    {
+        LobbyPlayerJoinedBatchData data = ReadJson<LobbyPlayerJoinedBatchData>(dataJson);
+
+        if (data != null)
+        {
+            LocalPlayerJoinedBatchReceived?.Invoke(data);
+        }
+    }
+
+    [Rpc(SendTo.SpecifiedInParams)]
+    private void ReceiveLobbyInitialSyncBatchRpc(string dataJson, RpcParams rpcParams = default)
+    {
+        LobbyInitialSyncBatchData data = ReadJson<LobbyInitialSyncBatchData>(dataJson);
+
+        if (data != null)
+        {
+            LocalLobbyInitialSyncBatchReceived?.Invoke(data);
         }
     }
 

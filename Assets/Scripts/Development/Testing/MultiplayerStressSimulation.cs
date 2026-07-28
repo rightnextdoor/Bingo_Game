@@ -1,0 +1,525 @@
+using System;
+using System.Collections.Generic;
+using System.Text;
+using UnityEngine;
+
+public enum MultiplayerStressLobbyMode
+{
+    Preset,
+    Random
+}
+
+[Serializable]
+public class MultiplayerStressLobbyPreset
+{
+    public MainMenuPlayMode playMode = MainMenuPlayMode.Online;
+    public BingoGameModeType gameModeType = BingoGameModeType.Traditional;
+    public BingoBallCountType ballCountType = BingoBallCountType.Ball75;
+    [Min(1)] public int targetPlayers = 50;
+    public bool useFreeCell = true;
+}
+
+[DisallowMultipleComponent]
+public class MultiplayerStressSimulation : MonoBehaviour
+{
+    #region Fields
+
+    [Header("Stress Setup")]
+    [SerializeField] private MultiplayerStressLobbyMode lobbyMode = MultiplayerStressLobbyMode.Random;
+    [SerializeField, Min(1)] private int lobbyCount = 4;
+    [SerializeField] private List<MultiplayerStressLobbyPreset> presetLobbies = new List<MultiplayerStressLobbyPreset>();
+
+    [Header("Random Lobby Setup")]
+    [SerializeField, Min(1)] private int minimumPlayersPerLobby = 25;
+    [SerializeField, Min(1)] private int maximumPlayersPerLobby = 100;
+    [SerializeField] private bool includeOnlineLobbies = true;
+    [SerializeField] private bool includeCustomLobbies = true;
+
+    [Header("Fake Player Join Wave")]
+    [SerializeField, Min(1)] private int minimumJoinBatch = 1;
+    [SerializeField, Min(1)] private int maximumJoinBatch = 8;
+    [SerializeField, Min(0f)] private float minimumJoinDelaySeconds = 0.2f;
+    [SerializeField, Min(0f)] private float maximumJoinDelaySeconds = 1.5f;
+    [SerializeField, Min(0f)] private float minimumLoadDelaySeconds = 0.5f;
+    [SerializeField, Min(0f)] private float maximumLoadDelaySeconds = 4f;
+
+    [Header("Run")]
+    [SerializeField, Min(5f)] private float maximumRunSeconds = 420f;
+    [SerializeField] private bool runStress;
+
+    private readonly List<ActiveStressLobby> activeLobbies = new List<ActiveStressLobby>();
+
+    private int stressRunId;
+    private double runStartedTime;
+    private bool isRunning;
+
+    #endregion
+
+    #region Unity Methods
+
+    private void Update()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (!isRunning)
+        {
+            if (runStress)
+            {
+                StartStressRun();
+            }
+
+            return;
+        }
+
+        MonitorStressRun();
+#endif
+    }
+
+    private void OnDisable()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (isRunning)
+        {
+            FinishStressRun(false, "The stress simulation was disabled before it completed.");
+        }
+#endif
+    }
+
+    #endregion
+
+    #region Stress Run
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+
+    private void StartStressRun()
+    {
+        if (!CanRun(out string failureReason))
+        {
+            runStress = false;
+            StressHealthReporter.instance?.ReportFailure("MULTI LOBBY FAILED", failureReason);
+            return;
+        }
+
+        List<MultiplayerStressLobbyPreset> definitions = BuildLobbyDefinitions();
+        string setupSummary = BuildRunSetupSummary(definitions);
+
+        if (!StressSimulationCoordinator.instance.TryBeginRun("Multi Lobby Stress", setupSummary, out stressRunId, out _))
+        {
+            runStress = false;
+            return;
+        }
+
+        activeLobbies.Clear();
+        runStartedTime = Time.unscaledTimeAsDouble;
+        isRunning = true;
+
+        for (int i = 0; i < definitions.Count; i++)
+        {
+            if (!TryCreateStressLobby(definitions[i], i + 1, out ActiveStressLobby activeLobby, out failureReason))
+            {
+                FinishStressRun(false, failureReason);
+                return;
+            }
+
+            activeLobbies.Add(activeLobby);
+        }
+    }
+
+    private void MonitorStressRun()
+    {
+        runStress = true;
+
+        if (Time.unscaledTimeAsDouble - runStartedTime >= maximumRunSeconds)
+        {
+            FinishStressRun(false, "The multi-lobby stress run exceeded its maximum run time.");
+            return;
+        }
+
+        bool allGamesCreated = activeLobbies.Count > 0;
+
+        for (int i = 0; i < activeLobbies.Count; i++)
+        {
+            ActiveStressLobby activeLobby = activeLobbies[i];
+
+            if (!NetworkLobbyManager.instance.TryGetStressLobby(activeLobby.lobbyId, out Lobby lobby) || lobby?.Controller == null)
+            {
+                FinishStressRun(false, $"Lobby {activeLobby.lobbyId} was removed before creating its game.");
+                return;
+            }
+
+            if (StressFakePlayerManager.instance.TryGetJoinWaveResult(activeLobby.joinOperationId, out StressFakePlayerJoinResult joinResult) && joinResult.completed)
+            {
+                if (joinResult.outcome == StressFakePlayerJoinOutcome.Failed)
+                {
+                    FinishStressRun(false, $"Lobby {activeLobby.lobbyId} fake-player join wave failed: {joinResult.failureReason}");
+                    return;
+                }
+
+                if (lobby.playMode == MainMenuPlayMode.Custom && !activeLobby.customCountdownRequested && lobby.lobbyState == LobbyState.Open)
+                {
+                    if (!TryBeginCustomCountdown(activeLobby, lobby, out string countdownFailure))
+                    {
+                        FinishStressRun(false, countdownFailure);
+                        return;
+                    }
+                }
+            }
+
+            if (lobby.lobbyState != LobbyState.InGame)
+            {
+                allGamesCreated = false;
+            }
+        }
+
+        if (allGamesCreated)
+        {
+            FinishStressRun(true, string.Empty);
+        }
+    }
+
+    private void FinishStressRun(bool success, string failureReason)
+    {
+        StringBuilder summary = new StringBuilder();
+        summary.AppendLine($"Lobbies Requested: {activeLobbies.Count}");
+
+        int gamesCreated = 0;
+        int requestedPlayers = 0;
+        int admittedPlayers = 0;
+        int readyPlayers = 0;
+        int notAdmittedBeforeStart = 0;
+        int lobbiesStartedBeforeTarget = 0;
+
+        for (int i = 0; i < activeLobbies.Count; i++)
+        {
+            ActiveStressLobby activeLobby = activeLobbies[i];
+            requestedPlayers += activeLobby.targetPlayers;
+
+            if (StressFakePlayerManager.instance != null && StressFakePlayerManager.instance.TryGetJoinWaveResult(activeLobby.joinOperationId, out StressFakePlayerJoinResult joinResult))
+            {
+                admittedPlayers += joinResult.admitted;
+                notAdmittedBeforeStart += joinResult.notAdmittedBeforeStart + joinResult.removedBeforeReady;
+
+                if (joinResult.outcome == StressFakePlayerJoinOutcome.LobbyStarted)
+                {
+                    lobbiesStartedBeforeTarget++;
+                }
+            }
+
+            if (NetworkLobbyManager.instance != null && NetworkLobbyManager.instance.TryGetStressLobby(activeLobby.lobbyId, out Lobby lobby) && lobby?.Controller != null)
+            {
+                readyPlayers += lobby.Controller.SceneReadyPlayerCount;
+
+                if (lobby.lobbyState == LobbyState.InGame)
+                {
+                    gamesCreated++;
+                }
+            }
+        }
+
+        summary.AppendLine($"Games Created: {gamesCreated}");
+        summary.AppendLine($"Synthetic Players Requested: {requestedPlayers}");
+        summary.AppendLine($"Synthetic Players Admitted: {admittedPlayers}");
+        summary.AppendLine($"Scene Ready Players At Finish: {readyPlayers}");
+        summary.AppendLine($"Lobbies Started Before Join Target: {lobbiesStartedBeforeTarget}");
+        summary.Append($"Players Not Ready/Admitted Before Start: {notAdmittedBeforeStart}");
+
+        StressSimulationCoordinator.instance?.CompleteRun(stressRunId, success, summary.ToString(), failureReason);
+
+        activeLobbies.Clear();
+        stressRunId = 0;
+        isRunning = false;
+        runStress = false;
+    }
+
+#endif
+
+    #endregion
+
+    #region Lobby Creation
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+
+    private bool TryCreateStressLobby(MultiplayerStressLobbyPreset definition, int index, out ActiveStressLobby activeLobby, out string failureReason)
+    {
+        activeLobby = null;
+        failureReason = string.Empty;
+
+        LobbySetupData setupData = BuildLobbySetupData(definition, index);
+
+        if (!NetworkLobbyManager.instance.TryCreateStressLobby(setupData, out Lobby lobby, out failureReason) || lobby?.Controller == null)
+        {
+            return false;
+        }
+
+        StressFakePlayerJoinRequest joinRequest = BuildJoinRequest(lobby.GetLobbyId(), definition.targetPlayers, definition.playMode == MainMenuPlayMode.Custom);
+        int operationId = StressFakePlayerManager.instance.StartJoinWave(joinRequest);
+
+        if (operationId <= 0)
+        {
+            failureReason = $"The fake-player join wave could not start for Lobby {lobby.GetLobbyId()}.";
+            return false;
+        }
+
+        activeLobby = new ActiveStressLobby
+        {
+            lobbyId = lobby.GetLobbyId(),
+            targetPlayers = definition.targetPlayers,
+            joinOperationId = operationId
+        };
+
+        return true;
+    }
+
+    private LobbySetupData BuildLobbySetupData(MultiplayerStressLobbyPreset definition, int index)
+    {
+        int unlimitedPlayerCount = LobbySettings.instance != null ? LobbySettings.instance.UnlimitedPlayerCount : Mathf.Max(definition.targetPlayers, 1000);
+        int maximumPlayers = Mathf.Max(definition.targetPlayers, LobbySettings.instance != null ? LobbySettings.instance.MinimumPlayers : 1);
+        bool useUnlimited = maximumPlayers >= unlimitedPlayerCount;
+
+        LobbySetupData setupData = new LobbySetupData
+        {
+            playMode = definition.playMode
+        };
+
+        if (definition.playMode == MainMenuPlayMode.Custom)
+        {
+            setupData.customSetupData.actionType = CustomLobbyActionType.HostLobby;
+            setupData.customSetupData.hostSetupData.lobbyName = $"Stress Custom {index:D2}";
+            setupData.customSetupData.hostSetupData.gameModeType = definition.gameModeType;
+            setupData.customSetupData.hostSetupData.ballCountType = definition.ballCountType;
+            setupData.customSetupData.hostSetupData.useFreeCell = definition.useFreeCell;
+            setupData.customSetupData.hostSetupData.unlimitedPlayers = useUnlimited;
+            setupData.customSetupData.hostSetupData.maxPlayers = useUnlimited ? unlimitedPlayerCount : maximumPlayers;
+        }
+        else
+        {
+            setupData.playMode = MainMenuPlayMode.Online;
+            setupData.onlineSetupData.searchType = OnlineSearchType.QuickPlay;
+            setupData.onlineSetupData.gameModeType = definition.gameModeType;
+            setupData.onlineSetupData.ballCountType = definition.ballCountType;
+            setupData.onlineSetupData.useFreeCell = definition.useFreeCell;
+            setupData.onlineSetupData.unlimitedPlayers = useUnlimited;
+            setupData.onlineSetupData.maxPlayers = useUnlimited ? unlimitedPlayerCount : maximumPlayers;
+        }
+
+        return setupData;
+    }
+
+    private StressFakePlayerJoinRequest BuildJoinRequest(string lobbyId, int playerCount, bool firstPlayerIsHost)
+    {
+        return new StressFakePlayerJoinRequest
+        {
+            lobbyId = lobbyId,
+            playerCount = Mathf.Max(1, playerCount),
+            minimumJoinBatch = minimumJoinBatch,
+            maximumJoinBatch = maximumJoinBatch,
+            minimumJoinDelaySeconds = minimumJoinDelaySeconds,
+            maximumJoinDelaySeconds = maximumJoinDelaySeconds,
+            minimumLoadDelaySeconds = minimumLoadDelaySeconds,
+            maximumLoadDelaySeconds = maximumLoadDelaySeconds,
+            firstPlayerIsHost = firstPlayerIsHost
+        };
+    }
+
+    private bool TryBeginCustomCountdown(ActiveStressLobby activeLobby, Lobby lobby, out string failureReason)
+    {
+        failureReason = string.Empty;
+        List<StressFakePlayerRecord> players = StressFakePlayerManager.instance.GetSceneReadyPlayersForLobby(activeLobby.lobbyId);
+        StressFakePlayerRecord host = null;
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            if (players[i].isHost)
+            {
+                host = players[i];
+                break;
+            }
+        }
+
+        if (host == null)
+        {
+            failureReason = $"Custom Lobby {activeLobby.lobbyId} does not have a scene-ready stress host.";
+            return false;
+        }
+
+        if (!NetworkLobbyManager.instance.TryBeginStressFinalCountdown(activeLobby.lobbyId, host.userId, out failureReason))
+        {
+            return false;
+        }
+
+        activeLobby.customCountdownRequested = true;
+        return true;
+    }
+
+#endif
+
+    #endregion
+
+    #region Configuration
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+
+    private bool CanRun(out string failureReason)
+    {
+        failureReason = string.Empty;
+
+        if (isRunning)
+        {
+            failureReason = "The multi-lobby stress simulation is already running.";
+            return false;
+        }
+
+        if (StressSimulationCoordinator.instance == null || StressHealthReporter.instance == null)
+        {
+            failureReason = "The shared stress simulation services are not ready.";
+            return false;
+        }
+
+        if (NetworkBootstrap.instance == null || !NetworkBootstrap.instance.IsAuthority)
+        {
+            failureReason = "Run the multi-lobby stress simulation from the authority/host player.";
+            return false;
+        }
+
+        if (NetworkLobbyManager.instance == null || !NetworkLobbyManager.instance.IsReady || StressFakePlayerManager.instance == null)
+        {
+            failureReason = "The stress simulation services are not ready.";
+            return false;
+        }
+
+        if (lobbyMode == MultiplayerStressLobbyMode.Random && !includeOnlineLobbies && !includeCustomLobbies)
+        {
+            failureReason = "Random stress requires Online, Custom, or both lobby types to be enabled.";
+            return false;
+        }
+
+        if (lobbyMode == MultiplayerStressLobbyMode.Preset && presetLobbies.Count == 0)
+        {
+            failureReason = "Add at least one preset Lobby before starting the stress run.";
+            return false;
+        }
+
+        return true;
+    }
+
+    private string BuildRunSetupSummary(List<MultiplayerStressLobbyPreset> definitions)
+    {
+        StringBuilder builder = new StringBuilder();
+        builder.AppendLine($"Mode: {lobbyMode}");
+        builder.AppendLine($"Requested Lobbies: {definitions.Count}");
+
+        if (lobbyMode == MultiplayerStressLobbyMode.Random)
+        {
+            int minimum = Mathf.Max(1, Mathf.Min(minimumPlayersPerLobby, maximumPlayersPerLobby));
+            int maximum = Mathf.Max(minimum, Mathf.Max(minimumPlayersPerLobby, maximumPlayersPerLobby));
+            builder.AppendLine($"Player Range: {minimum} - {maximum}");
+            builder.AppendLine($"Online Enabled: {includeOnlineLobbies}");
+            builder.Append($"Custom Enabled: {includeCustomLobbies}");
+        }
+        else
+        {
+            int totalTargets = 0;
+
+            for (int i = 0; i < definitions.Count; i++)
+            {
+                totalTargets += definitions[i].targetPlayers;
+            }
+
+            builder.Append($"Total Requested Players: {totalTargets}");
+        }
+
+        return builder.ToString();
+    }
+
+    private List<MultiplayerStressLobbyPreset> BuildLobbyDefinitions()
+    {
+        if (lobbyMode == MultiplayerStressLobbyMode.Preset)
+        {
+            List<MultiplayerStressLobbyPreset> definitions = new List<MultiplayerStressLobbyPreset>();
+
+            for (int i = 0; i < presetLobbies.Count; i++)
+            {
+                MultiplayerStressLobbyPreset preset = presetLobbies[i];
+
+                if (preset != null)
+                {
+                    definitions.Add(ClonePreset(preset));
+                }
+            }
+
+            return definitions;
+        }
+
+        List<MultiplayerStressLobbyPreset> randomDefinitions = new List<MultiplayerStressLobbyPreset>();
+        List<BingoGameModeType> gameModes = GetRandomGameModes();
+        Array ballCounts = Enum.GetValues(typeof(BingoBallCountType));
+        int minPlayers = Mathf.Max(1, Mathf.Min(minimumPlayersPerLobby, maximumPlayersPerLobby));
+        int maxPlayers = Mathf.Max(minPlayers, Mathf.Max(minimumPlayersPerLobby, maximumPlayersPerLobby));
+
+        for (int i = 0; i < Mathf.Max(1, lobbyCount); i++)
+        {
+            MainMenuPlayMode playMode = GetRandomPlayMode();
+            BingoGameModeType gameMode = gameModes.Count > 0 ? gameModes[UnityEngine.Random.Range(0, gameModes.Count)] : BingoGameModeType.Traditional;
+            BingoBallCountType ballCount = (BingoBallCountType)ballCounts.GetValue(UnityEngine.Random.Range(0, ballCounts.Length));
+
+            randomDefinitions.Add(new MultiplayerStressLobbyPreset
+            {
+                playMode = playMode,
+                gameModeType = gameMode,
+                ballCountType = ballCount,
+                targetPlayers = UnityEngine.Random.Range(minPlayers, maxPlayers + 1),
+                useFreeCell = UnityEngine.Random.value >= 0.5f
+            });
+        }
+
+        return randomDefinitions;
+    }
+
+    private MainMenuPlayMode GetRandomPlayMode()
+    {
+        if (includeOnlineLobbies && includeCustomLobbies)
+        {
+            return UnityEngine.Random.value >= 0.5f ? MainMenuPlayMode.Online : MainMenuPlayMode.Custom;
+        }
+
+        return includeCustomLobbies ? MainMenuPlayMode.Custom : MainMenuPlayMode.Online;
+    }
+
+    private List<BingoGameModeType> GetRandomGameModes()
+    {
+        List<BingoGameModeType> values = new List<BingoGameModeType>();
+
+        foreach (BingoGameModeType value in Enum.GetValues(typeof(BingoGameModeType)))
+        {
+            if (value != BingoGameModeType.Custom)
+            {
+                values.Add(value);
+            }
+        }
+
+        return values;
+    }
+
+    private MultiplayerStressLobbyPreset ClonePreset(MultiplayerStressLobbyPreset preset)
+    {
+        return new MultiplayerStressLobbyPreset
+        {
+            playMode = preset.playMode == MainMenuPlayMode.Custom ? MainMenuPlayMode.Custom : MainMenuPlayMode.Online,
+            gameModeType = preset.gameModeType,
+            ballCountType = preset.ballCountType,
+            targetPlayers = Mathf.Max(1, preset.targetPlayers),
+            useFreeCell = preset.useFreeCell
+        };
+    }
+
+#endif
+
+    #endregion
+
+    private class ActiveStressLobby
+    {
+        public string lobbyId = string.Empty;
+        public int targetPlayers;
+        public int joinOperationId;
+        public bool customCountdownRequested;
+    }
+}

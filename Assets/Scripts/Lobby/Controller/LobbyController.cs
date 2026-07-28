@@ -29,9 +29,17 @@ public class LobbyController
 
     [SerializeField] private List<LobbyPlayerData> players = new List<LobbyPlayerData>();
 
+    [NonSerialized] private Queue<UserData> pendingBotUsers = new Queue<UserData>();
+    [NonSerialized] private Queue<string> pendingBoardRegenerationUserIds = new Queue<string>();
+    [NonSerialized] private bool pendingViewRefresh;
+
     public IReadOnlyList<LobbyPlayerData> Players => players;
     public int PlayerCount => players != null ? players.Count : 0;
-    public bool IsFull => maxPlayers > 0 && PlayerCount >= maxPlayers;
+    public int SceneReadyPlayerCount => GetVisiblePlayerCount();
+    public int PendingPlayerCount => pendingBotUsers != null ? pendingBotUsers.Count : 0;
+    public int ReservedPlayerCount => PlayerCount + PendingPlayerCount;
+    public bool HasPendingWork => pendingViewRefresh || PendingPlayerCount > 0 || (pendingBoardRegenerationUserIds != null && pendingBoardRegenerationUserIds.Count > 0);
+    public bool IsFull => maxPlayers > 0 && ReservedPlayerCount >= maxPlayers;
     public bool IsEmpty => PlayerCount == 0;
 
     [field: NonSerialized]
@@ -52,6 +60,7 @@ public class LobbyController
     public LobbyTimer Timer => timer;
     public bool IsTimerActive => timer != null && timer.IsActive;
     public double TimerEndTime => timer != null ? timer.EndTime : 0d;
+    public bool IsJoinLocked => GetIsJoinLocked();
 
     [field: NonSerialized] public event Action<LobbyController> FinalCountdownStarted;
 
@@ -136,6 +145,9 @@ public class LobbyController
     private void Initialize(LobbySetupData lobbySetupData, Func<string, bool> isRoomCodeAvailable)
     {
         players = new List<LobbyPlayerData>();
+        pendingBotUsers = new Queue<UserData>();
+        pendingBoardRegenerationUserIds = new Queue<string>();
+        pendingViewRefresh = false;
 
         lobbyName = GetDefaultLobbyName();
         roomCode = string.Empty;
@@ -340,7 +352,7 @@ public class LobbyController
 
         EnsureCollections();
 
-        if (lobby != null && lobby.lobbyState == LobbyState.Closed)
+        if (lobby != null && lobby.lobbyState != LobbyState.Open)
         {
             return false;
         }
@@ -379,8 +391,6 @@ public class LobbyController
         }
 
         playerData.isLobbySceneReady = isReady;
-        RefreshViews();
-
         return true;
     }
 
@@ -754,7 +764,8 @@ public class LobbyController
             if (botUser == null ||
                 !botUser.HasUser ||
                 botUser.userTag != UserTag.Bot ||
-                HasPlayer(botUser.userId))
+                HasPlayer(botUser.userId) ||
+                HasPendingBotUser(botUser.userId))
             {
                 continue;
             }
@@ -800,6 +811,154 @@ public class LobbyController
         return count;
     }
 
+    private int QueueRandomBotsInternal(int requestedCount, int maximumTotalBots)
+    {
+        if (requestedCount <= 0 || botUserProvider == null)
+        {
+            return 0;
+        }
+
+        EnsurePendingWorkCollections();
+
+        List<UserData> eligibleBots = BuildEligibleBotList();
+
+        if (eligibleBots.Count == 0)
+        {
+            return 0;
+        }
+
+        ShuffleBots(eligibleBots);
+
+        int availablePlayerSlots = Mathf.Max(0, maxPlayers - ReservedPlayerCount);
+        int remainingBotAllowance = Mathf.Max(0, maximumTotalBots - BotCount - PendingPlayerCount);
+        int reserveCount = Mathf.Min(requestedCount, eligibleBots.Count);
+        reserveCount = Mathf.Min(reserveCount, availablePlayerSlots);
+        reserveCount = Mathf.Min(reserveCount, remainingBotAllowance);
+
+        for (int i = 0; i < reserveCount; i++)
+        {
+            pendingBotUsers.Enqueue(eligibleBots[i]);
+        }
+
+        return reserveCount;
+    }
+
+    private void QueueRegenerateAllPlayerBoards()
+    {
+        EnsurePendingWorkCollections();
+        pendingBoardRegenerationUserIds.Clear();
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            string userId = players[i]?.userData?.userId;
+
+            if (!string.IsNullOrWhiteSpace(userId))
+            {
+                pendingBoardRegenerationUserIds.Enqueue(userId);
+            }
+        }
+    }
+
+    private bool HasPendingBotUser(string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId) || pendingBotUsers == null)
+        {
+            return false;
+        }
+
+        foreach (UserData pendingBot in pendingBotUsers)
+        {
+            if (pendingBot != null && pendingBot.userId == userId)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void TrimPendingBotsToCapacity()
+    {
+        EnsurePendingWorkCollections();
+
+        int allowedPendingBots = Mathf.Max(0, maxPlayers - PlayerCount);
+
+        if (pendingBotUsers.Count <= allowedPendingBots)
+        {
+            return;
+        }
+
+        Queue<UserData> trimmedBots = new Queue<UserData>();
+
+        while (trimmedBots.Count < allowedPendingBots && pendingBotUsers.Count > 0)
+        {
+            trimmedBots.Enqueue(pendingBotUsers.Dequeue());
+        }
+
+        pendingBotUsers = trimmedBots;
+    }
+
+    public bool ProcessPendingWorkBatch(int maximumItems, out LobbyWorkBatchResult batchResult)
+    {
+        batchResult = new LobbyWorkBatchResult();
+
+        if (maximumItems <= 0)
+        {
+            return false;
+        }
+
+        EnsurePendingWorkCollections();
+        bool shouldRefreshViews = pendingViewRefresh;
+        pendingViewRefresh = false;
+        int processedItems = 0;
+
+        while (processedItems < maximumItems && pendingBotUsers.Count > 0)
+        {
+            UserData botUser = pendingBotUsers.Dequeue();
+            processedItems++;
+
+            if (botUser == null || !botUser.HasUser || HasPlayer(botUser.userId))
+            {
+                continue;
+            }
+
+            LobbyPlayerData botPlayer = new LobbyPlayerData(botUser, false);
+            botPlayer.isLobbySceneReady = true;
+
+            if (!AddPlayerInternal(botPlayer, false))
+            {
+                continue;
+            }
+
+            batchResult.addedPlayers.Add(new LobbyPlayerViewData(botPlayer));
+            batchResult.changedBoards.Add(new LobbyPlayerBoardViewData(botUser.userId, botPlayer.boardData));
+        }
+
+        while (processedItems < maximumItems && pendingBoardRegenerationUserIds.Count > 0)
+        {
+            string userId = pendingBoardRegenerationUserIds.Dequeue();
+            processedItems++;
+
+            LobbyPlayerData playerData = GetPlayer(userId);
+
+            if (playerData == null)
+            {
+                continue;
+            }
+
+            GeneratePlayerBoard(playerData);
+            NotifyPlayerBoardChanged(playerData);
+            batchResult.changedBoards.Add(new LobbyPlayerBoardViewData(userId, playerData.boardData));
+        }
+
+        if (shouldRefreshViews || batchResult.HasChanges)
+        {
+            RefreshViews();
+        }
+
+        return shouldRefreshViews || batchResult.HasChanges;
+    }
+
     #endregion
 
     #region Lobby State
@@ -831,6 +990,10 @@ public class LobbyController
         }
 
         players.Clear();
+        EnsurePendingWorkCollections();
+        pendingBotUsers.Clear();
+        pendingBoardRegenerationUserIds.Clear();
+        pendingViewRefresh = false;
         RefreshViews();
 
         return removedUserIds;
@@ -839,6 +1002,38 @@ public class LobbyController
     #endregion
 
     #region Timer
+
+    private bool GetIsJoinLocked()
+    {
+        if (lobby == null || lobby.lobbyState != LobbyState.Open)
+        {
+            return true;
+        }
+
+        if (lobby.playMode != MainMenuPlayMode.Online || timer == null || !timer.IsActive)
+        {
+            return false;
+        }
+
+        LobbySettings lobbySettings = LobbySettings.instance;
+
+        if (lobbySettings == null)
+        {
+            return false;
+        }
+
+        float joinLockThreshold = timer.FinalCountdownSeconds + lobbySettings.JoinLockSeconds;
+        return timer.GetRemainingSeconds() <= joinLockThreshold;
+    }
+
+    public bool IsOnlineFinalCountdownDue()
+    {
+        return lobby != null &&
+               lobby.playMode == MainMenuPlayMode.Online &&
+               lobby.lobbyState == LobbyState.Open &&
+               timer != null &&
+               timer.HasReachedFinalCountdown();
+    }
 
     public bool BeginFinalCountdown()
     {
@@ -1188,23 +1383,21 @@ public class LobbyController
         int requestedBotCount = addBots ? Mathf.Max(0, settingsData.botCount) : 0;
 
         ResolveGameModeData();
+        TrimPendingBotsToCapacity();
 
         if (requestedBotCount > 0)
         {
-            AddRandomBotsInternal(requestedBotCount, int.MaxValue);
+            QueueRandomBotsInternal(requestedBotCount, int.MaxValue);
         }
 
-        bool boardGenerationChanged =
-            ballCountType != previousBallCountType ||
-            useFreeCell != previousUseFreeCell;
+        bool boardGenerationChanged = ballCountType != previousBallCountType || useFreeCell != previousUseFreeCell;
 
         if (boardGenerationChanged)
         {
-            RegenerateAllPlayerBoards();
+            QueueRegenerateAllPlayerBoards();
         }
 
-        RefreshViews();
-
+        pendingViewRefresh = true;
         return true;
     }
 
@@ -1322,6 +1515,11 @@ public class LobbyController
 
     public LobbyViewData BuildViewData()
     {
+        return BuildViewData(true);
+    }
+
+    public LobbyViewData BuildViewData(bool includePlayers)
+    {
         EnsureCollections();
         ResolveGameModeData();
 
@@ -1348,7 +1546,7 @@ public class LobbyController
             playerCount = GetVisiblePlayerCount(),
             maxPlayers = maxPlayers,
             unlimitedPlayers = unlimitedPlayers,
-            players = BuildPlayerViewDataList(),
+            players = includePlayers ? BuildPlayerViewDataList() : new List<LobbyPlayerViewData>(),
             addBots = addBots,
             botCount = BotCount
         };
@@ -1366,9 +1564,7 @@ public class LobbyController
         {
             LobbyPlayerData playerData = players[i];
 
-            if (playerData == null ||
-                !playerData.isLobbySceneReady ||
-                !playerData.HasValidUser)
+            if (playerData == null || !playerData.isLobbySceneReady || !playerData.HasValidUser)
             {
                 continue;
             }
@@ -1389,10 +1585,7 @@ public class LobbyController
         {
             LobbyPlayerData playerData = players[i];
 
-            if (playerData == null ||
-                playerData == visibleHost ||
-                !playerData.isLobbySceneReady ||
-                !playerData.HasValidUser)
+            if (playerData == null || playerData == visibleHost || !playerData.isLobbySceneReady || !playerData.HasValidUser)
             {
                 continue;
             }
@@ -1411,7 +1604,7 @@ public class LobbyController
         {
             LobbyPlayerData playerData = players[i];
 
-            if (playerData != null && playerData.isLobbySceneReady)
+            if (playerData != null && playerData.isLobbySceneReady && playerData.HasValidUser)
             {
                 visiblePlayerCount++;
             }
@@ -1462,6 +1655,13 @@ public class LobbyController
         players ??= new List<LobbyPlayerData>();
         patternTypes ??= new List<BingoPatternType>();
         views ??= new List<ILobbyView>();
+        EnsurePendingWorkCollections();
+    }
+
+    private void EnsurePendingWorkCollections()
+    {
+        pendingBotUsers ??= new Queue<UserData>();
+        pendingBoardRegenerationUserIds ??= new Queue<string>();
     }
 
     #endregion

@@ -338,7 +338,8 @@ public class NetworkBootstrap : MonoBehaviour
 
         float timeoutTime = Time.realtimeSinceStartup + ShutdownTimeoutSeconds;
 
-        while (connectionState != NetworkConnectionState.Offline)
+        while (connectionState != NetworkConnectionState.Offline ||
+               (networkManager != null && (networkManager.IsListening || networkManager.ShutdownInProgress)))
         {
             if (Time.realtimeSinceStartup >= timeoutTime)
             {
@@ -358,6 +359,20 @@ public class NetworkBootstrap : MonoBehaviour
             return;
         }
 
+        if (networkManager == null)
+        {
+            CompleteShutdown();
+            return;
+        }
+
+        if (networkManager.ShutdownInProgress)
+        {
+            isManualShutdown = true;
+            SetConnectionState(NetworkConnectionState.Disconnecting);
+            shutdownRoutine = StartCoroutine(WaitForShutdown());
+            return;
+        }
+
         if (!networkManager.IsListening)
         {
             CompleteShutdown();
@@ -373,7 +388,7 @@ public class NetworkBootstrap : MonoBehaviour
 
     private IEnumerator WaitForShutdown()
     {
-        while (networkManager != null && networkManager.IsListening)
+        while (networkManager != null && (networkManager.IsListening || networkManager.ShutdownInProgress))
         {
             yield return null;
         }
@@ -463,6 +478,23 @@ public class NetworkBootstrap : MonoBehaviour
 
     #endregion
 
+    #region Development Testing
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    public bool SimulateUnexpectedClientDisconnectForTesting()
+    {
+        if (!isReady || networkManager == null || !networkManager.IsListening || !networkManager.IsClient || networkManager.IsHost)
+        {
+            return false;
+        }
+
+        networkManager.Shutdown(true);
+        return true;
+    }
+#endif
+
+    #endregion
+
     #region Validation
 
     private bool CanStartConnection()
@@ -485,7 +517,8 @@ public class NetworkBootstrap : MonoBehaviour
             return false;
         }
 
-        if (connectionState == NetworkConnectionState.Initializing ||
+        if (networkManager.ShutdownInProgress ||
+            connectionState == NetworkConnectionState.Initializing ||
             connectionState == NetworkConnectionState.Connecting ||
             connectionState == NetworkConnectionState.Disconnecting)
         {

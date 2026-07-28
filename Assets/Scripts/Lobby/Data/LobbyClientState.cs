@@ -104,7 +104,50 @@ public class LobbyClientState
 
         viewData.playerCount = data.playerCount;
         viewData.botCount = data.botCount;
-        viewData.addBots = data.botCount > 0;
+        return LobbyStateApplyResult.Applied;
+    }
+
+    public LobbyStateApplyResult ApplyPlayerJoinedBatch(LobbyPlayerJoinedBatchData data)
+    {
+        if (data?.players == null || viewData?.players == null)
+        {
+            return LobbyStateApplyResult.Invalid;
+        }
+
+        LobbyStateApplyResult revisionResult = ValidateRevision(data.lobbyId, data.revision);
+
+        if (revisionResult != LobbyStateApplyResult.Applied)
+        {
+            return revisionResult;
+        }
+
+        for (int i = 0; i < data.players.Count; i++)
+        {
+            LobbyPlayerViewData playerData = data.players[i];
+
+            if (playerData == null || string.IsNullOrWhiteSpace(playerData.userId))
+            {
+                continue;
+            }
+
+            int existingIndex = FindPlayerIndex(playerData.userId);
+
+            if (existingIndex >= 0)
+            {
+                viewData.players[existingIndex] = playerData;
+            }
+            else if (playerData.isHost)
+            {
+                viewData.players.Insert(0, playerData);
+            }
+            else
+            {
+                viewData.players.Add(playerData);
+            }
+        }
+
+        viewData.playerCount = data.playerCount;
+        viewData.botCount = data.botCount;
         return LobbyStateApplyResult.Applied;
     }
 
@@ -132,7 +175,6 @@ public class LobbyClientState
         boardsByUserId.Remove(data.userId);
         viewData.playerCount = data.playerCount;
         viewData.botCount = data.botCount;
-        viewData.addBots = data.botCount > 0;
         return LobbyStateApplyResult.Applied;
     }
 
@@ -217,6 +259,85 @@ public class LobbyClientState
         viewData.isTimerActive = data.isTimerActive;
         viewData.timerEndTime = data.timerEndTime;
         return LobbyStateApplyResult.Applied;
+    }
+
+    #endregion
+
+    #region Initial Sync
+
+    public bool ApplyInitialSyncBatch(LobbyInitialSyncBatchData data)
+    {
+        if (data == null || string.IsNullOrWhiteSpace(data.lobbyId) || !IsCurrentLobby(data.lobbyId))
+        {
+            return false;
+        }
+
+        if (data.resetState)
+        {
+            if (data.lobbyViewData == null)
+            {
+                return false;
+            }
+
+            data.lobbyViewData.lobbyId = lobbyId;
+            data.lobbyViewData.players ??= new List<LobbyPlayerViewData>();
+            data.lobbyViewData.players.Clear();
+            viewData = data.lobbyViewData;
+            boardsByUserId.Clear();
+        }
+
+        if (viewData?.players == null)
+        {
+            return false;
+        }
+
+        if (data.players != null)
+        {
+            for (int i = 0; i < data.players.Count; i++)
+            {
+                LobbyPlayerViewData playerData = data.players[i];
+
+                if (playerData == null || string.IsNullOrWhiteSpace(playerData.userId))
+                {
+                    continue;
+                }
+
+                int existingIndex = FindPlayerIndex(playerData.userId);
+
+                if (existingIndex >= 0)
+                {
+                    viewData.players[existingIndex] = playerData;
+                }
+                else if (playerData.isHost)
+                {
+                    viewData.players.Insert(0, playerData);
+                }
+                else
+                {
+                    viewData.players.Add(playerData);
+                }
+            }
+        }
+
+        if (data.boards != null)
+        {
+            for (int i = 0; i < data.boards.Count; i++)
+            {
+                LobbyPlayerBoardViewData boardData = data.boards[i];
+
+                if (boardData != null && !string.IsNullOrWhiteSpace(boardData.userId))
+                {
+                    boardsByUserId[boardData.userId] = new LobbyBoardData(boardData.boardData);
+                }
+            }
+        }
+
+        if (data.isFinalBatch)
+        {
+            revision = Math.Max(0, data.revision);
+        }
+
+        return true;
     }
 
     #endregion

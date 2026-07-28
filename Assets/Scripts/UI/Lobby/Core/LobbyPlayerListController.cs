@@ -88,62 +88,85 @@ public class LobbyPlayerListController : MonoBehaviour
     {
         UpdatePlayerCount(playerCount, maxPlayers, unlimitedPlayers);
 
-        string previousSelectedUserId =
-            selectedUserId;
+        string previousSelectedUserId = selectedUserId;
 
-        ClearRows();
-
-        if (rowParent == null ||
-            rowPrefab == null ||
-            players == null)
+        if (rowParent == null || rowPrefab == null || players == null)
         {
+            ClearRows();
             selectedUserId = string.Empty;
             return;
         }
 
+        HashSet<string> desiredUserIds = new HashSet<string>();
+
         for (int i = 0; i < players.Count; i++)
         {
-            PlayerListPlayerData playerData =
-                players[i];
+            string userId = players[i]?.userId;
 
-            if (playerData == null ||
-                string.IsNullOrWhiteSpace(
-                    playerData.userId))
+            if (!string.IsNullOrWhiteSpace(userId))
+            {
+                desiredUserIds.Add(userId);
+            }
+        }
+
+        List<string> removedUserIds = new List<string>();
+
+        foreach (KeyValuePair<string, LobbyPlayerRowUI> rowEntry in rowsByUserId)
+        {
+            if (!desiredUserIds.Contains(rowEntry.Key))
+            {
+                removedUserIds.Add(rowEntry.Key);
+            }
+        }
+
+        for (int i = 0; i < removedUserIds.Count; i++)
+        {
+            string userId = removedUserIds[i];
+
+            if (!rowsByUserId.TryGetValue(userId, out LobbyPlayerRowUI removedRow))
             {
                 continue;
             }
 
-            LobbyPlayerRowUI row =
-                Instantiate(
-                    rowPrefab,
-                    rowParent);
+            rowsByUserId.Remove(userId);
+            spawnedRows.Remove(removedRow);
 
-            row.gameObject.SetActive(true);
-
-            bool highlighted =
-                !string.IsNullOrWhiteSpace(
-                    previousSelectedUserId) &&
-                previousSelectedUserId ==
-                    playerData.userId;
-
-            row.Setup(
-                playerData,
-                OnRowClicked,
-                OnKickRequested,
-                highlighted);
-
-            spawnedRows.Add(row);
-
-            rowsByUserId[
-                playerData.userId] = row;
+            if (removedRow != null)
+            {
+                DestroyChildObject(removedRow.gameObject);
+            }
         }
 
-        selectedUserId =
-            rowsByUserId.ContainsKey(
-                previousSelectedUserId)
-                ? previousSelectedUserId
-                : string.Empty;
+        List<LobbyPlayerRowUI> orderedRows = new List<LobbyPlayerRowUI>();
 
+        for (int i = 0; i < players.Count; i++)
+        {
+            PlayerListPlayerData playerData = players[i];
+
+            if (playerData == null || string.IsNullOrWhiteSpace(playerData.userId))
+            {
+                continue;
+            }
+
+            bool isNewRow = !rowsByUserId.TryGetValue(playerData.userId, out LobbyPlayerRowUI row) || row == null;
+
+            if (isNewRow)
+            {
+                row = Instantiate(rowPrefab, rowParent);
+                row.gameObject.SetActive(true);
+                rowsByUserId[playerData.userId] = row;
+            }
+
+            bool highlighted = !string.IsNullOrWhiteSpace(previousSelectedUserId) && previousSelectedUserId == playerData.userId;
+            row.Setup(playerData, OnRowClicked, OnKickRequested, highlighted, isNewRow);
+            row.transform.SetAsLastSibling();
+            orderedRows.Add(row);
+        }
+
+        spawnedRows.Clear();
+        spawnedRows.AddRange(orderedRows);
+
+        selectedUserId = rowsByUserId.ContainsKey(previousSelectedUserId) ? previousSelectedUserId : string.Empty;
         SetSelectedUser(selectedUserId);
     }
 

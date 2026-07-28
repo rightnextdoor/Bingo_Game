@@ -64,7 +64,7 @@ public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
 
     #region Setup
 
-    public void Setup(PlayerListPlayerData playerData, Action<string> onRowClicked, Action<string> onKickRequested, bool isHighlighted)
+    public void Setup(PlayerListPlayerData playerData, Action<string> onRowClicked, Action<string> onKickRequested, bool isHighlighted, bool refreshBoard = true)
     {
         if (playerData == null)
         {
@@ -78,7 +78,10 @@ public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
         SetPlayerIcon(playerData.iconId);
         SetPlayerName(playerData.playerName, playerData.userId);
 
-        boardPreviewController?.DisplayBoard(playerData.boardData, playerData.markedCellIndices);
+        if (refreshBoard)
+        {
+            boardPreviewController?.DisplayBoard(playerData.boardData, playerData.markedCellIndices);
+        }
 
         SetStatusIcon(botIconImage, UIIconType.Bot, playerData.showBotIcon);
         SetStatusIcon(readyCheckmarkImage, UIIconType.LobbyCheckmark, playerData.showReadyIcon && playerData.isReady);

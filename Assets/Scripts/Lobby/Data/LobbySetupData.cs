@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 [Serializable]
 public class LobbySetupData
@@ -30,6 +31,9 @@ public class SoloLobbySetupData
     public BingoBallCountType ballCountType = BingoBallCountType.Ball75;
     public bool useFreeCell = true;
 
+    public bool usesDefaultPatterns = true;
+    public List<BingoPatternType> patternTypes = new List<BingoPatternType>();
+
     public bool maxPlayers = false;
     public int maxPlayer = 6;
 
@@ -38,6 +42,9 @@ public class SoloLobbySetupData
         gameModeType = BingoGameModeType.Traditional;
         ballCountType = BingoBallCountType.Ball75;
         useFreeCell = true;
+
+        usesDefaultPatterns = true;
+        patternTypes = new List<BingoPatternType>();
 
         maxPlayers = false;
         maxPlayer = 6;
@@ -94,6 +101,9 @@ public class CustomHostLobbySetupData
     public BingoBallCountType ballCountType = BingoBallCountType.Ball75;
     public bool useFreeCell = true;
 
+    public bool usesDefaultPatterns = true;
+    public List<BingoPatternType> patternTypes = new List<BingoPatternType>();
+
     public bool maxPlayers = false;
     public int maxPlayer = 6;
 
@@ -105,6 +115,9 @@ public class CustomHostLobbySetupData
         gameModeType = BingoGameModeType.Traditional;
         ballCountType = BingoBallCountType.Ball75;
         useFreeCell = true;
+
+        usesDefaultPatterns = true;
+        patternTypes = new List<BingoPatternType>();
 
         maxPlayers = false;
         maxPlayer = 6;

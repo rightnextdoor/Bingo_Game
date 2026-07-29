@@ -206,6 +206,17 @@ public class LobbyController
         gameModeType = soloSetupData.gameModeType;
         ballCountType = soloSetupData.ballCountType;
         useFreeCell = soloSetupData.useFreeCell;
+        usesDefaultPatterns = soloSetupData.usesDefaultPatterns;
+
+        if (usesDefaultPatterns)
+        {
+            patternTypes.Clear();
+        }
+        else
+        {
+            ApplyCustomPatterns(soloSetupData.patternTypes);
+        }
+
         maxPlayers = soloSetupData.maxPlayers;
         maxPlayer = GetValidMaximumPlayers(soloSetupData.maxPlayer, maxPlayers);
     }
@@ -253,6 +264,17 @@ public class LobbyController
         gameModeType = hostSetupData.gameModeType;
         ballCountType = hostSetupData.ballCountType;
         useFreeCell = hostSetupData.useFreeCell;
+        usesDefaultPatterns = hostSetupData.usesDefaultPatterns;
+
+        if (usesDefaultPatterns)
+        {
+            patternTypes.Clear();
+        }
+        else
+        {
+            ApplyCustomPatterns(hostSetupData.patternTypes);
+        }
+
         maxPlayers = hostSetupData.maxPlayers;
         maxPlayer = GetValidMaximumPlayers(hostSetupData.maxPlayer, maxPlayers);
 

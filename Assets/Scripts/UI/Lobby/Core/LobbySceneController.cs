@@ -344,6 +344,34 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
     }
 
 
+    private void SaveCurrentHostLobbySettings(LobbyManager lobbyManager)
+    {
+        if (lobbyManager == null || !lobbyManager.HasEnteredLobby)
+        {
+            return;
+        }
+
+        LobbyViewData lobbyViewData = lobbyManager.RuntimeType == SessionRuntimeType.Local
+            ? lobbyManager.CurrentLobby?.Controller?.BuildViewData()
+            : lobbyManager.CurrentLobbyViewData;
+
+        if (lobbyViewData == null)
+        {
+            return;
+        }
+
+        if (lobbyViewData.playMode == MainMenuPlayMode.Solo)
+        {
+            LobbySaveDataService.SaveLobbyViewData(lobbyViewData);
+            return;
+        }
+
+        if (lobbyViewData.playMode == MainMenuPlayMode.Custom && IsCurrentPlayerHost(lobbyViewData))
+        {
+            LobbySaveDataService.SaveLobbyViewData(lobbyViewData);
+        }
+    }
+
     private void StartLobby()
     {
         LobbyManager lobbyManager = LobbyManager.instance;
@@ -371,6 +399,8 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
                 return;
             }
 
+            SaveCurrentHostLobbySettings(lobbyManager);
+
             if (!controller.BeginFinalCountdown(lobbyManager.CurrentUserId))
             {
                 return;
@@ -393,6 +423,7 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
             return;
         }
 
+        SaveCurrentHostLobbySettings(lobbyManager);
         lobbyService.StartLobby();
     }
 

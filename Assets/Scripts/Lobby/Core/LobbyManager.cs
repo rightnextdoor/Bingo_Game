@@ -129,6 +129,8 @@ public class LobbyManager : MonoBehaviour
             return;
         }
 
+        LobbySaveDataService.ApplySavedDataToSetup(lobbySetupData);
+
         pendingLobbySetupData = lobbySetupData;
         lastEntryResult = null;
 

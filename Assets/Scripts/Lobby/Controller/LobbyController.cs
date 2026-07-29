@@ -12,15 +12,15 @@ public class LobbyController
     private const string DefaultCustomLobbyName = "Custom Lobby";
 
     [SerializeField] private string lobbyName = string.Empty;
-    [SerializeField] private int maxPlayers;
-    [SerializeField] private bool unlimitedPlayers;
+    [SerializeField] private int maxPlayer;
+    [SerializeField] private bool maxPlayers;
     [SerializeField] private LobbyCloseReason closeReason = LobbyCloseReason.None;
 
     [NonSerialized] private Lobby lobby;
 
     public string LobbyName => lobbyName;
-    public int MaxPlayers => maxPlayers;
-    public bool UnlimitedPlayers => unlimitedPlayers;
+    public int MaxPlayer => maxPlayer;
+    public bool MaxPlayers => maxPlayers;
     public LobbyCloseReason CloseReason => closeReason;
 
     #endregion
@@ -39,7 +39,7 @@ public class LobbyController
     public int PendingPlayerCount => pendingBotUsers != null ? pendingBotUsers.Count : 0;
     public int ReservedPlayerCount => PlayerCount + PendingPlayerCount;
     public bool HasPendingWork => pendingViewRefresh || PendingPlayerCount > 0 || (pendingBoardRegenerationUserIds != null && pendingBoardRegenerationUserIds.Count > 0);
-    public bool IsFull => maxPlayers > 0 && ReservedPlayerCount >= maxPlayers;
+    public bool IsFull => maxPlayer > 0 && ReservedPlayerCount >= maxPlayer;
     public bool IsEmpty => PlayerCount == 0;
 
     [field: NonSerialized]
@@ -160,8 +160,8 @@ public class LobbyController
         usesDefaultPatterns = true;
         useFreeCell = true;
 
-        unlimitedPlayers = false;
-        maxPlayers = GetMinimumPlayers();
+        maxPlayers = false;
+        maxPlayer = GetMinimumPlayers();
         addBots = false;
 
         closeReason = LobbyCloseReason.None;
@@ -206,8 +206,8 @@ public class LobbyController
         gameModeType = soloSetupData.gameModeType;
         ballCountType = soloSetupData.ballCountType;
         useFreeCell = soloSetupData.useFreeCell;
-        unlimitedPlayers = soloSetupData.unlimitedPlayers;
-        maxPlayers = GetValidMaximumPlayers(soloSetupData.maxPlayers, unlimitedPlayers);
+        maxPlayers = soloSetupData.maxPlayers;
+        maxPlayer = GetValidMaximumPlayers(soloSetupData.maxPlayer, maxPlayers);
     }
 
     private void ApplyOnlineSetup(OnlineLobbySetupData onlineSetupData)
@@ -222,8 +222,8 @@ public class LobbyController
         gameModeType = onlineSetupData.gameModeType;
         ballCountType = onlineSetupData.ballCountType;
         useFreeCell = onlineSetupData.useFreeCell;
-        unlimitedPlayers = onlineSetupData.unlimitedPlayers;
-        maxPlayers = GetValidMaximumPlayers(onlineSetupData.maxPlayers, unlimitedPlayers);
+        maxPlayers = onlineSetupData.maxPlayers;
+        maxPlayer = GetValidMaximumPlayers(onlineSetupData.maxPlayer, maxPlayers);
     }
 
     private void ApplyCustomSetup(CustomLobbySetupData customSetupData, Func<string, bool> isRoomCodeAvailable)
@@ -253,8 +253,8 @@ public class LobbyController
         gameModeType = hostSetupData.gameModeType;
         ballCountType = hostSetupData.ballCountType;
         useFreeCell = hostSetupData.useFreeCell;
-        unlimitedPlayers = hostSetupData.unlimitedPlayers;
-        maxPlayers = GetValidMaximumPlayers(hostSetupData.maxPlayers, unlimitedPlayers);
+        maxPlayers = hostSetupData.maxPlayers;
+        maxPlayer = GetValidMaximumPlayers(hostSetupData.maxPlayer, maxPlayers);
 
         roomCode = GenerateUniqueRoomCode(isRoomCodeAvailable);
     }
@@ -287,19 +287,19 @@ public class LobbyController
         return LobbySettings.instance.MinimumPlayers;
     }
 
-    private int GetUnlimitedPlayerCount()
+    private int GetMaxPlayerCount()
     {
-        return LobbySettings.instance.UnlimitedPlayerCount;
+        return LobbySettings.instance.MaxPlayerCount;
     }
 
-    private int GetValidMaximumPlayers(int requestedMaximumPlayers, bool isUnlimited)
+    private int GetValidMaximumPlayers(int requestedMaximumPlayers, bool isMax)
     {
-        if (isUnlimited)
+        if (isMax)
         {
-            return GetUnlimitedPlayerCount();
+            return GetMaxPlayerCount();
         }
 
-        return Mathf.Clamp(requestedMaximumPlayers, GetMinimumPlayers(), GetUnlimitedPlayerCount());
+        return Mathf.Clamp(requestedMaximumPlayers, GetMinimumPlayers(), GetMaxPlayerCount());
     }
 
     #endregion
@@ -723,7 +723,7 @@ public class LobbyController
 
         ShuffleBots(eligibleBots);
 
-        int availablePlayerSlots = Mathf.Max(0, maxPlayers - PlayerCount);
+        int availablePlayerSlots = Mathf.Max(0, maxPlayer - PlayerCount);
         int remainingBotAllowance = Mathf.Max(0, maximumTotalBots - BotCount);
 
         int addCount = Mathf.Min(requestedCount, eligibleBots.Count);
@@ -829,7 +829,7 @@ public class LobbyController
 
         ShuffleBots(eligibleBots);
 
-        int availablePlayerSlots = Mathf.Max(0, maxPlayers - ReservedPlayerCount);
+        int availablePlayerSlots = Mathf.Max(0, maxPlayer - ReservedPlayerCount);
         int remainingBotAllowance = Mathf.Max(0, maximumTotalBots - BotCount - PendingPlayerCount);
         int reserveCount = Mathf.Min(requestedCount, eligibleBots.Count);
         reserveCount = Mathf.Min(reserveCount, availablePlayerSlots);
@@ -881,7 +881,7 @@ public class LobbyController
     {
         EnsurePendingWorkCollections();
 
-        int allowedPendingBots = Mathf.Max(0, maxPlayers - PlayerCount);
+        int allowedPendingBots = Mathf.Max(0, maxPlayer - PlayerCount);
 
         if (pendingBotUsers.Count <= allowedPendingBots)
         {
@@ -1096,7 +1096,7 @@ public class LobbyController
             int requiredBots = GetMinimumPlayers() - PlayerCount;
             List<UserData> eligibleBots = BuildEligibleBotList();
 
-            int availablePlayerSlots = Mathf.Max(0, maxPlayers - PlayerCount);
+            int availablePlayerSlots = Mathf.Max(0, maxPlayer - PlayerCount);
             int remainingOnlineBotAllowance = Mathf.Max(0, lobbySettings.MaxOnlineBots - BotCount);
 
             int maximumBotsToAdd = Mathf.Min(eligibleBots.Count, availablePlayerSlots);
@@ -1376,8 +1376,8 @@ public class LobbyController
             ApplyCustomPatterns(settingsData.patternTypes);
         }
 
-        unlimitedPlayers = settingsData.unlimitedPlayers;
-        maxPlayers = GetValidMaximumPlayers(settingsData.maxPlayers, unlimitedPlayers);
+        maxPlayers = settingsData.maxPlayers;
+        maxPlayer = GetValidMaximumPlayers(settingsData.maxPlayer, maxPlayers);
 
         addBots = settingsData.addBots;
         int requestedBotCount = addBots ? Mathf.Max(0, settingsData.botCount) : 0;
@@ -1544,8 +1544,8 @@ public class LobbyController
             ballCountType = ballCountType,
             useFreeCell = useFreeCell,
             playerCount = GetVisiblePlayerCount(),
+            maxPlayer = maxPlayer,
             maxPlayers = maxPlayers,
-            unlimitedPlayers = unlimitedPlayers,
             players = includePlayers ? BuildPlayerViewDataList() : new List<LobbyPlayerViewData>(),
             addBots = addBots,
             botCount = BotCount

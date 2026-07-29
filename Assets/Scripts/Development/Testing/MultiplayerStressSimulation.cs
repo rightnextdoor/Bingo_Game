@@ -47,10 +47,12 @@ public class MultiplayerStressSimulation : MonoBehaviour
     [Header("Run")]
     [SerializeField, Min(5f)] private float maximumRunSeconds = 420f;
     [SerializeField] private bool runStress;
+    [SerializeField] private bool stopSimulation;
 
     private readonly List<ActiveStressLobby> activeLobbies = new List<ActiveStressLobby>();
 
     private int stressRunId;
+    private int requestedLobbyCount;
     private double runStartedTime;
     private bool isRunning;
 
@@ -80,6 +82,11 @@ public class MultiplayerStressSimulation : MonoBehaviour
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         if (!isRunning)
         {
+            if (stopSimulation)
+            {
+                stopSimulation = false;
+            }
+
             if (runStress)
             {
                 StartStressRun();
@@ -88,7 +95,12 @@ public class MultiplayerStressSimulation : MonoBehaviour
             return;
         }
 
-        MonitorStressRun();
+        ProcessStopSimulation();
+
+        if (isRunning)
+        {
+            MonitorStressRun();
+        }
 #endif
     }
 
@@ -97,7 +109,7 @@ public class MultiplayerStressSimulation : MonoBehaviour
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         if (isRunning)
         {
-            FinishStressRun(false, "The stress simulation was disabled before it completed.");
+            FinishStressRun(StressTestResult.Cancelled, "The stress simulation was disabled before it completed.");
         }
 #endif
     }
@@ -127,14 +139,16 @@ public class MultiplayerStressSimulation : MonoBehaviour
         }
 
         activeLobbies.Clear();
+        requestedLobbyCount = definitions.Count;
         runStartedTime = Time.unscaledTimeAsDouble;
+        stopSimulation = false;
         isRunning = true;
 
         for (int i = 0; i < definitions.Count; i++)
         {
             if (!TryCreateStressLobby(definitions[i], i + 1, out ActiveStressLobby activeLobby, out failureReason))
             {
-                FinishStressRun(false, failureReason);
+                FinishStressRun(StressTestResult.Failed, failureReason);
                 return;
             }
 
@@ -146,9 +160,15 @@ public class MultiplayerStressSimulation : MonoBehaviour
     {
         runStress = true;
 
+        if (StressSimulationCoordinator.instance != null && StressSimulationCoordinator.instance.IsStopRequestedFor(stressRunId))
+        {
+            FinishStressRun(StressTestResult.Cancelled, StressSimulationCoordinator.instance.StopReason);
+            return;
+        }
+
         if (Time.unscaledTimeAsDouble - runStartedTime >= maximumRunSeconds)
         {
-            FinishStressRun(false, "The multi-lobby stress run exceeded its maximum run time.");
+            FinishStressRun(StressTestResult.Failed, "The multi-lobby stress run exceeded its maximum run time.");
             return;
         }
 
@@ -160,7 +180,7 @@ public class MultiplayerStressSimulation : MonoBehaviour
 
             if (!NetworkLobbyManager.instance.TryGetStressLobby(activeLobby.lobbyId, out Lobby lobby) || lobby?.Controller == null)
             {
-                FinishStressRun(false, $"Lobby {activeLobby.lobbyId} was removed before creating its game.");
+                FinishStressRun(StressTestResult.Failed, $"Lobby {activeLobby.lobbyId} was removed before creating its game.");
                 return;
             }
 
@@ -168,7 +188,7 @@ public class MultiplayerStressSimulation : MonoBehaviour
             {
                 if (joinResult.outcome == StressFakePlayerJoinOutcome.Failed)
                 {
-                    FinishStressRun(false, $"Lobby {activeLobby.lobbyId} fake-player join wave failed: {joinResult.failureReason}");
+                    FinishStressRun(StressTestResult.Failed, $"Lobby {activeLobby.lobbyId} fake-player join wave failed: {joinResult.failureReason}");
                     return;
                 }
 
@@ -176,7 +196,7 @@ public class MultiplayerStressSimulation : MonoBehaviour
                 {
                     if (!TryBeginCustomCountdown(activeLobby, lobby, out string countdownFailure))
                     {
-                        FinishStressRun(false, countdownFailure);
+                        FinishStressRun(StressTestResult.Failed, countdownFailure);
                         return;
                     }
                 }
@@ -190,20 +210,27 @@ public class MultiplayerStressSimulation : MonoBehaviour
 
         if (allGamesCreated)
         {
-            FinishStressRun(true, string.Empty);
+            FinishStressRun(StressTestResult.Passed, string.Empty);
         }
     }
 
-    private void FinishStressRun(bool success, string failureReason)
+    private void FinishStressRun(StressTestResult resultType, string reason)
     {
+        if (resultType != StressTestResult.Passed)
+        {
+            CancelActiveJoinWaves(reason);
+        }
+
         StringBuilder summary = new StringBuilder();
-        summary.AppendLine($"Lobbies Requested: {activeLobbies.Count}");
+        summary.AppendLine($"Lobbies Requested: {requestedLobbyCount}");
+        summary.AppendLine($"Lobbies Created: {activeLobbies.Count}");
 
         int gamesCreated = 0;
         int requestedPlayers = 0;
         int admittedPlayers = 0;
         int readyPlayers = 0;
         int notAdmittedBeforeStart = 0;
+        int notAdmittedDueToCancellation = 0;
         int lobbiesStartedBeforeTarget = 0;
 
         for (int i = 0; i < activeLobbies.Count; i++)
@@ -215,6 +242,15 @@ public class MultiplayerStressSimulation : MonoBehaviour
             {
                 admittedPlayers += joinResult.admitted;
                 notAdmittedBeforeStart += joinResult.notAdmittedBeforeStart + joinResult.removedBeforeReady;
+
+                int cancelledPlayers = joinResult.notAdmittedDueToCancellation;
+
+                if (resultType == StressTestResult.Cancelled && !joinResult.completed)
+                {
+                    cancelledPlayers = Mathf.Max(cancelledPlayers, activeLobby.targetPlayers - joinResult.admitted - joinResult.rejected - joinResult.notAdmittedDueToCapacity - joinResult.notAdmittedBeforeStart);
+                }
+
+                notAdmittedDueToCancellation += Mathf.Max(0, cancelledPlayers);
 
                 if (joinResult.outcome == StressFakePlayerJoinOutcome.LobbyStarted)
                 {
@@ -238,14 +274,55 @@ public class MultiplayerStressSimulation : MonoBehaviour
         summary.AppendLine($"Synthetic Players Admitted: {admittedPlayers}");
         summary.AppendLine($"Scene Ready Players At Finish: {readyPlayers}");
         summary.AppendLine($"Lobbies Started Before Join Target: {lobbiesStartedBeforeTarget}");
-        summary.Append($"Players Not Ready/Admitted Before Start: {notAdmittedBeforeStart}");
+        summary.AppendLine($"Players Not Ready/Admitted Before Start: {notAdmittedBeforeStart}");
+        summary.Append($"Players Not Added Due To Cancellation: {notAdmittedDueToCancellation}");
 
-        StressSimulationCoordinator.instance?.CompleteRun(stressRunId, success, summary.ToString(), failureReason);
+        if (resultType == StressTestResult.Cancelled)
+        {
+            StressSimulationCoordinator.instance?.CancelRun(stressRunId, summary.ToString(), reason);
+        }
+        else
+        {
+            StressSimulationCoordinator.instance?.CompleteRun(stressRunId, resultType == StressTestResult.Passed, summary.ToString(), reason);
+        }
 
         activeLobbies.Clear();
         stressRunId = 0;
+        requestedLobbyCount = 0;
         isRunning = false;
         runStress = false;
+        stopSimulation = false;
+    }
+
+    private void ProcessStopSimulation()
+    {
+        if (!stopSimulation || !isRunning)
+        {
+            return;
+        }
+
+        stopSimulation = false;
+        StressSimulationCoordinator.instance?.RequestStopRun(stressRunId, "User stopped the simulation.");
+    }
+
+    private void CancelActiveJoinWaves(string reason)
+    {
+        if (StressFakePlayerManager.instance == null)
+        {
+            return;
+        }
+
+        string resolvedReason = string.IsNullOrWhiteSpace(reason) ? "The multi-lobby stress simulation stopped before completion." : reason;
+
+        for (int i = 0; i < activeLobbies.Count; i++)
+        {
+            ActiveStressLobby activeLobby = activeLobbies[i];
+
+            if (activeLobby.joinOperationId > 0 && StressFakePlayerManager.instance.IsJoinWaveRunning(activeLobby.joinOperationId))
+            {
+                StressFakePlayerManager.instance.CancelJoinWave(activeLobby.joinOperationId, resolvedReason);
+            }
+        }
     }
 
 #endif
@@ -297,9 +374,9 @@ public class MultiplayerStressSimulation : MonoBehaviour
 
     private LobbySetupData BuildLobbySetupData(MultiplayerStressLobbyPreset definition, int index)
     {
-        int unlimitedPlayerCount = LobbySettings.instance != null ? LobbySettings.instance.UnlimitedPlayerCount : Mathf.Max(definition.targetPlayers, 1000);
+        int maxPlayerCount = LobbySettings.instance != null ? LobbySettings.instance.MaxPlayerCount : Mathf.Max(definition.targetPlayers, 1000);
         int maximumPlayers = Mathf.Max(definition.targetPlayers, LobbySettings.instance != null ? LobbySettings.instance.MinimumPlayers : 1);
-        bool useUnlimited = maximumPlayers >= unlimitedPlayerCount;
+        bool useMax = maximumPlayers >= maxPlayerCount;
 
         LobbySetupData setupData = new LobbySetupData
         {
@@ -313,8 +390,8 @@ public class MultiplayerStressSimulation : MonoBehaviour
             setupData.customSetupData.hostSetupData.gameModeType = definition.gameModeType;
             setupData.customSetupData.hostSetupData.ballCountType = definition.ballCountType;
             setupData.customSetupData.hostSetupData.useFreeCell = definition.useFreeCell;
-            setupData.customSetupData.hostSetupData.unlimitedPlayers = useUnlimited;
-            setupData.customSetupData.hostSetupData.maxPlayers = useUnlimited ? unlimitedPlayerCount : maximumPlayers;
+            setupData.customSetupData.hostSetupData.maxPlayers = useMax;
+            setupData.customSetupData.hostSetupData.maxPlayer = useMax ? maxPlayerCount : maximumPlayers;
         }
         else
         {
@@ -323,8 +400,8 @@ public class MultiplayerStressSimulation : MonoBehaviour
             setupData.onlineSetupData.gameModeType = definition.gameModeType;
             setupData.onlineSetupData.ballCountType = definition.ballCountType;
             setupData.onlineSetupData.useFreeCell = definition.useFreeCell;
-            setupData.onlineSetupData.unlimitedPlayers = useUnlimited;
-            setupData.onlineSetupData.maxPlayers = useUnlimited ? unlimitedPlayerCount : maximumPlayers;
+            setupData.onlineSetupData.maxPlayers = useMax;
+            setupData.onlineSetupData.maxPlayer = useMax ? maxPlayerCount : maximumPlayers;
         }
 
         return setupData;
@@ -359,7 +436,7 @@ public class MultiplayerStressSimulation : MonoBehaviour
             return Mathf.Max(1, fallbackPlayerCount);
         }
 
-        return Mathf.Max(0, lobby.Controller.MaxPlayers - lobby.Controller.PlayerCount);
+        return Mathf.Max(0, lobby.Controller.MaxPlayer - lobby.Controller.PlayerCount);
     }
 
     private bool TryBeginCustomCountdown(ActiveStressLobby activeLobby, Lobby lobby, out string failureReason)

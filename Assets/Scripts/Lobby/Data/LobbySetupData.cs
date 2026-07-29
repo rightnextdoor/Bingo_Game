@@ -30,8 +30,8 @@ public class SoloLobbySetupData
     public BingoBallCountType ballCountType = BingoBallCountType.Ball75;
     public bool useFreeCell = true;
 
-    public bool unlimitedPlayers = false;
-    public int maxPlayers = 6;
+    public bool maxPlayers = false;
+    public int maxPlayer = 6;
 
     public SoloLobbySetupData()
     {
@@ -39,8 +39,8 @@ public class SoloLobbySetupData
         ballCountType = BingoBallCountType.Ball75;
         useFreeCell = true;
 
-        unlimitedPlayers = false;
-        maxPlayers = 6;
+        maxPlayers = false;
+        maxPlayer = 6;
     }
 }
 
@@ -52,8 +52,8 @@ public class OnlineLobbySetupData
     public BingoBallCountType ballCountType = BingoBallCountType.Ball75;
     public bool useFreeCell = true;
 
-    public bool unlimitedPlayers = false;
-    public int maxPlayers = 30;
+    public bool maxPlayers = false;
+    public int maxPlayer = 30;
 
     public OnlineLobbySetupData()
     {
@@ -62,8 +62,8 @@ public class OnlineLobbySetupData
         ballCountType = BingoBallCountType.Ball75;
         useFreeCell = true;
 
-        unlimitedPlayers = false;
-        maxPlayers = 30;
+        maxPlayers = false;
+        maxPlayer = 30;
     }
 }
 
@@ -94,8 +94,8 @@ public class CustomHostLobbySetupData
     public BingoBallCountType ballCountType = BingoBallCountType.Ball75;
     public bool useFreeCell = true;
 
-    public bool unlimitedPlayers = false;
-    public int maxPlayers = 6;
+    public bool maxPlayers = false;
+    public int maxPlayer = 6;
 
     public CustomHostLobbySetupData()
     {
@@ -106,8 +106,8 @@ public class CustomHostLobbySetupData
         ballCountType = BingoBallCountType.Ball75;
         useFreeCell = true;
 
-        unlimitedPlayers = false;
-        maxPlayers = 6;
+        maxPlayers = false;
+        maxPlayer = 6;
     }
 }
 

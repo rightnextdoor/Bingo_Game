@@ -32,7 +32,7 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
     [SerializeField] private LobbyHostPatternToggleItem patternTogglePrefab;
 
     [Header("Player Limit")]
-    [SerializeField] private Toggle unlimitedPlayersToggle;
+    [SerializeField] private Toggle maxPlayersToggle;
     [SerializeField] private GameObject playerCountRow;
     [SerializeField] private TMP_InputField playerCountInput;
 
@@ -221,19 +221,19 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
 
         LoadPatternSelection(workingData.patternTypes);
 
-        if (unlimitedPlayersToggle != null)
+        if (maxPlayersToggle != null)
         {
-            unlimitedPlayersToggle.SetIsOnWithoutNotify(workingData.unlimitedPlayers);
+            maxPlayersToggle.SetIsOnWithoutNotify(workingData.maxPlayers);
         }
 
         if (playerCountInput != null)
         {
-            int playerCountValue = workingData.unlimitedPlayers
+            int playerCountValue = workingData.maxPlayers
                 ? LobbySettings.instance.MinimumPlayers
                 : Mathf.Clamp(
-                    workingData.maxPlayers,
+                    workingData.maxPlayer,
                     LobbySettings.instance.MinimumPlayers,
-                    LobbySettings.instance.UnlimitedPlayerCount);
+                    LobbySettings.instance.MaxPlayerCount);
 
             playerCountInput.SetTextWithoutNotify(playerCountValue.ToString());
         }
@@ -249,7 +249,7 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
             botCountInput.SetTextWithoutNotify(botCountValue.ToString());
         }
 
-        ApplyUnlimitedPlayersState();
+        ApplyMaxPlayersState();
         ApplyAddBotsState();
         RefreshPatternInteractableState();
 
@@ -593,10 +593,10 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
             useFreeCellToggle.onValueChanged.AddListener(OnUseFreeCellChanged);
         }
 
-        if (unlimitedPlayersToggle != null)
+        if (maxPlayersToggle != null)
         {
-            unlimitedPlayersToggle.onValueChanged.RemoveListener(OnUnlimitedPlayersChanged);
-            unlimitedPlayersToggle.onValueChanged.AddListener(OnUnlimitedPlayersChanged);
+            maxPlayersToggle.onValueChanged.RemoveListener(OnMaxPlayersChanged);
+            maxPlayersToggle.onValueChanged.AddListener(OnMaxPlayersChanged);
         }
 
         if (playerCountInput != null)
@@ -641,9 +641,9 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
             useFreeCellToggle.onValueChanged.RemoveListener(OnUseFreeCellChanged);
         }
 
-        if (unlimitedPlayersToggle != null)
+        if (maxPlayersToggle != null)
         {
-            unlimitedPlayersToggle.onValueChanged.RemoveListener(OnUnlimitedPlayersChanged);
+            maxPlayersToggle.onValueChanged.RemoveListener(OnMaxPlayersChanged);
         }
 
         if (playerCountInput != null)
@@ -710,22 +710,22 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
         ClearError();
     }
 
-    private void OnUnlimitedPlayersChanged(bool isOn)
+    private void OnMaxPlayersChanged(bool isOn)
     {
         if (isLoadingUi)
         {
             return;
         }
 
-        workingData.unlimitedPlayers = isOn;
+        workingData.maxPlayers = isOn;
 
         if (isOn)
         {
-            workingData.maxPlayers = LobbySettings.instance.UnlimitedPlayerCount;
+            workingData.maxPlayer = LobbySettings.instance.MaxPlayerCount;
             ClearError();
         }
 
-        ApplyUnlimitedPlayersState();
+        ApplyMaxPlayersState();
     }
 
     private void OnPlayerCountChanged(string value)
@@ -737,7 +737,7 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
 
         if (TryGetPlayerCountValue(false, out int playerCount))
         {
-            workingData.maxPlayers = playerCount;
+            workingData.maxPlayer = playerCount;
 
             if (HasError())
             {
@@ -791,15 +791,15 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
 
     #region UI State
 
-    private void ApplyUnlimitedPlayersState()
+    private void ApplyMaxPlayersState()
     {
-        bool unlimitedPlayers = unlimitedPlayersToggle != null && unlimitedPlayersToggle.isOn;
+        bool maxPlayers = maxPlayersToggle != null && maxPlayersToggle.isOn;
 
-        SetActive(playerCountRow, !unlimitedPlayers);
+        SetActive(playerCountRow, !maxPlayers);
 
         if (playerCountInput != null)
         {
-            playerCountInput.interactable = !unlimitedPlayers;
+            playerCountInput.interactable = !maxPlayers;
         }
 
         RefreshLayout();
@@ -857,10 +857,10 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
             return false;
         }
 
-        bool unlimitedPlayers = unlimitedPlayersToggle != null && unlimitedPlayersToggle.isOn;
-        int maxPlayers = LobbySettings.instance.UnlimitedPlayerCount;
+        bool maxPlayers = maxPlayersToggle != null && maxPlayersToggle.isOn;
+        int maxPlayer = LobbySettings.instance.MaxPlayerCount;
 
-        if (!unlimitedPlayers && !TryGetPlayerCountValue(true, out maxPlayers))
+        if (!maxPlayers && !TryGetPlayerCountValue(true, out maxPlayer))
         {
             return false;
         }
@@ -880,8 +880,8 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
             useFreeCell = useFreeCell,
             patternTypes = new List<BingoPatternType>(workingData.patternTypes),
             usesDefaultPatterns = workingData.usesDefaultPatterns,
-            unlimitedPlayers = unlimitedPlayers,
             maxPlayers = maxPlayers,
+            maxPlayer = maxPlayer,
             addBots = addBots,
             botCount = botCount
         };
@@ -997,9 +997,9 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
             return false;
         }
 
-        if (parsedPlayerCount > LobbySettings.instance.UnlimitedPlayerCount)
+        if (parsedPlayerCount > LobbySettings.instance.MaxPlayerCount)
         {
-            parsedPlayerCount = LobbySettings.instance.UnlimitedPlayerCount;
+            parsedPlayerCount = LobbySettings.instance.MaxPlayerCount;
             playerCountInput.SetTextWithoutNotify(parsedPlayerCount.ToString());
         }
 
@@ -1053,9 +1053,9 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
             return false;
         }
 
-        if (parsedBotCount > LobbySettings.instance.UnlimitedPlayerCount)
+        if (parsedBotCount > LobbySettings.instance.MaxPlayerCount)
         {
-            parsedBotCount = LobbySettings.instance.UnlimitedPlayerCount;
+            parsedBotCount = LobbySettings.instance.MaxPlayerCount;
             botCountInput.SetTextWithoutNotify(parsedBotCount.ToString());
         }
 

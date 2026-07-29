@@ -234,8 +234,8 @@ public class LobbyClientState
         viewData.ballCountType = data.ballCountType;
         viewData.useFreeCell = data.useFreeCell;
         viewData.playerCount = data.playerCount;
+        viewData.maxPlayer = data.maxPlayer;
         viewData.maxPlayers = data.maxPlayers;
-        viewData.unlimitedPlayers = data.unlimitedPlayers;
         viewData.addBots = data.addBots;
         viewData.botCount = data.botCount;
         return LobbyStateApplyResult.Applied;

@@ -27,8 +27,8 @@ public class LobbySettingsChangedData
     public bool useFreeCell;
 
     public int playerCount;
-    public int maxPlayers;
-    public bool unlimitedPlayers;
+    public int maxPlayer;
+    public bool maxPlayers;
 
     public bool addBots;
     public int botCount;
@@ -54,8 +54,8 @@ public class LobbySettingsChangedData
         ballCountType = BingoBallCountType.Ball75;
         useFreeCell = true;
         playerCount = 0;
-        maxPlayers = 0;
-        unlimitedPlayers = false;
+        maxPlayer = 0;
+        maxPlayers = false;
         addBots = false;
         botCount = 0;
     }
@@ -83,8 +83,8 @@ public class LobbySettingsChangedData
         ballCountType = lobbyViewData.ballCountType;
         useFreeCell = lobbyViewData.useFreeCell;
         playerCount = lobbyViewData.playerCount;
+        maxPlayer = lobbyViewData.maxPlayer;
         maxPlayers = lobbyViewData.maxPlayers;
-        unlimitedPlayers = lobbyViewData.unlimitedPlayers;
         addBots = lobbyViewData.addBots;
         botCount = lobbyViewData.botCount;
     }

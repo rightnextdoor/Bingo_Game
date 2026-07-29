@@ -8,7 +8,7 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 {
     #region Constants
 
-    private const bool DefaultOnlineUnlimitedPlayers = true;
+    private const bool DefaultOnlineMaxPlayers = true;
 
     private const int MinimumTextLength = 1;
     private const int LobbyNameCharacterLimit = 24;
@@ -26,7 +26,7 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 
     [Header("Solo Settings")]
     [SerializeField] private TMP_InputField soloLobbySizeInput;
-    [SerializeField] private Toggle soloUnlimitedToggle;
+    [SerializeField] private Toggle soloMaxToggle;
     [SerializeField] private TMP_Text soloErrorText;
 
     [Header("Online Settings")]
@@ -48,7 +48,7 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
     [SerializeField] private Button customHostShowPasswordButton;
     [SerializeField] private TMP_Text customHostShowPasswordButtonText;
     [SerializeField] private TMP_InputField customHostLobbySizeInput;
-    [SerializeField] private Toggle customHostUnlimitedToggle;
+    [SerializeField] private Toggle customHostMaxToggle;
 
     [Header("Custom Search Settings")]
     [SerializeField] private TMP_InputField customSearchLobbyCodeInput;
@@ -344,10 +344,10 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
             soloLobbySizeInput.onValueChanged.AddListener(OnSoloLobbySizeChanged);
         }
 
-        if (soloUnlimitedToggle != null)
+        if (soloMaxToggle != null)
         {
-            soloUnlimitedToggle.onValueChanged.RemoveListener(OnSoloUnlimitedChanged);
-            soloUnlimitedToggle.onValueChanged.AddListener(OnSoloUnlimitedChanged);
+            soloMaxToggle.onValueChanged.RemoveListener(OnSoloMaxChanged);
+            soloMaxToggle.onValueChanged.AddListener(OnSoloMaxChanged);
         }
     }
 
@@ -358,9 +358,9 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
             soloLobbySizeInput.onValueChanged.RemoveListener(OnSoloLobbySizeChanged);
         }
 
-        if (soloUnlimitedToggle != null)
+        if (soloMaxToggle != null)
         {
-            soloUnlimitedToggle.onValueChanged.RemoveListener(OnSoloUnlimitedChanged);
+            soloMaxToggle.onValueChanged.RemoveListener(OnSoloMaxChanged);
         }
     }
 
@@ -377,9 +377,9 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         }
     }
 
-    private void OnSoloUnlimitedChanged(bool isOn)
+    private void OnSoloMaxChanged(bool isOn)
     {
-        ApplySoloUnlimitedState();
+        ApplySoloMaxState();
 
         if (isOn)
         {
@@ -412,12 +412,12 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
             soloLobbySizeInput.SetTextWithoutNotify(lobbySize.ToString());
         }
 
-        if (soloUnlimitedToggle != null)
+        if (soloMaxToggle != null)
         {
-            soloUnlimitedToggle.SetIsOnWithoutNotify(soloMenuData.unlimitedPlayers);
+            soloMaxToggle.SetIsOnWithoutNotify(soloMenuData.maxPlayers);
         }
 
-        ApplySoloUnlimitedState();
+        ApplySoloMaxState();
         ClearError(soloErrorText);
     }
 
@@ -436,12 +436,12 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
             soloLobbySizeInput.SetTextWithoutNotify(lobbySize.ToString());
         }
 
-        if (soloUnlimitedToggle != null)
+        if (soloMaxToggle != null)
         {
-            soloUnlimitedToggle.SetIsOnWithoutNotify(soloMenuData.unlimitedPlayers);
+            soloMaxToggle.SetIsOnWithoutNotify(soloMenuData.maxPlayers);
         }
 
-        ApplySoloUnlimitedState();
+        ApplySoloMaxState();
         ClearError(soloErrorText);
     }
 
@@ -452,11 +452,11 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
             return;
         }
 
-        bool unlimitedPlayers = soloUnlimitedToggle != null && soloUnlimitedToggle.isOn;
+        bool maxPlayers = soloMaxToggle != null && soloMaxToggle.isOn;
 
-        soloMenuData.unlimitedPlayers = unlimitedPlayers;
+        soloMenuData.maxPlayers = maxPlayers;
 
-        if (unlimitedPlayers)
+        if (maxPlayers)
         {
             soloMenuData.lobbySize = GetDefaultSoloLobbySize();
             return;
@@ -479,12 +479,12 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
             return false;
         }
 
-        bool unlimitedPlayers = soloUnlimitedToggle != null && soloUnlimitedToggle.isOn;
+        bool maxPlayers = soloMaxToggle != null && soloMaxToggle.isOn;
 
-        if (unlimitedPlayers)
+        if (maxPlayers)
         {
-            lobbySetupData.soloSetupData.unlimitedPlayers = true;
-            lobbySetupData.soloSetupData.maxPlayers = GetUnlimitedPlayerCount();
+            lobbySetupData.soloSetupData.maxPlayers = true;
+            lobbySetupData.soloSetupData.maxPlayer = GetMaxPlayerCount();
 
             ClearError(soloErrorText);
             return true;
@@ -495,8 +495,8 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
             return false;
         }
 
-        lobbySetupData.soloSetupData.unlimitedPlayers = false;
-        lobbySetupData.soloSetupData.maxPlayers = lobbySize;
+        lobbySetupData.soloSetupData.maxPlayers = false;
+        lobbySetupData.soloSetupData.maxPlayer = lobbySize;
 
         ClearError(soloErrorText);
         return true;
@@ -506,14 +506,14 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 
     #region Solo UI State
 
-    private void ApplySoloUnlimitedState()
+    private void ApplySoloMaxState()
     {
-        if (soloLobbySizeInput == null || soloUnlimitedToggle == null)
+        if (soloLobbySizeInput == null || soloMaxToggle == null)
         {
             return;
         }
 
-        soloLobbySizeInput.interactable = !soloUnlimitedToggle.isOn;
+        soloLobbySizeInput.interactable = !soloMaxToggle.isOn;
     }
 
     #endregion
@@ -775,11 +775,11 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         lobbySetupData.onlineSetupData.searchType = selectedSearchType;
         lobbySetupData.onlineSetupData.ballCountType = selectedBallCountType;
 
-        lobbySetupData.onlineSetupData.unlimitedPlayers = DefaultOnlineUnlimitedPlayers;
+        lobbySetupData.onlineSetupData.maxPlayers = DefaultOnlineMaxPlayers;
 
-        if (DefaultOnlineUnlimitedPlayers)
+        if (DefaultOnlineMaxPlayers)
         {
-            lobbySetupData.onlineSetupData.maxPlayers = GetUnlimitedPlayerCount();
+            lobbySetupData.onlineSetupData.maxPlayer = GetMaxPlayerCount();
         }
 
         ClearError(onlineErrorText);
@@ -958,10 +958,10 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
             customHostLobbySizeInput.onValueChanged.AddListener(OnCustomHostLobbySizeChanged);
         }
 
-        if (customHostUnlimitedToggle != null)
+        if (customHostMaxToggle != null)
         {
-            customHostUnlimitedToggle.onValueChanged.RemoveListener(OnCustomHostUnlimitedChanged);
-            customHostUnlimitedToggle.onValueChanged.AddListener(OnCustomHostUnlimitedChanged);
+            customHostMaxToggle.onValueChanged.RemoveListener(OnCustomHostMaxChanged);
+            customHostMaxToggle.onValueChanged.AddListener(OnCustomHostMaxChanged);
         }
 
         if (customHostShowPasswordButton != null)
@@ -1011,9 +1011,9 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
             customHostLobbySizeInput.onValueChanged.RemoveListener(OnCustomHostLobbySizeChanged);
         }
 
-        if (customHostUnlimitedToggle != null)
+        if (customHostMaxToggle != null)
         {
-            customHostUnlimitedToggle.onValueChanged.RemoveListener(OnCustomHostUnlimitedChanged);
+            customHostMaxToggle.onValueChanged.RemoveListener(OnCustomHostMaxChanged);
         }
 
         if (customHostShowPasswordButton != null)
@@ -1077,9 +1077,9 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         }
     }
 
-    private void OnCustomHostUnlimitedChanged(bool isOn)
+    private void OnCustomHostMaxChanged(bool isOn)
     {
-        ApplyCustomHostUnlimitedState();
+        ApplyCustomHostMaxState();
 
         if (isOn)
         {
@@ -1142,9 +1142,9 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
             customHostLobbySizeInput.SetTextWithoutNotify(GetDefaultSoloLobbySize().ToString());
         }
 
-        if (customHostUnlimitedToggle != null)
+        if (customHostMaxToggle != null)
         {
-            customHostUnlimitedToggle.SetIsOnWithoutNotify(false);
+            customHostMaxToggle.SetIsOnWithoutNotify(false);
         }
 
         if (customSearchLobbyCodeInput != null)
@@ -1161,7 +1161,7 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         SetCustomPasswordVisibility(customSearchPasswordInput, customSearchShowPasswordButtonText, false, ref customSearchPasswordVisible);
 
         ApplyCustomActionState();
-        ApplyCustomHostUnlimitedState();
+        ApplyCustomHostMaxState();
         ClearError(customErrorText);
     }
 
@@ -1190,9 +1190,9 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
             customHostLobbySizeInput.SetTextWithoutNotify(GetDefaultSoloLobbySize().ToString());
         }
 
-        if (customHostUnlimitedToggle != null)
+        if (customHostMaxToggle != null)
         {
-            customHostUnlimitedToggle.SetIsOnWithoutNotify(false);
+            customHostMaxToggle.SetIsOnWithoutNotify(false);
         }
 
         if (customSearchLobbyCodeInput != null)
@@ -1209,7 +1209,7 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         SetCustomPasswordVisibility(customSearchPasswordInput, customSearchShowPasswordButtonText, false, ref customSearchPasswordVisible);
 
         ApplyCustomActionState();
-        ApplyCustomHostUnlimitedState();
+        ApplyCustomHostMaxState();
         ClearError(customErrorText);
     }
 
@@ -1266,13 +1266,13 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
             return false;
         }
 
-        bool unlimitedPlayers = customHostUnlimitedToggle != null && customHostUnlimitedToggle.isOn;
+        bool maxPlayers = customHostMaxToggle != null && customHostMaxToggle.isOn;
 
-        int maxPlayers = GetUnlimitedPlayerCount();
+        int maxPlayer = GetMaxPlayerCount();
 
-        if (!unlimitedPlayers)
+        if (!maxPlayers)
         {
-            if (!TryGetCustomLobbySizeValue(customHostLobbySizeInput, out maxPlayers))
+            if (!TryGetCustomLobbySizeValue(customHostLobbySizeInput, out maxPlayer))
             {
                 return false;
             }
@@ -1280,8 +1280,8 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 
         lobbySetupData.customSetupData.hostSetupData.lobbyName = lobbyName;
         lobbySetupData.customSetupData.hostSetupData.password = GetOptionalInputText(customHostPasswordInput, PasswordCharacterLimit);
-        lobbySetupData.customSetupData.hostSetupData.unlimitedPlayers = unlimitedPlayers;
         lobbySetupData.customSetupData.hostSetupData.maxPlayers = maxPlayers;
+        lobbySetupData.customSetupData.hostSetupData.maxPlayer = maxPlayer;
 
         ClearError(customErrorText);
         return true;
@@ -1320,14 +1320,14 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         NotifySettingsLayoutChanged();
     }
 
-    private void ApplyCustomHostUnlimitedState()
+    private void ApplyCustomHostMaxState()
     {
-        if (customHostLobbySizeInput == null || customHostUnlimitedToggle == null)
+        if (customHostLobbySizeInput == null || customHostMaxToggle == null)
         {
             return;
         }
 
-        customHostLobbySizeInput.interactable = !customHostUnlimitedToggle.isOn;
+        customHostLobbySizeInput.interactable = !customHostMaxToggle.isOn;
     }
 
     private void ToggleCustomHostPasswordVisibility()
@@ -1554,10 +1554,10 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
             return false;
         }
 
-        if (parsedLobbySize > GetUnlimitedPlayerCount())
+        if (parsedLobbySize > GetMaxPlayerCount())
         {
-            parsedLobbySize = GetUnlimitedPlayerCount();
-            inputField.SetTextWithoutNotify(GetUnlimitedPlayerCount().ToString());
+            parsedLobbySize = GetMaxPlayerCount();
+            inputField.SetTextWithoutNotify(GetMaxPlayerCount().ToString());
         }
 
         lobbySize = parsedLobbySize;
@@ -1571,9 +1571,9 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
             return GetSavedDefaultLobbySize();
         }
 
-        if (lobbySize > GetUnlimitedPlayerCount())
+        if (lobbySize > GetMaxPlayerCount())
         {
-            return GetUnlimitedPlayerCount();
+            return GetMaxPlayerCount();
         }
 
         return lobbySize;
@@ -1610,9 +1610,9 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
             return GetMinimumLobbySize();
         }
 
-        if (savedLobbySize > GetUnlimitedPlayerCount())
+        if (savedLobbySize > GetMaxPlayerCount())
         {
-            return GetUnlimitedPlayerCount();
+            return GetMaxPlayerCount();
         }
 
         return savedLobbySize;
@@ -1628,9 +1628,9 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         return LobbySettings.instance.MinimumPlayers;
     }
 
-    private int GetUnlimitedPlayerCount()
+    private int GetMaxPlayerCount()
     {
-        return LobbySettings.instance.UnlimitedPlayerCount;
+        return LobbySettings.instance.MaxPlayerCount;
     }
 
     #endregion

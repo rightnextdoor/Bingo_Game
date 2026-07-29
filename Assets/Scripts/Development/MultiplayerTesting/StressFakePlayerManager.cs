@@ -17,6 +17,7 @@ public enum StressFakePlayerJoinOutcome
     Running,
     Completed,
     LobbyStarted,
+    Cancelled,
     Failed
 }
 
@@ -54,11 +55,12 @@ public class StressFakePlayerJoinResult
     public int removedBeforeReady;
     public int notAdmittedDueToCapacity;
     public int notAdmittedBeforeStart;
+    public int notAdmittedDueToCancellation;
     public bool completed;
     public StressFakePlayerJoinOutcome outcome = StressFakePlayerJoinOutcome.Running;
     public string failureReason = string.Empty;
 
-    public bool Succeeded => completed && outcome != StressFakePlayerJoinOutcome.Failed && rejected == 0;
+    public bool Succeeded => completed && outcome != StressFakePlayerJoinOutcome.Failed && outcome != StressFakePlayerJoinOutcome.Cancelled && rejected == 0;
     public bool ReachedRequestedTarget => completed && outcome == StressFakePlayerJoinOutcome.Completed && admitted == requested && sceneReady == requested;
 }
 
@@ -93,6 +95,7 @@ public class StressFakePlayerManager : MonoBehaviour
     public event Action<StressFakePlayerJoinResult> JoinWaveCompleted;
     public event Action<StressFakePlayerJoinResult> JoinWaveClosedByLobbyStart;
     public event Action<StressFakePlayerJoinResult> JoinWaveFailed;
+    public event Action<StressFakePlayerJoinResult> JoinWaveCancelled;
 
     #endregion
 
@@ -188,7 +191,7 @@ public class StressFakePlayerManager : MonoBehaviour
     {
         StressFakePlayerJoinRequest request = operation.request;
 
-        while (operation.createdCount < operation.targetPlayerCount)
+        while (!operation.cancelRequested && operation.createdCount < operation.targetPlayerCount)
         {
             if (!TryGetLobby(request.lobbyId, out Lobby lobby))
             {
@@ -202,7 +205,7 @@ public class StressFakePlayerManager : MonoBehaviour
                 break;
             }
 
-            if (request.limitToAvailableLobbyCapacity && !lobby.Controller.UnlimitedPlayers && lobby.Controller.IsFull)
+            if (request.limitToAvailableLobbyCapacity && !lobby.Controller.MaxPlayers && lobby.Controller.IsFull)
             {
                 MarkLobbyCapacityReached(operation);
                 break;
@@ -215,6 +218,11 @@ public class StressFakePlayerManager : MonoBehaviour
 
             for (int i = 0; i < batchCount && operation.createdCount < operation.targetPlayerCount; i++)
             {
+                if (operation.cancelRequested)
+                {
+                    break;
+                }
+
                 if (request.limitToAvailableLobbyCapacity && IsLobbyAtCapacity(request.lobbyId))
                 {
                     MarkLobbyCapacityReached(operation);
@@ -270,7 +278,7 @@ public class StressFakePlayerManager : MonoBehaviour
                 break;
             }
 
-            if (operation.createdCount < operation.targetPlayerCount)
+            if (!operation.cancelRequested && operation.createdCount < operation.targetPlayerCount)
             {
                 yield return new WaitForSecondsRealtime(GetRandomRange(request.minimumJoinDelaySeconds, request.maximumJoinDelaySeconds));
             }
@@ -287,6 +295,15 @@ public class StressFakePlayerManager : MonoBehaviour
     private void CompleteJoinOperation(StressFakePlayerJoinOperation operation)
     {
         operation.result.completed = true;
+
+        if (operation.cancelRequested && operation.result.outcome != StressFakePlayerJoinOutcome.Failed)
+        {
+            operation.result.outcome = StressFakePlayerJoinOutcome.Cancelled;
+            operation.result.failureReason = string.IsNullOrWhiteSpace(operation.cancelReason) ? "User stopped the fake-player join wave." : operation.cancelReason;
+            operation.result.notAdmittedDueToCancellation = Mathf.Max(0, operation.result.requested - operation.result.admitted - operation.result.rejected - operation.result.notAdmittedDueToCapacity - operation.result.notAdmittedBeforeStart);
+            JoinWaveCancelled?.Invoke(operation.result);
+            return;
+        }
 
         if (operation.result.outcome == StressFakePlayerJoinOutcome.Running)
         {
@@ -317,16 +334,8 @@ public class StressFakePlayerManager : MonoBehaviour
             return false;
         }
 
-        if (operation.routine != null)
-        {
-            StopCoroutine(operation.routine);
-            operation.routine = null;
-        }
-
-        operation.result.completed = true;
-        operation.result.outcome = StressFakePlayerJoinOutcome.Failed;
-        operation.result.failureReason = string.IsNullOrWhiteSpace(reason) ? "The fake-player join wave was cancelled." : reason.Trim();
-        JoinWaveFailed?.Invoke(operation.result);
+        operation.cancelRequested = true;
+        operation.cancelReason = string.IsNullOrWhiteSpace(reason) ? "User stopped the fake-player join wave." : reason.Trim();
         return true;
     }
 
@@ -344,12 +353,12 @@ public class StressFakePlayerManager : MonoBehaviour
 
     private void ApplyInitialCapacityLimit(StressFakePlayerJoinOperation operation)
     {
-        if (operation == null || !operation.request.limitToAvailableLobbyCapacity || !TryGetLobby(operation.request.lobbyId, out Lobby lobby) || lobby.Controller == null || lobby.Controller.UnlimitedPlayers)
+        if (operation == null || !operation.request.limitToAvailableLobbyCapacity || !TryGetLobby(operation.request.lobbyId, out Lobby lobby) || lobby.Controller == null || lobby.Controller.MaxPlayers)
         {
             return;
         }
 
-        int availableCapacity = Mathf.Max(0, lobby.Controller.MaxPlayers - lobby.Controller.PlayerCount);
+        int availableCapacity = Mathf.Max(0, lobby.Controller.MaxPlayer - lobby.Controller.PlayerCount);
         operation.targetPlayerCount = Mathf.Min(operation.targetPlayerCount, availableCapacity);
         operation.result.notAdmittedDueToCapacity = Mathf.Max(0, operation.result.requested - operation.targetPlayerCount);
     }
@@ -367,7 +376,7 @@ public class StressFakePlayerManager : MonoBehaviour
 
     private bool IsLobbyAtCapacity(string lobbyId)
     {
-        return TryGetLobby(lobbyId, out Lobby lobby) && lobby.Controller != null && !lobby.Controller.UnlimitedPlayers && lobby.Controller.IsFull;
+        return TryGetLobby(lobbyId, out Lobby lobby) && lobby.Controller != null && !lobby.Controller.MaxPlayers && lobby.Controller.IsFull;
     }
 
     private bool IsLobbyStarted(string lobbyId)
@@ -644,6 +653,8 @@ public class StressFakePlayerManager : MonoBehaviour
         public Coroutine routine;
         public int createdCount;
         public int targetPlayerCount;
+        public bool cancelRequested;
+        public string cancelReason = string.Empty;
 
         public StressFakePlayerJoinOperation(int operationId, StressFakePlayerJoinRequest request)
         {

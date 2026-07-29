@@ -22,12 +22,12 @@ public class MenuData
 [Serializable]
 public class SoloMenuData
 {
-    public bool unlimitedPlayers = false;
+    public bool maxPlayers = false;
     public int lobbySize = 6;
 
     public SoloMenuData()
     {
-        unlimitedPlayers = false;
+        maxPlayers = false;
         lobbySize = 6;
     }
 }

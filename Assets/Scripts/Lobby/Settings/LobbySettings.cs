@@ -8,8 +8,8 @@ public class LobbySettings : MonoBehaviour
     public static LobbySettings instance;
 
     [Header("Lobby Players")]
-    [SerializeField, Min(1)] private int minimumPlayers = 6;
-    [SerializeField, Min(1)] private int unlimitedPlayerCount = 100000;
+    [SerializeField, Range(3, 10)] private int minimumPlayers = 6;
+    [SerializeField, Range(10, 500)] private int maxPlayerCount = 500;
 
     [Header("Lobby Timers")]
     [SerializeField, Min(0f)] private float onlineTimerMinutes = 5f;
@@ -21,7 +21,7 @@ public class LobbySettings : MonoBehaviour
     [SerializeField, Min(0)] private int maxOnlineBots = 30;
 
     public int MinimumPlayers => Mathf.Max(1, minimumPlayers);
-    public int UnlimitedPlayerCount => Mathf.Max(MinimumPlayers, unlimitedPlayerCount);
+    public int MaxPlayerCount => Mathf.Max(MinimumPlayers, maxPlayerCount);
 
     public float OnlineTimerMinutes => onlineTimerMinutes;
     public float OnlineTimerSeconds => MinutesToSeconds(onlineTimerMinutes);

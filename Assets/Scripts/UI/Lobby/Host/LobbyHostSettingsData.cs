@@ -11,8 +11,8 @@ public class LobbyHostSettingsData
     public List<BingoPatternType> patternTypes;
     public bool usesDefaultPatterns;
 
-    public bool unlimitedPlayers;
-    public int maxPlayers;
+    public bool maxPlayers;
+    public int maxPlayer;
 
     public bool addBots;
     public int botCount;
@@ -26,8 +26,8 @@ public class LobbyHostSettingsData
         patternTypes = new List<BingoPatternType>();
         usesDefaultPatterns = true;
 
-        unlimitedPlayers = false;
-        maxPlayers = LobbySettings.instance != null
+        maxPlayers = false;
+        maxPlayer = LobbySettings.instance != null
             ? LobbySettings.instance.MinimumPlayers
             : 6;
 
@@ -57,8 +57,8 @@ public class LobbyHostSettingsData
 
         usesDefaultPatterns = lobbyViewData.usesDefaultPatterns;
 
-        unlimitedPlayers = lobbyViewData.unlimitedPlayers;
         maxPlayers = lobbyViewData.maxPlayers;
+        maxPlayer = lobbyViewData.maxPlayer;
 
         addBots = lobbyViewData.addBots;
         botCount = addBots ? 1 : 0;

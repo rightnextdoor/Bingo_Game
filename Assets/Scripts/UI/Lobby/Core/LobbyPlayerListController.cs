@@ -144,7 +144,7 @@ public class LobbyPlayerListController : MonoBehaviour
         }
 
         BuildLobbyPlayerListData(lobbyViewData, localUserId);
-        DisplayCurrentPlayers(lobbyViewData.playerCount, lobbyViewData.maxPlayers, lobbyViewData.unlimitedPlayers);
+        DisplayCurrentPlayers(lobbyViewData.playerCount, lobbyViewData.maxPlayer, lobbyViewData.maxPlayers);
     }
 
     public void DisplayPlayers(IReadOnlyList<PlayerListPlayerData> playerData, int playerCount)
@@ -152,7 +152,7 @@ public class LobbyPlayerListController : MonoBehaviour
         DisplayPlayers(playerData, playerCount, 0, true);
     }
 
-    public void DisplayPlayers(IReadOnlyList<PlayerListPlayerData> playerData, int playerCount, int maxPlayers, bool unlimitedPlayers)
+    public void DisplayPlayers(IReadOnlyList<PlayerListPlayerData> playerData, int playerCount, int maxPlayer, bool maxPlayers)
     {
         players.Clear();
         playerIndexByUserId.Clear();
@@ -173,12 +173,12 @@ public class LobbyPlayerListController : MonoBehaviour
             }
         }
 
-        DisplayCurrentPlayers(playerCount, maxPlayers, unlimitedPlayers);
+        DisplayCurrentPlayers(playerCount, maxPlayer, maxPlayers);
     }
 
-    private void DisplayCurrentPlayers(int playerCount, int maxPlayers, bool unlimitedPlayers)
+    private void DisplayCurrentPlayers(int playerCount, int maxPlayer, bool maxPlayers)
     {
-        UpdatePlayerCount(playerCount, maxPlayers, unlimitedPlayers);
+        UpdatePlayerCount(playerCount, maxPlayer, maxPlayers);
 
         if (!string.IsNullOrWhiteSpace(selectedUserId) && !playerIndexByUserId.ContainsKey(selectedUserId))
         {
@@ -475,14 +475,14 @@ public class LobbyPlayerListController : MonoBehaviour
 
     #region Helpers
 
-    private void UpdatePlayerCount(int playerCount, int maxPlayers, bool unlimitedPlayers)
+    private void UpdatePlayerCount(int playerCount, int maxPlayer, bool maxPlayers)
     {
         if (playerCountText == null)
         {
             return;
         }
 
-        playerCountText.text = unlimitedPlayers ? $"Players {playerCount}" : $"Players {playerCount} / {maxPlayers}";
+        playerCountText.text = maxPlayers ? $"Players {playerCount}" : $"Players {playerCount} / {maxPlayer}";
     }
 
     private bool IsLocalPlayerHost(IReadOnlyList<LobbyPlayerViewData> lobbyPlayers, string localUserId)

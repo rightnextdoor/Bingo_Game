@@ -4,6 +4,13 @@ using System.Text;
 using Unity.Netcode;
 using UnityEngine;
 
+public enum StressTestResult
+{
+    Passed,
+    Failed,
+    Cancelled
+}
+
 public class StressHealthSnapshot
 {
     public int activeServers;
@@ -89,7 +96,7 @@ public class StressHealthReporter : MonoBehaviour
         int runId = nextRunId++;
         string resolvedRunName = string.IsNullOrWhiteSpace(runName) ? "Stress Test" : runName.Trim();
         StressHealthSnapshot startingSnapshot = CaptureSnapshot();
-        StressHealthRun run = new StressHealthRun(runId, resolvedRunName, startingSnapshot, Time.unscaledTimeAsDouble);
+        StressHealthRun run = new StressHealthRun(runId, resolvedRunName, startingSnapshot, System.Diagnostics.Stopwatch.GetTimestamp());
         activeRuns[runId] = run;
         ApplySnapshotToRun(run, startingSnapshot);
 
@@ -113,6 +120,11 @@ public class StressHealthReporter : MonoBehaviour
 
     public void CompleteRun(int runId, bool success, string summary, string failureReason = "")
     {
+        CompleteRun(runId, success ? StressTestResult.Passed : StressTestResult.Failed, summary, failureReason);
+    }
+
+    public void CompleteRun(int runId, StressTestResult result, string summary, string reason = "")
+    {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         if (!activeRuns.TryGetValue(runId, out StressHealthRun run))
         {
@@ -123,26 +135,29 @@ public class StressHealthReporter : MonoBehaviour
         ApplySnapshotToRun(run, endingSnapshot);
         activeRuns.Remove(runId);
 
+        long endingTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
+        double durationSeconds = Math.Max(0d, (endingTimestamp - run.startedTimestamp) / (double)System.Diagnostics.Stopwatch.Frequency);
+
         StringBuilder builder = new StringBuilder();
         builder.AppendLine("[STRESS][TEST END]");
         builder.AppendLine($"Run: {run.name}");
         builder.AppendLine($"Run ID: {run.id}");
-        builder.AppendLine($"Duration: {Math.Max(0d, Time.unscaledTimeAsDouble - run.startedTime):F2}s");
+        builder.AppendLine($"Duration: {durationSeconds:F2}s");
 
         if (!string.IsNullOrWhiteSpace(summary))
         {
             builder.AppendLine(summary.Trim());
         }
 
-        if (!success && !string.IsNullOrWhiteSpace(failureReason))
+        if (result != StressTestResult.Passed && !string.IsNullOrWhiteSpace(reason))
         {
-            builder.AppendLine($"Reason: {failureReason.Trim()}");
+            builder.AppendLine($"Reason: {reason.Trim()}");
         }
 
         AppendHealth(builder, run.startingSnapshot, "Starting Health:");
         AppendHealth(builder, endingSnapshot, "Ending Health:");
         AppendPeakHealth(builder, run);
-        builder.Append($"Result: {(success ? "PASS" : "FAIL")}");
+        builder.Append($"Result: {GetResultLabel(result)}");
         Debug.Log(builder.ToString());
 #endif
     }
@@ -226,6 +241,7 @@ public class StressHealthReporter : MonoBehaviour
             fakePlayerManager.JoinWaveCompleted += OnJoinWaveCompleted;
             fakePlayerManager.JoinWaveClosedByLobbyStart += OnJoinWaveClosedByLobbyStart;
             fakePlayerManager.JoinWaveFailed += OnJoinWaveFailed;
+            fakePlayerManager.JoinWaveCancelled += OnJoinWaveCancelled;
         }
 
         eventsSubscribed = lobbyManager != null || sessionLifecycle != null || fakePlayerManager != null;
@@ -251,6 +267,7 @@ public class StressHealthReporter : MonoBehaviour
             fakePlayerManager.JoinWaveCompleted -= OnJoinWaveCompleted;
             fakePlayerManager.JoinWaveClosedByLobbyStart -= OnJoinWaveClosedByLobbyStart;
             fakePlayerManager.JoinWaveFailed -= OnJoinWaveFailed;
+            fakePlayerManager.JoinWaveCancelled -= OnJoinWaveCancelled;
         }
 
         eventsSubscribed = false;
@@ -382,6 +399,21 @@ public class StressHealthReporter : MonoBehaviour
         Debug.LogError(builder.ToString());
     }
 
+    private void OnJoinWaveCancelled(StressFakePlayerJoinResult result)
+    {
+        if (!IsStressRunActive())
+        {
+            return;
+        }
+
+        StringBuilder builder = new StringBuilder();
+        builder.AppendLine("[STRESS][FAKE PLAYER JOIN CANCELLED]");
+        AppendJoinResult(builder, result);
+        builder.AppendLine($"Reason: {(string.IsNullOrWhiteSpace(result.failureReason) ? "User stopped the fake-player join wave." : result.failureReason)}");
+        AppendHealth(builder, CaptureSnapshot());
+        Debug.Log(builder.ToString());
+    }
+
     private bool IsStressRunActive()
     {
         return StressSimulationCoordinator.instance != null && StressSimulationCoordinator.instance.IsRunActive && activeRuns.Count > 0;
@@ -478,6 +510,19 @@ public class StressHealthReporter : MonoBehaviour
         run.highestOldestQueuedWorkSeconds = Math.Max(run.highestOldestQueuedWorkSeconds, snapshot.oldestQueuedWorkSeconds);
     }
 
+    private string GetResultLabel(StressTestResult result)
+    {
+        switch (result)
+        {
+            case StressTestResult.Passed:
+                return "PASS";
+            case StressTestResult.Cancelled:
+                return "CANCELLED";
+            default:
+                return "FAIL";
+        }
+    }
+
     private void AppendLobby(StringBuilder builder, Lobby lobby)
     {
         builder.AppendLine($"Lobby: {lobby.GetLobbyId()}");
@@ -495,6 +540,7 @@ public class StressHealthReporter : MonoBehaviour
         builder.AppendLine($"Rejected: {result.rejected}");
         builder.AppendLine($"Not Added Due To Capacity: {result.notAdmittedDueToCapacity}");
         builder.AppendLine($"Not Admitted Before Start: {result.notAdmittedBeforeStart}");
+        builder.AppendLine($"Not Added Due To Cancellation: {result.notAdmittedDueToCancellation}");
         builder.AppendLine($"Removed Before Ready: {result.removedBeforeReady}");
     }
 
@@ -535,7 +581,7 @@ public class StressHealthReporter : MonoBehaviour
         public readonly int id;
         public readonly string name;
         public readonly StressHealthSnapshot startingSnapshot;
-        public readonly double startedTime;
+        public readonly long startedTimestamp;
         public int peakActiveServers;
         public int peakActiveLobbies;
         public int peakActiveGames;
@@ -547,12 +593,12 @@ public class StressHealthReporter : MonoBehaviour
         public long peakSchedulerQueuedBytes;
         public double highestOldestQueuedWorkSeconds;
 
-        public StressHealthRun(int id, string name, StressHealthSnapshot startingSnapshot, double startedTime)
+        public StressHealthRun(int id, string name, StressHealthSnapshot startingSnapshot, long startedTimestamp)
         {
             this.id = id;
             this.name = name;
             this.startingSnapshot = startingSnapshot;
-            this.startedTime = startedTime;
+            this.startedTimestamp = startedTimestamp;
         }
     }
 

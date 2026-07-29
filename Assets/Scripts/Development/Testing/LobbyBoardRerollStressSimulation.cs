@@ -20,12 +20,17 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
     [SerializeField, Min(0f)] private float minimumLoadDelaySeconds = 0.5f;
     [SerializeField, Min(0f)] private float maximumLoadDelaySeconds = 4f;
     [SerializeField] private bool addPlayers;
+    [SerializeField] private bool stopAddingPlayers;
 
     [Header("Board Reroll Stress")]
     [SerializeField, Min(1)] private int rerollsPerPlayer = 20;
     [SerializeField, Min(0f)] private float minimumRerollDelaySeconds = 0.2f;
     [SerializeField, Min(0f)] private float maximumRerollDelaySeconds = 2f;
     [SerializeField] private bool runRerolls;
+    [SerializeField] private bool stopRerolling;
+
+    [Header("Run Control")]
+    [SerializeField] private bool stopSimulation;
 
     private readonly List<RerollPlayerState> rerollPlayers = new List<RerollPlayerState>();
 
@@ -64,6 +69,7 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
     private void Update()
     {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
+        ProcessStopSimulation();
         ProcessJoinTrigger();
         ProcessRerollTrigger();
         ProcessRerolls();
@@ -75,13 +81,20 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         if (joinOperationId > 0)
         {
+            StressFakePlayerJoinResult result = null;
             StressFakePlayerManager.instance?.CancelJoinWave(joinOperationId, "The fake-player join stress simulation was disabled before completion.");
-            FinishJoinStress(false, null, "The fake-player join stress simulation was disabled before completion.");
+
+            if (StressFakePlayerManager.instance != null)
+            {
+                StressFakePlayerManager.instance.TryGetJoinWaveResult(joinOperationId, out result);
+            }
+
+            FinishJoinStress(StressTestResult.Cancelled, result, "The fake-player join stress simulation was disabled before completion.");
         }
 
         if (rerollRunning)
         {
-            FinishRerollStress(false, "The board reroll stress simulation was disabled before completion.");
+            FinishRerollStress(StressTestResult.Cancelled, "The board reroll stress simulation was disabled before completion.");
         }
 #endif
     }
@@ -98,13 +111,30 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
         {
             addPlayers = true;
 
+            if (stopAddingPlayers)
+            {
+                RequestJoinStop("User stopped adding fake players.");
+                stopAddingPlayers = false;
+            }
+
+            if (StressSimulationCoordinator.instance != null && StressSimulationCoordinator.instance.IsStopRequestedFor(joinStressRunId))
+            {
+                StressFakePlayerManager.instance?.CancelJoinWave(joinOperationId, StressSimulationCoordinator.instance.StopReason);
+            }
+
             if (!StressFakePlayerManager.instance.TryGetJoinWaveResult(joinOperationId, out StressFakePlayerJoinResult result) || !result.completed)
             {
                 return;
             }
 
+            if (result.outcome == StressFakePlayerJoinOutcome.Cancelled)
+            {
+                FinishJoinStress(StressTestResult.Cancelled, result, result.failureReason);
+                return;
+            }
+
             bool success = result.outcome != StressFakePlayerJoinOutcome.Failed;
-            FinishJoinStress(success, result, success ? string.Empty : result.failureReason);
+            FinishJoinStress(success ? StressTestResult.Passed : StressTestResult.Failed, result, success ? string.Empty : result.failureReason);
             return;
         }
 
@@ -145,6 +175,8 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
         }
 
         activeJoinRequestedPlayers = requestedPlayerCount;
+        stopAddingPlayers = false;
+        stopSimulation = false;
 
         StressFakePlayerJoinRequest request = new StressFakePlayerJoinRequest
         {
@@ -164,14 +196,14 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
 
         if (joinOperationId <= 0)
         {
-            FinishJoinStress(false, null, "The fake-player join wave could not start.");
+            FinishJoinStress(StressTestResult.Failed, null, "The fake-player join wave could not start.");
             return;
         }
 
         activeJoinLobbyId = lobby.GetLobbyId();
     }
 
-    private void FinishJoinStress(bool success, StressFakePlayerJoinResult result, string failureReason)
+    private void FinishJoinStress(StressTestResult resultType, StressFakePlayerJoinResult result, string reason)
     {
         StringBuilder summary = new StringBuilder();
         summary.AppendLine($"Lobby: {activeJoinLobbyId}");
@@ -183,6 +215,7 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
             summary.AppendLine($"Scene Ready: {result.sceneReady}");
             summary.AppendLine($"Not Added Due To Capacity: {result.notAdmittedDueToCapacity}");
             summary.AppendLine($"Not Admitted Before Start: {result.notAdmittedBeforeStart}");
+            summary.AppendLine($"Not Added Due To Cancellation: {result.notAdmittedDueToCancellation}");
             summary.AppendLine($"Removed Before Ready: {result.removedBeforeReady}");
             summary.Append($"Outcome: {result.outcome}");
         }
@@ -191,13 +224,22 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
             summary.Append($"Requested: {Mathf.Max(1, activeJoinRequestedPlayers)}");
         }
 
-        StressSimulationCoordinator.instance?.CompleteRun(joinStressRunId, success, summary.ToString(), failureReason);
+        if (resultType == StressTestResult.Cancelled)
+        {
+            StressSimulationCoordinator.instance?.CancelRun(joinStressRunId, summary.ToString(), reason);
+        }
+        else
+        {
+            StressSimulationCoordinator.instance?.CompleteRun(joinStressRunId, resultType == StressTestResult.Passed, summary.ToString(), reason);
+        }
 
         joinOperationId = 0;
         joinStressRunId = 0;
         activeJoinRequestedPlayers = 0;
         activeJoinLobbyId = string.Empty;
         addPlayers = false;
+        stopAddingPlayers = false;
+        stopSimulation = false;
     }
 
 #endif
@@ -247,6 +289,8 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
         }
 
         rerollPlayers.Clear();
+        stopRerolling = false;
+        stopSimulation = false;
         activeRerollLobbyId = lobby.GetLobbyId();
         totalRerollsRequested = fakePlayers.Count * Mathf.Max(1, rerollsPerPlayer);
         totalRerollsCompleted = 0;
@@ -276,9 +320,21 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
 
         runRerolls = true;
 
+        if (stopRerolling)
+        {
+            RequestRerollStop("User stopped board rerolling.");
+            stopRerolling = false;
+        }
+
+        if (StressSimulationCoordinator.instance != null && StressSimulationCoordinator.instance.IsStopRequestedFor(rerollStressRunId))
+        {
+            FinishRerollStress(StressTestResult.Cancelled, StressSimulationCoordinator.instance.StopReason);
+            return;
+        }
+
         if (NetworkLobbyManager.instance == null || !NetworkLobbyManager.instance.TryGetStressLobby(activeRerollLobbyId, out Lobby lobby) || lobby?.Controller == null)
         {
-            FinishRerollStress(false, "The target Lobby became unavailable during board reroll stress.");
+            FinishRerollStress(StressTestResult.Failed, "The target Lobby became unavailable during board reroll stress.");
             return;
         }
 
@@ -316,21 +372,31 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
 
         if (!hasRemainingWork)
         {
-            FinishRerollStress(failedRerolls == 0, failedRerolls == 0 ? string.Empty : "One or more fake-player board rerolls failed.");
+            FinishRerollStress(failedRerolls == 0 ? StressTestResult.Passed : StressTestResult.Failed, failedRerolls == 0 ? string.Empty : "One or more fake-player board rerolls failed.");
         }
     }
 
-    private void FinishRerollStress(bool success, string failureReason)
+    private void FinishRerollStress(StressTestResult resultType, string reason)
     {
+        int cancelledRerolls = Mathf.Max(0, totalRerollsRequested - totalRerollsCompleted - failedRerolls);
+
         StringBuilder summary = new StringBuilder();
         summary.AppendLine($"Lobby: {activeRerollLobbyId}");
         summary.AppendLine($"Synthetic Players: {rerollPlayers.Count}");
         summary.AppendLine($"Rerolls Per Player: {Mathf.Max(1, rerollsPerPlayer)}");
         summary.AppendLine($"Requested Rerolls: {totalRerollsRequested}");
         summary.AppendLine($"Completed Rerolls: {totalRerollsCompleted}");
-        summary.Append($"Failed Rerolls: {failedRerolls}");
+        summary.AppendLine($"Failed Rerolls: {failedRerolls}");
+        summary.Append($"Cancelled Rerolls: {(resultType == StressTestResult.Cancelled ? cancelledRerolls : 0)}");
 
-        StressSimulationCoordinator.instance?.CompleteRun(rerollStressRunId, success, summary.ToString(), failureReason);
+        if (resultType == StressTestResult.Cancelled)
+        {
+            StressSimulationCoordinator.instance?.CancelRun(rerollStressRunId, summary.ToString(), reason);
+        }
+        else
+        {
+            StressSimulationCoordinator.instance?.CompleteRun(rerollStressRunId, resultType == StressTestResult.Passed, summary.ToString(), reason);
+        }
 
         rerollPlayers.Clear();
         activeRerollLobbyId = string.Empty;
@@ -340,6 +406,61 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
         rerollStressRunId = 0;
         rerollRunning = false;
         runRerolls = false;
+        stopRerolling = false;
+        stopSimulation = false;
+    }
+
+#endif
+
+    #endregion
+
+    #region Run Control
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+
+    private void ProcessStopSimulation()
+    {
+        if (!stopSimulation)
+        {
+            return;
+        }
+
+        if (joinOperationId > 0)
+        {
+            RequestJoinStop("User stopped the simulation.");
+            stopSimulation = false;
+            return;
+        }
+
+        if (rerollRunning)
+        {
+            RequestRerollStop("User stopped the simulation.");
+            stopSimulation = false;
+            return;
+        }
+
+        stopSimulation = false;
+    }
+
+    private void RequestJoinStop(string reason)
+    {
+        if (joinOperationId <= 0)
+        {
+            return;
+        }
+
+        StressSimulationCoordinator.instance?.RequestStopRun(joinStressRunId, reason);
+        StressFakePlayerManager.instance?.CancelJoinWave(joinOperationId, reason);
+    }
+
+    private void RequestRerollStop(string reason)
+    {
+        if (!rerollRunning)
+        {
+            return;
+        }
+
+        StressSimulationCoordinator.instance?.RequestStopRun(rerollStressRunId, reason);
     }
 
 #endif
@@ -409,7 +530,7 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
             return Mathf.Max(1, playersToAdd);
         }
 
-        return Mathf.Max(0, lobby.Controller.MaxPlayers - lobby.Controller.PlayerCount);
+        return Mathf.Max(0, lobby.Controller.MaxPlayer - lobby.Controller.PlayerCount);
     }
 
     private string BuildJoinSetupSummary(Lobby lobby, int requestedPlayerCount)
@@ -420,7 +541,7 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
         builder.AppendLine($"Use Max Lobby Size: {useMaxLobbySize}");
         builder.AppendLine($"Players To Add: {requestedPlayerCount}");
         builder.AppendLine($"Current Players: {lobby.Controller.PlayerCount}");
-        builder.AppendLine(lobby.Controller.UnlimitedPlayers ? "Lobby Capacity: Unlimited" : $"Lobby Capacity: {lobby.Controller.MaxPlayers}");
+        builder.AppendLine(lobby.Controller.MaxPlayers ? "Lobby Capacity: Max" : $"Lobby Capacity: {lobby.Controller.MaxPlayer}");
 
         builder.AppendLine($"Join Batch: {Mathf.Max(1, minimumJoinBatch)} - {Mathf.Max(1, maximumJoinBatch)}");
         builder.AppendLine($"Join Delay: {Mathf.Max(0f, minimumJoinDelaySeconds):F2}s - {Mathf.Max(0f, maximumJoinDelaySeconds):F2}s");

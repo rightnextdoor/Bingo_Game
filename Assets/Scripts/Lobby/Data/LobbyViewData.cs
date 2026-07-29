@@ -33,8 +33,8 @@ public class LobbyViewData
     public bool useFreeCell;
 
     public int playerCount;
-    public int maxPlayers;
-    public bool unlimitedPlayers;
+    public int maxPlayer;
+    public bool maxPlayers;
 
     public List<LobbyPlayerViewData> players;
 
@@ -74,8 +74,8 @@ public class LobbyViewData
         useFreeCell = true;
 
         playerCount = 0;
-        maxPlayers = LobbySettings.instance != null ? LobbySettings.instance.MinimumPlayers : 6;
-        unlimitedPlayers = false;
+        maxPlayer = LobbySettings.instance != null ? LobbySettings.instance.MinimumPlayers : 6;
+        maxPlayers = false;
 
         players = new List<LobbyPlayerViewData>();
 

@@ -9,10 +9,14 @@ public class StressSimulationCoordinator : MonoBehaviour
 
     private int activeRunId;
     private string activeRunName = string.Empty;
+    private bool stopRequested;
+    private string stopReason = string.Empty;
 
     public bool IsRunActive => activeRunId > 0;
     public int ActiveRunId => activeRunId;
     public string ActiveRunName => activeRunName;
+    public bool IsStopRequested => IsRunActive && stopRequested;
+    public string StopReason => stopReason;
 
     #endregion
 
@@ -40,7 +44,7 @@ public class StressSimulationCoordinator : MonoBehaviour
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         if (IsRunActive)
         {
-            StressHealthReporter.instance?.CompleteRun(activeRunId, false, string.Empty, "The stress simulation coordinator was destroyed before the active test completed.");
+            StressHealthReporter.instance?.CompleteRun(activeRunId, StressTestResult.Cancelled, string.Empty, "The stress simulation coordinator was destroyed before the active test completed.");
         }
 #endif
 
@@ -87,11 +91,34 @@ public class StressSimulationCoordinator : MonoBehaviour
 
         activeRunId = runId;
         activeRunName = resolvedRunName;
+        stopRequested = false;
+        stopReason = string.Empty;
         return true;
 #else
         failureReason = "Stress simulations are only available in the Editor or Development builds.";
         return false;
 #endif
+    }
+
+    public bool RequestStopRun(int runId, string reason = "User stopped the simulation.")
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (!IsRunActive || runId != activeRunId)
+        {
+            return false;
+        }
+
+        stopRequested = true;
+        stopReason = string.IsNullOrWhiteSpace(reason) ? "User stopped the simulation." : reason.Trim();
+        return true;
+#else
+        return false;
+#endif
+    }
+
+    public bool IsStopRequestedFor(int runId)
+    {
+        return IsRunActive && runId == activeRunId && stopRequested;
     }
 
     public void CompleteRun(int runId, bool success, string summary, string failureReason = "")
@@ -102,7 +129,21 @@ public class StressSimulationCoordinator : MonoBehaviour
             return;
         }
 
-        StressHealthReporter.instance?.CompleteRun(runId, success, summary, failureReason);
+        StressHealthReporter.instance?.CompleteRun(runId, success ? StressTestResult.Passed : StressTestResult.Failed, summary, failureReason);
+        ClearActiveRun();
+#endif
+    }
+
+    public void CancelRun(int runId, string summary, string reason = "User stopped the simulation.")
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (!IsRunActive || runId != activeRunId)
+        {
+            return;
+        }
+
+        string resolvedReason = string.IsNullOrWhiteSpace(reason) ? "User stopped the simulation." : reason.Trim();
+        StressHealthReporter.instance?.CompleteRun(runId, StressTestResult.Cancelled, summary, resolvedReason);
         ClearActiveRun();
 #endif
     }
@@ -115,6 +156,8 @@ public class StressSimulationCoordinator : MonoBehaviour
     {
         activeRunId = 0;
         activeRunName = string.Empty;
+        stopRequested = false;
+        stopReason = string.Empty;
     }
 
     #endregion

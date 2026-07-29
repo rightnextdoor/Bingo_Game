@@ -7,6 +7,8 @@ using UnityEngine;
 
 public class SaveManager : MonoBehaviour
 {
+    private const int MultiplayerPlayModeTestPlayerCount = 4;
+
     public static SaveManager instance;
 
     public static event Action SaveDataChanged;
@@ -91,10 +93,11 @@ public class SaveManager : MonoBehaviour
         hasLoadedData = false;
 
         dataHandler.Delete();
+        DeleteMultiplayerPlayModeTestSavedData();
 
         gameData = new GameData();
 
-        Debug.Log("Deleted save file. Runtime managers were not refreshed.");
+        Debug.Log("Deleted save data.");
     }
 
     public void NewGame()
@@ -384,7 +387,21 @@ public class SaveManager : MonoBehaviour
             return;
         }
 
-        fileName =
-            $"bingo_save_mppm_player_{MultiplayerPlayModeTestContext.PlayerNumber}.json";
+        fileName = GetMultiplayerPlayModeTestSaveFileName(MultiplayerPlayModeTestContext.PlayerNumber);
+    }
+
+    private void DeleteMultiplayerPlayModeTestSavedData()
+    {
+        for (int playerNumber = 1; playerNumber <= MultiplayerPlayModeTestPlayerCount; playerNumber++)
+        {
+            string testFileName = GetMultiplayerPlayModeTestSaveFileName(playerNumber);
+            FileDataHandler testDataHandler = new FileDataHandler(Application.persistentDataPath, testFileName, encryptData);
+            testDataHandler.Delete();
+        }
+    }
+
+    private string GetMultiplayerPlayModeTestSaveFileName(int playerNumber)
+    {
+        return $"bingo_save_mppm_player_{playerNumber}.json";
     }
 }

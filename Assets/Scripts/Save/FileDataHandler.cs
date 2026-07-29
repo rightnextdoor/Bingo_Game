@@ -137,11 +137,6 @@ public class FileDataHandler
             if (File.Exists(fullPath))
             {
                 File.Delete(fullPath);
-                Debug.Log($"Deleted save file: {fullPath}");
-            }
-            else
-            {
-                Debug.Log($"No save file found to delete: {fullPath}");
             }
         }
     }

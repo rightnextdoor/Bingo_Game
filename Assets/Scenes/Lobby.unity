@@ -8158,7 +8158,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 633853011194982010, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
       propertyPath: playMode
-      value: 2
+      value: 3
       objectReference: {fileID: 0}
     - target: {fileID: 1290380241951259866, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
       propertyPath: m_LocalPosition.x
@@ -8199,18 +8199,6 @@ PrefabInstance:
     - target: {fileID: 1290380241951259866, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 2111454386386178723, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
-      propertyPath: GlobalObjectIdHash
-      value: 1970528371
-      objectReference: {fileID: 0}
-    - target: {fileID: 2111454386386178723, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
-      propertyPath: SceneMigrationSynchronization
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 2111454386386178723, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
-      propertyPath: InScenePlacedSourceGlobalObjectIdHash
-      value: 390109301
       objectReference: {fileID: 0}
     - target: {fileID: 2715090340337549302, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
       propertyPath: bingoButton

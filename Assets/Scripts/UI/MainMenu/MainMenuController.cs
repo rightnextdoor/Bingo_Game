@@ -140,6 +140,9 @@ public class MainMenuController : MonoBehaviour
 
             settingsController.OnlineGameModeChanged -= OnOnlineGameModeChanged;
             settingsController.OnlineGameModeChanged += OnOnlineGameModeChanged;
+
+            settingsController.OnlineBallCountChanged -= OnOnlineBallCountChanged;
+            settingsController.OnlineBallCountChanged += OnOnlineBallCountChanged;
         }
     }
 
@@ -184,6 +187,7 @@ public class MainMenuController : MonoBehaviour
         {
             settingsController.SettingsLayoutChanged -= OnSettingsLayoutChanged;
             settingsController.OnlineGameModeChanged -= OnOnlineGameModeChanged;
+            settingsController.OnlineBallCountChanged -= OnOnlineBallCountChanged;
         }
     }
 
@@ -311,7 +315,7 @@ public class MainMenuController : MonoBehaviour
                 break;
 
             case MainMenuPlayMode.Online:
-                gameInfoController.ShowOnlineInfo(GetSelectedOnlineGameModeType());
+                gameInfoController.ShowOnlineInfo(GetSelectedOnlineGameModeType(), GetSelectedOnlineBallCountType());
                 break;
 
             case MainMenuPlayMode.Custom:
@@ -322,6 +326,16 @@ public class MainMenuController : MonoBehaviour
                 gameInfoController.ClearInfo();
                 break;
         }
+    }
+
+    private BingoBallCountType GetSelectedOnlineBallCountType()
+    {
+        if (settingsController == null)
+        {
+            return BingoBallCountType.Ball75;
+        }
+
+        return settingsController.GetSelectedOnlineBallCountType();
     }
 
     private BingoGameModeType GetSelectedOnlineGameModeType()
@@ -336,17 +350,22 @@ public class MainMenuController : MonoBehaviour
 
     private void OnOnlineGameModeChanged(BingoGameModeType selectedGameModeType)
     {
-        if (selectedMode != MainMenuPlayMode.Online)
+        if (selectedMode != MainMenuPlayMode.Online || gameInfoController == null)
         {
             return;
         }
 
-        if (gameInfoController == null)
+        gameInfoController.ShowOnlineInfo(selectedGameModeType, GetSelectedOnlineBallCountType());
+    }
+
+    private void OnOnlineBallCountChanged(BingoBallCountType selectedBallCountType)
+    {
+        if (selectedMode != MainMenuPlayMode.Online || gameInfoController == null)
         {
             return;
         }
 
-        gameInfoController.ShowOnlineInfo(selectedGameModeType);
+        gameInfoController.ShowOnlineInfo(GetSelectedOnlineGameModeType(), selectedBallCountType);
     }
 
     private void ResetSettingsScroll()

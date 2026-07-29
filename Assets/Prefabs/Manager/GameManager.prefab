@@ -309,9 +309,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LobbySettings
   minimumPlayers: 6
-  unlimitedPlayerCount: 100000
-  onlineTimerMinutes: 1
+  maxPlayerCount: 500
+  onlineTimerMinutes: 3
   finalCountdownSeconds: 10
+  joinLockSeconds: 10
+  pendingJoinTimeoutSeconds: 60
   maxOnlineBots: 30
 --- !u!114 &6480048657164182875
 MonoBehaviour:

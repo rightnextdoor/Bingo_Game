@@ -13603,6 +13603,7 @@ GameObject:
   - component: {fileID: 4638822466777951173}
   - component: {fileID: 2587708605992498794}
   - component: {fileID: 1227116113724583676}
+  - component: {fileID: 8863843012506824436}
   m_Layer: 5
   m_Name: MainMenuContent
   m_TagString: Untagged
@@ -13654,7 +13655,7 @@ MonoBehaviour:
   customButton: {fileID: 152749048120913154}
   quitButton: {fileID: 9491184234544338}
   settingsController: {fileID: 1227116113724583676}
-  gameInfoController: {fileID: 7086214592516453140}
+  gameInfoController: {fileID: 8863843012506824436}
   modeTitleText: {fileID: 3763736488476386436}
   settingsScrollRect: {fileID: 7435768273823894898}
   setupBackButton: {fileID: 4082263268311690437}
@@ -13675,7 +13676,7 @@ MonoBehaviour:
   onlineSettingsGroup: {fileID: 5659032679141120480}
   customSettingsGroup: {fileID: 6800066979246822684}
   soloLobbySizeInput: {fileID: 7627724300188762745}
-  soloUnlimitedToggle: {fileID: 3230640087682783687}
+  soloMaxToggle: {fileID: 3230640087682783687}
   soloErrorText: {fileID: 7096394444397532810}
   onlineGameModeDropdown: {fileID: 6797110698820049452}
   onlineSearchTypeDropdown: {fileID: 5781753469307907294}
@@ -13691,11 +13692,30 @@ MonoBehaviour:
   customHostShowPasswordButton: {fileID: 965197336414692834}
   customHostShowPasswordButtonText: {fileID: 7311467589247822077}
   customHostLobbySizeInput: {fileID: 5642640775788232951}
-  customHostUnlimitedToggle: {fileID: 9180166653782626616}
+  customHostMaxToggle: {fileID: 9180166653782626616}
   customSearchLobbyCodeInput: {fileID: 555540954331693377}
   customSearchPasswordInput: {fileID: 7542868560877634524}
   customSearchShowPasswordButton: {fileID: 3477851937095533581}
   customSearchShowPasswordButtonText: {fileID: 3735105969202507436}
+--- !u!114 &8863843012506824436
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7633284443323107005}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 416095985b7746d49bbbbc4309b49bbf, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MainMenuGameInfoController
+  gameInfoController: {fileID: 1750031919247846379}
+  soloInfoMessage: Create a solo lobby and play against computer players. Choose
+    the lobby size or allow max players, then continue to the lobby to prepare for
+    the game.
+  customInfoMessage: Create a private lobby or join an existing one using a lobby
+    code. Hosts can set the lobby name, password, and player limit before choosing
+    the game rules and patterns in the lobby.
 --- !u!1 &7695108546075620621
 GameObject:
   m_ObjectHideFlags: 0
@@ -17873,19 +17893,19 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: d8846def5de6d9949b26f6c0de0f962b, type: 3}
---- !u!224 &6299887373057248814 stripped
-RectTransform:
-  m_CorrespondingSourceObject: {fileID: 6129143236806068351, guid: d8846def5de6d9949b26f6c0de0f962b, type: 3}
-  m_PrefabInstance: {fileID: 171881691468236369}
-  m_PrefabAsset: {fileID: 0}
---- !u!114 &7086214592516453140 stripped
+--- !u!114 &1750031919247846379 stripped
 MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 6932710931700544837, guid: d8846def5de6d9949b26f6c0de0f962b, type: 3}
+  m_CorrespondingSourceObject: {fileID: 1885875467568246202, guid: d8846def5de6d9949b26f6c0de0f962b, type: 3}
   m_PrefabInstance: {fileID: 171881691468236369}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 416095985b7746d49bbbbc4309b49bbf, type: 3}
+  m_Script: {fileID: 11500000, guid: 6e96c7d8ac6f51e4c8e923aa65fefaa2, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::MainMenuGameInfoController
+  m_EditorClassIdentifier: Assembly-CSharp::GameInfoController
+--- !u!224 &6299887373057248814 stripped
+RectTransform:
+  m_CorrespondingSourceObject: {fileID: 6129143236806068351, guid: d8846def5de6d9949b26f6c0de0f962b, type: 3}
+  m_PrefabInstance: {fileID: 171881691468236369}
+  m_PrefabAsset: {fileID: 0}

@@ -77,6 +77,7 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 
     public event System.Action SettingsLayoutChanged;
     public event System.Action<BingoGameModeType> OnlineGameModeChanged;
+    public event System.Action<BingoBallCountType> OnlineBallCountChanged;
 
     #endregion
 
@@ -242,6 +243,16 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         }
 
         return GetDefaultOnlineGameModeType();
+    }
+
+    public BingoBallCountType GetSelectedOnlineBallCountType()
+    {
+        if (TryGetSelectedDropdownValue(onlineBallCountDropdown, onlineBallCountOptions, out BingoBallCountType selectedBallCountType))
+        {
+            return selectedBallCountType;
+        }
+
+        return BingoBallCountType.Ball75;
     }
 
     #endregion
@@ -682,6 +693,7 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
     private void OnOnlineBallCountChanged(int value)
     {
         ClearError(onlineErrorText);
+        OnlineBallCountChanged?.Invoke(GetSelectedOnlineBallCountType());
     }
 
     #endregion

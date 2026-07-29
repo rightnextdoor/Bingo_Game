@@ -9,6 +9,7 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
     [SerializeField] private LobbyCustomPanelController customPanelController;
     [SerializeField] private LobbyBoardSectionController boardSectionController;
     [SerializeField] private LobbyPlayerListController playerListController;
+    [SerializeField] private LobbyGameInfoController gameInfoController;
 
     private LobbyController lobbyController;
     private Coroutine bindRoutine;
@@ -59,6 +60,8 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
                 : string.Empty);
 
         headerController?.DisplayLobbyInfo(lobbyViewData, CanOpenHostSettings(lobbyViewData), CanStartLobby(lobbyViewData));
+
+        gameInfoController?.DisplayLobbyInfo(lobbyViewData);
 
         if (boardSectionController != null)
         {

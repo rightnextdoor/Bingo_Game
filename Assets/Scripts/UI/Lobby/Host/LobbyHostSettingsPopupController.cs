@@ -28,6 +28,8 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
     [SerializeField] private Toggle useFreeCellToggle;
 
     [Header("Patterns")]
+    [SerializeField] private Toggle useDefaultPatternsToggle;
+    [SerializeField] private GameObject patternSection;
     [SerializeField] private RectTransform patternListContent;
     [SerializeField] private LobbyHostPatternToggleItem patternTogglePrefab;
 
@@ -219,6 +221,13 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
             useFreeCellToggle.SetIsOnWithoutNotify(workingData.useFreeCell);
         }
 
+        if (useDefaultPatternsToggle != null)
+        {
+            useDefaultPatternsToggle.SetIsOnWithoutNotify(workingData.usesDefaultPatterns);
+        }
+
+        LoadPatternSelection(workingData.patternTypes);
+
         LoadPatternSelection(workingData.patternTypes);
 
         if (maxPlayersToggle != null)
@@ -249,6 +258,7 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
             botCountInput.SetTextWithoutNotify(botCountValue.ToString());
         }
 
+        ApplyPatternState();
         ApplyMaxPlayersState();
         ApplyAddBotsState();
         RefreshPatternInteractableState();
@@ -486,7 +496,6 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
             return;
         }
 
-        workingData.usesDefaultPatterns = false;
         UpdateWorkingPatternList();
         RefreshPatternInteractableState();
         ClearError();
@@ -593,6 +602,12 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
             useFreeCellToggle.onValueChanged.AddListener(OnUseFreeCellChanged);
         }
 
+        if (useDefaultPatternsToggle != null)
+        {
+            useDefaultPatternsToggle.onValueChanged.RemoveListener(OnUseDefaultPatternsChanged);
+            useDefaultPatternsToggle.onValueChanged.AddListener(OnUseDefaultPatternsChanged);
+        }
+
         if (maxPlayersToggle != null)
         {
             maxPlayersToggle.onValueChanged.RemoveListener(OnMaxPlayersChanged);
@@ -641,6 +656,11 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
             useFreeCellToggle.onValueChanged.RemoveListener(OnUseFreeCellChanged);
         }
 
+        if (useDefaultPatternsToggle != null)
+        {
+            useDefaultPatternsToggle.onValueChanged.RemoveListener(OnUseDefaultPatternsChanged);
+        }
+
         if (maxPlayersToggle != null)
         {
             maxPlayersToggle.onValueChanged.RemoveListener(OnMaxPlayersChanged);
@@ -686,6 +706,24 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
         }
 
         ClearError();
+    }
+
+    private void OnUseDefaultPatternsChanged(bool isOn)
+    {
+        if (isLoadingUi)
+        {
+            return;
+        }
+
+        workingData.usesDefaultPatterns = isOn;
+
+        if (isOn)
+        {
+            ApplyDefaultPatternsForGameMode(workingData.gameModeType);
+            ClearError();
+        }
+
+        ApplyPatternState();
     }
 
     private void OnBallCountChanged(int value)
@@ -805,6 +843,17 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
         RefreshLayout();
     }
 
+    private void ApplyPatternState()
+    {
+        bool useDefaultPatterns = useDefaultPatternsToggle != null
+            ? useDefaultPatternsToggle.isOn
+            : workingData.usesDefaultPatterns;
+
+        SetActive(patternSection, !useDefaultPatterns);
+
+        RefreshLayout();
+    }
+
     private void ApplyAddBotsState()
     {
         bool addBots = addBotsToggle != null && addBotsToggle.isOn;
@@ -849,12 +898,25 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
             ? useFreeCellToggle.isOn
             : workingData.useFreeCell;
 
-        UpdateWorkingPatternList();
+        bool usesDefaultPatterns = useDefaultPatternsToggle != null
+            ? useDefaultPatternsToggle.isOn
+            : workingData.usesDefaultPatterns;
 
-        if (workingData.patternTypes.Count == 0)
+        workingData.usesDefaultPatterns = usesDefaultPatterns;
+
+        if (usesDefaultPatterns)
         {
-            ShowError("At least one pattern must be selected.");
-            return false;
+            ApplyDefaultPatternsForGameMode(selectedGameModeType);
+        }
+        else
+        {
+            UpdateWorkingPatternList();
+
+            if (workingData.patternTypes.Count == 0)
+            {
+                ShowError("At least one pattern must be selected.");
+                return false;
+            }
         }
 
         bool maxPlayers = maxPlayersToggle != null && maxPlayersToggle.isOn;
@@ -879,7 +941,7 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
             ballCountType = selectedBallCountType,
             useFreeCell = useFreeCell,
             patternTypes = new List<BingoPatternType>(workingData.patternTypes),
-            usesDefaultPatterns = workingData.usesDefaultPatterns,
+            usesDefaultPatterns = usesDefaultPatterns,
             maxPlayers = maxPlayers,
             maxPlayer = maxPlayer,
             addBots = addBots,

@@ -993,14 +993,6 @@ PrefabInstance:
       propertyPath: m_Name
       value: PopupRoot
       objectReference: {fileID: 0}
-    - target: {fileID: 1792472634856489677, guid: 1081001668a67c9488608f7502962f1a, type: 3}
-      propertyPath: iconManager
-      value: 
-      objectReference: {fileID: 0}
-    - target: {fileID: 2065434793892903902, guid: 1081001668a67c9488608f7502962f1a, type: 3}
-      propertyPath: iconManager
-      value: 
-      objectReference: {fileID: 0}
     - target: {fileID: 6035635953207925447, guid: 1081001668a67c9488608f7502962f1a, type: 3}
       propertyPath: m_Pivot.x
       value: 0.5

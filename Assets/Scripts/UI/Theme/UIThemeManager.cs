@@ -18,6 +18,7 @@ public class UIThemeManager : MonoBehaviour
     [SerializeField] private List<UIThemeData> themeDataList = new();
 
     private UIThemeData activeThemeData;
+    private bool hasRuntimeTheme;
 
     private readonly List<IUIThemeTarget> registeredTargets = new();
 
@@ -50,6 +51,15 @@ public class UIThemeManager : MonoBehaviour
         }
 
         instance = this;
+
+        if (Application.isPlaying)
+        {
+            hasRuntimeTheme = false;
+            defaultThemeData = null;
+            activeThemeData = null;
+            ClearActiveThemeLists();
+            return;
+        }
 
         SetTheme(selectedThemeType);
     }
@@ -133,7 +143,10 @@ public class UIThemeManager : MonoBehaviour
             registeredTargets.Add(target);
         }
 
-        target.ReapplyTheme();
+        if (!Application.isPlaying || hasRuntimeTheme)
+        {
+            target.ReapplyTheme();
+        }
     }
 
     public void Unregister(IUIThemeTarget target)
@@ -154,6 +167,11 @@ public class UIThemeManager : MonoBehaviour
         activeThemeData = FindThemeData(themeType);
 
         RebuildActiveThemeLists();
+
+        if (Application.isPlaying)
+        {
+            hasRuntimeTheme = activeThemeData != null;
+        }
 
         ReapplyThemeToRegisteredTargets();
     }

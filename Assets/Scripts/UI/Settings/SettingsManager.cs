@@ -56,6 +56,8 @@ public class SettingsManager : MonoBehaviour, ISaveManager, ISceneReadyCheck
     private bool isSavingQueued;
     private bool hasUnsavedSettingsChanges;
 
+    public bool IsReady => hasLoadedData;
+
     private Coroutine deferredSaveRoutine;
 
     #endregion
@@ -161,16 +163,15 @@ public class SettingsManager : MonoBehaviour, ISaveManager, ISceneReadyCheck
             changed = true;
         }
 
-        if (ValidateThemeSettings())
-        {
-            changed = true;
-        }
-
         ClampSoundSettings();
 
         ApplySoundSettings();
         ApplyGraphicsSettings();
-        ApplyThemeSettings();
+
+        if (ApplyThemeSettings())
+        {
+            changed = true;
+        }
 
         RefreshControllers();
 
@@ -422,20 +423,18 @@ public class SettingsManager : MonoBehaviour, ISaveManager, ISceneReadyCheck
         );
     }
 
-    private void ApplyThemeSettings()
+    private bool ApplyThemeSettings()
     {
-        if (settingsData == null)
+        if (settingsData == null || !CacheThemeManager())
         {
-            return;
+            return false;
         }
 
-        if (!CacheThemeManager())
-        {
-            return;
-        }
+        UIThemeType beforeThemeType = settingsData.selectedThemeType;
+        UIThemeType finalThemeType = themeManager.ValidateAndSetTheme(beforeThemeType);
 
-        UIThemeType finalThemeType = themeManager.ValidateAndSetTheme(settingsData.selectedThemeType);
         settingsData.selectedThemeType = finalThemeType;
+        return beforeThemeType != finalThemeType;
     }
 
     #endregion
@@ -485,21 +484,6 @@ public class SettingsManager : MonoBehaviour, ISaveManager, ISceneReadyCheck
         }
 
         return changed;
-    }
-
-    private bool ValidateThemeSettings()
-    {
-        if (!CacheThemeManager())
-        {
-            return false;
-        }
-
-        UIThemeType beforeThemeType = settingsData.selectedThemeType;
-        UIThemeType finalThemeType = themeManager.ValidateAndSetTheme(beforeThemeType);
-
-        settingsData.selectedThemeType = finalThemeType;
-
-        return beforeThemeType != finalThemeType;
     }
 
     #endregion

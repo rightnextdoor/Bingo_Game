@@ -27,6 +27,7 @@ public class AudioManager : MonoBehaviour
 
     private Coroutine musicFadeCoroutine;
     private Coroutine musicSequenceCoroutine;
+    private Coroutine startupMusicCoroutine;
 
     private readonly Dictionary<AudioZone, List<Sound>> remainingZoneMusicTracks = new Dictionary<AudioZone, List<Sound>>();
 
@@ -66,12 +67,21 @@ public class AudioManager : MonoBehaviour
 
         SetupSoundSources();
         SetupZoneMusicSources();
+    }
 
-        PrepareZoneMusicForCurrentScene();
+    private void Start()
+    {
+        startupMusicCoroutine = StartCoroutine(WaitForSettingsAndStartMusic());
     }
 
     private void OnDestroy()
     {
+        if (startupMusicCoroutine != null)
+        {
+            StopCoroutine(startupMusicCoroutine);
+            startupMusicCoroutine = null;
+        }
+
         if (instance == this)
         {
             instance = null;
@@ -80,6 +90,9 @@ public class AudioManager : MonoBehaviour
 
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
+        if (!AreSettingsReady())
+            return;
+
         PrepareZoneMusicForScene(scene.name);
     }
 
@@ -143,6 +156,9 @@ public class AudioManager : MonoBehaviour
 
     private void PrepareZoneMusicForCurrentScene()
     {
+        if (!AreSettingsReady())
+            return;
+
         string activeSceneName = SceneManager.GetActiveScene().name;
         PrepareZoneMusicForScene(activeSceneName);
     }
@@ -256,6 +272,9 @@ public class AudioManager : MonoBehaviour
 
     public void ApplyZoneMusicForCurrentScene()
     {
+        if (!AreSettingsReady())
+            return;
+
         string activeSceneName = SceneManager.GetActiveScene().name;
         AudioZone sceneZone = GetZoneForScene(activeSceneName);
 
@@ -280,6 +299,9 @@ public class AudioManager : MonoBehaviour
 
     public void PlaySFX(string soundName)
     {
+        if (!AreSettingsReady())
+            return;
+
         Sound sound = FindSFX(soundName);
 
         if (sound == null)
@@ -476,6 +498,15 @@ public class AudioManager : MonoBehaviour
 
     #region Coroutines
 
+    private IEnumerator WaitForSettingsAndStartMusic()
+    {
+        while (!AreSettingsReady())
+            yield return null;
+
+        startupMusicCoroutine = null;
+        PrepareZoneMusicForCurrentScene();
+    }
+
     private IEnumerator CrossfadeMusicCoroutine(Sound nextMusic, AudioZone nextZone)
     {
         Sound oldMusic = currentMusic;
@@ -579,6 +610,11 @@ public class AudioManager : MonoBehaviour
     #endregion
 
     #region Source Helpers
+
+    private bool AreSettingsReady()
+    {
+        return SettingsManager.instance != null && SettingsManager.instance.IsReady;
+    }
 
     private void CreateSourceForSound(Sound sound, string sourceName)
     {

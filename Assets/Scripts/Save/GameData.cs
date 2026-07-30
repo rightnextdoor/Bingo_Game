@@ -8,6 +8,7 @@ public class GameData
     public UserDatabaseData userDatabase = new UserDatabaseData();
     public SettingsData settingsData = new SettingsData();
     public MenuData menuData = new MenuData();
+    public LobbyData lobbyData = new LobbyData();
 
     public GameData()
     {
@@ -16,5 +17,6 @@ public class GameData
         userDatabase = new UserDatabaseData();
         settingsData = new SettingsData();
         menuData = new MenuData();
+        lobbyData = new LobbyData();
     }
 }

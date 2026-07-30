@@ -25,7 +25,7 @@ public class UITopBarIconSlot : MonoBehaviour,
     [SerializeField] private float hoverScale = 1.08f;
     [SerializeField] private float pressedScale = 0.92f;
 
-    private UIMessageData tooltipMessageData;
+    private UIMessageType tooltipMessageType = UIMessageType.None;
     private ToolTipManager toolTipManager;
 
     private Action clickCallback;
@@ -51,12 +51,12 @@ public class UITopBarIconSlot : MonoBehaviour,
         isPressed = false;
     }
 
-    public void Setup(Sprite iconSprite, Action onClicked, UIMessageData newTooltipMessageData)
+    public void Setup(Sprite iconSprite, Action onClicked, UIMessageType newTooltipMessageType)
     {
         FindMissingReferences();
 
         clickCallback = onClicked;
-        tooltipMessageData = newTooltipMessageData;
+        tooltipMessageType = newTooltipMessageType;
 
         SetIcon(iconSprite);
 
@@ -88,9 +88,16 @@ public class UITopBarIconSlot : MonoBehaviour,
         isHovering = true;
         ApplyVisualState();
 
-        if (tooltipMessageData != null && CacheToolTipManager())
+        if (tooltipMessageType == UIMessageType.None || UIMessageCatalog.instance == null || !CacheToolTipManager())
         {
-            toolTipManager.ShowToolTip(tooltipMessageData, GetComponent<RectTransform>());
+            return;
+        }
+
+        UIMessageData messageData = UIMessageCatalog.instance.GetMessage(tooltipMessageType);
+
+        if (messageData != null)
+        {
+            toolTipManager.ShowToolTip(messageData, GetComponent<RectTransform>());
         }
     }
 

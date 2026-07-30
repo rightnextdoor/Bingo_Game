@@ -14,3 +14,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BingoPatternData
   patternType: 6
   description: Complete the star-shaped pattern on your board.
+  winningHighlightColor: {r: 0.3019608, g: 0.5882353, b: 1, a: 1}

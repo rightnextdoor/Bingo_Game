@@ -14,3 +14,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BingoPatternData
   patternType: 2
   description: Mark all four corner spaces on your board.
+  winningHighlightColor: {r: 0.9607843, g: 0.6509804, b: 0.13725491, a: 1}

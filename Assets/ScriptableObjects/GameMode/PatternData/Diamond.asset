@@ -14,3 +14,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BingoPatternData
   patternType: 5
   description: Complete the diamond-shaped spaces around the center of the board.
+  winningHighlightColor: {r: 0.95686275, g: 0.827451, b: 0.36862746, a: 1}

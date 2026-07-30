@@ -9,11 +9,11 @@ public class UserIconData : ScriptableObject
 {
     [Header("Icon Data")]
     [SerializeField] private string iconId;
-    [SerializeField] private string lookupName;
+    [SerializeField] private UIIconType iconType = UIIconType.None;
     [SerializeField] private Sprite iconSprite;
 
     public string IconId => iconId;
-    public string LookupName => lookupName;
+    public UIIconType IconType => iconType;
     public Sprite IconSprite => iconSprite;
 
     public bool IsValid()
@@ -27,14 +27,7 @@ public class UserIconData : ScriptableObject
         string path = AssetDatabase.GetAssetPath(this);
 
         if (!string.IsNullOrWhiteSpace(path))
-        {
             iconId = AssetDatabase.AssetPathToGUID(path);
-        }
-
-        if (string.IsNullOrWhiteSpace(lookupName))
-        {
-            lookupName = name;
-        }
 
         EditorUtility.SetDirty(this);
     }

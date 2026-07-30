@@ -13,5 +13,5 @@ MonoBehaviour:
   m_Name: Leaderboard_Icon
   m_EditorClassIdentifier: Assembly-CSharp::UserIconData
   iconId: 95f48b6a09f7a964d91fbae1624bcad4
-  lookupName: leaderboard
+  iconType: 2
   iconSprite: {fileID: 221507396, guid: bdeaeacf91e805f449e7fa66d480d644, type: 3}

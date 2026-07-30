@@ -9,9 +9,8 @@ public enum PopupId
     UserInfo,
     Leaderboard,
     Settings,
-    LocalPlayOptions,
-    OnlineOptions,
-    CustomOptions
+    LobbyEntryFailure,
+    HostSettings
 }
 
 [Serializable]
@@ -159,6 +158,30 @@ public class PopupManager : MonoBehaviour
         }
 
         OpenPopup(nextPopupId);
+    }
+
+    public bool OpenLobbyEntryFailurePopup(string message)
+    {
+        GameObject popup = GetPopupObject(PopupId.LobbyEntryFailure);
+
+        if (popup == null)
+        {
+            Debug.LogWarning("PopupManager could not find the Lobby Entry Failure popup.");
+            return false;
+        }
+
+        LobbyEntryFailurePopupController popupController = popup.GetComponent<LobbyEntryFailurePopupController>();
+
+        if (popupController == null)
+        {
+            Debug.LogWarning("Lobby Entry Failure popup does not have a LobbyEntryFailurePopupController.");
+            return false;
+        }
+
+        popupController.SetFailureMessage(message);
+        OpenPopup(PopupId.LobbyEntryFailure);
+
+        return activePopupId == PopupId.LobbyEntryFailure;
     }
 
     public void CloseActivePopup()

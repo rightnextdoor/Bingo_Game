@@ -12,7 +12,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6b33075be95cdb746abd148dfc70db25, type: 3}
   m_Name: User_Message
   m_EditorClassIdentifier: Assembly-CSharp::UIMessageData
+  messageType: 1
   messageText: User Profile
+  imageMode: 0
+  customImage: {fileID: 0}
   fontAsset: {fileID: 0}
   fontSize: 24
   textColor: {r: 0.94509804, g: 0.9529412, b: 0.9607843, a: 1}

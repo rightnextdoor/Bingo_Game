@@ -18,6 +18,7 @@ public class UIThemeManager : MonoBehaviour
     [SerializeField] private List<UIThemeData> themeDataList = new();
 
     private UIThemeData activeThemeData;
+    private bool hasRuntimeTheme;
 
     private readonly List<IUIThemeTarget> registeredTargets = new();
 
@@ -29,6 +30,7 @@ public class UIThemeManager : MonoBehaviour
     private readonly List<UIThemeScrollStyle> activeScrollStyles = new();
     private readonly List<UIThemeSliderStyle> activeSliderStyles = new();
     private readonly List<UIThemeToggleStyle> activeToggleStyles = new();
+    private readonly List<UIThemeBoardStyle> activeBoardStyles = new();
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetStaticState()
@@ -49,6 +51,15 @@ public class UIThemeManager : MonoBehaviour
         }
 
         instance = this;
+
+        if (Application.isPlaying)
+        {
+            hasRuntimeTheme = false;
+            defaultThemeData = null;
+            activeThemeData = null;
+            ClearActiveThemeLists();
+            return;
+        }
 
         SetTheme(selectedThemeType);
     }
@@ -132,7 +143,10 @@ public class UIThemeManager : MonoBehaviour
             registeredTargets.Add(target);
         }
 
-        target.ReapplyTheme();
+        if (!Application.isPlaying || hasRuntimeTheme)
+        {
+            target.ReapplyTheme();
+        }
     }
 
     public void Unregister(IUIThemeTarget target)
@@ -153,6 +167,11 @@ public class UIThemeManager : MonoBehaviour
         activeThemeData = FindThemeData(themeType);
 
         RebuildActiveThemeLists();
+
+        if (Application.isPlaying)
+        {
+            hasRuntimeTheme = activeThemeData != null;
+        }
 
         ReapplyThemeToRegisteredTargets();
     }
@@ -184,6 +203,9 @@ public class UIThemeManager : MonoBehaviour
 
             case UIThemeSectionType.Toggle:
                 return FindToggleStyle(styleType);
+
+            case UIThemeSectionType.Board:
+                return FindBoardStyle(styleType);
 
             default:
                 Debug.LogWarning($"UIThemeManager does not support section type: {sectionType}");
@@ -276,6 +298,7 @@ public class UIThemeManager : MonoBehaviour
         activeScrollStyles.AddRange(activeThemeData.ScrollStyles);
         activeSliderStyles.AddRange(activeThemeData.SliderStyles);
         activeToggleStyles.AddRange(activeThemeData.ToggleStyles);
+        activeBoardStyles.AddRange(activeThemeData.BoardStyles);
     }
 
     private void ClearActiveThemeLists()
@@ -288,6 +311,7 @@ public class UIThemeManager : MonoBehaviour
         activeScrollStyles.Clear();
         activeSliderStyles.Clear();
         activeToggleStyles.Clear();
+        activeBoardStyles.Clear();
     }
 
     private void ReapplyThemeToRegisteredTargets()
@@ -598,6 +622,42 @@ public class UIThemeManager : MonoBehaviour
         return null;
     }
 
+    private UIThemeBoardStyle FindBoardStyle(Enum styleType)
+    {
+        UIThemeBoardType boardType;
+
+        if (!TryGetEnumType(styleType, out boardType))
+        {
+            Debug.LogWarning("UIThemeManager received invalid board type.");
+            return null;
+        }
+
+        for (int i = 0; i < activeBoardStyles.Count; i++)
+        {
+            UIThemeBoardStyle style = activeBoardStyles[i];
+
+            if (style == null)
+            {
+                continue;
+            }
+
+            if (style.BoardType == boardType)
+            {
+                return style;
+            }
+        }
+
+        UIThemeBoardStyle defaultStyle = FindDefaultBoardStyle(boardType);
+
+        if (defaultStyle != null)
+        {
+            return defaultStyle;
+        }
+
+        Debug.LogWarning($"UIThemeManager could not find board style: {boardType}");
+        return null;
+    }
+
     #endregion
 
     private bool TryGetEnumType<TEnum>(Enum styleType, out TEnum typedValue)
@@ -784,6 +844,26 @@ public class UIThemeManager : MonoBehaviour
             UIThemeToggleStyle style = defaultThemeData.ToggleStyles[i];
 
             if (style != null && style.ToggleType == toggleType)
+            {
+                return style;
+            }
+        }
+
+        return null;
+    }
+
+    private UIThemeBoardStyle FindDefaultBoardStyle(UIThemeBoardType boardType)
+    {
+        if (defaultThemeData == null)
+        {
+            return null;
+        }
+
+        for (int i = 0; i < defaultThemeData.BoardStyles.Count; i++)
+        {
+            UIThemeBoardStyle style = defaultThemeData.BoardStyles[i];
+
+            if (style != null && style.BoardType == boardType)
             {
                 return style;
             }

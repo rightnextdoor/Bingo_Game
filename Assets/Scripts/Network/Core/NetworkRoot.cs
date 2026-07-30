@@ -5,31 +5,34 @@ using UnityEngine;
 
 [DefaultExecutionOrder(-1200)]
 [DisallowMultipleComponent]
+[RequireComponent(typeof(NetworkManager))]
+[RequireComponent(typeof(UnityTransport))]
 public class NetworkRoot : MonoBehaviour
 {
-    public static NetworkRoot instance;
+    #region Fields
 
-    private bool isPrimaryInstance;
-    private bool isReady;
+    public static NetworkRoot instance;
 
     [Header("Lifetime")]
     [SerializeField] private bool dontDestroyOnLoad = true;
 
     [Header("Configuration")]
-    [SerializeField]
-    private NetworkRuntimeConfigData runtimeConfig;
+    [SerializeField] private NetworkRuntimeConfigData runtimeConfig;
 
+    private bool isPrimaryInstance;
+    private bool isReady;
     private NetworkManager networkManager;
     private UnityTransport unityTransport;
 
     public bool IsPrimaryInstance => isPrimaryInstance;
     public bool IsReady => isReady;
-
-    public NetworkRuntimeConfigData RuntimeConfig =>
-        runtimeConfig;
+    public NetworkRuntimeConfigData RuntimeConfig => runtimeConfig;
 
     public event Action Ready;
 
+    #endregion
+
+    #region Unity Methods
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetStaticState()
@@ -42,38 +45,34 @@ public class NetworkRoot : MonoBehaviour
         if (instance != null && instance != this)
         {
             isPrimaryInstance = false;
-
             gameObject.SetActive(false);
             Destroy(gameObject);
-
             return;
         }
 
         instance = this;
         isPrimaryInstance = true;
 
-        if (dontDestroyOnLoad)
-        {
-            if (transform.parent != null)
-            {
-                Debug.LogWarning(
-                    "NetworkRoot must be a root GameObject for DontDestroyOnLoad to work.");
-            }
-            else
-            {
-                DontDestroyOnLoad(gameObject);
-            }
-        }
-    }
-
-    private void Start()
-    {
-        if (!isPrimaryInstance)
+        if (!dontDestroyOnLoad)
         {
             return;
         }
 
-        InitializeNetworkRoot();
+        if (transform.parent != null)
+        {
+            Debug.LogWarning("NetworkRoot must be a root GameObject for DontDestroyOnLoad to work.");
+            return;
+        }
+
+        DontDestroyOnLoad(gameObject);
+    }
+
+    private void Start()
+    {
+        if (isPrimaryInstance)
+        {
+            InitializeNetworkRoot();
+        }
     }
 
     private void OnDestroy()
@@ -84,35 +83,17 @@ public class NetworkRoot : MonoBehaviour
         }
     }
 
+    #endregion
+
+    #region Initialization
+
     private void InitializeNetworkRoot()
     {
-        networkManager =
-            GetComponent<NetworkManager>();
+        networkManager = GetComponent<NetworkManager>();
+        unityTransport = GetComponent<UnityTransport>();
 
-        unityTransport =
-            GetComponent<UnityTransport>();
-
-        if (runtimeConfig == null)
+        if (!ValidateRequiredConfiguration())
         {
-            Debug.LogError(
-                "NetworkRoot could not initialize because NetworkRuntimeConfigData is not assigned.");
-
-            return;
-        }
-
-        if (networkManager == null)
-        {
-            Debug.LogError(
-                "NetworkRoot could not initialize because NetworkManager is missing.");
-
-            return;
-        }
-
-        if (unityTransport == null)
-        {
-            Debug.LogError(
-                "NetworkRoot could not initialize because UnityTransport is missing.");
-
             return;
         }
 
@@ -136,42 +117,68 @@ public class NetworkRoot : MonoBehaviour
             return;
         }
 
-        if (!InitializeAuthorityRuntime())
+        if (!InitializeMultiplayerSessionLifecycle())
+        {
+            return;
+        }
+
+        if (!InitializeMultiplayerNetworkScheduler())
         {
             return;
         }
 
         isReady = true;
-
         Ready?.Invoke();
+    }
+
+    private bool ValidateRequiredConfiguration()
+    {
+        if (runtimeConfig == null)
+        {
+            Debug.LogError("NetworkRoot could not initialize because NetworkRuntimeConfigData is not assigned.");
+            return false;
+        }
+
+        if (networkManager == null)
+        {
+            Debug.LogError("NetworkRoot could not initialize because NetworkManager is missing.");
+            return false;
+        }
+
+        if (unityTransport == null)
+        {
+            Debug.LogError("NetworkRoot could not initialize because UnityTransport is missing.");
+            return false;
+        }
+
+        return true;
     }
 
     private bool InitializeRelayConnectionService()
     {
-        RelayConnectionService relayConnectionService =
-            RelayConnectionService.instance;
+        RelayConnectionService relayConnectionService = GetComponent<RelayConnectionService>();
 
         if (relayConnectionService == null)
         {
-            Debug.LogError(
-                "NetworkRoot could not initialize because RelayConnectionService.instance is null.");
-
-            return false;
+            return true;
         }
 
-        return relayConnectionService.Initialize();
+        if (relayConnectionService.Initialize())
+        {
+            return true;
+        }
+
+        Debug.LogError("NetworkRoot could not initialize RelayConnectionService.");
+        return false;
     }
 
     private bool InitializeConnectionRegistry()
     {
-        NetworkConnectionRegistry connectionRegistry =
-            NetworkConnectionRegistry.instance;
+        NetworkConnectionRegistry connectionRegistry = GetComponent<NetworkConnectionRegistry>();
 
         if (connectionRegistry == null)
         {
-            Debug.LogError(
-                "NetworkRoot could not initialize because NetworkConnectionRegistry.instance is null.");
-
+            Debug.LogError("NetworkRoot could not initialize because NetworkConnectionRegistry is missing.");
             return false;
         }
 
@@ -180,14 +187,11 @@ public class NetworkRoot : MonoBehaviour
 
     private bool InitializeConnectionApproval()
     {
-        NetworkConnectionApproval connectionApproval =
-            NetworkConnectionApproval.instance;
+        NetworkConnectionApproval connectionApproval = GetComponent<NetworkConnectionApproval>();
 
         if (connectionApproval == null)
         {
-            Debug.LogError(
-                "NetworkRoot could not initialize because NetworkConnectionApproval.instance is null.");
-
+            Debug.LogError("NetworkRoot could not initialize because NetworkConnectionApproval is missing.");
             return false;
         }
 
@@ -196,33 +200,30 @@ public class NetworkRoot : MonoBehaviour
 
     private bool InitializeNetworkBootstrap()
     {
-        NetworkBootstrap networkBootstrap =
-            NetworkBootstrap.instance;
+        NetworkBootstrap networkBootstrap = GetComponent<NetworkBootstrap>();
 
         if (networkBootstrap == null)
         {
-            Debug.LogError(
-                "NetworkRoot could not initialize because NetworkBootstrap.instance is null.");
-
+            Debug.LogError("NetworkRoot could not initialize because NetworkBootstrap is missing.");
             return false;
         }
 
         return networkBootstrap.Initialize();
     }
 
-    private bool InitializeAuthorityRuntime()
+    private bool InitializeMultiplayerSessionLifecycle()
     {
-        NetworkAuthorityRuntime authorityRuntime =
-            NetworkAuthorityRuntime.instance;
+        MultiplayerSessionLifecycle sessionLifecycle = GetComponent<MultiplayerSessionLifecycle>();
 
-        if (authorityRuntime == null)
-        {
-            Debug.LogError(
-                "NetworkRoot could not initialize because NetworkAuthorityRuntime.instance is null.");
-
-            return false;
-        }
-
-        return authorityRuntime.Initialize();
+        return sessionLifecycle != null && sessionLifecycle.Initialize();
     }
+
+    private bool InitializeMultiplayerNetworkScheduler()
+    {
+        MultiplayerNetworkScheduler networkScheduler = GetComponent<MultiplayerNetworkScheduler>();
+
+        return networkScheduler != null && networkScheduler.Initialize();
+    }
+
+    #endregion
 }

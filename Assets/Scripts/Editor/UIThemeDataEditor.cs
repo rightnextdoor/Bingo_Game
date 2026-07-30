@@ -18,6 +18,7 @@ public class UIThemeDataEditor : Editor
     private bool scrollSectionExpanded = false;
     private bool sliderSectionExpanded = false;
     private bool toggleSectionExpanded = false;
+    private bool boardSectionExpanded = false;
 
     private SerializedProperty backgroundStylesProperty;
     private SerializedProperty buttonStylesProperty;
@@ -27,6 +28,7 @@ public class UIThemeDataEditor : Editor
     private SerializedProperty scrollStylesProperty;
     private SerializedProperty sliderStylesProperty;
     private SerializedProperty toggleStylesProperty;
+    private SerializedProperty boardStylesProperty;
 
     private void OnEnable()
     {
@@ -40,6 +42,7 @@ public class UIThemeDataEditor : Editor
         scrollStylesProperty = serializedObject.FindProperty("scrollStyles");
         sliderStylesProperty = serializedObject.FindProperty("sliderStyles");
         toggleStylesProperty = serializedObject.FindProperty("toggleStyles");
+        boardStylesProperty = serializedObject.FindProperty("boardStyles");
     }
 
     public override void OnInspectorGUI()
@@ -60,6 +63,7 @@ public class UIThemeDataEditor : Editor
         DrawScrollSection();
         DrawSliderSection();
         DrawToggleSection();
+        DrawBoardSection();
 
         bool changed = EditorGUI.EndChangeCheck();
 
@@ -208,6 +212,26 @@ public class UIThemeDataEditor : Editor
              "toggleType",
              DrawToggleStyleEntry
          );
+    }
+
+    private void DrawBoardSection()
+    {
+        EditorGUILayout.Space(6);
+
+        boardSectionExpanded = DrawRememberedSectionFoldout(
+            "Board Section",
+            boardSectionExpanded);
+
+        if (!boardSectionExpanded)
+        {
+            return;
+        }
+
+        DrawList(
+            boardStylesProperty,
+            "Board",
+            "boardType",
+            DrawBoardStyleEntry);
     }
 
     #endregion
@@ -671,6 +695,107 @@ public class UIThemeDataEditor : Editor
         );
     }
 
+    private void DrawBoardStyleEntry(SerializedProperty boardProperty)
+    {
+        EditorGUILayout.PropertyField(
+            boardProperty.FindPropertyRelative("boardType"),
+            new GUIContent("Type"));
+
+        EditorGUILayout.Space(6);
+
+        EditorGUILayout.LabelField(
+            "Board Root",
+            EditorStyles.boldLabel);
+
+        DrawFixedStyle(
+            "Root Image",
+            boardProperty.FindPropertyRelative("rootImage"),
+            DrawImageComponentFields);
+
+        EditorGUILayout.Space(6);
+
+        EditorGUILayout.LabelField(
+            "Letter Header",
+            EditorStyles.boldLabel);
+
+        DrawFixedStyle(
+            "Letter Header Image",
+            boardProperty.FindPropertyRelative("letterHeaderImage"),
+            DrawImageComponentFields);
+
+        DrawBoardHeaderStyle(
+            boardProperty,
+            "B Header",
+            "bHeaderImage",
+            "bHeaderText");
+
+        DrawBoardHeaderStyle(
+            boardProperty,
+            "I Header",
+            "iHeaderImage",
+            "iHeaderText");
+
+        DrawBoardHeaderStyle(
+            boardProperty,
+            "N Header",
+            "nHeaderImage",
+            "nHeaderText");
+
+        DrawBoardHeaderStyle(
+            boardProperty,
+            "G Header",
+            "gHeaderImage",
+            "gHeaderText");
+
+        DrawBoardHeaderStyle(
+            boardProperty,
+            "O Header",
+            "oHeaderImage",
+            "oHeaderText");
+
+        EditorGUILayout.Space(6);
+
+        EditorGUILayout.LabelField(
+            "Cell Grid",
+            EditorStyles.boldLabel);
+
+        DrawFixedStyle(
+            "Cell Grid Image",
+            boardProperty.FindPropertyRelative("cellGridImage"),
+            DrawImageComponentFields);
+
+        EditorGUILayout.Space(6);
+
+        EditorGUILayout.LabelField(
+            "Cell",
+            EditorStyles.boldLabel);
+
+        DrawFixedStyle(
+            "Cell Image",
+            boardProperty.FindPropertyRelative("cellImage"),
+            DrawImageComponentFields);
+
+        DrawFixedStyle(
+            "Cell Visual",
+            boardProperty.FindPropertyRelative("cellVisual"),
+            DrawSelectableVisualFields);
+
+        DrawFixedStyle(
+            "Marked Highlight Image",
+            boardProperty.FindPropertyRelative("markedHighlightImage"),
+            DrawImageComponentFields);
+
+        DrawFixedStyle(
+            "Winning Highlight Image",
+            boardProperty.FindPropertyRelative("winningHighlightImage"),
+            DrawImageComponentFields);
+
+        DrawFixedStyle(
+            "Value Text",
+            boardProperty.FindPropertyRelative("valueText"),
+            DrawTextComponentFields);
+    }
+
     #endregion
 
     #region Style Field Drawers
@@ -1006,6 +1131,29 @@ public class UIThemeDataEditor : Editor
         }
 
         return typeProperty.enumNames[enumIndex];
+    }
+
+    private void DrawBoardHeaderStyle(
+    SerializedProperty boardProperty,
+    string label,
+    string imagePropertyName,
+    string textPropertyName)
+    {
+        EditorGUILayout.Space(6);
+
+        EditorGUILayout.LabelField(
+            label,
+            EditorStyles.boldLabel);
+
+        DrawFixedStyle(
+            "Header Image",
+            boardProperty.FindPropertyRelative(imagePropertyName),
+            DrawImageComponentFields);
+
+        DrawFixedStyle(
+            "Letter Text",
+            boardProperty.FindPropertyRelative(textPropertyName),
+            DrawTextComponentFields);
     }
 
     #endregion

@@ -16,7 +16,8 @@ public enum UIThemeSectionType
     Dropdown,
     Scroll,
     Slider,
-    Toggle
+    Toggle,
+    Board
 }
 
 public enum UIThemeBackgroundType
@@ -28,14 +29,17 @@ public enum UIThemeBackgroundType
     LeaderboardRowHighlight,
     Pattern,
     PatternHighlight,
-    PatternTooltip
+    PatternTooltip,
+    PlayerListRow,
+    PlayerListRowHighlight
 }
 
 public enum UIThemeButtonType
 {
     Primary,
     Secondary,
-    Close
+    Close,
+    Ready
 }
 
 public enum UIThemeTextType
@@ -62,7 +66,8 @@ public enum UIThemeDropdownType
 
 public enum UIThemeScrollType
 {
-    Default
+    Default,
+    Patterns
 }
 
 public enum UIThemeSliderType
@@ -74,4 +79,9 @@ public enum UIThemeToggleType
 {
     RadioButton,
     Checkmark
+}
+
+public enum UIThemeBoardType
+{
+    Default
 }

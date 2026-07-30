@@ -7,6 +7,7 @@ public class MenuData
 
     public SoloMenuData soloMenuData = new SoloMenuData();
     public OnlineMenuData onlineMenuData = new OnlineMenuData();
+    public CustomMenuData customMenuData = new CustomMenuData();
 
     public MenuData()
     {
@@ -14,18 +15,19 @@ public class MenuData
 
         soloMenuData = new SoloMenuData();
         onlineMenuData = new OnlineMenuData();
+        customMenuData = new CustomMenuData();
     }
 }
 
 [Serializable]
 public class SoloMenuData
 {
-    public bool unlimitedPlayers = false;
+    public bool maxPlayers = false;
     public int lobbySize = 6;
 
     public SoloMenuData()
     {
-        unlimitedPlayers = false;
+        maxPlayers = false;
         lobbySize = 6;
     }
 }
@@ -42,5 +44,16 @@ public class OnlineMenuData
         gameModeType = BingoGameModeType.Traditional;
         searchType = OnlineSearchType.QuickPlay;
         ballCountType = BingoBallCountType.Ball75;
+    }
+}
+
+[System.Serializable]
+public class CustomMenuData
+{
+    public CustomLobbyActionType actionType = CustomLobbyActionType.HostLobby;
+
+    public CustomMenuData()
+    {
+        actionType = CustomLobbyActionType.HostLobby;
     }
 }

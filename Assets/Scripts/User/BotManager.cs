@@ -1,4 +1,6 @@
+using System;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 public class BotManager : MonoBehaviour, ISceneReadyCheck
@@ -146,6 +148,16 @@ public class BotManager : MonoBehaviour, ISceneReadyCheck
         }
 
         UserManager.instance.SyncBotUsers(botUserListData);
+    }
+
+    public IReadOnlyList<UserData> GetLocalBotUsers()
+    {
+        if (!isReady || UserManager.instance == null)
+        {
+            return Array.Empty<UserData>();
+        }
+
+        return UserManager.instance.GetBotUsers();
     }
 
 }

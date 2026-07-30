@@ -16,9 +16,12 @@ public class GameModeManager : MonoBehaviour
     [Header("Patterns")]
     [SerializeField] private List<BingoPatternData> bingoPatterns = new List<BingoPatternData>();
 
+    private bool isReady;
+
     public IReadOnlyList<BingoGameModeData> GameModes => gameModes;
     public IReadOnlyList<BingoGameRuleData> GameRules => gameRules;
     public IReadOnlyList<BingoPatternData> BingoPatterns => bingoPatterns;
+    public bool IsReady => isReady;
 
     #endregion
 
@@ -39,12 +42,14 @@ public class GameModeManager : MonoBehaviour
         }
 
         instance = this;
+        isReady = true;
     }
 
     private void OnDestroy()
     {
         if (instance == this)
         {
+            isReady = false;
             instance = null;
         }
     }
@@ -218,6 +223,27 @@ public class GameModeManager : MonoBehaviour
     {
         patternData = GetBingoPatternData(patternType);
         return patternData != null;
+    }
+
+    public Color GetBingoPatternHighlightColor(BingoPatternType patternType)
+    {
+        BingoPatternData patternData = GetBingoPatternData(patternType);
+
+        if (patternData == null)
+            return Color.white;
+
+        return patternData.WinningHighlightColor;
+    }
+
+    public bool TryGetBingoPatternHighlightColor(BingoPatternType patternType, out Color highlightColor)
+    {
+        highlightColor = Color.white;
+
+        if (!TryGetBingoPatternData(patternType, out BingoPatternData patternData))
+            return false;
+
+        highlightColor = patternData.WinningHighlightColor;
+        return true;
     }
 
     #endregion

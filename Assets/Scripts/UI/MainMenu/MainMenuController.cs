@@ -140,6 +140,9 @@ public class MainMenuController : MonoBehaviour
 
             settingsController.OnlineGameModeChanged -= OnOnlineGameModeChanged;
             settingsController.OnlineGameModeChanged += OnOnlineGameModeChanged;
+
+            settingsController.OnlineBallCountChanged -= OnOnlineBallCountChanged;
+            settingsController.OnlineBallCountChanged += OnOnlineBallCountChanged;
         }
     }
 
@@ -184,6 +187,7 @@ public class MainMenuController : MonoBehaviour
         {
             settingsController.SettingsLayoutChanged -= OnSettingsLayoutChanged;
             settingsController.OnlineGameModeChanged -= OnOnlineGameModeChanged;
+            settingsController.OnlineBallCountChanged -= OnOnlineBallCountChanged;
         }
     }
 
@@ -311,7 +315,7 @@ public class MainMenuController : MonoBehaviour
                 break;
 
             case MainMenuPlayMode.Online:
-                gameInfoController.ShowOnlineInfo(GetSelectedOnlineGameModeType());
+                gameInfoController.ShowOnlineInfo(GetSelectedOnlineGameModeType(), GetSelectedOnlineBallCountType());
                 break;
 
             case MainMenuPlayMode.Custom:
@@ -322,6 +326,16 @@ public class MainMenuController : MonoBehaviour
                 gameInfoController.ClearInfo();
                 break;
         }
+    }
+
+    private BingoBallCountType GetSelectedOnlineBallCountType()
+    {
+        if (settingsController == null)
+        {
+            return BingoBallCountType.Ball75;
+        }
+
+        return settingsController.GetSelectedOnlineBallCountType();
     }
 
     private BingoGameModeType GetSelectedOnlineGameModeType()
@@ -336,17 +350,22 @@ public class MainMenuController : MonoBehaviour
 
     private void OnOnlineGameModeChanged(BingoGameModeType selectedGameModeType)
     {
-        if (selectedMode != MainMenuPlayMode.Online)
+        if (selectedMode != MainMenuPlayMode.Online || gameInfoController == null)
         {
             return;
         }
 
-        if (gameInfoController == null)
+        gameInfoController.ShowOnlineInfo(selectedGameModeType, GetSelectedOnlineBallCountType());
+    }
+
+    private void OnOnlineBallCountChanged(BingoBallCountType selectedBallCountType)
+    {
+        if (selectedMode != MainMenuPlayMode.Online || gameInfoController == null)
         {
             return;
         }
 
-        gameInfoController.ShowOnlineInfo(selectedGameModeType);
+        gameInfoController.ShowOnlineInfo(GetSelectedOnlineGameModeType(), selectedBallCountType);
     }
 
     private void ResetSettingsScroll()
@@ -495,47 +514,80 @@ public class MainMenuController : MonoBehaviour
 
         if (selectedMode == MainMenuPlayMode.None)
         {
-            Debug.LogWarning("Cannot play because no mode is selected.");
+            Debug.LogWarning(
+                "Cannot play because no mode is selected.");
+
             return;
         }
 
         if (settingsController == null)
         {
-            Debug.LogWarning("MainMenuController could not play because MainMenuSettingsController was not found.");
+            Debug.LogWarning(
+                "MainMenuController could not play because MainMenuSettingsController was not found.");
+
             return;
         }
 
-        if (!settingsController.TryBuildLobbySetupData(selectedMode, out LobbySetupData lobbySetupData))
+        if (userManager == null ||
+            !userManager.IsReady ||
+            !userManager.HasUser)
+        {
+            Debug.LogWarning(
+                "MainMenuController could not play because the current user is not ready.");
+
+            return;
+        }
+
+        if (!settingsController.TryBuildLobbySetupData(
+                selectedMode,
+                out LobbySetupData lobbySetupData))
         {
             ScrollSettingsToBottom();
             return;
         }
 
-        if (!settingsController.SaveMenuDataForMode(selectedMode))
+        lobbySetupData.userData = userManager.CurrentUser;
+
+        if (!settingsController.SaveMenuDataForMode(
+                selectedMode))
         {
             return;
         }
 
         if (lobbyManager == null)
         {
-            lobbyManager = LobbyManager.instance;
+            lobbyManager =
+                LobbyManager.instance;
         }
 
         if (lobbyManager == null)
         {
-            Debug.LogWarning("MainMenuController could not send lobby setup data because LobbyManager was not found.");
+            Debug.LogWarning(
+                "MainMenuController could not send lobby setup data because LobbyManager was not found.");
+
             return;
         }
-
-        lobbyManager.SetPendingLobbySetupData(lobbySetupData);
 
         if (gameSceneManager == null)
         {
-            Debug.LogWarning("MainMenuController could not load Lobby because GameSceneManager was not found.");
+            gameSceneManager =
+                GameSceneManager.instance;
+        }
+
+        if (gameSceneManager == null)
+        {
+            Debug.LogWarning(
+                "MainMenuController could not load Lobby because GameSceneManager was not found.");
+
             return;
         }
 
+        lobbyManager.SetPendingLobbySetupData(
+            lobbySetupData);
+
         gameSceneManager.LoadLobbyScene();
+
+        lobbyManager.BeginPendingLobbyEntry();
     }
 
     private void ScrollSettingsToBottom()

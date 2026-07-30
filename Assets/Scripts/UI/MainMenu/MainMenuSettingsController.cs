@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
@@ -7,8 +8,7 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 {
     #region Constants
 
-    private const int MinimumLobbySize = 6;
-    private const int UnlimitedPlayerCount = 100000;
+    private const bool DefaultOnlineMaxPlayers = true;
 
     private const int MinimumTextLength = 1;
     private const int LobbyNameCharacterLimit = 24;
@@ -26,7 +26,7 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 
     [Header("Solo Settings")]
     [SerializeField] private TMP_InputField soloLobbySizeInput;
-    [SerializeField] private Toggle soloUnlimitedToggle;
+    [SerializeField] private Toggle soloMaxToggle;
     [SerializeField] private TMP_Text soloErrorText;
 
     [Header("Online Settings")]
@@ -48,7 +48,7 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
     [SerializeField] private Button customHostShowPasswordButton;
     [SerializeField] private TMP_Text customHostShowPasswordButtonText;
     [SerializeField] private TMP_InputField customHostLobbySizeInput;
-    [SerializeField] private Toggle customHostUnlimitedToggle;
+    [SerializeField] private Toggle customHostMaxToggle;
 
     [Header("Custom Search Settings")]
     [SerializeField] private TMP_InputField customSearchLobbyCodeInput;
@@ -63,6 +63,8 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
     private MenuData menuData;
 
     private bool hasLoadedData;
+    private bool hasBuiltGameModeOptions;
+    private bool isUiReady;
 
     private readonly List<BingoGameModeType> onlineGameModeOptions = new List<BingoGameModeType>();
     private readonly List<OnlineSearchType> onlineSearchTypeOptions = new List<OnlineSearchType>();
@@ -75,6 +77,7 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 
     public event System.Action SettingsLayoutChanged;
     public event System.Action<BingoGameModeType> OnlineGameModeChanged;
+    public event System.Action<BingoBallCountType> OnlineBallCountChanged;
 
     #endregion
 
@@ -83,15 +86,27 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
     private void Awake()
     {
         EnsureMenuData();
-        BuildAllDropdownOptions();
-        ApplyAllDefaults();
+        BuildNonGameModeDropdownOptions();
         ClearAllErrors();
     }
 
-    private void Start()
+    private IEnumerator Start()
     {
         RegisterReadyCheck();
         TryLoadFromCurrentSaveData();
+
+        while (LobbySettings.instance == null ||
+               GameModeManager.instance == null ||
+               !GameModeManager.instance.IsReady)
+        {
+            yield return null;
+        }
+
+        BuildOnlineGameModeDropdownOptions();
+
+        hasBuiltGameModeOptions = true;
+
+        TryInitializeUi();
     }
 
     private void OnEnable()
@@ -117,23 +132,23 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
     {
         if (data == null)
         {
-            EnsureMenuData();
-            ApplyAllDefaults();
-            hasLoadedData = true;
-            return;
+            menuData = new MenuData();
         }
-
-        if (data.menuData == null)
+        else
         {
-            data.menuData = new MenuData();
-        }
+            if (data.menuData == null)
+            {
+                data.menuData = new MenuData();
+            }
 
-        menuData = data.menuData;
+            menuData = data.menuData;
+        }
 
         EnsureMenuData();
-        LoadAllMenuData();
 
         hasLoadedData = true;
+
+        TryInitializeUi();
     }
 
     public void SaveData(ref GameData data)
@@ -151,12 +166,12 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 
     bool ISaveManager.IsReady()
     {
-        return hasLoadedData;
+        return isUiReady;
     }
 
     string ISceneReadyCheck.ReadyName => "Main Menu Settings Controller";
 
-    bool ISceneReadyCheck.IsReady => hasLoadedData;
+    bool ISceneReadyCheck.IsReady => isUiReady;
 
     #endregion
 
@@ -230,6 +245,16 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         return GetDefaultOnlineGameModeType();
     }
 
+    public BingoBallCountType GetSelectedOnlineBallCountType()
+    {
+        if (TryGetSelectedDropdownValue(onlineBallCountDropdown, onlineBallCountOptions, out BingoBallCountType selectedBallCountType))
+        {
+            return selectedBallCountType;
+        }
+
+        return BingoBallCountType.Ball75;
+    }
+
     #endregion
 
     #region Menu Data Setup
@@ -250,6 +275,11 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         {
             menuData.onlineMenuData = new OnlineMenuData();
         }
+
+        if (menuData.customMenuData == null)
+        {
+            menuData.customMenuData = new CustomMenuData();
+        }
     }
 
     private void ApplyAllDefaults()
@@ -258,15 +288,16 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 
         ApplySoloDefaults(menuData.soloMenuData);
         ApplyOnlineDefaults(menuData.onlineMenuData);
-        ApplyCustomDefaults();
+        ApplyCustomDefaults(menuData.customMenuData);
     }
+
     private void LoadAllMenuData()
     {
         EnsureMenuData();
 
         LoadSoloMenuData(menuData.soloMenuData);
         LoadOnlineMenuData(menuData.onlineMenuData);
-        ApplyCustomDefaults();
+        LoadCustomMenuData(menuData.customMenuData);
 
         ClearAllErrors();
     }
@@ -277,6 +308,19 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 
         SaveSoloMenuData(menuData.soloMenuData);
         SaveOnlineMenuData(menuData.onlineMenuData);
+        SaveCustomMenuData(menuData.customMenuData);
+    }
+
+    private void TryInitializeUi()
+    {
+        if (!hasLoadedData || !hasBuiltGameModeOptions)
+        {
+            return;
+        }
+
+        LoadAllMenuData();
+
+        isUiReady = true;
     }
 
     #endregion
@@ -311,10 +355,10 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
             soloLobbySizeInput.onValueChanged.AddListener(OnSoloLobbySizeChanged);
         }
 
-        if (soloUnlimitedToggle != null)
+        if (soloMaxToggle != null)
         {
-            soloUnlimitedToggle.onValueChanged.RemoveListener(OnSoloUnlimitedChanged);
-            soloUnlimitedToggle.onValueChanged.AddListener(OnSoloUnlimitedChanged);
+            soloMaxToggle.onValueChanged.RemoveListener(OnSoloMaxChanged);
+            soloMaxToggle.onValueChanged.AddListener(OnSoloMaxChanged);
         }
     }
 
@@ -325,9 +369,9 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
             soloLobbySizeInput.onValueChanged.RemoveListener(OnSoloLobbySizeChanged);
         }
 
-        if (soloUnlimitedToggle != null)
+        if (soloMaxToggle != null)
         {
-            soloUnlimitedToggle.onValueChanged.RemoveListener(OnSoloUnlimitedChanged);
+            soloMaxToggle.onValueChanged.RemoveListener(OnSoloMaxChanged);
         }
     }
 
@@ -344,9 +388,9 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         }
     }
 
-    private void OnSoloUnlimitedChanged(bool isOn)
+    private void OnSoloMaxChanged(bool isOn)
     {
-        ApplySoloUnlimitedState();
+        ApplySoloMaxState();
 
         if (isOn)
         {
@@ -379,12 +423,12 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
             soloLobbySizeInput.SetTextWithoutNotify(lobbySize.ToString());
         }
 
-        if (soloUnlimitedToggle != null)
+        if (soloMaxToggle != null)
         {
-            soloUnlimitedToggle.SetIsOnWithoutNotify(soloMenuData.unlimitedPlayers);
+            soloMaxToggle.SetIsOnWithoutNotify(soloMenuData.maxPlayers);
         }
 
-        ApplySoloUnlimitedState();
+        ApplySoloMaxState();
         ClearError(soloErrorText);
     }
 
@@ -403,12 +447,12 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
             soloLobbySizeInput.SetTextWithoutNotify(lobbySize.ToString());
         }
 
-        if (soloUnlimitedToggle != null)
+        if (soloMaxToggle != null)
         {
-            soloUnlimitedToggle.SetIsOnWithoutNotify(soloMenuData.unlimitedPlayers);
+            soloMaxToggle.SetIsOnWithoutNotify(soloMenuData.maxPlayers);
         }
 
-        ApplySoloUnlimitedState();
+        ApplySoloMaxState();
         ClearError(soloErrorText);
     }
 
@@ -419,11 +463,11 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
             return;
         }
 
-        bool unlimitedPlayers = soloUnlimitedToggle != null && soloUnlimitedToggle.isOn;
+        bool maxPlayers = soloMaxToggle != null && soloMaxToggle.isOn;
 
-        soloMenuData.unlimitedPlayers = unlimitedPlayers;
+        soloMenuData.maxPlayers = maxPlayers;
 
-        if (unlimitedPlayers)
+        if (maxPlayers)
         {
             soloMenuData.lobbySize = GetDefaultSoloLobbySize();
             return;
@@ -446,12 +490,12 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
             return false;
         }
 
-        bool unlimitedPlayers = soloUnlimitedToggle != null && soloUnlimitedToggle.isOn;
+        bool maxPlayers = soloMaxToggle != null && soloMaxToggle.isOn;
 
-        if (unlimitedPlayers)
+        if (maxPlayers)
         {
-            lobbySetupData.soloSetupData.unlimitedPlayers = true;
-            lobbySetupData.soloSetupData.maxPlayers = UnlimitedPlayerCount;
+            lobbySetupData.soloSetupData.maxPlayers = true;
+            lobbySetupData.soloSetupData.maxPlayer = GetMaxPlayerCount();
 
             ClearError(soloErrorText);
             return true;
@@ -462,8 +506,8 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
             return false;
         }
 
-        lobbySetupData.soloSetupData.unlimitedPlayers = false;
-        lobbySetupData.soloSetupData.maxPlayers = lobbySize;
+        lobbySetupData.soloSetupData.maxPlayers = false;
+        lobbySetupData.soloSetupData.maxPlayer = lobbySize;
 
         ClearError(soloErrorText);
         return true;
@@ -473,14 +517,14 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 
     #region Solo UI State
 
-    private void ApplySoloUnlimitedState()
+    private void ApplySoloMaxState()
     {
-        if (soloLobbySizeInput == null || soloUnlimitedToggle == null)
+        if (soloLobbySizeInput == null || soloMaxToggle == null)
         {
             return;
         }
 
-        soloLobbySizeInput.interactable = !soloUnlimitedToggle.isOn;
+        soloLobbySizeInput.interactable = !soloMaxToggle.isOn;
     }
 
     #endregion
@@ -491,9 +535,8 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 
     #region Online Dropdown Setup
 
-    private void BuildAllDropdownOptions()
+    private void BuildNonGameModeDropdownOptions()
     {
-        BuildOnlineGameModeDropdownOptions();
         BuildOnlineSearchTypeDropdownOptions();
         BuildOnlineBallCountDropdownOptions();
         BuildCustomActionDropdownOptions();
@@ -503,6 +546,20 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
     {
         onlineGameModeOptions.Clear();
 
+        if (onlineGameModeDropdown == null)
+        {
+            return;
+        }
+
+        GameModeManager gameModeManager = GameModeManager.instance;
+
+        if (gameModeManager == null || !gameModeManager.IsReady)
+        {
+            return;
+        }
+
+        List<string> labels = new List<string>();
+
         foreach (BingoGameModeType gameModeType in System.Enum.GetValues(typeof(BingoGameModeType)))
         {
             if (gameModeType == BingoGameModeType.Custom)
@@ -510,19 +567,15 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
                 continue;
             }
 
+            BingoGameModeData gameModeData = gameModeManager.GetGameModeData(gameModeType);
+
+            if (gameModeData == null)
+            {
+                continue;
+            }
+
             onlineGameModeOptions.Add(gameModeType);
-        }
-
-        if (onlineGameModeDropdown == null)
-        {
-            return;
-        }
-
-        List<string> labels = new List<string>();
-
-        for (int i = 0; i < onlineGameModeOptions.Count; i++)
-        {
-            labels.Add(GetGameModeLabel(onlineGameModeOptions[i]));
+            labels.Add(gameModeData.GameName);
         }
 
         onlineGameModeDropdown.ClearOptions();
@@ -640,6 +693,7 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
     private void OnOnlineBallCountChanged(int value)
     {
         ClearError(onlineErrorText);
+        OnlineBallCountChanged?.Invoke(GetSelectedOnlineBallCountType());
     }
 
     #endregion
@@ -733,6 +787,13 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         lobbySetupData.onlineSetupData.searchType = selectedSearchType;
         lobbySetupData.onlineSetupData.ballCountType = selectedBallCountType;
 
+        lobbySetupData.onlineSetupData.maxPlayers = DefaultOnlineMaxPlayers;
+
+        if (DefaultOnlineMaxPlayers)
+        {
+            lobbySetupData.onlineSetupData.maxPlayer = GetMaxPlayerCount();
+        }
+
         ClearError(onlineErrorText);
         return true;
     }
@@ -786,16 +847,6 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         }
 
         return BingoGameModeType.Traditional;
-    }
-
-    private string GetGameModeLabel(BingoGameModeType gameModeType)
-    {
-        if (GameModeManager.instance == null)
-        {
-            return gameModeType.ToString();
-        }
-
-        return GameModeManager.instance.GetGameModeName(gameModeType);
     }
 
     private string GetOnlineSearchTypeLabel(OnlineSearchType searchType)
@@ -919,10 +970,10 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
             customHostLobbySizeInput.onValueChanged.AddListener(OnCustomHostLobbySizeChanged);
         }
 
-        if (customHostUnlimitedToggle != null)
+        if (customHostMaxToggle != null)
         {
-            customHostUnlimitedToggle.onValueChanged.RemoveListener(OnCustomHostUnlimitedChanged);
-            customHostUnlimitedToggle.onValueChanged.AddListener(OnCustomHostUnlimitedChanged);
+            customHostMaxToggle.onValueChanged.RemoveListener(OnCustomHostMaxChanged);
+            customHostMaxToggle.onValueChanged.AddListener(OnCustomHostMaxChanged);
         }
 
         if (customHostShowPasswordButton != null)
@@ -972,9 +1023,9 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
             customHostLobbySizeInput.onValueChanged.RemoveListener(OnCustomHostLobbySizeChanged);
         }
 
-        if (customHostUnlimitedToggle != null)
+        if (customHostMaxToggle != null)
         {
-            customHostUnlimitedToggle.onValueChanged.RemoveListener(OnCustomHostUnlimitedChanged);
+            customHostMaxToggle.onValueChanged.RemoveListener(OnCustomHostMaxChanged);
         }
 
         if (customHostShowPasswordButton != null)
@@ -1038,9 +1089,9 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         }
     }
 
-    private void OnCustomHostUnlimitedChanged(bool isOn)
+    private void OnCustomHostMaxChanged(bool isOn)
     {
-        ApplyCustomHostUnlimitedState();
+        ApplyCustomHostMaxState();
 
         if (isOn)
         {
@@ -1079,9 +1130,14 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 
     #region Custom Defaults
 
-    private void ApplyCustomDefaults()
+    private void ApplyCustomDefaults(CustomMenuData customMenuData)
     {
-        SetDropdownValueWithoutNotify(customActionDropdown, customActionOptions, CustomLobbyActionType.HostLobby);
+        if (customMenuData == null)
+        {
+            customMenuData = new CustomMenuData();
+        }
+
+        SetDropdownValueWithoutNotify(customActionDropdown, customActionOptions, customMenuData.actionType);
 
         if (customHostLobbyNameInput != null)
         {
@@ -1098,9 +1154,9 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
             customHostLobbySizeInput.SetTextWithoutNotify(GetDefaultSoloLobbySize().ToString());
         }
 
-        if (customHostUnlimitedToggle != null)
+        if (customHostMaxToggle != null)
         {
-            customHostUnlimitedToggle.SetIsOnWithoutNotify(false);
+            customHostMaxToggle.SetIsOnWithoutNotify(false);
         }
 
         if (customSearchLobbyCodeInput != null)
@@ -1117,9 +1173,69 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         SetCustomPasswordVisibility(customSearchPasswordInput, customSearchShowPasswordButtonText, false, ref customSearchPasswordVisible);
 
         ApplyCustomActionState();
-        ApplyCustomHostUnlimitedState();
-
+        ApplyCustomHostMaxState();
         ClearError(customErrorText);
+    }
+
+    private void LoadCustomMenuData(CustomMenuData customMenuData)
+    {
+        if (customMenuData == null)
+        {
+            ApplyCustomDefaults(new CustomMenuData());
+            return;
+        }
+
+        SetDropdownValueWithoutNotify(customActionDropdown, customActionOptions, customMenuData.actionType);
+
+        if (customHostLobbyNameInput != null)
+        {
+            customHostLobbyNameInput.SetTextWithoutNotify(string.Empty);
+        }
+
+        if (customHostPasswordInput != null)
+        {
+            customHostPasswordInput.SetTextWithoutNotify(string.Empty);
+        }
+
+        if (customHostLobbySizeInput != null)
+        {
+            customHostLobbySizeInput.SetTextWithoutNotify(GetDefaultSoloLobbySize().ToString());
+        }
+
+        if (customHostMaxToggle != null)
+        {
+            customHostMaxToggle.SetIsOnWithoutNotify(false);
+        }
+
+        if (customSearchLobbyCodeInput != null)
+        {
+            customSearchLobbyCodeInput.SetTextWithoutNotify(string.Empty);
+        }
+
+        if (customSearchPasswordInput != null)
+        {
+            customSearchPasswordInput.SetTextWithoutNotify(string.Empty);
+        }
+
+        SetCustomPasswordVisibility(customHostPasswordInput, customHostShowPasswordButtonText, false, ref customHostPasswordVisible);
+        SetCustomPasswordVisibility(customSearchPasswordInput, customSearchShowPasswordButtonText, false, ref customSearchPasswordVisible);
+
+        ApplyCustomActionState();
+        ApplyCustomHostMaxState();
+        ClearError(customErrorText);
+    }
+
+    private void SaveCustomMenuData(CustomMenuData customMenuData)
+    {
+        if (customMenuData == null)
+        {
+            return;
+        }
+
+        if (TryGetSelectedDropdownValue(customActionDropdown, customActionOptions, out CustomLobbyActionType selectedActionType))
+        {
+            customMenuData.actionType = selectedActionType;
+        }
     }
 
     #endregion
@@ -1162,13 +1278,13 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
             return false;
         }
 
-        bool unlimitedPlayers = customHostUnlimitedToggle != null && customHostUnlimitedToggle.isOn;
+        bool maxPlayers = customHostMaxToggle != null && customHostMaxToggle.isOn;
 
-        int maxPlayers = UnlimitedPlayerCount;
+        int maxPlayer = GetMaxPlayerCount();
 
-        if (!unlimitedPlayers)
+        if (!maxPlayers)
         {
-            if (!TryGetCustomLobbySizeValue(customHostLobbySizeInput, out maxPlayers))
+            if (!TryGetCustomLobbySizeValue(customHostLobbySizeInput, out maxPlayer))
             {
                 return false;
             }
@@ -1176,8 +1292,8 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 
         lobbySetupData.customSetupData.hostSetupData.lobbyName = lobbyName;
         lobbySetupData.customSetupData.hostSetupData.password = GetOptionalInputText(customHostPasswordInput, PasswordCharacterLimit);
-        lobbySetupData.customSetupData.hostSetupData.unlimitedPlayers = unlimitedPlayers;
         lobbySetupData.customSetupData.hostSetupData.maxPlayers = maxPlayers;
+        lobbySetupData.customSetupData.hostSetupData.maxPlayer = maxPlayer;
 
         ClearError(customErrorText);
         return true;
@@ -1216,14 +1332,14 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         NotifySettingsLayoutChanged();
     }
 
-    private void ApplyCustomHostUnlimitedState()
+    private void ApplyCustomHostMaxState()
     {
-        if (customHostLobbySizeInput == null || customHostUnlimitedToggle == null)
+        if (customHostLobbySizeInput == null || customHostMaxToggle == null)
         {
             return;
         }
 
-        customHostLobbySizeInput.interactable = !customHostUnlimitedToggle.isOn;
+        customHostLobbySizeInput.interactable = !customHostMaxToggle.isOn;
     }
 
     private void ToggleCustomHostPasswordVisibility()
@@ -1424,7 +1540,7 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         {
             if (showError)
             {
-                ShowError(errorText, $"Lobby size must be at least {MinimumLobbySize}.");
+                ShowError(errorText, $"Lobby size must be at least {GetMinimumLobbySize()}.");
             }
 
             return false;
@@ -1440,20 +1556,20 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
             return false;
         }
 
-        if (parsedLobbySize < MinimumLobbySize)
+        if (parsedLobbySize < GetMinimumLobbySize())
         {
             if (showError)
             {
-                ShowError(errorText, $"Lobby size must be at least {MinimumLobbySize}.");
+                ShowError(errorText, $"Lobby size must be at least {GetMinimumLobbySize()}.");
             }
 
             return false;
         }
 
-        if (parsedLobbySize > UnlimitedPlayerCount)
+        if (parsedLobbySize > GetMaxPlayerCount())
         {
-            parsedLobbySize = UnlimitedPlayerCount;
-            inputField.SetTextWithoutNotify(UnlimitedPlayerCount.ToString());
+            parsedLobbySize = GetMaxPlayerCount();
+            inputField.SetTextWithoutNotify(GetMaxPlayerCount().ToString());
         }
 
         lobbySize = parsedLobbySize;
@@ -1462,14 +1578,14 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 
     private int ClampLobbySizeToAllowedRange(int lobbySize)
     {
-        if (lobbySize < MinimumLobbySize)
+        if (lobbySize < GetMinimumLobbySize())
         {
             return GetSavedDefaultLobbySize();
         }
 
-        if (lobbySize > UnlimitedPlayerCount)
+        if (lobbySize > GetMaxPlayerCount())
         {
-            return UnlimitedPlayerCount;
+            return GetMaxPlayerCount();
         }
 
         return lobbySize;
@@ -1501,14 +1617,14 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 
         int savedLobbySize = menuData.soloMenuData.lobbySize;
 
-        if (savedLobbySize < MinimumLobbySize)
+        if (savedLobbySize < GetMinimumLobbySize())
         {
-            return MinimumLobbySize;
+            return GetMinimumLobbySize();
         }
 
-        if (savedLobbySize > UnlimitedPlayerCount)
+        if (savedLobbySize > GetMaxPlayerCount())
         {
-            return UnlimitedPlayerCount;
+            return GetMaxPlayerCount();
         }
 
         return savedLobbySize;
@@ -1516,8 +1632,17 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 
     private int GetDefaultSoloLobbySize()
     {
-        SoloMenuData defaultSoloMenuData = new SoloMenuData();
-        return ClampLobbySizeToAllowedRange(defaultSoloMenuData.lobbySize);
+        return LobbySettings.instance.MinimumPlayers;
+    }
+
+    private int GetMinimumLobbySize()
+    {
+        return LobbySettings.instance.MinimumPlayers;
+    }
+
+    private int GetMaxPlayerCount()
+    {
+        return LobbySettings.instance.MaxPlayerCount;
     }
 
     #endregion

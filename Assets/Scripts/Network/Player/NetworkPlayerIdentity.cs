@@ -3,23 +3,22 @@ using Unity.Netcode;
 using UnityEngine;
 
 [DisallowMultipleComponent]
+[RequireComponent(typeof(NetworkObject), typeof(NetworkSessionPlayer))]
 public class NetworkPlayerIdentity : NetworkBehaviour
 {
-    private NetworkConnectionRegistry connectionRegistry;
+    #region Fields
 
-    private readonly NetworkVariable<FixedString128Bytes>
-        bingoUserId =
-            new NetworkVariable<FixedString128Bytes>(
-                default,
-                NetworkVariableReadPermission.Everyone,
-                NetworkVariableWritePermission.Server);
+    private readonly NetworkVariable<FixedString128Bytes> bingoUserId = new NetworkVariable<FixedString128Bytes>(
+        default,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server);
 
-    public string BingoUserId =>
-        bingoUserId.Value.ToString();
+    public string BingoUserId => bingoUserId.Value.ToString();
+    public ulong ClientId => OwnerClientId;
 
-    public ulong ClientId =>
-        OwnerClientId;
+    #endregion
 
+    #region Network Methods
 
     public override void OnNetworkSpawn()
     {
@@ -30,30 +29,22 @@ public class NetworkPlayerIdentity : NetworkBehaviour
             return;
         }
 
-        connectionRegistry =
-            NetworkConnectionRegistry.instance;
+        NetworkConnectionRegistry connectionRegistry = NetworkConnectionRegistry.instance;
 
-        if (connectionRegistry == null ||
-            !connectionRegistry.IsReady)
+        if (connectionRegistry == null || !connectionRegistry.IsReady)
         {
-            Debug.LogError(
-                $"NetworkPlayerIdentity for ClientId {OwnerClientId} could not initialize because NetworkConnectionRegistry is not ready.");
-
+            Debug.LogError($"NetworkPlayerIdentity for ClientId {OwnerClientId} could not initialize because NetworkConnectionRegistry is not ready.");
             return;
         }
 
-        if (!connectionRegistry.TryGetBingoUserId(
-                OwnerClientId,
-                out string registeredBingoUserId))
+        if (!connectionRegistry.TryGetBingoUserId(OwnerClientId, out string registeredBingoUserId))
         {
-            Debug.LogError(
-                $"NetworkPlayerIdentity could not find a registered Bingo UserId for ClientId {OwnerClientId}.");
-
+            Debug.LogError($"NetworkPlayerIdentity could not find a registered Bingo UserId for ClientId {OwnerClientId}.");
             return;
         }
 
-        bingoUserId.Value =
-            new FixedString128Bytes(
-                registeredBingoUserId);
+        bingoUserId.Value = new FixedString128Bytes(registeredBingoUserId);
     }
+
+    #endregion
 }

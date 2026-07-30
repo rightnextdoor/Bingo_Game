@@ -7,6 +7,8 @@ using UnityEngine;
 
 public class SaveManager : MonoBehaviour
 {
+    private const int MultiplayerPlayModeTestPlayerCount = 4;
+
     public static SaveManager instance;
 
     public static event Action SaveDataChanged;
@@ -56,6 +58,8 @@ public class SaveManager : MonoBehaviour
 
         instance = this;
 
+        ApplyMultiplayerPlayModeTestSaveFile();
+
         EnsureDataHandler();
     }
 
@@ -89,10 +93,11 @@ public class SaveManager : MonoBehaviour
         hasLoadedData = false;
 
         dataHandler.Delete();
+        DeleteMultiplayerPlayModeTestSavedData();
 
         gameData = new GameData();
 
-        Debug.Log("Deleted save file. Runtime managers were not refreshed.");
+        Debug.Log("Deleted save data.");
     }
 
     public void NewGame()
@@ -373,5 +378,30 @@ public class SaveManager : MonoBehaviour
         Exception exception = task.Exception.GetBaseException();
 
         Debug.LogWarning($"{taskName} failed: {exception.Message}");
+    }
+
+    private void ApplyMultiplayerPlayModeTestSaveFile()
+    {
+        if (!MultiplayerPlayModeTestContext.IsActive)
+        {
+            return;
+        }
+
+        fileName = GetMultiplayerPlayModeTestSaveFileName(MultiplayerPlayModeTestContext.PlayerNumber);
+    }
+
+    private void DeleteMultiplayerPlayModeTestSavedData()
+    {
+        for (int playerNumber = 1; playerNumber <= MultiplayerPlayModeTestPlayerCount; playerNumber++)
+        {
+            string testFileName = GetMultiplayerPlayModeTestSaveFileName(playerNumber);
+            FileDataHandler testDataHandler = new FileDataHandler(Application.persistentDataPath, testFileName, encryptData);
+            testDataHandler.Delete();
+        }
+    }
+
+    private string GetMultiplayerPlayModeTestSaveFileName(int playerNumber)
+    {
+        return $"bingo_save_mppm_player_{playerNumber}.json";
     }
 }

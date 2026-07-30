@@ -1,57 +1,47 @@
-using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 public class GlobalIconBarController : MonoBehaviour
 {
-    private enum TopBarAction
-    {
-        User,
-        Leaderboard,
-        Settings
-    }
-
-    [Serializable]
-    private class TopBarIconEntry
-    {
-        [SerializeField] private TopBarAction action;
-        [SerializeField] private UserIconData iconData;
-        [SerializeField] private UIMessageData tooltipMessageData;
-
-        public TopBarAction Action => action;
-        public UserIconData IconData => iconData;
-        public UIMessageData TooltipMessageData => tooltipMessageData;
-    }
+    #region Data
 
     private class RuntimeTopBarIcon
     {
-        public TopBarIconEntry Entry { get; }
+        public UIIconType IconType { get; }
         public UITopBarIconSlot Slot { get; }
 
-        public RuntimeTopBarIcon(TopBarIconEntry entry, UITopBarIconSlot slot)
+        public RuntimeTopBarIcon(UIIconType iconType, UITopBarIconSlot slot)
         {
-            Entry = entry;
+            IconType = iconType;
             Slot = slot;
         }
     }
+
+    #endregion
+
+    #region Fields
+
+    private static readonly UIIconType[] OrderedIcons = { UIIconType.User, UIIconType.Leaderboard, UIIconType.Settings };
 
     [Header("Managers")]
     private PopupManager popupManager;
     private UserManager userManager;
     private UIIconManager iconManager;
+
     [SerializeField] private IconSelectPopupController iconSelectPopupController;
 
     [Header("Top Icon Bar")]
     [SerializeField] private RectTransform topIconGroup;
     [SerializeField] private UITopBarIconSlot topIconSlotPrefab;
 
-    [Header("Ordered Icons")]
-    [SerializeField] private List<TopBarIconEntry> topBarIcons = new List<TopBarIconEntry>();
-
     private readonly List<RuntimeTopBarIcon> runtimeIcons = new List<RuntimeTopBarIcon>();
 
     private Coroutine delayedRefreshRoutine;
+
+    #endregion
+
+    #region Unity Lifecycle
 
     private void OnEnable()
     {
@@ -78,30 +68,9 @@ public class GlobalIconBarController : MonoBehaviour
         SaveManager.SaveDataChanged -= RefreshTopBarIcons;
     }
 
-    private void QueueDelayedRefresh()
-    {
-        if (delayedRefreshRoutine != null)
-        {
-            StopCoroutine(delayedRefreshRoutine);
-        }
+    #endregion
 
-        delayedRefreshRoutine = StartCoroutine(DelayedRefreshTopBarIcons());
-    }
-
-    private IEnumerator DelayedRefreshTopBarIcons()
-    {
-        yield return null;
-
-        delayedRefreshRoutine = null;
-
-        CacheManagers();
-        RefreshTopBarIcons();
-    }
-
-    private void CacheManagers()
-    {
-        FindMissingReferences();
-    }
+    #region Build
 
     public void BuildTopIconBar()
     {
@@ -120,23 +89,18 @@ public class GlobalIconBarController : MonoBehaviour
             return;
         }
 
-        for (int i = 0; i < topBarIcons.Count; i++)
+        for (int i = 0; i < OrderedIcons.Length; i++)
         {
-            TopBarIconEntry entry = topBarIcons[i];
-
-            if (entry == null)
-            {
-                continue;
-            }
-
-            TopBarAction action = entry.Action;
-            Sprite iconSprite = GetSpriteForEntry(entry);
+            UIIconType iconType = OrderedIcons[i];
+            Sprite iconSprite = GetSpriteForIcon(iconType);
+            UIMessageType tooltipMessageType = GetTooltipMessageType(iconType);
 
             UITopBarIconSlot slot = Instantiate(topIconSlotPrefab, topIconGroup);
-            slot.name = $"UITopBarIconSlot_{action}";
-            slot.Setup(iconSprite, () => HandleTopBarAction(action), entry.TooltipMessageData);
 
-            runtimeIcons.Add(new RuntimeTopBarIcon(entry, slot));
+            slot.name = $"UITopBarIconSlot_{iconType}";
+            slot.Setup(iconSprite, () => HandleTopBarAction(iconType), tooltipMessageType);
+
+            runtimeIcons.Add(new RuntimeTopBarIcon(iconType, slot));
         }
     }
 
@@ -164,7 +128,11 @@ public class GlobalIconBarController : MonoBehaviour
         }
     }
 
-    private void HandleTopBarAction(TopBarAction action)
+    #endregion
+
+    #region Actions
+
+    private void HandleTopBarAction(UIIconType iconType)
     {
         CacheManagers();
 
@@ -176,18 +144,22 @@ public class GlobalIconBarController : MonoBehaviour
             return;
         }
 
-        switch (action)
+        switch (iconType)
         {
-            case TopBarAction.User:
+            case UIIconType.User:
                 ToggleUserPopup();
                 break;
 
-            case TopBarAction.Leaderboard:
+            case UIIconType.Leaderboard:
                 popupManager.TogglePopup(PopupId.Leaderboard);
                 break;
 
-            case TopBarAction.Settings:
+            case UIIconType.Settings:
                 popupManager.TogglePopup(PopupId.Settings);
+                break;
+
+            default:
+                Debug.LogWarning($"GlobalIconBarController does not have an action for {iconType}.");
                 break;
         }
     }
@@ -206,6 +178,10 @@ public class GlobalIconBarController : MonoBehaviour
         }
     }
 
+    #endregion
+
+    #region Icon Display
+
     private void RefreshTopBarIcons()
     {
         CacheManagers();
@@ -214,24 +190,23 @@ public class GlobalIconBarController : MonoBehaviour
         {
             RuntimeTopBarIcon runtimeIcon = runtimeIcons[i];
 
-            if (runtimeIcon == null || runtimeIcon.Slot == null || runtimeIcon.Entry == null)
+            if (runtimeIcon == null || runtimeIcon.Slot == null)
             {
                 continue;
             }
 
-            Sprite iconSprite = GetSpriteForEntry(runtimeIcon.Entry);
-            runtimeIcon.Slot.SetIcon(iconSprite);
+            runtimeIcon.Slot.SetIcon(GetSpriteForIcon(runtimeIcon.IconType));
         }
     }
 
-    private Sprite GetSpriteForEntry(TopBarIconEntry entry)
+    private Sprite GetSpriteForIcon(UIIconType iconType)
     {
-        if (entry == null)
+        if (iconManager == null)
         {
             return null;
         }
 
-        if (entry.Action == TopBarAction.User)
+        if (iconType == UIIconType.User)
         {
             Sprite savedUserIconSprite = GetSavedUserIconSprite();
 
@@ -241,58 +216,86 @@ public class GlobalIconBarController : MonoBehaviour
             }
         }
 
-        return entry.IconData != null ? entry.IconData.IconSprite : null;
+        return iconManager.GetNonPlayerIconSprite(iconType);
     }
 
     private Sprite GetSavedUserIconSprite()
     {
         CacheManagers();
 
-        if (userManager == null || !userManager.HasUser)
+        if (userManager == null || !userManager.HasUser || userManager.CurrentUser == null || iconManager == null)
         {
             return null;
         }
 
         string iconId = userManager.CurrentUser.iconId;
 
-        if (string.IsNullOrWhiteSpace(iconId))
+        if (!iconManager.HasValidPlayerIconId(iconId))
         {
             return null;
         }
 
-        if (iconManager == null)
+        return iconManager.GetPlayerIconSpriteById(iconId);
+    }
+
+    #endregion
+
+    #region Messages
+
+    private UIMessageType GetTooltipMessageType(UIIconType iconType)
+    {
+        switch (iconType)
         {
-            return null;
+            case UIIconType.User:
+                return UIMessageType.UserTooltip;
+
+            case UIIconType.Leaderboard:
+                return UIMessageType.LeaderboardTooltip;
+
+            case UIIconType.Settings:
+                return UIMessageType.SettingsTooltip;
+
+            default:
+                return UIMessageType.None;
+        }
+    }
+
+    #endregion
+
+    #region Refresh
+
+    private void QueueDelayedRefresh()
+    {
+        if (delayedRefreshRoutine != null)
+        {
+            StopCoroutine(delayedRefreshRoutine);
         }
 
-        IReadOnlyList<UserIconData> playerIcons = iconManager.PlayerIcons;
+        delayedRefreshRoutine = StartCoroutine(DelayedRefreshTopBarIcons());
+    }
 
-        for (int i = 0; i < playerIcons.Count; i++)
-        {
-            UserIconData iconData = playerIcons[i];
+    private IEnumerator DelayedRefreshTopBarIcons()
+    {
+        yield return null;
 
-            if (iconData == null)
-            {
-                continue;
-            }
+        delayedRefreshRoutine = null;
 
-            if (iconData.IconId == iconId && iconData.IconSprite != null)
-            {
-                return iconData.IconSprite;
-            }
-        }
+        CacheManagers();
+        RefreshTopBarIcons();
+    }
 
-        return null;
+    #endregion
+
+    #region Helpers
+
+    private void CacheManagers()
+    {
+        FindMissingReferences();
     }
 
     private void CloseIconSelectPopupIfOpen()
     {
-        if (iconSelectPopupController == null)
-        {
-            return;
-        }
-
-        if (!iconSelectPopupController.gameObject.activeInHierarchy)
+        if (iconSelectPopupController == null || !iconSelectPopupController.gameObject.activeInHierarchy)
         {
             return;
         }
@@ -317,4 +320,6 @@ public class GlobalIconBarController : MonoBehaviour
             iconManager = UIIconManager.instance;
         }
     }
+
+    #endregion
 }

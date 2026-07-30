@@ -30,6 +30,9 @@ public class UIThemeData : ScriptableObject
     [Header("Toggle Section")]
     [SerializeField] private List<UIThemeToggleStyle> toggleStyles = new();
 
+    [Header("Board Section")]
+    [SerializeField] private List<UIThemeBoardStyle> boardStyles = new();
+
     public UIThemeType ThemeType => themeType;
 
     public IReadOnlyList<UIThemeBackgroundStyle> BackgroundStyles => backgroundStyles;
@@ -40,6 +43,7 @@ public class UIThemeData : ScriptableObject
     public IReadOnlyList<UIThemeScrollStyle> ScrollStyles => scrollStyles;
     public IReadOnlyList<UIThemeSliderStyle> SliderStyles => sliderStyles;
     public IReadOnlyList<UIThemeToggleStyle> ToggleStyles => toggleStyles;
+    public IReadOnlyList<UIThemeBoardStyle> BoardStyles => boardStyles;
 
 #if UNITY_EDITOR
     private void OnValidate()

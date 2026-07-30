@@ -15,3 +15,4 @@ MonoBehaviour:
   patternType: 1
   description: Complete any two full lines on your board. Lines can be horizontal,
     vertical, or diagonal.
+  winningHighlightColor: {r: 0.20784314, g: 0.7882353, b: 0.9098039, a: 1}

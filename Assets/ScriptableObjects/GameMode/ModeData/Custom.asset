@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d3c173fd56715224a8ab0eebb27f00c5, type: 3}
+  m_Name: Custom
+  m_EditorClassIdentifier: Assembly-CSharp::BingoGameModeData
+  gameName: Custom Bingo
+  gameModeType: 4
+  description: Create a custom bingo match using the available rules, patterns, and
+    match settings. The host can choose how the game should be played.
+  ruleData: {fileID: 0}
+  defaultPattern: {fileID: 0}
+  specialPatterns: []
+  supportsMultipleWinners: 0

@@ -1,0 +1,253 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &4922679368307309324
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1290380241951259866}
+  - component: {fileID: 633853011194982010}
+  - component: {fileID: 5179758250553139109}
+  - component: {fileID: 3515003745649080825}
+  - component: {fileID: 8635193435336926230}
+  - component: {fileID: 91398956343745977}
+  - component: {fileID: 2715090340337549302}
+  - component: {fileID: 5965249215158017029}
+  - component: {fileID: 1787420868634442607}
+  - component: {fileID: 5177889571896862763}
+  - component: {fileID: 7817590989810674380}
+  - component: {fileID: 7440050942383293183}
+  - component: {fileID: 5427336919033162558}
+  m_Layer: 0
+  m_Name: Development
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1290380241951259866
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4922679368307309324}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 548.8369, y: 234.56435, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &633853011194982010
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4922679368307309324}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fc8879c34ab292c49bd3216c3a9fa12b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LobbySimulationController
+  simulateOnStart: 1
+  playMode: 2
+  gameModeType: 0
+  ballCountType: 75
+--- !u!114 &5179758250553139109
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4922679368307309324}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2fa1b0a3700eb1a4798fa5913991658a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GameSimulationController
+  lobbyBoardSectionController: {fileID: 0}
+  gameController: {fileID: 2715090340337549302}
+  boardController: {fileID: 0}
+  validator: {fileID: 1787420868634442607}
+  enableSimulation: 0
+  patternTypes: 0500000006000000
+  simulateWinning: 1
+  gameOver: 1
+  resetSimulation: 0
+--- !u!114 &3515003745649080825
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4922679368307309324}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 725fcd6aa276b8541abcb9b153f5796d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MultiplayerConnectionSimulation
+  targetPlayer: 2
+  simulateConnectionLoss: 0
+--- !u!114 &8635193435336926230
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4922679368307309324}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9b1290e32c4944a45bea6007fff11d69, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MultiplayerStressSimulation
+  lobbyMode: 1
+  lobbyCount: 4
+  useMaxLobbySize: 0
+  presetLobbies: []
+  minimumPlayersPerLobby: 25
+  maximumPlayersPerLobby: 100
+  includeOnlineLobbies: 1
+  includeCustomLobbies: 1
+  minimumJoinBatch: 1
+  maximumJoinBatch: 8
+  minimumJoinDelaySeconds: 0.2
+  maximumJoinDelaySeconds: 1.5
+  minimumLoadDelaySeconds: 0.5
+  maximumLoadDelaySeconds: 4
+  maximumRunSeconds: 420
+  runStress: 0
+  stopSimulation: 0
+  inspectorDefaultsVersion: 1
+--- !u!114 &91398956343745977
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4922679368307309324}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 28ba4393e42f5ee4d8ed65a1daa20d00, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LobbyBoardRerollStressSimulation
+  targetPlayer: 1
+  useMaxLobbySize: 0
+  playersToAdd: 50
+  minimumJoinBatch: 1
+  maximumJoinBatch: 8
+  minimumJoinDelaySeconds: 0.2
+  maximumJoinDelaySeconds: 1.5
+  minimumLoadDelaySeconds: 0.5
+  maximumLoadDelaySeconds: 4
+  addPlayers: 0
+  stopAddingPlayers: 0
+  rerollsPerPlayer: 20
+  minimumRerollDelaySeconds: 0.2
+  maximumRerollDelaySeconds: 2
+  runRerolls: 0
+  stopRerolling: 0
+  stopSimulation: 0
+  inspectorDefaultsVersion: 1
+--- !u!114 &2715090340337549302
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4922679368307309324}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 737ee52291be94b46b91d50cc05fa867, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GameController
+  bingoChecker: {fileID: 5965249215158017029}
+  boardController: {fileID: 0}
+  bingoButton: {fileID: 0}
+  useDirectBingoButtonInput: 0
+  playerId: TestPlayer
+--- !u!114 &5965249215158017029
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4922679368307309324}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ef2c34adc3644e34fac2323d95d0b3e6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoChecker
+  validator: {fileID: 1787420868634442607}
+  animationController: {fileID: 5177889571896862763}
+--- !u!114 &1787420868634442607
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4922679368307309324}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 74ca514913282e44087d772aca802d01, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoPatternValidator
+--- !u!114 &5177889571896862763
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4922679368307309324}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fee62df935a43c64598eff2703c5a377, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoCheckAnimationController
+  boardController: {fileID: 0}
+  cellCheckSeconds: 0.3
+  patternResultSeconds: 1
+  finalPatternSeconds: 2
+  failureColor: {r: 1, g: 0, b: 0, a: 1}
+--- !u!114 &7817590989810674380
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4922679368307309324}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7426e882d447fa842a87973c5423b206, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::StressFakePlayerManager
+--- !u!114 &7440050942383293183
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4922679368307309324}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5913a40c8119a24a9cf9e994b6990a3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::StressHealthReporter
+  healthSampleIntervalSeconds: 0.25
+--- !u!114 &5427336919033162558
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4922679368307309324}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 94965d30e4654a04597dbd171713ae15, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::StressSimulationCoordinator

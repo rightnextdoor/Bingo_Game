@@ -133,7 +133,7 @@ public class GameSceneManager : MonoBehaviour
         loadingRoutine = StartCoroutine(CurrentSceneLoadingRoutine(sceneType));
     }
 
-    public void ReturnToMainSceneAfterLobbyFailure()
+    public void ReturnToMainSceneAfterFailure()
     {
         if (isLoadingScene)
         {

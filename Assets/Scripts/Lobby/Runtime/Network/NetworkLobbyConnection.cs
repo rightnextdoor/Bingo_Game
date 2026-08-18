@@ -436,13 +436,12 @@ public class NetworkLobbyConnection : NetworkBehaviour
 
         string json = JsonUtility.ToJson(notification);
 
-        return ScheduleAuthoritySend(
-            notification.lobbyId,
-            json,
-            MultiplayerNetworkPriority.Critical,
-            MultiplayerNetworkWorkType.Event,
-            string.Empty,
-            () => TrySend(connection, clientId, () => connection.ReceiveForcedLobbyExitRpc(json, connection.RpcTarget.Single(clientId, RpcTargetUse.Temp))));
+        return TrySend(
+            connection,
+            clientId,
+            () => connection.ReceiveForcedLobbyExitRpc(
+                json,
+                connection.RpcTarget.Single(clientId, RpcTargetUse.Temp)));
     }
 
     public static bool TrySendPlayerBoardUpdate(ulong clientId, LobbyPlayerBoardUpdateData updateData)

@@ -50,7 +50,6 @@ public class MainMenuController : MonoBehaviour
     {
         UnregisterButtonListeners();
     }
-
     private void CacheManagers()
     {
         if (userManager == null)

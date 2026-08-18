@@ -9,7 +9,7 @@ public enum PopupId
     UserInfo,
     Leaderboard,
     Settings,
-    LobbyEntryFailure,
+    Failure,
     HostSettings
 }
 
@@ -160,28 +160,29 @@ public class PopupManager : MonoBehaviour
         OpenPopup(nextPopupId);
     }
 
-    public bool OpenLobbyEntryFailurePopup(string message)
+    public bool OpenFailurePopup(string message)
     {
-        GameObject popup = GetPopupObject(PopupId.LobbyEntryFailure);
+        GameObject popup = GetPopupObject(PopupId.Failure);
 
         if (popup == null)
         {
-            Debug.LogWarning("PopupManager could not find the Lobby Entry Failure popup.");
+            Debug.LogWarning("PopupManager could not find the Failure popup.");
             return false;
         }
 
-        LobbyEntryFailurePopupController popupController = popup.GetComponent<LobbyEntryFailurePopupController>();
+        FailurePopupController popupController = popup.GetComponent<FailurePopupController>();
 
         if (popupController == null)
         {
-            Debug.LogWarning("Lobby Entry Failure popup does not have a LobbyEntryFailurePopupController.");
+            Debug.LogWarning("Failure popup does not have a FailurePopupController.");
             return false;
         }
 
         popupController.SetFailureMessage(message);
-        OpenPopup(PopupId.LobbyEntryFailure);
 
-        return activePopupId == PopupId.LobbyEntryFailure;
+        OpenPopup(PopupId.Failure);
+
+        return activePopupId == PopupId.Failure;
     }
 
     public void CloseActivePopup()

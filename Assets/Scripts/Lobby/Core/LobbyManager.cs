@@ -824,7 +824,7 @@ public class LobbyManager : MonoBehaviour
             return;
         }
 
-        gameSceneManager.ReturnToMainSceneAfterLobbyFailure();
+        gameSceneManager.ReturnToMainSceneAfterFailure();
     }
 
     #endregion
@@ -1023,7 +1023,9 @@ public class LobbyManager : MonoBehaviour
 
         LobbyEntryFailed?.Invoke(result);
 
-        Debug.LogWarning($"[LobbyManager] Lobby entry failed. " + $"Type: {result.failureType}. " + $"Message: {result.failureMessage}");
+        Debug.LogWarning($"[LobbyManager] Lobby entry failed. Type: {result.failureType}. Message: {result.failureMessage}");
+
+        ReturnToMainScene();
     }
 
     #endregion

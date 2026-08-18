@@ -5,5 +5,5 @@ public enum UIMessageType
     LeaderboardTooltip,
     SettingsTooltip,
     NotEnoughPlayers,
-    GameAboutToStart
+    GameAboutToStart,
 }

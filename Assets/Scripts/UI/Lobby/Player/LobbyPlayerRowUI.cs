@@ -76,7 +76,7 @@ public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
         kickRequested = onKickRequested;
 
         SetPlayerIcon(playerData.iconId);
-        SetPlayerName(playerData.playerName, playerData.userId);
+        SetPlayerName(playerData.displayName);
 
         if (refreshBoard)
         {
@@ -136,36 +136,23 @@ public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
         playerIconImage.preserveAspect = true;
     }
 
-    private void SetPlayerName(string playerName, string playerUserId)
+    private void SetPlayerName(string displayName)
     {
-        if (playerNameText == null)
+        if (playerNameText != null)
+        {
+            playerNameText.text = string.IsNullOrWhiteSpace(displayName) ? "Player" : displayName;
+        }
+    }
+
+    public void UpdateProfile(PlayerListPlayerData playerData)
+    {
+        if (playerData == null || !string.Equals(userId, playerData.userId, StringComparison.Ordinal))
         {
             return;
         }
 
-        string displayName = string.IsNullOrWhiteSpace(playerName)
-            ? "Player"
-            : playerName.Trim();
-
-        string shortId = GetShortUserId(playerUserId);
-
-        playerNameText.text = string.IsNullOrWhiteSpace(shortId)
-            ? displayName
-            : $"{displayName} #{shortId}";
-    }
-
-    private string GetShortUserId(string playerUserId)
-    {
-        if (string.IsNullOrWhiteSpace(playerUserId))
-        {
-            return string.Empty;
-        }
-
-        playerUserId = playerUserId.Trim();
-
-        return playerUserId.Length <= 4
-            ? playerUserId
-            : playerUserId.Substring(0, 4);
+        SetPlayerIcon(playerData.iconId);
+        SetPlayerName(playerData.displayName);
     }
 
     #endregion

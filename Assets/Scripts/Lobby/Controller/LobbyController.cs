@@ -416,6 +416,35 @@ public class LobbyController
         return true;
     }
 
+    public bool UpdatePlayerProfile(PlayerProfileData profile)
+    {
+        if (profile == null || !profile.IsValid)
+        {
+            return false;
+        }
+
+        LobbyPlayerData playerData = GetPlayer(profile.userId);
+
+        if (playerData?.userData == null || playerData.userData.userTag == UserTag.Bot)
+        {
+            return false;
+        }
+
+        string playerName = profile.playerName.Trim();
+        string iconId = profile.iconId?.Trim() ?? string.Empty;
+
+        if (string.Equals(playerData.userData.playerName, playerName, StringComparison.Ordinal) &&
+            string.Equals(playerData.userData.iconId, iconId, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        playerData.userData.playerName = playerName;
+        playerData.userData.iconId = iconId;
+        RefreshViews();
+        return true;
+    }
+
     public LobbyExitResult RemovePlayer(string userId, LobbyPlayerExitReason exitReason)
     {
         if (string.IsNullOrWhiteSpace(userId))

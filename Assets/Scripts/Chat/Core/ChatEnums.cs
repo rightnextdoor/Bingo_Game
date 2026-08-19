@@ -4,3 +4,16 @@ public enum ChatConversationType
     FriendDirect,
     FriendGroup
 }
+
+public enum ChatTabType
+{
+    Session,
+    Friends
+}
+
+public enum ChatCommandAvailability
+{
+    All,
+    SessionOnly,
+    FriendsOnly
+}

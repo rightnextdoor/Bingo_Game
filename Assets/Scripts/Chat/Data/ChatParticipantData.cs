@@ -18,9 +18,13 @@ public class ChatParticipantData
 
     public ChatParticipantData(string userId, string playerName, string iconId)
     {
-        this.userId = userId ?? string.Empty;
-        this.playerName = playerName ?? string.Empty;
-        this.iconId = iconId ?? string.Empty;
+        this.userId = userId?.Trim() ?? string.Empty;
+        this.playerName = playerName?.Trim() ?? string.Empty;
+        this.iconId = iconId?.Trim() ?? string.Empty;
+    }
+
+    public ChatParticipantData(PlayerProfileData profile) : this(profile?.userId, profile?.playerName, profile?.iconId)
+    {
     }
 
     public ChatParticipantData Clone()

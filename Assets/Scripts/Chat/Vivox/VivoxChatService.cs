@@ -17,9 +17,13 @@ public class VivoxChatService : MonoBehaviour, IChatService
     private class BingoChatMessageMetadata
     {
         public string type = MetadataType;
+        public string conversationId = string.Empty;
+        public ChatConversationType conversationType = ChatConversationType.Session;
         public string userId = string.Empty;
         public string playerName = string.Empty;
         public string iconId = string.Empty;
+        public bool isPrivate;
+        public string recipientUserId = string.Empty;
     }
 
     private const string MetadataType = "BingoChatMessage";
@@ -30,22 +34,22 @@ public class VivoxChatService : MonoBehaviour, IChatService
 
     private OnlineServicesRoot onlineServicesRoot;
 
-    private readonly Dictionary<string, ChatConversationReference> conversationByChannelName =
-        new Dictionary<string, ChatConversationReference>();
-
-    private readonly Dictionary<string, string> channelNameByConversationKey =
-        new Dictionary<string, string>();
+    private readonly Dictionary<string, ChatConversationReference> conversationByChannelName = new Dictionary<string, ChatConversationReference>();
+    private readonly Dictionary<string, string> channelNameByConversationKey = new Dictionary<string, string>();
+    private readonly Dictionary<string, Dictionary<string, string>> providerPlayerIdByUserIdByConversationKey = new Dictionary<string, Dictionary<string, string>>();
 
     private ChatParticipantData localParticipant;
 
     private bool isAdapterReady;
     private bool eventsSubscribed;
     private bool isShuttingDown;
+    private bool serviceUnavailable;
 
     private string lastError = string.Empty;
 
     public bool IsReady =>
         isAdapterReady &&
+        !serviceUnavailable &&
         VivoxService.Instance != null &&
         VivoxService.Instance.InitializationState == VivoxInitializationState.Initialized &&
         VivoxService.Instance.IsLoggedIn;
@@ -77,9 +81,7 @@ public class VivoxChatService : MonoBehaviour, IChatService
 
         onlineServicesRoot = OnlineServicesRoot.instance;
 
-        if (onlineServicesRoot == null ||
-            onlineServicesRoot != GetComponent<OnlineServicesRoot>() ||
-            !onlineServicesRoot.IsPrimaryInstance)
+        if (onlineServicesRoot == null || onlineServicesRoot != GetComponent<OnlineServicesRoot>() || !onlineServicesRoot.IsPrimaryInstance)
         {
             return false;
         }
@@ -97,6 +99,7 @@ public class VivoxChatService : MonoBehaviour, IChatService
 
         UpdateLocalParticipant(participant);
         lastError = string.Empty;
+        serviceUnavailable = false;
 
         try
         {
@@ -117,7 +120,7 @@ public class VivoxChatService : MonoBehaviour, IChatService
             {
                 LoginOptions loginOptions = new LoginOptions
                 {
-                    DisplayName = localParticipant.playerName
+                    DisplayName = localParticipant.userId
                 };
 
                 await VivoxService.Instance.LoginAsync(loginOptions);
@@ -130,6 +133,7 @@ public class VivoxChatService : MonoBehaviour, IChatService
             }
 
             lastError = string.Empty;
+            serviceUnavailable = false;
             return true;
         }
         catch (Exception exception)
@@ -159,6 +163,7 @@ public class VivoxChatService : MonoBehaviour, IChatService
 
         if (channelNameByConversationKey.ContainsKey(conversationKey))
         {
+            RefreshParticipantMappings(conversation);
             return true;
         }
 
@@ -166,14 +171,13 @@ public class VivoxChatService : MonoBehaviour, IChatService
 
         try
         {
-            await VivoxService.Instance.JoinGroupChannelAsync(
-                channelName,
-                ChatCapability.TextOnly);
+            await VivoxService.Instance.JoinGroupChannelAsync(channelName, ChatCapability.TextOnly);
 
             channelNameByConversationKey[conversationKey] = channelName;
-            conversationByChannelName[channelName] =
-                new ChatConversationReference(conversation.conversationId, conversation.conversationType);
+            conversationByChannelName[channelName] = new ChatConversationReference(conversation.conversationId, conversation.conversationType);
+            providerPlayerIdByUserIdByConversationKey[conversationKey] = new Dictionary<string, string>(StringComparer.Ordinal);
 
+            RefreshParticipantMappings(conversation);
             return true;
         }
         catch (Exception exception)
@@ -194,6 +198,7 @@ public class VivoxChatService : MonoBehaviour, IChatService
 
         if (!channelNameByConversationKey.TryGetValue(conversationKey, out string channelName))
         {
+            providerPlayerIdByUserIdByConversationKey.Remove(conversationKey);
             return true;
         }
 
@@ -206,7 +211,7 @@ public class VivoxChatService : MonoBehaviour, IChatService
 
             channelNameByConversationKey.Remove(conversationKey);
             conversationByChannelName.Remove(channelName);
-
+            providerPlayerIdByUserIdByConversationKey.Remove(conversationKey);
             return true;
         }
         catch (Exception exception)
@@ -220,16 +225,11 @@ public class VivoxChatService : MonoBehaviour, IChatService
 
     #region Messages
 
-    public async Task<ChatSendResult> SendMessageAsync(
-        ChatConversationReference conversation,
-        string message)
+    public async Task<ChatSendResult> SendMessageAsync(ChatConversationReference conversation, string message)
     {
         if (!IsReady)
         {
-            return ChatSendResult.Failed(
-                string.IsNullOrWhiteSpace(lastError)
-                    ? "Chat is not available."
-                    : lastError);
+            return ChatSendResult.Failed(string.IsNullOrWhiteSpace(lastError) ? "Chat is not available." : lastError);
         }
 
         if (conversation == null || !conversation.IsValid)
@@ -251,14 +251,51 @@ public class VivoxChatService : MonoBehaviour, IChatService
         {
             MessageOptions messageOptions = new MessageOptions
             {
-                Metadata = BuildMessageMetadata()
+                Metadata = BuildMessageMetadata(conversation, false, string.Empty)
             };
 
-            await VivoxService.Instance.SendChannelTextMessageAsync(
-                channelName,
-                message,
-                messageOptions);
+            await VivoxService.Instance.SendChannelTextMessageAsync(channelName, message, messageOptions);
+            return ChatSendResult.Succeeded();
+        }
+        catch (Exception exception)
+        {
+            lastError = exception.Message;
+            return ChatSendResult.Failed(lastError);
+        }
+    }
 
+    public async Task<ChatSendResult> SendDirectMessageAsync(ChatConversationReference conversation, string recipientUserId, string message)
+    {
+        if (!IsReady)
+        {
+            return ChatSendResult.Failed(string.IsNullOrWhiteSpace(lastError) ? "Chat is not available." : lastError);
+        }
+
+        if (conversation == null || !conversation.IsValid || conversation.conversationType != ChatConversationType.Session)
+        {
+            return ChatSendResult.Failed("The Session conversation is not valid.");
+        }
+
+        if (string.IsNullOrWhiteSpace(recipientUserId) || string.IsNullOrWhiteSpace(message))
+        {
+            return ChatSendResult.Failed("The private message target or message is missing.");
+        }
+
+        RefreshParticipantMappings(conversation);
+
+        if (!TryGetProviderPlayerId(conversation, recipientUserId, out string providerPlayerId))
+        {
+            return ChatSendResult.Failed("That player is not available in the current Session chat.");
+        }
+
+        try
+        {
+            MessageOptions messageOptions = new MessageOptions
+            {
+                Metadata = BuildMessageMetadata(conversation, true, recipientUserId)
+            };
+
+            await VivoxService.Instance.SendDirectTextMessageAsync(providerPlayerId, message, messageOptions);
             return ChatSendResult.Succeeded();
         }
         catch (Exception exception)
@@ -272,27 +309,19 @@ public class VivoxChatService : MonoBehaviour, IChatService
     {
         List<ChatMessageData> history = new List<ChatMessageData>();
 
-        if (!IsReady ||
-            request?.conversation == null ||
-            !request.conversation.IsValid ||
-            request.maximumMessages <= 0)
+        if (!IsReady || request?.conversation == null || !request.conversation.IsValid || request.maximumMessages <= 0)
         {
             return history;
         }
 
-        if (!channelNameByConversationKey.TryGetValue(
-                request.conversation.Key,
-                out string channelName))
+        if (!channelNameByConversationKey.TryGetValue(request.conversation.Key, out string channelName))
         {
             return history;
         }
 
         try
         {
-            ReadOnlyCollection<VivoxMessage> messages =
-                await VivoxService.Instance.GetChannelTextMessageHistoryAsync(
-                    channelName,
-                    request.maximumMessages);
+            ReadOnlyCollection<VivoxMessage> messages = await VivoxService.Instance.GetChannelTextMessageHistoryAsync(channelName, request.maximumMessages);
 
             if (messages == null)
             {
@@ -301,8 +330,7 @@ public class VivoxChatService : MonoBehaviour, IChatService
 
             for (int i = messages.Count - 1; i >= 0; i--)
             {
-                ChatMessageData chatMessage =
-                    ConvertMessage(messages[i], request.conversation);
+                ChatMessageData chatMessage = ConvertChannelMessage(messages[i], request.conversation);
 
                 if (chatMessage != null)
                 {
@@ -320,17 +348,13 @@ public class VivoxChatService : MonoBehaviour, IChatService
 
     private void OnChannelMessageReceived(VivoxMessage vivoxMessage)
     {
-        if (vivoxMessage == null ||
-            string.IsNullOrWhiteSpace(vivoxMessage.ChannelName) ||
-            !conversationByChannelName.TryGetValue(
-                vivoxMessage.ChannelName,
-                out ChatConversationReference conversation))
+        if (vivoxMessage == null || string.IsNullOrWhiteSpace(vivoxMessage.ChannelName) ||
+            !conversationByChannelName.TryGetValue(vivoxMessage.ChannelName, out ChatConversationReference conversation))
         {
             return;
         }
 
-        ChatMessageData message =
-            ConvertMessage(vivoxMessage, conversation);
+        ChatMessageData message = ConvertChannelMessage(vivoxMessage, conversation);
 
         if (message != null)
         {
@@ -338,42 +362,62 @@ public class VivoxChatService : MonoBehaviour, IChatService
         }
     }
 
-    private ChatMessageData ConvertMessage(
-        VivoxMessage vivoxMessage,
-        ChatConversationReference conversation)
+    private void OnDirectedMessageReceived(VivoxMessage vivoxMessage)
+    {
+        ChatMessageData message = ConvertDirectedMessage(vivoxMessage);
+
+        if (message != null)
+        {
+            MessageReceived?.Invoke(message);
+        }
+    }
+
+    private ChatMessageData ConvertChannelMessage(VivoxMessage vivoxMessage, ChatConversationReference conversation)
     {
         if (vivoxMessage == null || conversation == null)
         {
             return null;
         }
 
-        BingoChatMessageMetadata metadata =
-            ParseMessageMetadata(vivoxMessage.Metadata);
+        BingoChatMessageMetadata metadata = ParseMessageMetadata(vivoxMessage.Metadata);
+        return BuildChatMessage(vivoxMessage, conversation, metadata, false);
+    }
 
-        string senderUserId =
-            metadata != null
-                ? metadata.userId
-                : string.Empty;
+    private ChatMessageData ConvertDirectedMessage(VivoxMessage vivoxMessage)
+    {
+        if (vivoxMessage == null)
+        {
+            return null;
+        }
 
-        string senderPlayerName =
-            metadata != null &&
-            !string.IsNullOrWhiteSpace(metadata.playerName)
-                ? metadata.playerName
-                : vivoxMessage.SenderDisplayName;
+        BingoChatMessageMetadata metadata = ParseMessageMetadata(vivoxMessage.Metadata);
 
-        string senderIconId =
-            metadata != null
-                ? metadata.iconId
-                : string.Empty;
+        if (metadata == null || !metadata.isPrivate || string.IsNullOrWhiteSpace(metadata.conversationId))
+        {
+            return null;
+        }
 
-        DateTime receivedTime =
-            vivoxMessage.ReceivedTime.Kind == DateTimeKind.Unspecified
-                ? DateTime.SpecifyKind(vivoxMessage.ReceivedTime, DateTimeKind.Utc)
-                : vivoxMessage.ReceivedTime.ToUniversalTime();
+        ChatConversationReference conversation = new ChatConversationReference(metadata.conversationId, metadata.conversationType);
 
-        long timestampUnixMilliseconds =
-            new DateTimeOffset(receivedTime)
-                .ToUnixTimeMilliseconds();
+        if (!channelNameByConversationKey.ContainsKey(conversation.Key))
+        {
+            return null;
+        }
+
+        return BuildChatMessage(vivoxMessage, conversation, metadata, true);
+    }
+
+    private ChatMessageData BuildChatMessage(VivoxMessage vivoxMessage, ChatConversationReference conversation, BingoChatMessageMetadata metadata, bool isPrivate)
+    {
+        string senderUserId = metadata != null ? metadata.userId : string.Empty;
+        string senderPlayerName = metadata != null && !string.IsNullOrWhiteSpace(metadata.playerName) ? metadata.playerName : vivoxMessage.SenderDisplayName;
+        string senderIconId = metadata != null ? metadata.iconId : string.Empty;
+
+        DateTime receivedTime = vivoxMessage.ReceivedTime.Kind == DateTimeKind.Unspecified
+            ? DateTime.SpecifyKind(vivoxMessage.ReceivedTime, DateTimeKind.Utc)
+            : vivoxMessage.ReceivedTime.ToUniversalTime();
+
+        long timestampUnixMilliseconds = new DateTimeOffset(receivedTime).ToUnixTimeMilliseconds();
 
         return new ChatMessageData(
             vivoxMessage.MessageId,
@@ -386,23 +430,28 @@ public class VivoxChatService : MonoBehaviour, IChatService
             vivoxMessage.SenderPlayerId,
             vivoxMessage.MessageText,
             timestampUnixMilliseconds,
-            vivoxMessage.FromSelf);
+            vivoxMessage.FromSelf,
+            isPrivate,
+            metadata?.recipientUserId);
     }
 
-    private string BuildMessageMetadata()
+    private string BuildMessageMetadata(ChatConversationReference conversation, bool isPrivate, string recipientUserId)
     {
         if (localParticipant == null)
         {
             return string.Empty;
         }
 
-        BingoChatMessageMetadata metadata =
-            new BingoChatMessageMetadata
-            {
-                userId = localParticipant.userId,
-                playerName = localParticipant.playerName,
-                iconId = localParticipant.iconId
-            };
+        BingoChatMessageMetadata metadata = new BingoChatMessageMetadata
+        {
+            conversationId = conversation?.conversationId ?? string.Empty,
+            conversationType = conversation?.conversationType ?? ChatConversationType.Session,
+            userId = localParticipant.userId,
+            playerName = localParticipant.playerName,
+            iconId = localParticipant.iconId,
+            isPrivate = isPrivate,
+            recipientUserId = recipientUserId ?? string.Empty
+        };
 
         return JsonUtility.ToJson(metadata);
     }
@@ -416,21 +465,102 @@ public class VivoxChatService : MonoBehaviour, IChatService
 
         try
         {
-            BingoChatMessageMetadata metadata =
-                JsonUtility.FromJson<BingoChatMessageMetadata>(
-                    metadataJson);
-
-            if (metadata == null || metadata.type != MetadataType)
-            {
-                return null;
-            }
-
-            return metadata;
+            BingoChatMessageMetadata metadata = JsonUtility.FromJson<BingoChatMessageMetadata>(metadataJson);
+            return metadata != null && metadata.type == MetadataType ? metadata : null;
         }
         catch
         {
             return null;
         }
+    }
+
+    #endregion
+
+    #region Participant Mapping
+
+    private void OnParticipantAddedToChannel(VivoxParticipant participant)
+    {
+        UpdateParticipantMapping(participant, true);
+    }
+
+    private void OnParticipantRemovedFromChannel(VivoxParticipant participant)
+    {
+        UpdateParticipantMapping(participant, false);
+    }
+
+    private void UpdateParticipantMapping(VivoxParticipant participant, bool add)
+    {
+        if (participant == null || string.IsNullOrWhiteSpace(participant.ChannelName) ||
+            !conversationByChannelName.TryGetValue(participant.ChannelName, out ChatConversationReference conversation))
+        {
+            return;
+        }
+
+        string userId = participant.DisplayName?.Trim() ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return;
+        }
+
+        if (!providerPlayerIdByUserIdByConversationKey.TryGetValue(conversation.Key, out Dictionary<string, string> participantMap))
+        {
+            participantMap = new Dictionary<string, string>(StringComparer.Ordinal);
+            providerPlayerIdByUserIdByConversationKey[conversation.Key] = participantMap;
+        }
+
+        if (add)
+        {
+            participantMap[userId] = participant.PlayerId;
+        }
+        else
+        {
+            participantMap.Remove(userId);
+        }
+    }
+
+    private void RefreshParticipantMappings(ChatConversationReference conversation)
+    {
+        if (conversation == null || !conversation.IsValid || VivoxService.Instance == null ||
+            !channelNameByConversationKey.TryGetValue(conversation.Key, out string channelName))
+        {
+            return;
+        }
+
+        if (!providerPlayerIdByUserIdByConversationKey.TryGetValue(conversation.Key, out Dictionary<string, string> participantMap))
+        {
+            participantMap = new Dictionary<string, string>(StringComparer.Ordinal);
+            providerPlayerIdByUserIdByConversationKey[conversation.Key] = participantMap;
+        }
+
+        participantMap.Clear();
+
+        if (!VivoxService.Instance.ActiveChannels.TryGetValue(channelName, out ReadOnlyCollection<VivoxParticipant> participants) || participants == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < participants.Count; i++)
+        {
+            VivoxParticipant participant = participants[i];
+            string userId = participant?.DisplayName?.Trim() ?? string.Empty;
+
+            if (!string.IsNullOrWhiteSpace(userId) && !string.IsNullOrWhiteSpace(participant.PlayerId))
+            {
+                participantMap[userId] = participant.PlayerId;
+            }
+        }
+    }
+
+    private bool TryGetProviderPlayerId(ChatConversationReference conversation, string userId, out string providerPlayerId)
+    {
+        providerPlayerId = string.Empty;
+
+        return conversation != null &&
+               !string.IsNullOrWhiteSpace(userId) &&
+               providerPlayerIdByUserIdByConversationKey.TryGetValue(conversation.Key, out Dictionary<string, string> participantMap) &&
+               participantMap.TryGetValue(userId.Trim(), out providerPlayerId) &&
+               !string.IsNullOrWhiteSpace(providerPlayerId);
     }
 
     #endregion
@@ -445,6 +575,9 @@ public class VivoxChatService : MonoBehaviour, IChatService
         }
 
         VivoxService.Instance.ChannelMessageReceived += OnChannelMessageReceived;
+        VivoxService.Instance.DirectedMessageReceived += OnDirectedMessageReceived;
+        VivoxService.Instance.ParticipantAddedToChannel += OnParticipantAddedToChannel;
+        VivoxService.Instance.ParticipantRemovedFromChannel += OnParticipantRemovedFromChannel;
         VivoxService.Instance.ConnectionFailedToRecover += OnConnectionFailedToRecover;
         VivoxService.Instance.LoggedOut += OnVivoxLoggedOut;
 
@@ -460,6 +593,9 @@ public class VivoxChatService : MonoBehaviour, IChatService
         }
 
         VivoxService.Instance.ChannelMessageReceived -= OnChannelMessageReceived;
+        VivoxService.Instance.DirectedMessageReceived -= OnDirectedMessageReceived;
+        VivoxService.Instance.ParticipantAddedToChannel -= OnParticipantAddedToChannel;
+        VivoxService.Instance.ParticipantRemovedFromChannel -= OnParticipantRemovedFromChannel;
         VivoxService.Instance.ConnectionFailedToRecover -= OnConnectionFailedToRecover;
         VivoxService.Instance.LoggedOut -= OnVivoxLoggedOut;
 
@@ -473,21 +609,16 @@ public class VivoxChatService : MonoBehaviour, IChatService
 
     private void OnVivoxLoggedOut()
     {
-        if (isShuttingDown)
+        if (!isShuttingDown)
         {
-            return;
+            SetUnavailable("Vivox chat was logged out.");
         }
-
-        SetUnavailable("Vivox chat was logged out.");
     }
 
     private void SetUnavailable(string reason)
     {
-        lastError =
-            string.IsNullOrWhiteSpace(reason)
-                ? "Chat is unavailable."
-                : reason;
-
+        serviceUnavailable = true;
+        lastError = string.IsNullOrWhiteSpace(reason) ? "Chat is unavailable." : reason;
         ServiceUnavailable?.Invoke(lastError);
     }
 
@@ -506,8 +637,7 @@ public class VivoxChatService : MonoBehaviour, IChatService
 
         try
         {
-            if (VivoxService.Instance != null &&
-                VivoxService.Instance.IsLoggedIn)
+            if (VivoxService.Instance != null && VivoxService.Instance.IsLoggedIn)
             {
                 await VivoxService.Instance.LeaveAllChannelsAsync();
                 await VivoxService.Instance.LogoutAsync();
@@ -521,6 +651,8 @@ public class VivoxChatService : MonoBehaviour, IChatService
         {
             channelNameByConversationKey.Clear();
             conversationByChannelName.Clear();
+            providerPlayerIdByUserIdByConversationKey.Clear();
+            serviceUnavailable = false;
             isShuttingDown = false;
         }
     }
@@ -549,33 +681,25 @@ public class VivoxChatService : MonoBehaviour, IChatService
                 break;
         }
 
-        string source =
-            $"{(int)conversation.conversationType}:{conversation.conversationId}";
-
+        string source = $"{(int)conversation.conversationType}:{conversation.conversationId}";
         return prefix + GetSha256Hex(source);
     }
 
     private string GetSha256Hex(string value)
     {
-        using SHA256 sha256 = SHA256.Create();
-
-        byte[] bytes =
-            Encoding.UTF8.GetBytes(
-                value ?? string.Empty);
-
-        byte[] hash =
-            sha256.ComputeHash(bytes);
-
-        StringBuilder builder =
-            new StringBuilder(hash.Length * 2);
-
-        for (int i = 0; i < hash.Length; i++)
+        using (SHA256 sha256 = SHA256.Create())
         {
-            builder.Append(
-                hash[i].ToString("x2"));
-        }
+            byte[] bytes = Encoding.UTF8.GetBytes(value ?? string.Empty);
+            byte[] hash = sha256.ComputeHash(bytes);
+            StringBuilder builder = new StringBuilder(hash.Length * 2);
 
-        return builder.ToString();
+            for (int i = 0; i < hash.Length; i++)
+            {
+                builder.Append(hash[i].ToString("x2"));
+            }
+
+            return builder.ToString();
+        }
     }
 
     #endregion

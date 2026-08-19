@@ -26,6 +26,7 @@ public class NetworkLobbyManager : MonoBehaviour
 
     private bool isReady;
     private bool isSubscribedToConnectionRegistry;
+    private bool isSubscribedToPlayerProfileConnection;
 
     private NetworkRoot networkRoot;
     private NetworkBootstrap networkBootstrap;
@@ -82,6 +83,7 @@ public class NetworkLobbyManager : MonoBehaviour
         connectionRegistry = NetworkConnectionRegistry.instance;
 
         SubscribeToConnectionRegistry();
+        SubscribeToPlayerProfileConnection();
 
         isReady = true;
     }
@@ -89,6 +91,7 @@ public class NetworkLobbyManager : MonoBehaviour
     private void OnDestroy()
     {
         UnsubscribeFromConnectionRegistry();
+        UnsubscribeFromPlayerProfileConnection();
         UnsubscribeFromAllLobbyControllers();
         StopAllLobbyRuntimeRoutines();
         StopAllInitialSyncRoutines();
@@ -1904,6 +1907,73 @@ public class NetworkLobbyManager : MonoBehaviour
         }
 
         RemovePlayerFromLobby(userId, LobbyPlayerExitReason.Disconnected);
+    }
+
+    #endregion
+
+    #region Player Profiles
+
+    private void SubscribeToPlayerProfileConnection()
+    {
+        if (isSubscribedToPlayerProfileConnection)
+        {
+            return;
+        }
+
+        NetworkPlayerProfileConnection.AuthorityProfileUpdateRequested += OnAuthorityPlayerProfileUpdateRequested;
+        isSubscribedToPlayerProfileConnection = true;
+    }
+
+    private void UnsubscribeFromPlayerProfileConnection()
+    {
+        if (!isSubscribedToPlayerProfileConnection)
+        {
+            return;
+        }
+
+        NetworkPlayerProfileConnection.AuthorityProfileUpdateRequested -= OnAuthorityPlayerProfileUpdateRequested;
+        isSubscribedToPlayerProfileConnection = false;
+    }
+
+    private void OnAuthorityPlayerProfileUpdateRequested(ulong clientId, PlayerProfileData profile)
+    {
+        if (profile == null || !profile.IsValid || !TryGetConnectedUserId(clientId, out string userId) ||
+            !string.Equals(profile.userId, userId, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        Lobby lobby = FindUserLobby(userId);
+
+        if (lobby?.Controller == null || !lobby.Controller.UpdatePlayerProfile(profile))
+        {
+            return;
+        }
+
+        BroadcastPlayerProfileUpdate(lobby, profile);
+    }
+
+    private void BroadcastPlayerProfileUpdate(Lobby lobby, PlayerProfileData profile)
+    {
+        if (lobby?.Controller == null || profile == null || !profile.IsValid || connectionRegistry == null || !connectionRegistry.IsReady)
+        {
+            return;
+        }
+
+        IReadOnlyList<LobbyPlayerData> players = lobby.Controller.Players;
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            LobbyPlayerData playerData = players[i];
+            string userId = playerData?.userData?.userId;
+
+            if (string.IsNullOrWhiteSpace(userId) || !connectionRegistry.TryGetClientId(userId, out ulong targetClientId))
+            {
+                continue;
+            }
+
+            NetworkPlayerProfileConnection.TrySendProfileUpdate(targetClientId, profile);
+        }
     }
 
     #endregion

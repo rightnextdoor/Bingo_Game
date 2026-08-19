@@ -203,6 +203,26 @@ public class LobbyClientState
         return LobbyStateApplyResult.Applied;
     }
 
+    public bool ApplyPlayerProfile(PlayerProfileData profile)
+    {
+        if (profile == null || !profile.IsValid || viewData?.players == null)
+        {
+            return false;
+        }
+
+        int playerIndex = FindPlayerIndex(profile.userId);
+
+        if (playerIndex < 0)
+        {
+            return false;
+        }
+
+        LobbyPlayerViewData playerData = viewData.players[playerIndex];
+        playerData.playerName = profile.playerName;
+        playerData.iconId = profile.iconId;
+        return true;
+    }
+
     #endregion
 
     #region Lobby Deltas

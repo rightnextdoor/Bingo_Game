@@ -6,4 +6,5 @@ public enum UIMessageType
     SettingsTooltip,
     NotEnoughPlayers,
     GameAboutToStart,
+    ChatHelp,
 }

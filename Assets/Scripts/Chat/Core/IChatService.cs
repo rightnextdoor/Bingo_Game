@@ -16,6 +16,7 @@ public interface IChatService
     Task<bool> JoinConversationAsync(ChatConversationReference conversation);
     Task<bool> LeaveConversationAsync(ChatConversationReference conversation);
     Task<ChatSendResult> SendMessageAsync(ChatConversationReference conversation, string message);
+    Task<ChatSendResult> SendDirectMessageAsync(ChatConversationReference conversation, string recipientUserId, string message);
     Task<IReadOnlyList<ChatMessageData>> GetHistoryAsync(ChatHistoryRequest request);
     Task ShutdownAsync();
 }

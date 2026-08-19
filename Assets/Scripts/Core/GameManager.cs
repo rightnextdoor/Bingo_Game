@@ -2,6 +2,7 @@ using UnityEngine;
 
 [DefaultExecutionOrder(-1000)]
 [DisallowMultipleComponent]
+[RequireComponent(typeof(PlayerProfileRegistry))]
 public class GameManager : MonoBehaviour, ISceneReadyCheck
 {
     public static GameManager instance;
@@ -13,13 +14,14 @@ public class GameManager : MonoBehaviour, ISceneReadyCheck
 
     private SaveManager saveManager;
     private UserManager userManager;
+    private PlayerProfileRegistry playerProfileRegistry;
 
     public SaveManager Save => saveManager;
     public UserManager User => userManager;
+    public PlayerProfileRegistry PlayerProfiles => playerProfileRegistry;
 
     public string ReadyName => "Game Manager";
     public bool IsReady => isReady;
-
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetStaticState()
@@ -53,9 +55,7 @@ public class GameManager : MonoBehaviour, ISceneReadyCheck
     private void Start()
     {
         CacheManagerInstances();
-
-        isReady = HasSaveManager() && HasUserManager();
-
+        isReady = HasSaveManager() && HasUserManager() && HasPlayerProfileRegistry();
         RegisterReadyCheck();
     }
 
@@ -71,59 +71,47 @@ public class GameManager : MonoBehaviour, ISceneReadyCheck
 
     private void CacheManagerInstances()
     {
-        if (saveManager == null)
-        {
-            saveManager = SaveManager.instance;
-        }
-
-        if (userManager == null)
-        {
-            userManager = UserManager.instance;
-        }
+        saveManager ??= SaveManager.instance;
+        userManager ??= UserManager.instance;
+        playerProfileRegistry ??= PlayerProfileRegistry.instance;
     }
 
     #region Ready Check
 
     private void RegisterReadyCheck()
     {
-        if (SceneReadyController.instance == null)
+        if (SceneReadyController.instance != null)
         {
-            return;
+            SceneReadyController.instance.RegisterReadyCheck(this, true);
         }
-
-        SceneReadyController.instance.RegisterReadyCheck(this, true);
     }
 
     private void UnregisterReadyCheck()
     {
-        if (SceneReadyController.instance == null)
+        if (SceneReadyController.instance != null)
         {
-            return;
+            SceneReadyController.instance.UnregisterReadyCheck(this);
         }
-
-        SceneReadyController.instance.UnregisterReadyCheck(this);
     }
 
     #endregion
 
     public bool HasSaveManager()
     {
-        if (saveManager == null)
-        {
-            saveManager = SaveManager.instance;
-        }
-
+        saveManager ??= SaveManager.instance;
         return saveManager != null;
     }
 
     public bool HasUserManager()
     {
-        if (userManager == null)
-        {
-            userManager = UserManager.instance;
-        }
-
+        userManager ??= UserManager.instance;
         return userManager != null;
+    }
+
+    public bool HasPlayerProfileRegistry()
+    {
+        playerProfileRegistry ??= PlayerProfileRegistry.instance;
+        return playerProfileRegistry != null;
     }
 
     public void QuitGame()
@@ -131,7 +119,7 @@ public class GameManager : MonoBehaviour, ISceneReadyCheck
 #if UNITY_EDITOR
         UnityEditor.EditorApplication.isPlaying = false;
 #else
-    Application.Quit();
+        Application.Quit();
 #endif
     }
 }

@@ -14,6 +14,9 @@ public class ChatMessageData
     public string senderIconId;
     public string providerSenderId;
 
+    public bool isPrivate;
+    public string recipientUserId;
+
     public string message;
     public long timestampUnixMilliseconds;
     public bool isFromCurrentUser;
@@ -27,6 +30,8 @@ public class ChatMessageData
         senderPlayerName = string.Empty;
         senderIconId = string.Empty;
         providerSenderId = string.Empty;
+        isPrivate = false;
+        recipientUserId = string.Empty;
         message = string.Empty;
     }
 
@@ -41,7 +46,9 @@ public class ChatMessageData
         string providerSenderId,
         string message,
         long timestampUnixMilliseconds,
-        bool isFromCurrentUser)
+        bool isFromCurrentUser,
+        bool isPrivate = false,
+        string recipientUserId = null)
     {
         this.messageId = messageId ?? string.Empty;
         this.providerMessageId = providerMessageId ?? string.Empty;
@@ -51,6 +58,8 @@ public class ChatMessageData
         this.senderPlayerName = senderPlayerName ?? string.Empty;
         this.senderIconId = senderIconId ?? string.Empty;
         this.providerSenderId = providerSenderId ?? string.Empty;
+        this.isPrivate = isPrivate;
+        this.recipientUserId = recipientUserId ?? string.Empty;
         this.message = message ?? string.Empty;
         this.timestampUnixMilliseconds = timestampUnixMilliseconds;
         this.isFromCurrentUser = isFromCurrentUser;

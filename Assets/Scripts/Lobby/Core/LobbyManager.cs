@@ -39,6 +39,7 @@ public class LobbyManager : MonoBehaviour
     private bool isSubscribedToMultiplayerSessionLifecycle;
     private GameSceneManager gameSceneManager;
     private bool isSubscribedToGameSceneManager;
+    private bool isSubscribedToPlayerProfiles;
 
     public bool HasPendingLobbySetupData => pendingLobbySetupData != null;
     public LobbySetupData PendingLobbySetupData => pendingLobbySetupData;
@@ -90,24 +91,28 @@ public class LobbyManager : MonoBehaviour
     {
         SubscribeToNetworkEvents();
         SubscribeToSceneEvents();
+        SubscribeToPlayerProfiles();
     }
 
     private void Start()
     {
         SubscribeToNetworkEvents();
         SubscribeToSceneEvents();
+        SubscribeToPlayerProfiles();
     }
 
     private void OnDisable()
     {
         UnsubscribeFromNetworkEvents();
         UnsubscribeFromSceneEvents();
+        UnsubscribeFromPlayerProfiles();
     }
 
     private void OnDestroy()
     {
         UnsubscribeFromNetworkEvents();
         UnsubscribeFromSceneEvents();
+        UnsubscribeFromPlayerProfiles();
         UnsubscribeFromLocalLobbyController();
 
         if (instance == this)
@@ -782,6 +787,7 @@ public class LobbyManager : MonoBehaviour
         currentUserId = string.Empty;
         activeLobbyService = null;
         lastEntryResult = null;
+        PlayerProfileRegistry.instance?.ClearLobbyProfiles();
     }
 
     private void ApplyPendingNetworkLobbyViewData()
@@ -801,10 +807,13 @@ public class LobbyManager : MonoBehaviour
 
     private void PublishCurrentLobbyView()
     {
-        if (lobbyClientState.ViewData != null)
+        if (lobbyClientState.ViewData == null)
         {
-            LobbyViewUpdated?.Invoke(lobbyClientState.ViewData);
+            return;
         }
+
+        PlayerProfileRegistry.instance?.SyncFromLobbyView(lobbyClientState.ViewData);
+        LobbyViewUpdated?.Invoke(lobbyClientState.ViewData);
     }
 
     public LobbyBoardData GetPlayerBoard(string userId)
@@ -825,6 +834,60 @@ public class LobbyManager : MonoBehaviour
         }
 
         gameSceneManager.ReturnToMainSceneAfterFailure();
+    }
+
+    #endregion
+
+    #region Player Profiles
+
+    private void SubscribeToPlayerProfiles()
+    {
+        if (isSubscribedToPlayerProfiles || PlayerProfileRegistry.instance == null)
+        {
+            return;
+        }
+
+        PlayerProfileRegistry.instance.ProfileChanged += OnPlayerProfileChanged;
+        isSubscribedToPlayerProfiles = true;
+    }
+
+    private void UnsubscribeFromPlayerProfiles()
+    {
+        if (isSubscribedToPlayerProfiles && PlayerProfileRegistry.instance != null)
+        {
+            PlayerProfileRegistry.instance.ProfileChanged -= OnPlayerProfileChanged;
+        }
+
+        isSubscribedToPlayerProfiles = false;
+    }
+
+    private void OnPlayerProfileChanged(PlayerProfileData profile)
+    {
+        if (profile == null || !profile.IsValid || !lobbyClientState.HasLobby)
+        {
+            return;
+        }
+
+        lobbyClientState.ApplyPlayerProfile(profile);
+
+        if (!string.Equals(profile.userId, currentUserId, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (runtimeType == SessionRuntimeType.Local)
+        {
+            currentLobby?.Controller?.UpdatePlayerProfile(profile);
+            return;
+        }
+
+        if (runtimeType != SessionRuntimeType.Network)
+        {
+            return;
+        }
+
+        NetworkPlayerProfileConnection connection = NetworkPlayerProfileConnection.GetLocalConnection();
+        connection?.RequestProfileUpdate(profile);
     }
 
     #endregion

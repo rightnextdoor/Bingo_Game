@@ -10,6 +10,7 @@ public class PlayerListPlayerData
     public UserTag userTag;
     public string playerName;
     public string iconId;
+    public string displayName;
 
     public bool isHost;
     public bool isReady;
@@ -31,6 +32,7 @@ public class PlayerListPlayerData
         userTag = UserTag.Player;
         playerName = string.Empty;
         iconId = string.Empty;
+        displayName = string.Empty;
         isHost = false;
         isReady = false;
         boardData = new LobbyBoardData();
@@ -53,6 +55,22 @@ public class PlayerListPlayerData
         iconId = playerData.iconId ?? string.Empty;
         isHost = playerData.isHost;
         isReady = playerData.isReady;
+    }
+
+    public void ApplyProfile(PlayerProfileData profile)
+    {
+        if (profile == null || !profile.IsValid || !string.Equals(userId, profile.userId, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        playerName = profile.playerName;
+        iconId = profile.iconId;
+    }
+
+    public PlayerProfileData BuildProfile()
+    {
+        return new PlayerProfileData(userId, playerName, iconId);
     }
 
     #endregion

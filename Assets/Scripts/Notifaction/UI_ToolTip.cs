@@ -75,6 +75,37 @@ public class UI_ToolTip : MonoBehaviour
         );
     }
 
+
+    public void ShowFixed(UIMessageData messageData, string message)
+    {
+        if (messageData == null)
+        {
+            return;
+        }
+
+        PrepareToShow();
+
+        ApplyMessageStyle(
+            messageData.FontAsset,
+            messageData.FontSize,
+            messageData.TextColor,
+            messageData.BackgroundColor,
+            messageData.ImageMode,
+            messageData.CustomImage,
+            message
+        );
+
+        ResizeToFitMessage(message);
+        PositionFixed(messageData.TooltipOffset);
+
+        if (canvasGroup != null)
+        {
+            canvasGroup.alpha = 1f;
+            canvasGroup.blocksRaycasts = false;
+            canvasGroup.interactable = false;
+        }
+    }
+
     public void ShowNearTarget(
     TooltipVisualStyle visualStyle,
     RectTransform targetRect)
@@ -386,6 +417,26 @@ public class UI_ToolTip : MonoBehaviour
 
         toolTipRect.anchoredPosition =
             new Vector2(targetX, targetY);
+    }
+
+    private void PositionFixed(Vector2 anchoredPosition)
+    {
+        if (toolTipRect == null || parentRect == null)
+        {
+            return;
+        }
+
+        Vector2 size = toolTipRect.rect.size;
+        Rect parentArea = parentRect.rect;
+
+        float minX = parentArea.xMin + ScreenPadding.x;
+        float maxX = parentArea.xMax - ScreenPadding.x - size.x;
+        float minY = parentArea.yMin + ScreenPadding.y + size.y;
+        float maxY = parentArea.yMax - ScreenPadding.y;
+
+        toolTipRect.anchoredPosition = new Vector2(
+            ClampEvenIfRangeIsSmall(anchoredPosition.x, minX, maxX),
+            ClampEvenIfRangeIsSmall(anchoredPosition.y, minY, maxY));
     }
 
     private void FindMissingReferences()

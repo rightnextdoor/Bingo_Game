@@ -176,25 +176,59 @@ public class FailureManager : MonoBehaviour
             lobbyFailure = GetComponent<LobbyFailure>();
         }
 
-        if (lobbyFailure == null)
+        if (lobbyFailure != null)
         {
+            lobbyFailure.GetEntryFailure(
+                result,
+                out string message,
+                out FailurePrecedence precedence);
+
             QueueFailure(
-                "The lobby could not be entered.",
-                FailurePrecedence.Domain,
+                message,
+                precedence,
                 FailureDisplayMode.WaitForMain);
 
             return;
         }
 
-        lobbyFailure.GetEntryFailure(
-            result,
-            out string message,
-            out FailurePrecedence precedence);
+        string fallbackMessage =
+            result != null &&
+            !string.IsNullOrWhiteSpace(result.failureMessage)
+                ? result.failureMessage
+                : "The lobby could not be entered.";
+
+        LobbyEntryFailureType failureType =
+            result != null
+                ? result.failureType
+                : LobbyEntryFailureType.Unknown;
+
+        FailurePrecedence fallbackPrecedence =
+            GetLobbyEntryFallbackPrecedence(failureType);
 
         QueueFailure(
-            message,
-            precedence,
+            fallbackMessage,
+            fallbackPrecedence,
             FailureDisplayMode.WaitForMain);
+    }
+
+    private FailurePrecedence GetLobbyEntryFallbackPrecedence(LobbyEntryFailureType failureType)
+    {
+        switch (failureType)
+        {
+            case LobbyEntryFailureType.LobbyCreationFailed:
+            case LobbyEntryFailureType.LobbyJoinFailed:
+            case LobbyEntryFailureType.LobbyLeaveFailed:
+            case LobbyEntryFailureType.Unknown:
+            case LobbyEntryFailureType.None:
+                return FailurePrecedence.Generic;
+
+            case LobbyEntryFailureType.NetworkConnectionFailed:
+            case LobbyEntryFailureType.NetworkLobbyConnectionUnavailable:
+                return FailurePrecedence.SessionConnection;
+
+            default:
+                return FailurePrecedence.Domain;
+        }
     }
 
     private void OnLobbyForcedExit(LobbyExitNotification notification)

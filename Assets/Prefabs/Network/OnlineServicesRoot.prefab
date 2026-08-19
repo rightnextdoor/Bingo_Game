@@ -11,6 +11,10 @@ GameObject:
   - component: {fileID: 2644111036726746331}
   - component: {fileID: 8075037770935376302}
   - component: {fileID: 5260553679247020530}
+  - component: {fileID: 8076486983627831156}
+  - component: {fileID: 1618080596790622899}
+  - component: {fileID: 864321038322354905}
+  - component: {fileID: 3931686448537915138}
   m_Layer: 0
   m_Name: OnlineServicesRoot
   m_TagString: Untagged
@@ -58,3 +62,51 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ac7858f02cc2c5a49877e481b4626913, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::OnlineConnectionManager
+--- !u!114 &8076486983627831156
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4896584780401707229}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: aaf0d869819ad044e9d3747048eaa58d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::OnlineServicesStartup
+--- !u!114 &1618080596790622899
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4896584780401707229}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c908270464d0d27479011322c327209a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::OnlineServicesLifecycle
+--- !u!114 &864321038322354905
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4896584780401707229}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0ba7219d1a534c247b2dabb8d5f8b466, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::VivoxChatService
+--- !u!114 &3931686448537915138
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4896584780401707229}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 49e20f7584aa69d4d882b0b4bc018037, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ChatManager

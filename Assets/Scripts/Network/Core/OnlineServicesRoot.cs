@@ -6,6 +6,8 @@ using UnityEngine;
 [RequireComponent(typeof(OnlineConnectionManager))]
 [RequireComponent(typeof(OnlineServicesStartup))]
 [RequireComponent(typeof(OnlineServicesLifecycle))]
+[RequireComponent(typeof(VivoxChatService))]
+[RequireComponent(typeof(ChatManager))]
 public class OnlineServicesRoot : MonoBehaviour
 {
     #region Fields
@@ -18,6 +20,8 @@ public class OnlineServicesRoot : MonoBehaviour
     private OnlineConnectionManager connectionManager;
     private OnlineServicesStartup startup;
     private OnlineServicesLifecycle lifecycle;
+    private VivoxChatService vivoxChatService;
+    private ChatManager chatManager;
 
     private bool isPrimaryInstance;
     private bool isReady;
@@ -26,6 +30,7 @@ public class OnlineServicesRoot : MonoBehaviour
     public bool IsReady => isReady;
 
     public OnlineConnectionManager ConnectionManager => connectionManager;
+    public ChatManager ChatManager => chatManager;
 
     public event Action Ready;
 
@@ -91,6 +96,8 @@ public class OnlineServicesRoot : MonoBehaviour
         connectionManager = GetComponent<OnlineConnectionManager>();
         startup = GetComponent<OnlineServicesStartup>();
         lifecycle = GetComponent<OnlineServicesLifecycle>();
+        vivoxChatService = GetComponent<VivoxChatService>();
+        chatManager = GetComponent<ChatManager>();
 
         if (connectionManager == null || !connectionManager.Initialize())
         {
@@ -101,6 +108,18 @@ public class OnlineServicesRoot : MonoBehaviour
         if (lifecycle == null || !lifecycle.Initialize())
         {
             Debug.LogError("OnlineServicesRoot could not initialize OnlineServicesLifecycle.");
+            return;
+        }
+
+        if (vivoxChatService == null || !vivoxChatService.Initialize())
+        {
+            Debug.LogError("OnlineServicesRoot could not initialize VivoxChatService.");
+            return;
+        }
+
+        if (chatManager == null || !chatManager.Initialize())
+        {
+            Debug.LogError("OnlineServicesRoot could not initialize ChatManager.");
             return;
         }
 

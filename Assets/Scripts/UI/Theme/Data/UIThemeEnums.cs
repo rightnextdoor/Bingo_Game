@@ -31,7 +31,9 @@ public enum UIThemeBackgroundType
     PatternHighlight,
     PatternTooltip,
     PlayerListRow,
-    PlayerListRowHighlight
+    PlayerListRowHighlight,
+    ColorPicker,
+    Selector
 }
 
 public enum UIThemeButtonType

@@ -204,6 +204,25 @@ MonoBehaviour:
       vertexColor: {r: 1, g: 1, b: 1, a: 1}
       colorGradient: {fileID: 0}
       textRaycastTarget: 1
+  - backgroundType: 10
+    style:
+      sourceImage: {fileID: 0}
+      color: {r: 1, g: 1, b: 1, a: 1}
+      material: {fileID: 0}
+      raycastTarget: 1
+      transition: 1
+      normalColor: {r: 1, g: 1, b: 1, a: 1}
+      highlightedColor: {r: 1, g: 1, b: 1, a: 1}
+      pressedColor: {r: 0.5019608, g: 0.5019608, b: 0.5019608, a: 1}
+      selectedColor: {r: 1, g: 1, b: 1, a: 1}
+      disabledColor: {r: 0.5019608, g: 0.5019608, b: 0.5019608, a: 1}
+      colorMultiplier: 1
+      fadeDuration: 0.1
+      fontAsset: {fileID: 0}
+      textMaterial: {fileID: 0}
+      vertexColor: {r: 1, g: 1, b: 1, a: 1}
+      colorGradient: {fileID: 0}
+      textRaycastTarget: 1
   buttonStyles:
   - buttonType: 0
     style:

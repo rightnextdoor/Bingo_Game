@@ -408,7 +408,25 @@ public class LobbyPlayerListController : MonoBehaviour
             }
 
             playerData.displayName = PlayerDisplayIdentityResolver.GetDisplayName(playerData.BuildProfile(), profiles);
+            playerData.displayUserId = GetDisplayUserId(playerData);
         }
+    }
+
+    private string GetDisplayUserId(PlayerListPlayerData playerData)
+    {
+        if (playerData == null || string.IsNullOrWhiteSpace(playerData.displayName))
+        {
+            return string.Empty;
+        }
+
+        int separatorIndex = playerData.displayName.LastIndexOf(" #", StringComparison.Ordinal);
+
+        if (separatorIndex < 0 || separatorIndex + 2 >= playerData.displayName.Length)
+        {
+            return string.Empty;
+        }
+
+        return playerData.displayName.Substring(separatorIndex + 2);
     }
 
     private void RefreshVisibleProfiles()

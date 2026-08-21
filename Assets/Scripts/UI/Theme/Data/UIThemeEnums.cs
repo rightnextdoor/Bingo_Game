@@ -33,7 +33,11 @@ public enum UIThemeBackgroundType
     PlayerListRow,
     PlayerListRowHighlight,
     ColorPicker,
-    Selector
+    Selector,
+    ChatMessageRowA,
+    ChatMessageRowB,
+    ChatSuggestionRow,
+    ChatSuggestionRowHighlight
 }
 
 public enum UIThemeButtonType
@@ -42,7 +46,8 @@ public enum UIThemeButtonType
     Secondary,
     Close,
     Ready,
-    Send
+    Send,
+    ChatTab
 }
 
 public enum UIThemeTextType
@@ -54,7 +59,10 @@ public enum UIThemeTextType
     LeaderboardTitle,
     LeaderboardHeader,
     LeaderboardCell,
-    PatternTooltip
+    PatternTooltip,
+    ChatCurrentUser,
+    ChatOtherUser,
+    ChatPrivate
 }
 
 public enum UIThemeInputType

@@ -16,6 +16,7 @@ public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
     [Header("Player")]
     [SerializeField] private Image playerIconImage;
     [SerializeField] private TMP_Text playerNameText;
+    [SerializeField] private TMP_Text playerIdText;
 
     [Header("Board")]
     [SerializeField] private LobbyPlayerBoardPreviewController boardPreviewController;
@@ -76,7 +77,7 @@ public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
         kickRequested = onKickRequested;
 
         SetPlayerIcon(playerData.iconId);
-        SetPlayerName(playerData.displayName);
+        SetPlayerIdentity(playerData.playerName, playerData.displayUserId);
 
         if (refreshBoard)
         {
@@ -105,6 +106,11 @@ public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
         if (playerNameText != null)
         {
             playerNameText.text = string.Empty;
+        }
+
+        if (playerIdText != null)
+        {
+            playerIdText.text = string.Empty;
         }
 
         SetImageActive(botIconImage, false);
@@ -136,11 +142,16 @@ public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
         playerIconImage.preserveAspect = true;
     }
 
-    private void SetPlayerName(string displayName)
+    private void SetPlayerIdentity(string playerName, string displayUserId)
     {
         if (playerNameText != null)
         {
-            playerNameText.text = string.IsNullOrWhiteSpace(displayName) ? "Player" : displayName;
+            playerNameText.text = string.IsNullOrWhiteSpace(playerName) ? "Player" : playerName;
+        }
+
+        if (playerIdText != null)
+        {
+            playerIdText.text = string.IsNullOrWhiteSpace(displayUserId) ? string.Empty : $"#{displayUserId}";
         }
     }
 
@@ -152,7 +163,7 @@ public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
         }
 
         SetPlayerIcon(playerData.iconId);
-        SetPlayerName(playerData.displayName);
+        SetPlayerIdentity(playerData.playerName, playerData.displayUserId);
     }
 
     #endregion

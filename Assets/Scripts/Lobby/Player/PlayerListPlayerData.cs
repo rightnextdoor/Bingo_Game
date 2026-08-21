@@ -11,6 +11,7 @@ public class PlayerListPlayerData
     public string playerName;
     public string iconId;
     public string displayName;
+    public string displayUserId;
 
     public bool isHost;
     public bool isReady;
@@ -33,6 +34,7 @@ public class PlayerListPlayerData
         playerName = string.Empty;
         iconId = string.Empty;
         displayName = string.Empty;
+        displayUserId = string.Empty;
         isHost = false;
         isReady = false;
         boardData = new LobbyBoardData();

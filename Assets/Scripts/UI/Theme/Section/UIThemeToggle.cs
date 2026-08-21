@@ -65,6 +65,14 @@ public class UIThemeToggle : MonoBehaviour, IUIThemeTarget
         return themeManager != null;
     }
 
+    public UIThemeToggleType ToggleType => toggleType;
+
+    public void SetToggleType(UIThemeToggleType newToggleType)
+    {
+        toggleType = newToggleType;
+        ReapplyTheme();
+    }
+
     public void ReapplyTheme()
     {
         if (!CacheThemeManager())

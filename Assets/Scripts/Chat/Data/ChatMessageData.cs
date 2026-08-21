@@ -16,6 +16,7 @@ public class ChatMessageData
 
     public bool isPrivate;
     public string recipientUserId;
+    public bool isLocalSystemMessage;
 
     public string message;
     public long timestampUnixMilliseconds;
@@ -32,6 +33,7 @@ public class ChatMessageData
         providerSenderId = string.Empty;
         isPrivate = false;
         recipientUserId = string.Empty;
+        isLocalSystemMessage = false;
         message = string.Empty;
     }
 
@@ -48,7 +50,8 @@ public class ChatMessageData
         long timestampUnixMilliseconds,
         bool isFromCurrentUser,
         bool isPrivate = false,
-        string recipientUserId = null)
+        string recipientUserId = null,
+        bool isLocalSystemMessage = false)
     {
         this.messageId = messageId ?? string.Empty;
         this.providerMessageId = providerMessageId ?? string.Empty;
@@ -60,6 +63,7 @@ public class ChatMessageData
         this.providerSenderId = providerSenderId ?? string.Empty;
         this.isPrivate = isPrivate;
         this.recipientUserId = recipientUserId ?? string.Empty;
+        this.isLocalSystemMessage = isLocalSystemMessage;
         this.message = message ?? string.Empty;
         this.timestampUnixMilliseconds = timestampUnixMilliseconds;
         this.isFromCurrentUser = isFromCurrentUser;

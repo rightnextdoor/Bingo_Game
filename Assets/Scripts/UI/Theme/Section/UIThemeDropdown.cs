@@ -82,6 +82,14 @@ public class UIThemeDropdown : MonoBehaviour, IUIThemeTarget
         return themeManager != null;
     }
 
+    public UIThemeDropdownType DropdownType => dropdownType;
+
+    public void SetDropdownType(UIThemeDropdownType newDropdownType)
+    {
+        dropdownType = newDropdownType;
+        ReapplyTheme();
+    }
+
     public void ReapplyTheme()
     {
         if (!CacheThemeManager())

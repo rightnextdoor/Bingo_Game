@@ -9524,6 +9524,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1510488711991615776}
+  - component: {fileID: 2655840208396793620}
   m_Layer: 5
   m_Name: LobbyChatContent
   m_TagString: Untagged
@@ -9531,6 +9532,29 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
+--- !u!114 &2655840208396793620
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2655840208396793619}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 62b1f6b04c2a04342895bb14aefe20ff, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ChatMessageScrollController
+  scrollRect: {fileID: 1494234944}
+  content: {fileID: 1838278853}
+  viewport: {fileID: 139007906}
+  rowPrefab: {fileID: 2621570177339385704, guid: a2dcd9fa54ae5d74791bd26c9a43aea8, type: 3}
+  rowSpacing: 4
+  extraVisibleRows: 2
+  fallbackRowHeight: 48
+  emptyChatText: {fileID: 1654182246}
+  newMessagesButton: {fileID: 1908377636}
+  newMessagesButtonText: {fileID: 845442328}
+  bottomThresholdNormalized: 0.02
 --- !u!1 &2706636792526870245
 GameObject:
   m_ObjectHideFlags: 0
@@ -12329,6 +12353,7 @@ GameObject:
   m_Component:
   - component: {fileID: 8712428435602909676}
   - component: {fileID: 1047369176299838743}
+  - component: {fileID: 8712428435602909677}
   m_Layer: 5
   m_Name: ChatTabs
   m_TagString: Untagged
@@ -15637,6 +15662,7 @@ GameObject:
   - component: {fileID: 2270927312897072313}
   - component: {fileID: 2319508604487033543}
   - component: {fileID: 1683954570886111612}
+  - component: {fileID: 8384827236274727186}
   m_Layer: 5
   m_Name: ChatSection
   m_TagString: Untagged
@@ -15681,6 +15707,7 @@ GameObject:
   - component: {fileID: 1545062801177334359}
   - component: {fileID: 907237390540624052}
   - component: {fileID: 5370758934933570143}
+  - component: {fileID: 8374560949861004986}
   m_Layer: 5
   m_Name: ChatInputArea
   m_TagString: Untagged
@@ -15688,6 +15715,23 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
+--- !u!114 &8374560949861004986
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8374560949861004985}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c9e649557df943b4ba2ccbe947dfda57, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ChatInputController
+  chatInputField: {fileID: 4296529529676101798}
+  sendButton: {fileID: 4238045337989061511}
+  errorText: {fileID: 0}
+  suggestionController: {fileID: 0}
+  maximumSuggestions: 8
 --- !u!222 &8384827236274727185
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -15696,6 +15740,22 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 8296952261422091516}
   m_CullTransparentMesh: 1
+--- !u!114 &8384827236274727186
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8296952261422091516}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1ed46ac91727bcb4699a5f63f85a1b20, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ChatSectionController
+  tabController: {fileID: 8712428435602909677}
+  sessionMessageController: {fileID: 2655840208396793620}
+  inputController: {fileID: 8374560949861004986}
+  friendsEmptyStateText: {fileID: 300677668}
 --- !u!1001 &8404732747971471337
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -15913,6 +15973,30 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 3235128220615591944, guid: ebcaa9cbc282b7949ac143ee7bcd0fad, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3299359626342094231, guid: ebcaa9cbc282b7949ac143ee7bcd0fad, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3299359626342094231, guid: ebcaa9cbc282b7949ac143ee7bcd0fad, type: 3}
+      propertyPath: m_AnchorMin.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3299359626342094231, guid: ebcaa9cbc282b7949ac143ee7bcd0fad, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3299359626342094231, guid: ebcaa9cbc282b7949ac143ee7bcd0fad, type: 3}
+      propertyPath: m_SizeDelta.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3299359626342094231, guid: ebcaa9cbc282b7949ac143ee7bcd0fad, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3299359626342094231, guid: ebcaa9cbc282b7949ac143ee7bcd0fad, type: 3}
       propertyPath: m_AnchoredPosition.y
       value: 0
       objectReference: {fileID: 0}
@@ -16544,6 +16628,30 @@ PrefabInstance:
       propertyPath: m_AnchoredPosition.y
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 7757274854085736205, guid: ebcaa9cbc282b7949ac143ee7bcd0fad, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7757274854085736205, guid: ebcaa9cbc282b7949ac143ee7bcd0fad, type: 3}
+      propertyPath: m_AnchorMin.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7757274854085736205, guid: ebcaa9cbc282b7949ac143ee7bcd0fad, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7757274854085736205, guid: ebcaa9cbc282b7949ac143ee7bcd0fad, type: 3}
+      propertyPath: m_SizeDelta.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7757274854085736205, guid: ebcaa9cbc282b7949ac143ee7bcd0fad, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7757274854085736205, guid: ebcaa9cbc282b7949ac143ee7bcd0fad, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 7789484766055149550, guid: ebcaa9cbc282b7949ac143ee7bcd0fad, type: 3}
       propertyPath: m_AnchorMax.x
       value: 0
@@ -16834,6 +16942,24 @@ RectTransform:
   m_AnchoredPosition: {x: -50, y: 0}
   m_SizeDelta: {x: -100, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &8712428435602909677
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5070908403005133642}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9812c7c3715e7984ba9a1f7f50201487, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ChatTabController
+  lobbyTabButton: {fileID: 1461389403}
+  lobbyTabTheme: {fileID: 1461389401}
+  friendsTabButton: {fileID: 821694757}
+  friendsTabTheme: {fileID: 821694755}
+  lobbyChatContent: {fileID: 2655840208396793619}
+  friendsContent: {fileID: 8739081304746452793}
 --- !u!1 &8739081304746452793
 GameObject:
   m_ObjectHideFlags: 0
@@ -17064,6 +17190,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1008291198086496314}
   - component: {fileID: 4842310641699456037}
+  - component: {fileID: 8929404476382235544}
   m_Layer: 5
   m_Name: ChatHeader
   m_TagString: Untagged
@@ -17071,6 +17198,26 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
+--- !u!114 &8929404476382235544
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8929404476382235543}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9e7f352680f8d474e84cd1863182c1b4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ChatHeaderController
+  helpButton: {fileID: 0}
+  helpIconImage: {fileID: 0}
+  helpTargetRect: {fileID: 0}
+  helpIconType: 0
+  helpHoverDelay: 0.45
+  settingsButton: {fileID: 0}
+  settingsIconImage: {fileID: 0}
+  settingsIconType: 0
 --- !u!224 &8970902860696258276
 RectTransform:
   m_ObjectHideFlags: 0

@@ -69,6 +69,14 @@ public class UIThemeScroll : MonoBehaviour, IUIThemeTarget
         return themeManager != null;
     }
 
+    public UIThemeScrollType ScrollType => scrollType;
+
+    public void SetScrollType(UIThemeScrollType newScrollType)
+    {
+        scrollType = newScrollType;
+        ReapplyTheme();
+    }
+
     public void ReapplyTheme()
     {
         if (!CacheThemeManager())

@@ -9,35 +9,41 @@ public class ChatMessageScrollController : MonoBehaviour
 {
     #region Fields
 
+    private const float ViewportPaddingMultiplier = 0.5f;
+    private const float BottomPixelTolerance = 2f;
+
     [Header("Scroll View")]
     [SerializeField] private ScrollRect scrollRect;
     [SerializeField] private RectTransform content;
     [SerializeField] private RectTransform viewport;
 
-    [Header("Rows")]
-    [SerializeField] private ChatMessageRowUI rowPrefab;
-    [SerializeField, Min(0f)] private float rowSpacing = 4f;
-    [SerializeField, Min(0)] private int extraVisibleRows = 2;
-    [SerializeField, Min(1f)] private float fallbackRowHeight = 48f;
+    [Header("Message")]
+    [SerializeField] private ChatMessageRowUI messagePrefab;
 
     [Header("State UI")]
     [SerializeField] private TMP_Text emptyChatText;
     [SerializeField] private Button newMessagesButton;
-    [SerializeField] private TMP_Text newMessagesButtonText;
-    [SerializeField, Range(0f, 1f)] private float bottomThresholdNormalized = 0.02f;
 
     private readonly List<ChatMessageData> messages = new List<ChatMessageData>();
-    private readonly List<float> rowHeights = new List<float>();
-    private readonly List<float> rowOffsets = new List<float>();
-    private readonly List<ChatMessageRowUI> rowPool = new List<ChatMessageRowUI>();
-    private readonly List<int> boundIndices = new List<int>();
+    private readonly List<MessagePresentation> presentations = new List<MessagePresentation>();
+    private readonly List<float> messageHeights = new List<float>();
+    private readonly List<float> messageOffsets = new List<float>();
+    private readonly List<ChatMessageRowUI> messageViewPool = new List<ChatMessageRowUI>();
+    private readonly List<int> boundMessageIndices = new List<int>();
 
     private ChatConversationData conversation;
-    private ChatSettingsData settingsData = new ChatSettingsData();
+    private ChatSettingsData userSettings = new ChatSettingsData();
+    private ChatMessageRowUI measurementView;
+
     private float cachedContentWidth = -1f;
+    private float cachedMessageTextSize = -1f;
+    private float cachedMessageSpacing = -1f;
+    private UIThemeType cachedThemeType;
+    private bool hasCachedThemeType;
+
     private bool initialized;
     private bool suppressScrollRefresh;
-    private bool wasNearBottom = true;
+    private bool followingBottom = true;
 
     public ChatConversationData Conversation => conversation;
 
@@ -66,21 +72,53 @@ public class ChatMessageScrollController : MonoBehaviour
     private void OnDestroy()
     {
         UnregisterListeners();
-        ClearRowPool();
+        ClearMessageViewPool();
+        DestroyMeasurementView();
     }
 
     private void LateUpdate()
     {
-        if (!initialized || content == null)
+        if (!initialized)
         {
             return;
         }
 
-        float width = GetContentWidth();
+        float currentWidth = GetContentWidth();
+        float currentTextSize = GetMessageTextSize();
+        float currentSpacing = GetMessageSpacing();
+        UIThemeType currentThemeType = UIThemeManager.instance != null
+            ? UIThemeManager.instance.SelectedThemeType
+            : default;
 
-        if (Mathf.Abs(width - cachedContentWidth) > 0.5f)
+        bool layoutChanged =
+            Mathf.Abs(currentWidth - cachedContentWidth) > 0.5f ||
+            Mathf.Abs(currentTextSize - cachedMessageTextSize) > 0.01f ||
+            Mathf.Abs(currentSpacing - cachedMessageSpacing) > 0.01f ||
+            (hasCachedThemeType && currentThemeType != cachedThemeType);
+
+        if (!layoutChanged)
         {
-            RebuildMeasurements(false);
+            if (!hasCachedThemeType && UIThemeManager.instance != null)
+            {
+                cachedThemeType = currentThemeType;
+                hasCachedThemeType = true;
+            }
+
+            return;
+        }
+
+        bool keepBottomPinned = followingBottom || IsAtBottom();
+        ViewAnchor anchor = keepBottomPinned ? default : CaptureViewAnchor();
+
+        RebuildMessageLayout();
+
+        if (keepBottomPinned)
+        {
+            ScrollToBottom();
+        }
+        else
+        {
+            RestoreViewAnchor(anchor);
         }
     }
 
@@ -108,7 +146,7 @@ public class ChatMessageScrollController : MonoBehaviour
 
     private void InitializeContent()
     {
-        initialized = scrollRect != null && content != null && viewport != null && rowPrefab != null;
+        initialized = scrollRect != null && content != null && viewport != null && messagePrefab != null;
 
         if (!initialized)
         {
@@ -128,8 +166,17 @@ public class ChatMessageScrollController : MonoBehaviour
         content.pivot = pivot;
 
         ClearExistingContentChildren();
-        rowPrefab.gameObject.SetActive(false);
+        CreateMeasurementView();
+
         cachedContentWidth = GetContentWidth();
+        cachedMessageTextSize = GetMessageTextSize();
+        cachedMessageSpacing = GetMessageSpacing();
+
+        if (UIThemeManager.instance != null)
+        {
+            cachedThemeType = UIThemeManager.instance.SelectedThemeType;
+            hasCachedThemeType = true;
+        }
     }
 
     private void ClearExistingContentChildren()
@@ -148,11 +195,13 @@ public class ChatMessageScrollController : MonoBehaviour
                 continue;
             }
 
-            if (rowPrefab != null && child.gameObject == rowPrefab.gameObject)
+            if (messagePrefab != null && child.gameObject == messagePrefab.gameObject)
             {
                 child.gameObject.SetActive(false);
                 continue;
             }
+
+            child.gameObject.SetActive(false);
 
             if (Application.isPlaying)
             {
@@ -167,7 +216,7 @@ public class ChatMessageScrollController : MonoBehaviour
 
     #endregion
 
-    #region Listener Setup
+    #region Listeners
 
     private void RegisterListeners()
     {
@@ -200,8 +249,8 @@ public class ChatMessageScrollController : MonoBehaviour
 
         if (ChatSettingsManager.instance != null)
         {
-            ChatSettingsManager.instance.ChatSettingsChanged -= OnChatSettingsChanged;
-            ChatSettingsManager.instance.ChatSettingsChanged += OnChatSettingsChanged;
+            ChatSettingsManager.instance.ChatSettingsChanged -= OnUserChatSettingsChanged;
+            ChatSettingsManager.instance.ChatSettingsChanged += OnUserChatSettingsChanged;
         }
 
         if (PlayerProfileRegistry.instance != null)
@@ -233,7 +282,7 @@ public class ChatMessageScrollController : MonoBehaviour
 
         if (ChatSettingsManager.instance != null)
         {
-            ChatSettingsManager.instance.ChatSettingsChanged -= OnChatSettingsChanged;
+            ChatSettingsManager.instance.ChatSettingsChanged -= OnUserChatSettingsChanged;
         }
 
         if (PlayerProfileRegistry.instance != null)
@@ -248,23 +297,19 @@ public class ChatMessageScrollController : MonoBehaviour
 
     public void SetConversation(ChatConversationData newConversation)
     {
-        bool keepBottomPinned = IsNearBottom();
-
         conversation = newConversation;
+        followingBottom = true;
+
         RebuildMessageData();
-        RebuildMeasurements(keepBottomPinned);
+        RebuildMessageLayout();
+        ScrollToBottom();
     }
 
     public void RefreshFromCurrentSession()
     {
-        if (ChatSettingsManager.instance != null && ChatSettingsManager.instance.IsReady)
-        {
-            settingsData = ChatSettingsManager.instance.CurrentSettings;
-        }
-        else
-        {
-            settingsData = new ChatSettingsData();
-        }
+        userSettings = ChatSettingsManager.instance != null && ChatSettingsManager.instance.IsReady
+            ? ChatSettingsManager.instance.CurrentSettings
+            : new ChatSettingsData();
 
         SetConversation(ChatManager.instance?.SessionConversation);
     }
@@ -272,10 +317,13 @@ public class ChatMessageScrollController : MonoBehaviour
     public void ClearDisplay()
     {
         conversation = null;
+
         messages.Clear();
-        rowHeights.Clear();
-        rowOffsets.Clear();
-        ReleaseAllRows();
+        presentations.Clear();
+        messageHeights.Clear();
+        messageOffsets.Clear();
+
+        ReleaseAllMessageViews();
 
         if (emptyChatText != null)
         {
@@ -283,25 +331,15 @@ public class ChatMessageScrollController : MonoBehaviour
             emptyChatText.gameObject.SetActive(false);
         }
 
-        if (newMessagesButtonText != null)
-        {
-            newMessagesButtonText.text = string.Empty;
-        }
-
-        if (newMessagesButton != null)
-        {
-            newMessagesButton.gameObject.SetActive(false);
-        }
+        SetNewMessagesButtonVisible(false);
 
         if (content != null)
         {
-            Vector2 size = content.sizeDelta;
-            size.y = 0f;
-            content.sizeDelta = size;
+            content.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, 0f);
             content.anchoredPosition = new Vector2(content.anchoredPosition.x, 0f);
         }
 
-        wasNearBottom = true;
+        followingBottom = true;
     }
 
     private void RebuildMessageData()
@@ -331,23 +369,27 @@ public class ChatMessageScrollController : MonoBehaviour
             return;
         }
 
-        bool nearBottomBefore = IsNearBottom();
-        int previousMessageCount = messages.Count;
-        float previousScrollY = content != null ? content.anchoredPosition.y : 0f;
+        bool keepBottomPinned = followingBottom || IsAtBottom();
+        string previousNewestMessageId = GetNewestMessageId();
+        ViewAnchor anchor = keepBottomPinned ? default : CaptureViewAnchor();
 
         RebuildMessageData();
-        RebuildMeasurements(false);
+        RebuildMessageLayout();
 
-        bool receivedNewMessages = messages.Count > previousMessageCount;
+        string currentNewestMessageId = GetNewestMessageId();
+        bool hasNewNewestMessage = !string.Equals(previousNewestMessageId, currentNewestMessageId, StringComparison.Ordinal);
 
-        if (nearBottomBefore)
+        if (keepBottomPinned)
         {
             ScrollToBottom();
+            return;
         }
-        else if (content != null)
+
+        RestoreViewAnchor(anchor);
+
+        if (hasNewNewestMessage)
         {
-            SetContentY(previousScrollY);
-            SetNewMessagesButtonVisible(receivedNewMessages || (newMessagesButton != null && newMessagesButton.gameObject.activeSelf));
+            SetNewMessagesButtonVisible(true);
         }
     }
 
@@ -358,7 +400,19 @@ public class ChatMessageScrollController : MonoBehaviour
             return;
         }
 
-        RefreshVisibleRows();
+        bool keepBottomPinned = followingBottom || IsAtBottom();
+        ViewAnchor anchor = keepBottomPinned ? default : CaptureViewAnchor();
+
+        RebuildMessageLayout();
+
+        if (keepBottomPinned)
+        {
+            ScrollToBottom();
+        }
+        else
+        {
+            RestoreViewAnchor(anchor);
+        }
     }
 
     private void OnConversationJoined(ChatConversationData joinedConversation)
@@ -386,55 +440,220 @@ public class ChatMessageScrollController : MonoBehaviour
 
     #endregion
 
-    #region Measurement
+    #region Presentation / Layout
 
-    private void RebuildMeasurements(bool scrollBottomAfter)
+    private void RebuildMessageLayout()
     {
         if (!initialized)
         {
             return;
         }
 
-        rowHeights.Clear();
-        rowOffsets.Clear();
+        presentations.Clear();
+        messageHeights.Clear();
+        messageOffsets.Clear();
 
-        float width = GetContentWidth();
-        cachedContentWidth = width;
+        float contentWidth = GetContentWidth();
+        float textSize = GetMessageTextSize();
+        float spacing = GetMessageSpacing();
         float currentOffset = 0f;
 
-        ChatMessageRowUI measureRow = GetMeasureRow();
+        cachedContentWidth = contentWidth;
+        cachedMessageTextSize = textSize;
+        cachedMessageSpacing = spacing;
+
+        if (UIThemeManager.instance != null)
+        {
+            cachedThemeType = UIThemeManager.instance.SelectedThemeType;
+            hasCachedThemeType = true;
+        }
+
+        List<PlayerProfileData> sessionProfiles = BuildSessionProfiles();
+        ChatMessageRowUI measureView = GetMeasurementView();
 
         for (int i = 0; i < messages.Count; i++)
         {
-            ChatMessageData message = messages[i];
-            string identity = ResolveMessageIdentity(message);
-            float height = measureRow != null ? measureRow.MeasurePreferredHeight(message, identity, width) : fallbackRowHeight;
-            height = Mathf.Max(1f, height);
+            MessagePresentation presentation = BuildPresentation(messages[i], i, sessionProfiles);
+            presentations.Add(presentation);
 
-            rowOffsets.Add(currentOffset);
-            rowHeights.Add(height);
+            float height = 1f;
+
+            if (measureView != null)
+            {
+                ApplyPresentation(measureView, presentation, textSize);
+                height = Mathf.Max(1f, measureView.GetPreferredHeight(contentWidth));
+            }
+
+            messageOffsets.Add(currentOffset);
+            messageHeights.Add(height);
+
             currentOffset += height;
 
             if (i < messages.Count - 1)
             {
-                currentOffset += rowSpacing;
+                currentOffset += spacing;
             }
         }
 
         SetContentHeight(currentOffset);
-        EnsurePoolCapacity();
-        RefreshVisibleRows();
+        RefreshVisibleMessageViews();
+    }
 
-        if (scrollBottomAfter)
+    private MessagePresentation BuildPresentation(ChatMessageData message, int messageIndex, IReadOnlyList<PlayerProfileData> sessionProfiles)
+    {
+        UIThemeBackgroundType backgroundType = messageIndex % 2 == 0
+            ? UIThemeBackgroundType.ChatMessageRowA
+            : UIThemeBackgroundType.ChatMessageRowB;
+
+        if (message == null)
         {
-            ScrollToBottom();
+            return new MessagePresentation(
+                null,
+                string.Empty,
+                backgroundType,
+                UIThemeTextType.Default,
+                false,
+                Color.white,
+                false);
+        }
+
+        if (message.isLocalSystemMessage)
+        {
+            return new MessagePresentation(
+                null,
+                message.message ?? string.Empty,
+                backgroundType,
+                UIThemeTextType.Error,
+                false,
+                Color.white,
+                false);
+        }
+
+        string identity = ResolveMessageIdentity(message, sessionProfiles);
+        string displayText = $"{identity}: {message.message ?? string.Empty}";
+        Sprite icon = UIIconManager.instance != null
+            ? UIIconManager.instance.GetPlayerIconSpriteById(message.senderIconId)
+            : null;
+
+        UIThemeTextType textType = GetMessageTextType(message);
+        bool useColorOverride = TryGetColorOverride(textType, out Color colorOverride);
+
+        return new MessagePresentation(
+            icon,
+            displayText,
+            backgroundType,
+            textType,
+            useColorOverride,
+            colorOverride,
+            icon != null);
+    }
+
+    private void ApplyPresentation(ChatMessageRowUI view, MessagePresentation presentation, float textSize)
+    {
+        if (view == null)
+        {
+            return;
+        }
+
+        view.Setup(
+            presentation.icon,
+            presentation.text,
+            textSize,
+            presentation.backgroundType,
+            presentation.textType,
+            presentation.useColorOverride,
+            presentation.colorOverride,
+            presentation.showIcon);
+    }
+
+    private UIThemeTextType GetMessageTextType(ChatMessageData message)
+    {
+        if (message != null && message.isPrivate)
+        {
+            return UIThemeTextType.ChatPrivate;
+        }
+
+        return message != null && message.isFromCurrentUser
+            ? UIThemeTextType.ChatCurrentUser
+            : UIThemeTextType.ChatOtherUser;
+    }
+
+    private bool TryGetColorOverride(UIThemeTextType textType, out Color color)
+    {
+        color = Color.white;
+
+        if (userSettings == null)
+        {
+            return false;
+        }
+
+        switch (textType)
+        {
+            case UIThemeTextType.ChatCurrentUser:
+                color = userSettings.currentUserMessageColor;
+                return userSettings.overrideCurrentUserMessageColor;
+
+            case UIThemeTextType.ChatOtherUser:
+                color = userSettings.otherUserMessageColor;
+                return userSettings.overrideOtherUserMessageColor;
+
+            case UIThemeTextType.ChatPrivate:
+                color = userSettings.privateMessageColor;
+                return userSettings.overridePrivateMessageColor;
+
+            default:
+                return false;
         }
     }
 
-    private ChatMessageRowUI GetMeasureRow()
+    private List<PlayerProfileData> BuildSessionProfiles()
     {
-        EnsurePoolCount(1);
-        return rowPool.Count > 0 ? rowPool[0] : null;
+        List<PlayerProfileData> profiles = new List<PlayerProfileData>();
+        ChatConversationData session = ChatManager.instance?.SessionConversation;
+
+        if (session?.participants == null)
+        {
+            return profiles;
+        }
+
+        for (int i = 0; i < session.participants.Count; i++)
+        {
+            ChatParticipantData participant = session.participants[i];
+
+            if (participant != null && participant.IsValid)
+            {
+                profiles.Add(new PlayerProfileData(participant.userId, participant.playerName, participant.iconId));
+            }
+        }
+
+        return profiles;
+    }
+
+    private string ResolveMessageIdentity(ChatMessageData message, IReadOnlyList<PlayerProfileData> sessionProfiles)
+    {
+        if (message == null)
+        {
+            return "Player";
+        }
+
+        string playerName = string.IsNullOrWhiteSpace(message.senderPlayerName)
+            ? "Player"
+            : message.senderPlayerName.Trim();
+
+        PlayerProfileData profile = PlayerProfileRegistry.instance?.GetProfile(message.senderUserId) ??
+                                    new PlayerProfileData(message.senderUserId, playerName, message.senderIconId);
+
+        return PlayerDisplayIdentityResolver.GetDisplayName(profile, sessionProfiles);
+    }
+
+    private float GetMessageTextSize()
+    {
+        return ChatSettings.instance != null ? ChatSettings.instance.MessageTextSize : 18f;
+    }
+
+    private float GetMessageSpacing()
+    {
+        return ChatSettings.instance != null ? ChatSettings.instance.MessageSpacing : 2f;
     }
 
     private float GetContentWidth()
@@ -461,58 +680,15 @@ public class ChatMessageScrollController : MonoBehaviour
             return;
         }
 
-        Vector2 size = content.sizeDelta;
-        size.y = Mathf.Max(0f, height);
-        content.sizeDelta = size;
+        content.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, Mathf.Max(0f, height));
         ClampContentPosition();
     }
 
     #endregion
 
-    #region Virtual Rows
+    #region Virtual Message Views
 
-    private void EnsurePoolCapacity()
-    {
-        if (!initialized || viewport == null)
-        {
-            return;
-        }
-
-        float minimumHeight = Mathf.Max(1f, GetMinimumMeasuredHeight());
-        int visibleCount = Mathf.CeilToInt(viewport.rect.height / minimumHeight) + (extraVisibleRows * 2) + 1;
-        EnsurePoolCount(Mathf.Max(1, visibleCount));
-    }
-
-    private void EnsurePoolCount(int desiredCount)
-    {
-        if (rowPrefab == null || content == null)
-        {
-            return;
-        }
-
-        while (rowPool.Count < desiredCount)
-        {
-            ChatMessageRowUI row = Instantiate(rowPrefab, content);
-            row.gameObject.SetActive(false);
-            row.Clear();
-            rowPool.Add(row);
-            boundIndices.Add(-1);
-        }
-    }
-
-    private float GetMinimumMeasuredHeight()
-    {
-        float minimum = fallbackRowHeight;
-
-        for (int i = 0; i < rowHeights.Count; i++)
-        {
-            minimum = Mathf.Min(minimum, rowHeights[i]);
-        }
-
-        return Mathf.Max(1f, minimum);
-    }
-
-    private void RefreshVisibleRows()
+    private void RefreshVisibleMessageViews()
     {
         if (!initialized)
         {
@@ -521,169 +697,207 @@ public class ChatMessageScrollController : MonoBehaviour
 
         if (messages.Count == 0)
         {
-            ReleaseAllRows();
+            ReleaseAllMessageViews();
             return;
         }
 
-        EnsurePoolCapacity();
+        float padding = viewport.rect.height * ViewportPaddingMultiplier;
+        float viewTop = Mathf.Max(0f, content.anchoredPosition.y - padding);
+        float viewBottom = content.anchoredPosition.y + viewport.rect.height + padding;
 
-        float viewTop = Mathf.Max(0f, content.anchoredPosition.y);
-        float viewBottom = viewTop + viewport.rect.height;
         int firstIndex = FindFirstVisibleIndex(viewTop);
         int lastIndex = FindLastVisibleIndex(viewBottom);
-
-        firstIndex = Mathf.Max(0, firstIndex - extraVisibleRows);
-        lastIndex = Mathf.Min(messages.Count - 1, lastIndex + extraVisibleRows);
-
         int requiredCount = Mathf.Max(0, lastIndex - firstIndex + 1);
-        EnsurePoolCount(requiredCount);
 
-        for (int poolIndex = 0; poolIndex < rowPool.Count; poolIndex++)
+        EnsureMessageViewPoolCount(requiredCount);
+
+        for (int poolIndex = 0; poolIndex < messageViewPool.Count; poolIndex++)
         {
             int messageIndex = poolIndex < requiredCount ? firstIndex + poolIndex : -1;
-            BindRow(poolIndex, messageIndex);
+            BindMessageView(poolIndex, messageIndex);
         }
     }
 
     private int FindFirstVisibleIndex(float viewTop)
     {
-        for (int i = 0; i < messages.Count; i++)
+        int low = 0;
+        int high = messages.Count - 1;
+        int result = high;
+
+        while (low <= high)
         {
-            float bottom = rowOffsets[i] + rowHeights[i];
+            int mid = (low + high) / 2;
+            float bottom = messageOffsets[mid] + messageHeights[mid];
 
             if (bottom >= viewTop)
             {
-                return i;
+                result = mid;
+                high = mid - 1;
+            }
+            else
+            {
+                low = mid + 1;
             }
         }
 
-        return Mathf.Max(0, messages.Count - 1);
+        return Mathf.Clamp(result, 0, messages.Count - 1);
     }
 
     private int FindLastVisibleIndex(float viewBottom)
     {
-        for (int i = messages.Count - 1; i >= 0; i--)
+        int low = 0;
+        int high = messages.Count - 1;
+        int result = 0;
+
+        while (low <= high)
         {
-            if (rowOffsets[i] <= viewBottom)
+            int mid = (low + high) / 2;
+
+            if (messageOffsets[mid] <= viewBottom)
             {
-                return i;
+                result = mid;
+                low = mid + 1;
+            }
+            else
+            {
+                high = mid - 1;
             }
         }
 
-        return 0;
+        return Mathf.Clamp(result, 0, messages.Count - 1);
     }
 
-    private void BindRow(int poolIndex, int messageIndex)
+    private void EnsureMessageViewPoolCount(int desiredCount)
     {
-        if (poolIndex < 0 || poolIndex >= rowPool.Count)
+        if (messagePrefab == null || content == null)
         {
             return;
         }
 
-        ChatMessageRowUI row = rowPool[poolIndex];
+        while (messageViewPool.Count < desiredCount)
+        {
+            ChatMessageRowUI view = Instantiate(messagePrefab, content);
+            view.gameObject.SetActive(false);
+            view.Clear();
 
-        if (row == null)
+            messageViewPool.Add(view);
+            boundMessageIndices.Add(-1);
+        }
+    }
+
+    private void BindMessageView(int poolIndex, int messageIndex)
+    {
+        if (poolIndex < 0 || poolIndex >= messageViewPool.Count)
+        {
+            return;
+        }
+
+        ChatMessageRowUI view = messageViewPool[poolIndex];
+
+        if (view == null)
         {
             return;
         }
 
         if (messageIndex < 0 || messageIndex >= messages.Count)
         {
-            boundIndices[poolIndex] = -1;
-            row.Clear();
-            row.gameObject.SetActive(false);
+            ReleaseMessageView(poolIndex);
             return;
         }
 
-        RectTransform rowRect = row.transform as RectTransform;
+        RectTransform viewRect = view.transform as RectTransform;
 
-        if (rowRect != null)
+        if (viewRect != null)
         {
-            rowRect.anchorMin = new Vector2(0f, 1f);
-            rowRect.anchorMax = new Vector2(1f, 1f);
-            rowRect.pivot = new Vector2(0.5f, 1f);
-            rowRect.offsetMin = new Vector2(0f, rowRect.offsetMin.y);
-            rowRect.offsetMax = new Vector2(0f, rowRect.offsetMax.y);
-            rowRect.anchoredPosition = new Vector2(0f, -rowOffsets[messageIndex]);
-            rowRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, rowHeights[messageIndex]);
+            viewRect.anchorMin = new Vector2(0f, 1f);
+            viewRect.anchorMax = new Vector2(1f, 1f);
+            viewRect.pivot = new Vector2(0.5f, 1f);
+            viewRect.anchoredPosition = new Vector2(0f, -messageOffsets[messageIndex]);
+            viewRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, messageHeights[messageIndex]);
         }
 
-        boundIndices[poolIndex] = messageIndex;
-        row.gameObject.SetActive(true);
-        row.Setup(messages[messageIndex], ResolveMessageIdentity(messages[messageIndex]), messageIndex, settingsData);
+        boundMessageIndices[poolIndex] = messageIndex;
+
+        ApplyPresentation(view, presentations[messageIndex], GetMessageTextSize());
+        view.gameObject.SetActive(true);
     }
 
-    private void RefreshVisibleRowsThemeOnly()
+    private void ReleaseMessageView(int poolIndex)
     {
-        for (int i = 0; i < rowPool.Count; i++)
+        if (poolIndex < 0 || poolIndex >= messageViewPool.Count)
         {
-            if (rowPool[i] != null && rowPool[i].gameObject.activeSelf)
-            {
-                rowPool[i].ReapplyTheme();
-            }
+            return;
+        }
+
+        boundMessageIndices[poolIndex] = -1;
+
+        ChatMessageRowUI view = messageViewPool[poolIndex];
+
+        if (view == null)
+        {
+            return;
+        }
+
+        view.Clear();
+        view.gameObject.SetActive(false);
+    }
+
+    private void ReleaseAllMessageViews()
+    {
+        for (int i = 0; i < messageViewPool.Count; i++)
+        {
+            ReleaseMessageView(i);
         }
     }
 
-    private void ReleaseAllRows()
+    private void ClearMessageViewPool()
     {
-        for (int i = 0; i < rowPool.Count; i++)
+        for (int i = messageViewPool.Count - 1; i >= 0; i--)
         {
-            boundIndices[i] = -1;
+            ChatMessageRowUI view = messageViewPool[i];
 
-            if (rowPool[i] != null)
+            if (view != null)
             {
-                rowPool[i].Clear();
-                rowPool[i].gameObject.SetActive(false);
-            }
-        }
-    }
-
-    private void ClearRowPool()
-    {
-        for (int i = rowPool.Count - 1; i >= 0; i--)
-        {
-            if (rowPool[i] != null)
-            {
-                Destroy(rowPool[i].gameObject);
-            }
-        }
-
-        rowPool.Clear();
-        boundIndices.Clear();
-    }
-
-    #endregion
-
-    #region Identity
-
-    private string ResolveMessageIdentity(ChatMessageData message)
-    {
-        if (message == null)
-        {
-            return "Player";
-        }
-
-        ChatConversationData session = ChatManager.instance?.SessionConversation;
-        List<PlayerProfileData> profiles = new List<PlayerProfileData>();
-
-        if (session?.participants != null)
-        {
-            for (int i = 0; i < session.participants.Count; i++)
-            {
-                ChatParticipantData participant = session.participants[i];
-
-                if (participant != null && participant.IsValid)
-                {
-                    profiles.Add(new PlayerProfileData(participant.userId, participant.playerName, participant.iconId));
-                }
+                Destroy(view.gameObject);
             }
         }
 
-        string playerName = string.IsNullOrWhiteSpace(message.senderPlayerName) ? "Player" : message.senderPlayerName.Trim();
-        PlayerProfileData profile = PlayerProfileRegistry.instance?.GetProfile(message.senderUserId) ??
-                                    new PlayerProfileData(message.senderUserId, playerName, message.senderIconId);
+        messageViewPool.Clear();
+        boundMessageIndices.Clear();
+    }
 
-        return PlayerDisplayIdentityResolver.GetDisplayName(profile, profiles);
+    private void CreateMeasurementView()
+    {
+        if (measurementView != null || messagePrefab == null || content == null)
+        {
+            return;
+        }
+
+        measurementView = Instantiate(messagePrefab, content);
+        measurementView.name = "ChatMessageMeasurementView";
+        measurementView.Clear();
+        measurementView.gameObject.SetActive(false);
+    }
+
+    private ChatMessageRowUI GetMeasurementView()
+    {
+        if (measurementView == null)
+        {
+            CreateMeasurementView();
+        }
+
+        return measurementView;
+    }
+
+    private void DestroyMeasurementView()
+    {
+        if (measurementView == null)
+        {
+            return;
+        }
+
+        Destroy(measurementView.gameObject);
+        measurementView = null;
     }
 
     #endregion
@@ -697,14 +911,17 @@ public class ChatMessageScrollController : MonoBehaviour
             return;
         }
 
-        wasNearBottom = IsNearBottom();
-
-        if (wasNearBottom)
+        if (IsAtBottom())
         {
+            followingBottom = true;
             SetNewMessagesButtonVisible(false);
         }
+        else
+        {
+            followingBottom = false;
+        }
 
-        RefreshVisibleRows();
+        RefreshVisibleMessageViews();
     }
 
     public void ScrollToBottom()
@@ -715,19 +932,38 @@ public class ChatMessageScrollController : MonoBehaviour
         }
 
         float maxY = Mathf.Max(0f, content.rect.height - viewport.rect.height);
+
+        suppressScrollRefresh = true;
         SetContentY(maxY);
 
         if (scrollRect != null)
         {
             scrollRect.StopMovement();
-            suppressScrollRefresh = true;
             scrollRect.verticalNormalizedPosition = 0f;
-            suppressScrollRefresh = false;
         }
 
-        wasNearBottom = true;
+        suppressScrollRefresh = false;
+
+        followingBottom = true;
         SetNewMessagesButtonVisible(false);
-        RefreshVisibleRows();
+        RefreshVisibleMessageViews();
+    }
+
+    private bool IsAtBottom()
+    {
+        if (!initialized || content == null || viewport == null)
+        {
+            return true;
+        }
+
+        float maxY = Mathf.Max(0f, content.rect.height - viewport.rect.height);
+
+        if (maxY <= BottomPixelTolerance)
+        {
+            return true;
+        }
+
+        return maxY - content.anchoredPosition.y <= BottomPixelTolerance;
     }
 
     private void SetContentY(float y)
@@ -737,7 +973,10 @@ public class ChatMessageScrollController : MonoBehaviour
             return;
         }
 
-        float maxY = viewport != null ? Mathf.Max(0f, content.rect.height - viewport.rect.height) : Mathf.Max(0f, y);
+        float maxY = viewport != null
+            ? Mathf.Max(0f, content.rect.height - viewport.rect.height)
+            : Mathf.Max(0f, y);
+
         y = Mathf.Clamp(y, 0f, maxY);
         content.anchoredPosition = new Vector2(content.anchoredPosition.x, y);
     }
@@ -752,28 +991,58 @@ public class ChatMessageScrollController : MonoBehaviour
         SetContentY(content.anchoredPosition.y);
     }
 
-    private bool IsNearBottom()
+    private ViewAnchor CaptureViewAnchor()
     {
-        if (!initialized || content == null || viewport == null)
+        if (messages.Count == 0 || content == null)
         {
-            return true;
+            return default;
         }
 
-        float maxY = Mathf.Max(0f, content.rect.height - viewport.rect.height);
+        float viewTop = Mathf.Max(0f, content.anchoredPosition.y);
+        int firstIndex = FindFirstVisibleIndex(viewTop);
 
-        if (maxY <= 0.5f)
+        if (firstIndex < 0 || firstIndex >= messages.Count)
         {
-            return true;
+            return default;
         }
 
-        float remaining = maxY - content.anchoredPosition.y;
-        float threshold = Mathf.Max(2f, viewport.rect.height * bottomThresholdNormalized);
-        return remaining <= threshold;
+        ChatMessageData message = messages[firstIndex];
+
+        return new ViewAnchor(
+            message?.messageId ?? string.Empty,
+            viewTop - messageOffsets[firstIndex],
+            viewTop);
+    }
+
+    private void RestoreViewAnchor(ViewAnchor anchor)
+    {
+        if (content == null)
+        {
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(anchor.messageId))
+        {
+            for (int i = 0; i < messages.Count; i++)
+            {
+                ChatMessageData message = messages[i];
+
+                if (message != null && string.Equals(message.messageId, anchor.messageId, StringComparison.Ordinal))
+                {
+                    SetContentY(messageOffsets[i] + anchor.offsetInsideMessage);
+                    RefreshVisibleMessageViews();
+                    return;
+                }
+            }
+        }
+
+        SetContentY(anchor.fallbackContentY);
+        RefreshVisibleMessageViews();
     }
 
     #endregion
 
-    #region UI State
+    #region State UI
 
     private void UpdateEmptyState()
     {
@@ -793,26 +1062,104 @@ public class ChatMessageScrollController : MonoBehaviour
 
     private void SetNewMessagesButtonVisible(bool visible)
     {
-        if (newMessagesButtonText != null)
-        {
-            newMessagesButtonText.text = visible ? "New Messages" : string.Empty;
-        }
-
         if (newMessagesButton != null)
         {
             newMessagesButton.gameObject.SetActive(visible);
         }
     }
 
-    private void OnChatSettingsChanged(ChatSettingsData settings)
+    private void OnUserChatSettingsChanged(ChatSettingsData settings)
     {
-        settingsData = settings?.Clone() ?? new ChatSettingsData();
-        RefreshVisibleRows();
+        userSettings = settings?.Clone() ?? new ChatSettingsData();
+
+        bool keepBottomPinned = followingBottom || IsAtBottom();
+        ViewAnchor anchor = keepBottomPinned ? default : CaptureViewAnchor();
+
+        RebuildMessageLayout();
+
+        if (keepBottomPinned)
+        {
+            ScrollToBottom();
+        }
+        else
+        {
+            RestoreViewAnchor(anchor);
+        }
     }
 
     private void OnProfileChanged(PlayerProfileData _)
     {
-        RefreshVisibleRows();
+        bool keepBottomPinned = followingBottom || IsAtBottom();
+        ViewAnchor anchor = keepBottomPinned ? default : CaptureViewAnchor();
+
+        RebuildMessageLayout();
+
+        if (keepBottomPinned)
+        {
+            ScrollToBottom();
+        }
+        else
+        {
+            RestoreViewAnchor(anchor);
+        }
+    }
+
+    private string GetNewestMessageId()
+    {
+        if (messages.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        ChatMessageData message = messages[messages.Count - 1];
+        return message?.messageId ?? string.Empty;
+    }
+
+    #endregion
+
+    #region Data
+
+    private readonly struct MessagePresentation
+    {
+        public readonly Sprite icon;
+        public readonly string text;
+        public readonly UIThemeBackgroundType backgroundType;
+        public readonly UIThemeTextType textType;
+        public readonly bool useColorOverride;
+        public readonly Color colorOverride;
+        public readonly bool showIcon;
+
+        public MessagePresentation(
+            Sprite icon,
+            string text,
+            UIThemeBackgroundType backgroundType,
+            UIThemeTextType textType,
+            bool useColorOverride,
+            Color colorOverride,
+            bool showIcon)
+        {
+            this.icon = icon;
+            this.text = text ?? string.Empty;
+            this.backgroundType = backgroundType;
+            this.textType = textType;
+            this.useColorOverride = useColorOverride;
+            this.colorOverride = colorOverride;
+            this.showIcon = showIcon;
+        }
+    }
+
+    private readonly struct ViewAnchor
+    {
+        public readonly string messageId;
+        public readonly float offsetInsideMessage;
+        public readonly float fallbackContentY;
+
+        public ViewAnchor(string messageId, float offsetInsideMessage, float fallbackContentY)
+        {
+            this.messageId = messageId ?? string.Empty;
+            this.offsetInsideMessage = offsetInsideMessage;
+            this.fallbackContentY = fallbackContentY;
+        }
     }
 
     #endregion

@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 3878376671372605292}
   - component: {fileID: 3980106887804455327}
   - component: {fileID: 6684133366491196162}
+  - component: {fileID: 6842137113101700655}
   m_Layer: 5
   m_Name: MessageText
   m_TagString: Untagged
@@ -137,6 +138,20 @@ MonoBehaviour:
   m_hasFontAssetChanged: 0
   m_baseMaterial: {fileID: 0}
   m_maskOffset: {x: 0, y: 0, z: 0, w: 0}
+--- !u!114 &6842137113101700655
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1622276813208837814}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 095b1392aeec0ee4da7ca08d43b5197b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIThemeText
+  textType: 0
+  text: {fileID: 6684133366491196162}
 --- !u!1 &2701662517829458597
 GameObject:
   m_ObjectHideFlags: 0
@@ -224,6 +239,7 @@ GameObject:
   - component: {fileID: 903901149627103942}
   - component: {fileID: 8604862402043424330}
   - component: {fileID: 5250741849694479155}
+  - component: {fileID: 2621570177339385704}
   m_Layer: 5
   m_Name: ChatMessageRow
   m_TagString: Untagged
@@ -304,3 +320,19 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::UIThemeBackground
   backgroundType: 12
   backgroundImage: {fileID: 8604862402043424330}
+--- !u!114 &2621570177339385704
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8195792940680561048}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: af10d3ffe6910984caf1f0cdf9f9e873, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ChatMessageRowUI
+  backgroundTheme: {fileID: 5250741849694479155}
+  messageTheme: {fileID: 6842137113101700655}
+  playerIconImage: {fileID: 8762537795142921314}
+  messageText: {fileID: 6684133366491196162}

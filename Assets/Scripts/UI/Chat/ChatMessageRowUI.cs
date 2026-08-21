@@ -3,32 +3,21 @@ using UnityEngine;
 using UnityEngine.UI;
 
 [DisallowMultipleComponent]
-public class ChatMessageRowUI : MonoBehaviour, IUIThemeTarget
+public class ChatMessageRowUI : MonoBehaviour
 {
     #region Fields
 
-    [Header("Row")]
-    [SerializeField] private Image backgroundImage;
-    [SerializeField] private UIThemeBackground automaticBackgroundTheme;
+    [Header("Theme")]
+    [SerializeField] private UIThemeBackground backgroundTheme;
+    [SerializeField] private UIThemeText messageTheme;
 
-    [Header("Message")]
+    [Header("Display")]
     [SerializeField] private Image playerIconImage;
     [SerializeField] private TMP_Text messageText;
 
-    [Header("Measurement")]
-    [SerializeField, Min(0f)] private float horizontalTextPadding = 16f;
-    [SerializeField, Min(0f)] private float verticalTextPadding = 8f;
-    [SerializeField, Min(0f)] private float iconWidth = 36f;
-    [SerializeField, Min(0f)] private float iconTextSpacing = 8f;
-    [SerializeField, Min(1f)] private float minimumRowHeight = 48f;
-
-    private ChatMessageData messageData;
-    private ChatSettingsData settingsData;
-    private string displayIdentity = string.Empty;
-    private int messageIndex = -1;
-    private UIThemeManager themeManager;
-
-    public int MessageIndex => messageIndex;
+    private RectTransform rowRect;
+    private RectTransform iconRect;
+    private HorizontalLayoutGroup horizontalLayoutGroup;
 
     #endregion
 
@@ -36,68 +25,70 @@ public class ChatMessageRowUI : MonoBehaviour, IUIThemeTarget
 
     private void Awake()
     {
-        if (automaticBackgroundTheme != null)
-        {
-            automaticBackgroundTheme.enabled = false;
-        }
+        rowRect = transform as RectTransform;
+        iconRect = playerIconImage != null ? playerIconImage.rectTransform : null;
+        horizontalLayoutGroup = GetComponent<HorizontalLayoutGroup>();
 
         Clear();
-    }
-
-    private void OnEnable()
-    {
-        RegisterWithThemeManager();
-    }
-
-    private void OnDisable()
-    {
-        if (themeManager != null)
-        {
-            themeManager.Unregister(this);
-            themeManager = null;
-        }
     }
 
     #endregion
 
-    #region Setup
+    #region Display
 
-    public void Setup(ChatMessageData message, string identity, int index, ChatSettingsData settings)
+    public void Setup(
+        Sprite playerIcon,
+        string displayText,
+        float textSize,
+        UIThemeBackgroundType backgroundType,
+        UIThemeTextType textType,
+        bool useColorOverride,
+        Color colorOverride,
+        bool showIcon)
     {
         Clear();
 
-        if (message == null)
-        {
-            return;
-        }
+        backgroundTheme?.SetBackgroundType(backgroundType);
 
-        messageData = message;
-        displayIdentity = string.IsNullOrWhiteSpace(identity) ? GetFallbackIdentity(message) : identity;
-        messageIndex = index;
-        settingsData = settings?.Clone() ?? new ChatSettingsData();
+        if (messageTheme != null)
+        {
+            messageTheme.SetTextType(textType);
+
+            if (useColorOverride)
+            {
+                messageTheme.SetColorOverride(colorOverride);
+            }
+        }
 
         if (messageText != null)
         {
-            messageText.text = BuildMessageText(displayIdentity, message.message);
+            messageText.fontSize = Mathf.Max(1f, textSize);
+            messageText.text = displayText ?? string.Empty;
+
+            if (messageTheme == null && useColorOverride)
+            {
+                Color finalColor = colorOverride;
+                finalColor.a = 1f;
+                messageText.color = finalColor;
+            }
         }
 
         if (playerIconImage != null)
         {
-            Sprite sprite = UIIconManager.instance != null ? UIIconManager.instance.GetPlayerIconSpriteById(message.senderIconId) : null;
-            playerIconImage.sprite = sprite;
-            playerIconImage.enabled = sprite != null;
-            playerIconImage.preserveAspect = true;
-        }
+            bool shouldShowIcon = showIcon && playerIcon != null;
 
-        ReapplyTheme();
+            playerIconImage.sprite = shouldShowIcon ? playerIcon : null;
+            playerIconImage.preserveAspect = true;
+            playerIconImage.gameObject.SetActive(shouldShowIcon);
+        }
     }
 
     public void Clear()
     {
-        messageData = null;
-        settingsData = null;
-        displayIdentity = string.Empty;
-        messageIndex = -1;
+        if (messageTheme != null)
+        {
+            messageTheme.ClearColorOverride();
+        }
 
         if (messageText != null)
         {
@@ -107,140 +98,110 @@ public class ChatMessageRowUI : MonoBehaviour, IUIThemeTarget
         if (playerIconImage != null)
         {
             playerIconImage.sprite = null;
-            playerIconImage.enabled = false;
+            playerIconImage.gameObject.SetActive(false);
         }
     }
 
     #endregion
 
-    #region Measurement
+    #region Size
 
-    public float MeasurePreferredHeight(ChatMessageData message, string identity, float rowWidth)
+    public float GetPreferredHeight(float rowWidth)
     {
-        if (messageText == null || message == null)
+        if (rowRect == null || messageText == null)
         {
-            return minimumRowHeight;
+            return 0f;
         }
 
-        string finalIdentity = string.IsNullOrWhiteSpace(identity) ? GetFallbackIdentity(message) : identity;
-        string finalText = BuildMessageText(finalIdentity, message.message);
+        rowWidth = Mathf.Max(1f, rowWidth);
+        rowRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, rowWidth);
 
-        float availableWidth = Mathf.Max(1f, rowWidth - horizontalTextPadding - iconWidth - iconTextSpacing);
-        Vector2 preferred = messageText.GetPreferredValues(finalText, availableWidth, 0f);
+        Canvas.ForceUpdateCanvases();
+        LayoutRebuilder.ForceRebuildLayoutImmediate(rowRect);
 
-        return Mathf.Max(minimumRowHeight, preferred.y + verticalTextPadding);
-    }
+        float layoutHeight = LayoutUtility.GetPreferredHeight(rowRect);
 
-    private string BuildMessageText(string identity, string message)
-    {
-        string safeIdentity = string.IsNullOrWhiteSpace(identity) ? "Player" : identity.Trim();
-        string safeMessage = message ?? string.Empty;
-        return $"{safeIdentity}: {safeMessage}";
-    }
-
-    private string GetFallbackIdentity(ChatMessageData message)
-    {
-        if (message == null)
+        if (horizontalLayoutGroup != null)
         {
-            return "Player";
+            float availableTextWidth = GetHorizontalLayoutTextWidth(rowWidth);
+            float textHeight = messageText.GetPreferredValues(messageText.text, availableTextWidth, 0f).y;
+            float iconHeight = GetVisibleIconHeight();
+            float contentHeight = Mathf.Max(textHeight, iconHeight);
+
+            return Mathf.Max(1f, contentHeight + horizontalLayoutGroup.padding.vertical);
         }
 
-        string playerName = string.IsNullOrWhiteSpace(message.senderPlayerName) ? "Player" : message.senderPlayerName.Trim();
-        string userId = message.senderUserId?.Trim() ?? string.Empty;
+        float textWidth = GetCurrentTextWidth(rowWidth);
+        float preferredTextHeight = messageText.GetPreferredValues(messageText.text, textWidth, 0f).y;
+        float currentTextHeight = Mathf.Max(0f, messageText.rectTransform.rect.height);
+        float currentRowHeight = Mathf.Max(0f, rowRect.rect.height);
+        float verticalChrome = Mathf.Max(0f, currentRowHeight - currentTextHeight);
+        float preferredHeight = preferredTextHeight + verticalChrome;
 
-        if (string.IsNullOrWhiteSpace(userId))
+        preferredHeight = Mathf.Max(preferredHeight, GetVisibleIconHeight() + verticalChrome);
+
+        if (layoutHeight > 0f)
         {
-            return playerName;
+            preferredHeight = Mathf.Max(preferredHeight, layoutHeight);
         }
 
-        string shortId = userId.Length <= 4 ? userId : userId.Substring(0, 4);
-        return $"{playerName} #{shortId}";
+        return Mathf.Max(1f, preferredHeight);
     }
 
-    #endregion
-
-    #region Theme
-
-    private void RegisterWithThemeManager()
+    private float GetHorizontalLayoutTextWidth(float rowWidth)
     {
-        themeManager ??= UIThemeManager.instance;
-        themeManager?.Register(this);
-    }
+        float width = rowWidth - horizontalLayoutGroup.padding.horizontal;
 
-    public void ReapplyTheme()
-    {
-        themeManager ??= UIThemeManager.instance;
-
-        if (themeManager == null)
+        if (playerIconImage != null && playerIconImage.gameObject.activeSelf)
         {
-            return;
-        }
+            float iconWidth = iconRect != null ? LayoutUtility.GetPreferredWidth(iconRect) : 0f;
 
-        UIThemeBackgroundType backgroundType = messageIndex >= 0 && (messageIndex % 2) != 0
-            ? UIThemeBackgroundType.ChatMessageRowB
-            : UIThemeBackgroundType.ChatMessageRowA;
-
-        UIThemeStyle backgroundStyle = themeManager.GetBackgroundStyle(backgroundType);
-        UIThemeApplier.ApplyImageStyle(backgroundImage, backgroundStyle);
-
-        UIThemeTextType textType = GetTextType();
-        UIThemeStyle textStyle = themeManager.GetTextStyle(textType);
-        UIThemeApplier.ApplyTextStyle(messageText, textStyle);
-
-        ApplyEffectiveTextColor(textType, textStyle);
-    }
-
-    private UIThemeTextType GetTextType()
-    {
-        if (messageData != null && messageData.isPrivate)
-        {
-            return UIThemeTextType.ChatPrivate;
-        }
-
-        return messageData != null && messageData.isFromCurrentUser
-            ? UIThemeTextType.ChatCurrentUser
-            : UIThemeTextType.ChatOtherUser;
-    }
-
-    private void ApplyEffectiveTextColor(UIThemeTextType textType, UIThemeStyle textStyle)
-    {
-        if (messageText == null)
-        {
-            return;
-        }
-
-        Color color = textStyle != null ? textStyle.VertexColor : messageText.color;
-        ChatSettingsData settings = settingsData ?? ChatSettingsManager.instance?.CurrentSettings;
-
-        if (settings != null)
-        {
-            switch (textType)
+            if (iconWidth <= 0f && iconRect != null)
             {
-                case UIThemeTextType.ChatCurrentUser:
-                    if (settings.overrideCurrentUserMessageColor)
-                    {
-                        color = settings.currentUserMessageColor;
-                    }
-                    break;
-
-                case UIThemeTextType.ChatOtherUser:
-                    if (settings.overrideOtherUserMessageColor)
-                    {
-                        color = settings.otherUserMessageColor;
-                    }
-                    break;
-
-                case UIThemeTextType.ChatPrivate:
-                    if (settings.overridePrivateMessageColor)
-                    {
-                        color = settings.privateMessageColor;
-                    }
-                    break;
+                iconWidth = iconRect.rect.width;
             }
+
+            width -= Mathf.Max(0f, iconWidth);
+            width -= horizontalLayoutGroup.spacing;
         }
 
-        color.a = 1f;
-        messageText.color = color;
+        return Mathf.Max(1f, width);
+    }
+
+    private float GetCurrentTextWidth(float rowWidth)
+    {
+        RectTransform textRect = messageText.rectTransform;
+        float width = textRect.rect.width;
+
+        if (width > 1f)
+        {
+            return width;
+        }
+
+        if (textRect.parent == rowRect)
+        {
+            float anchorWidth = rowWidth * (textRect.anchorMax.x - textRect.anchorMin.x);
+            width = anchorWidth + textRect.sizeDelta.x;
+        }
+
+        return Mathf.Max(1f, width);
+    }
+
+    private float GetVisibleIconHeight()
+    {
+        if (playerIconImage == null || !playerIconImage.gameObject.activeSelf || iconRect == null)
+        {
+            return 0f;
+        }
+
+        float height = LayoutUtility.GetPreferredHeight(iconRect);
+
+        if (height <= 0f)
+        {
+            height = iconRect.rect.height;
+        }
+
+        return Mathf.Max(0f, height);
     }
 
     #endregion

@@ -435,6 +435,7 @@ GameObject:
   - component: {fileID: 8484746395792418116}
   - component: {fileID: 4437568651889265426}
   - component: {fileID: 8146865771080950177}
+  - component: {fileID: 4714635389141318796}
   m_Layer: 5
   m_Name: ChatSuggestionRow
   m_TagString: Untagged
@@ -522,6 +523,22 @@ MonoBehaviour:
   m_FlexibleWidth: 0
   m_FlexibleHeight: 1
   m_LayoutPriority: 1
+--- !u!114 &4714635389141318796
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4748385741684164560}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 28b3b3cbd525ab2459d27a0bebcf9920, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ChatSuggestionRowUI
+  highlightObject: {fileID: 7870957935102807850}
+  playerIconImage: {fileID: 4441863433214751916}
+  playerNameText: {fileID: 9187053888270171635}
+  userIdText: {fileID: 3229144465488325594}
 --- !u!1 &6543633220371940063
 GameObject:
   m_ObjectHideFlags: 0

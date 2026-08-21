@@ -7,6 +7,8 @@ public class UIThemeText : MonoBehaviour, IUIThemeTarget
     [SerializeField] private UIThemeTextType textType;
 
     private UIThemeManager themeManager;
+    private bool hasColorOverride;
+    private Color colorOverride;
 
     [Header("Components")]
     [SerializeField] private TMP_Text text;
@@ -57,9 +59,29 @@ public class UIThemeText : MonoBehaviour, IUIThemeTarget
         return themeManager != null;
     }
 
+    public UIThemeTextType TextType => textType;
+
     public void SetTextType(UIThemeTextType newTextType)
     {
         textType = newTextType;
+        ReapplyTheme();
+    }
+
+    public void SetColorOverride(Color color)
+    {
+        hasColorOverride = true;
+        colorOverride = color;
+        ApplyColorOverride();
+    }
+
+    public void ClearColorOverride()
+    {
+        if (!hasColorOverride)
+        {
+            return;
+        }
+
+        hasColorOverride = false;
         ReapplyTheme();
     }
 
@@ -76,5 +98,18 @@ public class UIThemeText : MonoBehaviour, IUIThemeTarget
         ) as UIThemeStyle;
 
         UIThemeApplier.ApplyTextStyle(text, style);
+        ApplyColorOverride();
+    }
+
+    private void ApplyColorOverride()
+    {
+        if (!hasColorOverride || text == null)
+        {
+            return;
+        }
+
+        Color finalColor = colorOverride;
+        finalColor.a = 1f;
+        text.color = finalColor;
     }
 }

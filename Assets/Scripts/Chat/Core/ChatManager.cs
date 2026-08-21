@@ -620,6 +620,40 @@ public class ChatManager : MonoBehaviour
         return result;
     }
 
+    public bool AddLocalSystemMessage(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return false;
+        }
+
+        ChatConversationData targetConversation = ActiveConversation ?? SessionConversation;
+
+        if (targetConversation == null)
+        {
+            return false;
+        }
+
+        ChatMessageData localMessage = new ChatMessageData(
+            Guid.NewGuid().ToString("N"),
+            string.Empty,
+            targetConversation.conversationId,
+            targetConversation.conversationType,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            message.Trim(),
+            DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            true,
+            false,
+            string.Empty,
+            true);
+
+        AddMessageToConversation(targetConversation, localMessage);
+        return true;
+    }
+
     public async Task<bool> LoadHistoryAsync(ChatConversationReference conversation, int maximumMessages)
     {
         if (conversation == null || !conversation.IsValid || maximumMessages <= 0 ||
@@ -632,6 +666,8 @@ public class ChatManager : MonoBehaviour
         {
             return false;
         }
+
+        maximumMessages = Mathf.Min(maximumMessages, GetMaximumRetainedMessages());
 
         IReadOnlyList<ChatMessageData> history = await chatService.GetHistoryAsync(new ChatHistoryRequest(conversation, maximumMessages));
         MergeHistory(conversationData, history);
@@ -679,8 +715,9 @@ public class ChatManager : MonoBehaviour
         }
 
         conversation.messages.Add(message);
+        TrimConversationMessages(conversation);
 
-        if (activeConversationKey != conversation.Key)
+        if (!message.isLocalSystemMessage && activeConversationKey != conversation.Key)
         {
             conversation.unreadCount++;
         }
@@ -717,7 +754,33 @@ public class ChatManager : MonoBehaviour
         }
 
         conversation.messages.Sort(CompareMessagesByTimestamp);
+        TrimConversationMessages(conversation);
         ConversationMessagesChanged?.Invoke(conversation);
+    }
+
+    private void TrimConversationMessages(ChatConversationData conversation)
+    {
+        if (conversation?.messages == null)
+        {
+            return;
+        }
+
+        int maximumMessages = GetMaximumRetainedMessages();
+        int removeCount = conversation.messages.Count - maximumMessages;
+
+        if (removeCount <= 0)
+        {
+            return;
+        }
+
+        conversation.messages.RemoveRange(0, removeCount);
+    }
+
+    private int GetMaximumRetainedMessages()
+    {
+        return ChatSettings.instance != null
+            ? ChatSettings.instance.MaximumRetainedMessages
+            : 200;
     }
 
     private bool ContainsMessage(ChatConversationData conversation, string messageId)

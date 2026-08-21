@@ -22,6 +22,7 @@ public class ChatManager : MonoBehaviour
     private LobbyManager lobbyManager;
 
     private readonly Dictionary<string, ChatConversationData> conversations = new Dictionary<string, ChatConversationData>();
+    private readonly HashSet<string> blockedUserIds = new HashSet<string>(StringComparer.Ordinal);
 
     private bool isReady;
     private bool isChatEnabled = true;
@@ -49,6 +50,7 @@ public class ChatManager : MonoBehaviour
     public string LastServiceError => lastServiceError;
     public string LastPrivateMessageUserId => lastPrivateMessageUserId;
     public IReadOnlyDictionary<string, ChatConversationData> Conversations => conversations;
+    public IReadOnlyCollection<string> BlockedUserIds => blockedUserIds;
 
     public ChatConversationData ActiveConversation =>
         conversations.TryGetValue(activeConversationKey, out ChatConversationData conversation) ? conversation : null;
@@ -60,8 +62,10 @@ public class ChatManager : MonoBehaviour
     public event Action<ChatConversationData> ConversationJoined;
     public event Action<ChatConversationReference> ConversationLeft;
     public event Action<ChatMessageData> MessageReceived;
+    public event Action<ChatConversationData> ConversationMessagesChanged;
     public event Action<ChatConversationData> ActiveConversationChanged;
     public event Action<ChatConversationData> SessionParticipantsChanged;
+    public event Action BlockedUsersChanged;
 
     #endregion
 
@@ -305,6 +309,8 @@ public class ChatManager : MonoBehaviour
             }
         }
 
+        ClearSessionBlocks();
+
         if (!await JoinConversationAsync(requestedSession))
         {
             return false;
@@ -345,6 +351,7 @@ public class ChatManager : MonoBehaviour
         {
             sessionConversationKey = string.Empty;
             lastPrivateMessageUserId = string.Empty;
+            ClearSessionBlocks();
             return true;
         }
 
@@ -355,6 +362,7 @@ public class ChatManager : MonoBehaviour
         {
             sessionConversationKey = string.Empty;
             lastPrivateMessageUserId = string.Empty;
+            ClearSessionBlocks();
         }
 
         return left;
@@ -632,7 +640,7 @@ public class ChatManager : MonoBehaviour
 
     private void OnChatMessageReceived(ChatMessageData message)
     {
-        if (message == null)
+        if (message == null || IsUserBlocked(message.senderUserId))
         {
             return;
         }
@@ -664,7 +672,8 @@ public class ChatManager : MonoBehaviour
 
     private void AddMessageToConversation(ChatConversationData conversation, ChatMessageData message)
     {
-        if (conversation == null || message == null || ContainsMessage(conversation, message.messageId))
+        if (conversation == null || message == null || IsUserBlocked(message.senderUserId) ||
+            ContainsMessage(conversation, message.messageId))
         {
             return;
         }
@@ -677,6 +686,7 @@ public class ChatManager : MonoBehaviour
         }
 
         MessageReceived?.Invoke(message);
+        ConversationMessagesChanged?.Invoke(conversation);
     }
 
     private void MergeHistory(ChatConversationData conversation, IReadOnlyList<ChatMessageData> history)
@@ -686,19 +696,28 @@ public class ChatManager : MonoBehaviour
             return;
         }
 
+        bool changed = false;
+
         for (int i = 0; i < history.Count; i++)
         {
             ChatMessageData message = history[i];
 
-            if (message == null || ContainsMessage(conversation, message.messageId))
+            if (message == null || IsUserBlocked(message.senderUserId) || ContainsMessage(conversation, message.messageId))
             {
                 continue;
             }
 
             conversation.messages.Add(message);
+            changed = true;
+        }
+
+        if (!changed)
+        {
+            return;
         }
 
         conversation.messages.Sort(CompareMessagesByTimestamp);
+        ConversationMessagesChanged?.Invoke(conversation);
     }
 
     private bool ContainsMessage(ChatConversationData conversation, string messageId)
@@ -1153,6 +1172,135 @@ public class ChatManager : MonoBehaviour
 
     #endregion
 
+    #region Blocking
+
+    public bool IsUserBlocked(string userId)
+    {
+        return !string.IsNullOrWhiteSpace(userId) && blockedUserIds.Contains(userId.Trim());
+    }
+
+    public bool SetUserBlocked(string userId, bool blocked)
+    {
+        if (string.IsNullOrWhiteSpace(userId) || IsCurrentLocalUser(userId))
+        {
+            return false;
+        }
+
+        string normalizedUserId = userId.Trim();
+        bool changed = blocked ? blockedUserIds.Add(normalizedUserId) : blockedUserIds.Remove(normalizedUserId);
+
+        if (!changed)
+        {
+            return false;
+        }
+
+        if (blocked)
+        {
+            RemoveMessagesFromBlockedUser(normalizedUserId);
+        }
+
+        BlockedUsersChanged?.Invoke();
+        return true;
+    }
+
+    public void ApplyBlockChanges(IEnumerable<string> userIdsToBlock, IEnumerable<string> userIdsToUnblock)
+    {
+        bool changed = false;
+
+        if (userIdsToBlock != null)
+        {
+            foreach (string userId in userIdsToBlock)
+            {
+                if (string.IsNullOrWhiteSpace(userId) || IsCurrentLocalUser(userId))
+                {
+                    continue;
+                }
+
+                string normalizedUserId = userId.Trim();
+
+                if (!blockedUserIds.Add(normalizedUserId))
+                {
+                    continue;
+                }
+
+                changed = true;
+                RemoveMessagesFromBlockedUser(normalizedUserId);
+            }
+        }
+
+        if (userIdsToUnblock != null)
+        {
+            foreach (string userId in userIdsToUnblock)
+            {
+                if (string.IsNullOrWhiteSpace(userId))
+                {
+                    continue;
+                }
+
+                if (blockedUserIds.Remove(userId.Trim()))
+                {
+                    changed = true;
+                }
+            }
+        }
+
+        if (changed)
+        {
+            BlockedUsersChanged?.Invoke();
+        }
+    }
+
+    private void RemoveMessagesFromBlockedUser(string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return;
+        }
+
+        foreach (KeyValuePair<string, ChatConversationData> pair in conversations)
+        {
+            ChatConversationData conversation = pair.Value;
+
+            if (conversation?.messages == null || conversation.messages.Count == 0)
+            {
+                continue;
+            }
+
+            bool removedAny = false;
+
+            for (int i = conversation.messages.Count - 1; i >= 0; i--)
+            {
+                ChatMessageData message = conversation.messages[i];
+
+                if (message == null || !string.Equals(message.senderUserId, userId, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                conversation.messages.RemoveAt(i);
+                removedAny = true;
+            }
+
+            if (removedAny)
+            {
+                ConversationMessagesChanged?.Invoke(conversation);
+            }
+        }
+    }
+
+    private void ClearSessionBlocks()
+    {
+        if (blockedUserIds.Count == 0)
+        {
+            return;
+        }
+
+        blockedUserIds.Clear();
+        BlockedUsersChanged?.Invoke();
+    }
+
+    #endregion
+
     #region Help
 
     public ChatCommandResult ToggleHelp(string helpMessage)
@@ -1536,6 +1684,7 @@ public class ChatManager : MonoBehaviour
         activeConversationKey = string.Empty;
         sessionConversationKey = string.Empty;
         lastPrivateMessageUserId = string.Empty;
+        ClearSessionBlocks();
 
         if (hadConversations)
         {

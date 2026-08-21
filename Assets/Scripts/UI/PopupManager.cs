@@ -10,7 +10,9 @@ public enum PopupId
     Leaderboard,
     Settings,
     Failure,
-    HostSettings
+    HostSettings,
+    ChatSettings,
+    ChatReport
 }
 
 [Serializable]

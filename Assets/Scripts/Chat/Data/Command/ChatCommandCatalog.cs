@@ -22,10 +22,10 @@ public class ChatCommandCatalog : MonoBehaviour
         commands.Add(new ChatCommandDefinition("help", "/help", "Show or hide chat help.", ChatCommandAvailability.All, false));
         commands.Add(new ChatCommandDefinition("msg", "/msg <player> <message>", "Send a private Session message.", ChatCommandAvailability.SessionOnly, true, "message", "whisper", "w"));
         commands.Add(new ChatCommandDefinition("reply", "/reply <player> <message>", "Reply with a private Session message.", ChatCommandAvailability.SessionOnly, true, "r"));
-        commands.Add(new ChatCommandDefinition("block", "/block <player>", "Block a Session player (coming later).", ChatCommandAvailability.SessionOnly, true));
-        commands.Add(new ChatCommandDefinition("unblock", "/unblock <player>", "Unblock a Session player (coming later).", ChatCommandAvailability.SessionOnly, true));
+        commands.Add(new ChatCommandDefinition("block", "/block <player>", "Block a Session player.", ChatCommandAvailability.SessionOnly, true));
+        commands.Add(new ChatCommandDefinition("unblock", "/unblock <player>", "Unblock a Session player.", ChatCommandAvailability.SessionOnly, true));
         commands.Add(new ChatCommandDefinition("friend", "/friend <player>", "Add a Session player as a friend (coming later).", ChatCommandAvailability.SessionOnly, true));
-        commands.Add(new ChatCommandDefinition("report", "/report <player>", "Report a Session player (coming later).", ChatCommandAvailability.SessionOnly, true));
+        commands.Add(new ChatCommandDefinition("report", "/report <player>", "Report a Session player.", ChatCommandAvailability.SessionOnly, true));
 
         isReady = true;
         return true;

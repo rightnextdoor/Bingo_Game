@@ -780,8 +780,8 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 1832984458}
   m_HandleRect: {fileID: 1832984457}
   m_Direction: 0
-  m_Value: 0
-  m_Size: 1
+  m_Value: 1
+  m_Size: 0.9999997
   m_NumberOfSteps: 0
   m_OnValueChanged:
     m_PersistentCalls:
@@ -3134,7 +3134,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &1908377634
 RectTransform:
   m_ObjectHideFlags: 0
@@ -3142,13 +3142,13 @@ RectTransform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1908377633}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 845442327}
-  m_Father: {fileID: 1510488711991615776}
+  m_Father: {fileID: 2312939687866020634}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0}
   m_AnchorMax: {x: 0.5, y: 0}
@@ -5149,7 +5149,6 @@ RectTransform:
   m_Children:
   - {fileID: 1494234942}
   - {fileID: 1654182244}
-  - {fileID: 1908377634}
   m_Father: {fileID: 2312939687866020634}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -9311,6 +9310,7 @@ RectTransform:
   m_Children:
   - {fileID: 1510488711991615776}
   - {fileID: 3622086378865176807}
+  - {fileID: 1908377634}
   m_Father: {fileID: 1279848817187422077}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -9525,6 +9525,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1510488711991615776}
   - component: {fileID: 2655840208396793620}
+  - component: {fileID: 2655840208396793621}
   m_Layer: 5
   m_Name: LobbyChatContent
   m_TagString: Untagged
@@ -9547,14 +9548,21 @@ MonoBehaviour:
   scrollRect: {fileID: 1494234944}
   content: {fileID: 1838278853}
   viewport: {fileID: 139007906}
-  rowPrefab: {fileID: 2621570177339385704, guid: a2dcd9fa54ae5d74791bd26c9a43aea8, type: 3}
-  rowSpacing: 4
-  extraVisibleRows: 2
-  fallbackRowHeight: 48
+  messagePrefab: {fileID: 2621570177339385704, guid: a2dcd9fa54ae5d74791bd26c9a43aea8, type: 3}
   emptyChatText: {fileID: 1654182246}
-  newMessagesButton: {fileID: 1908377636}
-  newMessagesButtonText: {fileID: 845442328}
-  bottomThresholdNormalized: 0.02
+--- !u!114 &2655840208396793621
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2655840208396793619}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b6a5dc0dbfb5a7d468d60a9d133a6f45, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LobbyChatController
+  messageScrollController: {fileID: 2655840208396793620}
 --- !u!1 &2706636792526870245
 GameObject:
   m_ObjectHideFlags: 0
@@ -15753,9 +15761,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ChatSectionController
   tabController: {fileID: 8712428435602909677}
-  sessionMessageController: {fileID: 2655840208396793620}
+  lobbyChatController: {fileID: 0}
+  friendsChatController: {fileID: 0}
   inputController: {fileID: 8374560949861004986}
-  friendsEmptyStateText: {fileID: 300677668}
+  newMessagesButton: {fileID: 0}
 --- !u!1001 &8404732747971471337
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -16556,6 +16565,10 @@ PrefabInstance:
       propertyPath: m_AnchorMax.y
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 7314721457368052939, guid: ebcaa9cbc282b7949ac143ee7bcd0fad, type: 3}
+      propertyPath: m_AnchorMin.x
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 7477766831006519229, guid: ebcaa9cbc282b7949ac143ee7bcd0fad, type: 3}
       propertyPath: m_AnchorMax.y
       value: 0
@@ -16969,6 +16982,8 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 3622086378865176807}
+  - component: {fileID: 8739081304746452795}
+  - component: {fileID: 8739081304746452794}
   m_Layer: 5
   m_Name: FriendsContent
   m_TagString: Untagged
@@ -16976,6 +16991,36 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 0
+--- !u!114 &8739081304746452794
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8739081304746452793}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8e8e1e01919df3045addd8a38931e316, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FriendsChatController
+  messageScrollController: {fileID: 8739081304746452795}
+--- !u!114 &8739081304746452795
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8739081304746452793}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 62b1f6b04c2a04342895bb14aefe20ff, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ChatMessageScrollController
+  scrollRect: {fileID: 1953000449}
+  content: {fileID: 1690631041}
+  viewport: {fileID: 1437123463}
+  messagePrefab: {fileID: 2621570177339385704, guid: a2dcd9fa54ae5d74791bd26c9a43aea8, type: 3}
+  emptyChatText: {fileID: 300677668}
 --- !u!114 &8777154838080626873
 MonoBehaviour:
   m_ObjectHideFlags: 0

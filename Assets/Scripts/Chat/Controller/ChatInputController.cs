@@ -15,11 +15,9 @@ public class ChatInputController : MonoBehaviour
     [Header("Input")]
     [SerializeField] private TMP_InputField chatInputField;
     [SerializeField] private Button sendButton;
-    [SerializeField] private TMP_Text errorText;
 
     [Header("Suggestions")]
     [SerializeField] private ChatSuggestionController suggestionController;
-    [SerializeField, Min(1)] private int maximumSuggestions = 8;
 
     private ChatCommandCatalog commandCatalog;
     private bool submitting;
@@ -46,7 +44,6 @@ public class ChatInputController : MonoBehaviour
     {
         UnregisterListeners();
         suggestionController?.ClearSuggestions();
-        ClearError();
     }
 
     private void Update()
@@ -73,12 +70,10 @@ public class ChatInputController : MonoBehaviour
 
     private void ConfigureInput()
     {
-        if (chatInputField == null)
+        if (chatInputField != null)
         {
-            return;
+            chatInputField.lineType = TMP_InputField.LineType.SingleLine;
         }
-
-        chatInputField.lineType = TMP_InputField.LineType.SingleLine;
     }
 
     private void ClearRuntimeUi()
@@ -88,7 +83,6 @@ public class ChatInputController : MonoBehaviour
             chatInputField.SetTextWithoutNotify(string.Empty);
         }
 
-        ClearError();
         suggestionController?.ClearSuggestions();
     }
 
@@ -113,6 +107,7 @@ public class ChatInputController : MonoBehaviour
         {
             ChatManager.instance.ChatAvailabilityChanged -= OnChatAvailabilityChanged;
             ChatManager.instance.ChatAvailabilityChanged += OnChatAvailabilityChanged;
+
             ChatManager.instance.SessionParticipantsChanged -= OnParticipantsChanged;
             ChatManager.instance.SessionParticipantsChanged += OnParticipantsChanged;
         }
@@ -173,28 +168,18 @@ public class ChatInputController : MonoBehaviour
 
         suppressValueChanged = false;
         suggestionController?.ClearSuggestions();
-        ClearError();
     }
 
     private void OnInputValueChanged(string value)
     {
-        if (suppressValueChanged)
+        if (!suppressValueChanged)
         {
-            return;
+            RefreshSuggestions(value);
         }
-
-        ClearError();
-        RefreshSuggestions(value);
     }
 
     private void OnInputSubmitted(string value)
     {
-        if (suggestionController != null && suggestionController.HasSuggestions)
-        {
-            AcceptSelectedSuggestion(false);
-            return;
-        }
-
         _ = SubmitAsync(value);
     }
 
@@ -210,19 +195,12 @@ public class ChatInputController : MonoBehaviour
             return;
         }
 
-        ClearError();
-
-        if (string.IsNullOrWhiteSpace(input))
-        {
-            ShowError("The chat message is empty.");
-            return;
-        }
-
         ChatManager chatManager = ChatManager.instance;
+        ChatErrorType inputError = ChatError.CheckInput(input, chatManager);
 
-        if (chatManager == null)
+        if (inputError != ChatErrorType.None)
         {
-            ShowError("Chat is not available.");
+            HandleChatError(inputError, ChatError.GetMessage(inputError));
             return;
         }
 
@@ -242,8 +220,21 @@ public class ChatInputController : MonoBehaviour
             return;
         }
 
-        ShowError(result?.failureMessage ?? "The chat message could not be sent.");
+        HandleChatError(
+            ChatErrorType.SendFailed,
+            string.IsNullOrWhiteSpace(result?.failureMessage) ? ChatError.GetMessage(ChatErrorType.SendFailed) : result.failureMessage);
+
         FocusInput();
+    }
+
+    public void HandleChatError(ChatErrorType errorType, string message)
+    {
+        if (errorType == ChatErrorType.None)
+        {
+            return;
+        }
+
+        // Future Chat error presentation routes through this method.
     }
 
     private void FocusInput()
@@ -265,47 +256,40 @@ public class ChatInputController : MonoBehaviour
     {
         suggestionController?.ClearSuggestions();
 
-        if (suggestionController == null || ChatManager.instance?.SessionConversation?.participants == null ||
-            !TryGetSuggestionContext(input, out string commandPrefix, out string query))
+        ChatManager chatManager = ChatManager.instance;
+
+        if (suggestionController == null || chatManager == null ||
+            !TryGetSuggestionContext(input, out string commandPrefix, out string query) ||
+            string.IsNullOrWhiteSpace(query))
         {
             return;
         }
 
-        string localUserId = UserManager.instance != null && UserManager.instance.HasUser ? UserManager.instance.UserId : string.Empty;
-        ChatConversationData session = ChatManager.instance.SessionConversation;
-        List<PlayerProfileData> profiles = BuildParticipantProfiles(session.participants);
-        List<ChatSuggestionData> suggestions = new List<ChatSuggestionData>();
-        string normalizedQuery = NormalizeQuery(query);
+        IReadOnlyList<ChatUserSuggestion> managerSuggestions = chatManager.GetUserSuggestions(input, 1);
 
-        for (int i = 0; i < session.participants.Count; i++)
+        if (managerSuggestions == null || managerSuggestions.Count == 0)
         {
-            ChatParticipantData participant = session.participants[i];
-
-            if (participant == null || !participant.IsValid || string.Equals(participant.userId, localUserId, StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            string displayName = PlayerDisplayIdentityResolver.GetDisplayName(
-                new PlayerProfileData(participant.userId, participant.playerName, participant.iconId), profiles);
-
-            if (!MatchesSuggestion(participant, displayName, normalizedQuery))
-            {
-                continue;
-            }
-
-            suggestions.Add(new ChatSuggestionData(participant, displayName));
+            return;
         }
 
-        suggestions.Sort((left, right) => CompareSuggestion(left, right, normalizedQuery));
+        List<ChatSuggestionData> suggestions = new List<ChatSuggestionData>(1);
+        ChatUserSuggestion source = managerSuggestions[0];
 
-        if (suggestions.Count > maximumSuggestions)
+        if (source != null && !string.IsNullOrWhiteSpace(source.userId) && !string.IsNullOrWhiteSpace(source.playerName))
         {
-            suggestions.RemoveRange(maximumSuggestions, suggestions.Count - maximumSuggestions);
+            suggestions.Add(new ChatSuggestionData
+            {
+                userId = source.userId,
+                playerName = source.playerName,
+                iconId = source.iconId,
+                displayName = source.displayName
+            });
         }
 
-        suggestionController.SetSuggestions(suggestions, suggestion => ApplySuggestion(commandPrefix, suggestion, false));
-        UpdateGhostSuggestion(commandPrefix, query);
+        suggestionController.SetSuggestions(
+            suggestions,
+            suggestion => ApplySuggestion(commandPrefix, suggestion, false),
+            suggestion => commandPrefix + suggestion.displayName);
     }
 
     private bool TryGetSuggestionContext(string input, out string commandPrefix, out string query)
@@ -366,9 +350,9 @@ public class ChatInputController : MonoBehaviour
             return false;
         }
 
+        string trimmed = arguments.TrimStart();
         ChatConversationData session = ChatManager.instance.SessionConversation;
         List<PlayerProfileData> profiles = BuildParticipantProfiles(session.participants);
-        string trimmed = arguments.TrimStart();
 
         for (int i = 0; i < session.participants.Count; i++)
         {
@@ -382,7 +366,8 @@ public class ChatInputController : MonoBehaviour
             string displayName = PlayerDisplayIdentityResolver.GetDisplayName(
                 new PlayerProfileData(participant.userId, participant.playerName, participant.iconId), profiles);
 
-            if (trimmed.Length > displayName.Length && trimmed.StartsWith(displayName, StringComparison.OrdinalIgnoreCase) &&
+            if (trimmed.Length > displayName.Length &&
+                trimmed.StartsWith(displayName, StringComparison.OrdinalIgnoreCase) &&
                 char.IsWhiteSpace(trimmed[displayName.Length]))
             {
                 return true;
@@ -414,112 +399,11 @@ public class ChatInputController : MonoBehaviour
         return profiles;
     }
 
-    private string NormalizeQuery(string query)
-    {
-        string normalized = query?.Trim() ?? string.Empty;
-        return normalized.StartsWith("#", StringComparison.Ordinal) ? normalized.Substring(1) : normalized;
-    }
-
-    private bool MatchesSuggestion(ChatParticipantData participant, string displayName, string query)
-    {
-        if (string.IsNullOrWhiteSpace(query))
-        {
-            return true;
-        }
-
-        return (participant.playerName ?? string.Empty).IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0 ||
-               (participant.userId ?? string.Empty).IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0 ||
-               (displayName ?? string.Empty).IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0;
-    }
-
-    private int CompareSuggestion(ChatSuggestionData left, ChatSuggestionData right, string query)
-    {
-        int leftRank = GetSuggestionRank(left, query);
-        int rightRank = GetSuggestionRank(right, query);
-
-        if (leftRank != rightRank)
-        {
-            return leftRank.CompareTo(rightRank);
-        }
-
-        return string.Compare(left?.playerName, right?.playerName, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private int GetSuggestionRank(ChatSuggestionData suggestion, string query)
-    {
-        if (suggestion == null)
-        {
-            return int.MaxValue;
-        }
-
-        if (string.IsNullOrWhiteSpace(query))
-        {
-            return 0;
-        }
-
-        if (string.Equals(suggestion.playerName, query, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(suggestion.userId, query, StringComparison.OrdinalIgnoreCase))
-        {
-            return 0;
-        }
-
-        if ((suggestion.playerName ?? string.Empty).StartsWith(query, StringComparison.OrdinalIgnoreCase))
-        {
-            return 1;
-        }
-
-        if ((suggestion.userId ?? string.Empty).StartsWith(query, StringComparison.OrdinalIgnoreCase))
-        {
-            return 2;
-        }
-
-        return 3;
-    }
-
-    private void UpdateGhostSuggestion(string commandPrefix, string query)
-    {
-        ChatSuggestionData selected = suggestionController?.SelectedSuggestion;
-
-        if (selected == null)
-        {
-            suggestionController?.SetGhostText(string.Empty);
-            return;
-        }
-
-        string typed = commandPrefix + (query ?? string.Empty);
-        string completed = commandPrefix + selected.displayName;
-
-        if (completed.StartsWith(typed, StringComparison.OrdinalIgnoreCase))
-        {
-            suggestionController.SetGhostText(completed);
-        }
-        else
-        {
-            suggestionController.SetGhostText(selected.displayName);
-        }
-    }
-
     private void HandleSuggestionKeyboardInput()
     {
         if (chatInputField == null || !chatInputField.isFocused || Keyboard.current == null ||
             suggestionController == null || !suggestionController.HasSuggestions)
         {
-            return;
-        }
-
-        if (Keyboard.current.upArrowKey.wasPressedThisFrame)
-        {
-            suggestionController.MoveSelection(-1);
-            RefreshGhostFromCurrentInput();
-            KeepInputFocused();
-            return;
-        }
-
-        if (Keyboard.current.downArrowKey.wasPressedThisFrame)
-        {
-            suggestionController.MoveSelection(1);
-            RefreshGhostFromCurrentInput();
-            KeepInputFocused();
             return;
         }
 
@@ -530,21 +414,11 @@ public class ChatInputController : MonoBehaviour
             return;
         }
 
-        if (Keyboard.current.spaceKey.wasPressedThisFrame && ShouldSpaceAcceptSuggestion())
+        if (Keyboard.current.spaceKey.wasPressedThisFrame)
         {
             AcceptSelectedSuggestion(true);
             KeepInputFocused();
         }
-    }
-
-    private bool ShouldSpaceAcceptSuggestion()
-    {
-        if (chatInputField == null || !TryGetSuggestionContext(chatInputField.text, out _, out string query))
-        {
-            return false;
-        }
-
-        return !string.IsNullOrWhiteSpace(query) && suggestionController?.SelectedSuggestion != null;
     }
 
     private void AcceptSelectedSuggestion(bool appendSpace)
@@ -555,8 +429,7 @@ public class ChatInputController : MonoBehaviour
             return;
         }
 
-        ChatSuggestionData selected = suggestionController.SelectedSuggestion.Clone();
-        ApplySuggestion(commandPrefix, selected, appendSpace);
+        ApplySuggestion(commandPrefix, suggestionController.SelectedSuggestion.Clone(), appendSpace);
     }
 
     private void ApplySuggestion(string commandPrefix, ChatSuggestionData suggestion, bool appendSpace)
@@ -575,26 +448,17 @@ public class ChatInputController : MonoBehaviour
         chatInputField.selectionFocusPosition = replacement.Length;
         suppressValueChanged = false;
 
+        ChatManager.instance?.RememberSuggestedUser(suggestion.userId);
         suggestionController?.ClearSuggestions();
         FocusInput();
     }
 
-    private void RefreshGhostFromCurrentInput()
-    {
-        if (chatInputField != null && TryGetSuggestionContext(chatInputField.text, out string commandPrefix, out string query))
-        {
-            UpdateGhostSuggestion(commandPrefix, query);
-        }
-    }
-
     private void KeepInputFocused()
     {
-        if (chatInputField == null)
+        if (chatInputField != null)
         {
-            return;
+            EventSystem.current?.SetSelectedGameObject(chatInputField.gameObject);
         }
-
-        EventSystem.current?.SetSelectedGameObject(chatInputField.gameObject);
     }
 
     #endregion
@@ -621,24 +485,6 @@ public class ChatInputController : MonoBehaviour
         }
 
         RefreshInteractableState();
-    }
-
-    private void ShowError(string message)
-    {
-        if (errorText != null)
-        {
-            errorText.text = message ?? string.Empty;
-            errorText.gameObject.SetActive(!string.IsNullOrWhiteSpace(errorText.text));
-        }
-    }
-
-    private void ClearError()
-    {
-        if (errorText != null)
-        {
-            errorText.text = string.Empty;
-            errorText.gameObject.SetActive(false);
-        }
     }
 
     #endregion

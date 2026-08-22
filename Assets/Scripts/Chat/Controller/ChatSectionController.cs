@@ -1,22 +1,29 @@
-using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 [DisallowMultipleComponent]
 public class ChatSectionController : MonoBehaviour
 {
+    #region Fields
+
     [Header("Controllers")]
     [SerializeField] private ChatTabController tabController;
-    [SerializeField] private ChatMessageScrollController sessionMessageController;
+    [SerializeField] private LobbyChatController lobbyChatController;
+    [SerializeField] private FriendsChatController friendsChatController;
     [SerializeField] private ChatInputController inputController;
 
-    [Header("Friends Shell")]
-    [SerializeField] private TMP_Text friendsEmptyStateText;
+    [Header("Shared State")]
+    [SerializeField] private Button newMessagesButton;
 
     private bool listenersRegistered;
 
+    #endregion
+
+    #region Unity Methods
+
     private void Awake()
     {
-        ClearRuntimeUi();
+        SetNewMessagesButtonVisible(false);
     }
 
     private void OnEnable()
@@ -25,18 +32,19 @@ public class ChatSectionController : MonoBehaviour
         InitializeView();
     }
 
+    private void Start()
+    {
+        RegisterListeners();
+    }
+
     private void OnDisable()
     {
         UnregisterListeners();
     }
 
-    private void ClearRuntimeUi()
-    {
-        if (friendsEmptyStateText != null)
-        {
-            friendsEmptyStateText.text = string.Empty;
-        }
-    }
+    #endregion
+
+    #region Setup
 
     private void InitializeView()
     {
@@ -48,10 +56,13 @@ public class ChatSectionController : MonoBehaviour
         }
 
         tabController?.SetSelectedTab(initialTab, false);
-        sessionMessageController?.RefreshFromCurrentSession();
+        lobbyChatController?.RefreshFromCurrentSession();
         ApplyTabState(initialTab, false);
-        RefreshAvailability();
     }
+
+    #endregion
+
+    #region Listeners
 
     private void RegisterListeners()
     {
@@ -65,11 +76,29 @@ public class ChatSectionController : MonoBehaviour
             tabController.TabChanged += OnTabChanged;
         }
 
+        ChatMessageScrollController lobbyMessageScroll = lobbyChatController?.MessageScrollController;
+
+        if (lobbyMessageScroll != null)
+        {
+            lobbyMessageScroll.NewMessagesStateChanged += OnNewMessagesStateChanged;
+        }
+
+        ChatMessageScrollController friendsMessageScroll = friendsChatController?.MessageScrollController;
+
+        if (friendsMessageScroll != null)
+        {
+            friendsMessageScroll.NewMessagesStateChanged += OnNewMessagesStateChanged;
+        }
+
+        if (newMessagesButton != null)
+        {
+            newMessagesButton.onClick.RemoveListener(OnNewMessagesClicked);
+            newMessagesButton.onClick.AddListener(OnNewMessagesClicked);
+        }
+
         if (ChatManager.instance != null)
         {
             ChatManager.instance.ChatAvailabilityChanged += OnChatAvailabilityChanged;
-            ChatManager.instance.ConversationJoined += OnConversationJoined;
-            ChatManager.instance.ConversationLeft += OnConversationLeft;
         }
 
         listenersRegistered = true;
@@ -87,15 +116,36 @@ public class ChatSectionController : MonoBehaviour
             tabController.TabChanged -= OnTabChanged;
         }
 
+        ChatMessageScrollController lobbyMessageScroll = lobbyChatController?.MessageScrollController;
+
+        if (lobbyMessageScroll != null)
+        {
+            lobbyMessageScroll.NewMessagesStateChanged -= OnNewMessagesStateChanged;
+        }
+
+        ChatMessageScrollController friendsMessageScroll = friendsChatController?.MessageScrollController;
+
+        if (friendsMessageScroll != null)
+        {
+            friendsMessageScroll.NewMessagesStateChanged -= OnNewMessagesStateChanged;
+        }
+
+        if (newMessagesButton != null)
+        {
+            newMessagesButton.onClick.RemoveListener(OnNewMessagesClicked);
+        }
+
         if (ChatManager.instance != null)
         {
             ChatManager.instance.ChatAvailabilityChanged -= OnChatAvailabilityChanged;
-            ChatManager.instance.ConversationJoined -= OnConversationJoined;
-            ChatManager.instance.ConversationLeft -= OnConversationLeft;
         }
 
         listenersRegistered = false;
     }
+
+    #endregion
+
+    #region Tabs
 
     private void OnTabChanged(ChatTabType tab)
     {
@@ -104,19 +154,8 @@ public class ChatSectionController : MonoBehaviour
 
     private void ApplyTabState(ChatTabType tab, bool saveSelection)
     {
-        bool sessionSelected = tab == ChatTabType.Session;
-
-        if (friendsEmptyStateText != null)
-        {
-            friendsEmptyStateText.text = sessionSelected ? string.Empty : "Friends chat is not available yet.";
-        }
-
-        if (sessionSelected)
-        {
-            sessionMessageController?.RefreshFromCurrentSession();
-        }
-
         RefreshAvailability();
+        RefreshNewMessagesButton();
 
         if (saveSelection)
         {
@@ -144,6 +183,48 @@ public class ChatSectionController : MonoBehaviour
         settingsManager.UpdateChatSettings(settings);
     }
 
+    #endregion
+
+    #region Shared New Messages
+
+    private void OnNewMessagesStateChanged(bool _)
+    {
+        RefreshNewMessagesButton();
+    }
+
+    private void OnNewMessagesClicked()
+    {
+        GetActiveMessageScroll()?.ScrollToBottom();
+        RefreshNewMessagesButton();
+    }
+
+    private void RefreshNewMessagesButton()
+    {
+        ChatMessageScrollController activeMessageScroll = GetActiveMessageScroll();
+        SetNewMessagesButtonVisible(activeMessageScroll != null && activeMessageScroll.HasNewMessagesBelow);
+    }
+
+    private ChatMessageScrollController GetActiveMessageScroll()
+    {
+        ChatTabType selectedTab = tabController != null ? tabController.SelectedTab : ChatTabType.Session;
+
+        return selectedTab == ChatTabType.Friends
+            ? friendsChatController?.MessageScrollController
+            : lobbyChatController?.MessageScrollController;
+    }
+
+    private void SetNewMessagesButtonVisible(bool visible)
+    {
+        if (newMessagesButton != null)
+        {
+            newMessagesButton.gameObject.SetActive(visible);
+        }
+    }
+
+    #endregion
+
+    #region Availability
+
     private void RefreshAvailability()
     {
         ChatManager chatManager = ChatManager.instance;
@@ -159,23 +240,5 @@ public class ChatSectionController : MonoBehaviour
         RefreshAvailability();
     }
 
-    private void OnConversationJoined(ChatConversationData conversation)
-    {
-        if (conversation != null && conversation.conversationType == ChatConversationType.Session)
-        {
-            sessionMessageController?.SetConversation(conversation);
-        }
-
-        RefreshAvailability();
-    }
-
-    private void OnConversationLeft(ChatConversationReference conversation)
-    {
-        if (conversation != null && conversation.conversationType == ChatConversationType.Session)
-        {
-            sessionMessageController?.ClearDisplay();
-        }
-
-        RefreshAvailability();
-    }
+    #endregion
 }

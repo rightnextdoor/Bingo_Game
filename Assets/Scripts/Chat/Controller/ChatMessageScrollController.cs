@@ -22,7 +22,6 @@ public class ChatMessageScrollController : MonoBehaviour
 
     [Header("State UI")]
     [SerializeField] private TMP_Text emptyChatText;
-    [SerializeField] private Button newMessagesButton;
 
     private readonly List<ChatMessageData> messages = new List<ChatMessageData>();
     private readonly List<MessagePresentation> presentations = new List<MessagePresentation>();
@@ -44,8 +43,13 @@ public class ChatMessageScrollController : MonoBehaviour
     private bool initialized;
     private bool suppressScrollRefresh;
     private bool followingBottom = true;
+    private bool hasNewMessagesBelow;
 
     public ChatConversationData Conversation => conversation;
+    public bool HasNewMessagesBelow => hasNewMessagesBelow;
+    public bool IsFollowingBottom => followingBottom;
+
+    public event Action<bool> NewMessagesStateChanged;
 
     #endregion
 
@@ -61,7 +65,17 @@ public class ChatMessageScrollController : MonoBehaviour
     private void OnEnable()
     {
         RegisterListeners();
-        RefreshFromCurrentSession();
+        RefreshUserSettings();
+
+        if (conversation != null)
+        {
+            RefreshConversation();
+        }
+    }
+
+    private void Start()
+    {
+        RegisterListeners();
     }
 
     private void OnDisable()
@@ -86,9 +100,7 @@ public class ChatMessageScrollController : MonoBehaviour
         float currentWidth = GetContentWidth();
         float currentTextSize = GetMessageTextSize();
         float currentSpacing = GetMessageSpacing();
-        UIThemeType currentThemeType = UIThemeManager.instance != null
-            ? UIThemeManager.instance.SelectedThemeType
-            : default;
+        UIThemeType currentThemeType = UIThemeManager.instance != null ? UIThemeManager.instance.SelectedThemeType : default;
 
         bool layoutChanged =
             Mathf.Abs(currentWidth - cachedContentWidth) > 0.5f ||
@@ -226,25 +238,10 @@ public class ChatMessageScrollController : MonoBehaviour
             scrollRect.onValueChanged.AddListener(OnScrollValueChanged);
         }
 
-        if (newMessagesButton != null)
-        {
-            newMessagesButton.onClick.RemoveListener(ScrollToBottom);
-            newMessagesButton.onClick.AddListener(ScrollToBottom);
-        }
-
         if (ChatManager.instance != null)
         {
             ChatManager.instance.ConversationMessagesChanged -= OnConversationMessagesChanged;
             ChatManager.instance.ConversationMessagesChanged += OnConversationMessagesChanged;
-
-            ChatManager.instance.SessionParticipantsChanged -= OnSessionParticipantsChanged;
-            ChatManager.instance.SessionParticipantsChanged += OnSessionParticipantsChanged;
-
-            ChatManager.instance.ConversationJoined -= OnConversationJoined;
-            ChatManager.instance.ConversationJoined += OnConversationJoined;
-
-            ChatManager.instance.ConversationLeft -= OnConversationLeft;
-            ChatManager.instance.ConversationLeft += OnConversationLeft;
         }
 
         if (ChatSettingsManager.instance != null)
@@ -267,17 +264,9 @@ public class ChatMessageScrollController : MonoBehaviour
             scrollRect.onValueChanged.RemoveListener(OnScrollValueChanged);
         }
 
-        if (newMessagesButton != null)
-        {
-            newMessagesButton.onClick.RemoveListener(ScrollToBottom);
-        }
-
         if (ChatManager.instance != null)
         {
             ChatManager.instance.ConversationMessagesChanged -= OnConversationMessagesChanged;
-            ChatManager.instance.SessionParticipantsChanged -= OnSessionParticipantsChanged;
-            ChatManager.instance.ConversationJoined -= OnConversationJoined;
-            ChatManager.instance.ConversationLeft -= OnConversationLeft;
         }
 
         if (ChatSettingsManager.instance != null)
@@ -297,21 +286,44 @@ public class ChatMessageScrollController : MonoBehaviour
 
     public void SetConversation(ChatConversationData newConversation)
     {
+        if (IsSameConversation(newConversation, conversation))
+        {
+            conversation = newConversation;
+            RefreshConversation();
+            return;
+        }
+
         conversation = newConversation;
         followingBottom = true;
+        SetHasNewMessagesBelow(false);
 
         RebuildMessageData();
         RebuildMessageLayout();
         ScrollToBottom();
     }
 
-    public void RefreshFromCurrentSession()
+    public void RefreshConversation()
     {
-        userSettings = ChatSettingsManager.instance != null && ChatSettingsManager.instance.IsReady
-            ? ChatSettingsManager.instance.CurrentSettings
-            : new ChatSettingsData();
+        if (conversation == null)
+        {
+            ClearDisplay();
+            return;
+        }
 
-        SetConversation(ChatManager.instance?.SessionConversation);
+        bool keepBottomPinned = followingBottom || IsAtBottom();
+        ViewAnchor anchor = keepBottomPinned ? default : CaptureViewAnchor();
+
+        RebuildMessageData();
+        RebuildMessageLayout();
+
+        if (keepBottomPinned)
+        {
+            ScrollToBottom();
+        }
+        else
+        {
+            RestoreViewAnchor(anchor);
+        }
     }
 
     public void ClearDisplay()
@@ -331,8 +343,6 @@ public class ChatMessageScrollController : MonoBehaviour
             emptyChatText.gameObject.SetActive(false);
         }
 
-        SetNewMessagesButtonVisible(false);
-
         if (content != null)
         {
             content.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, 0f);
@@ -340,6 +350,7 @@ public class ChatMessageScrollController : MonoBehaviour
         }
 
         followingBottom = true;
+        SetHasNewMessagesBelow(false);
     }
 
     private void RebuildMessageData()
@@ -373,6 +384,7 @@ public class ChatMessageScrollController : MonoBehaviour
         string previousNewestMessageId = GetNewestMessageId();
         ViewAnchor anchor = keepBottomPinned ? default : CaptureViewAnchor();
 
+        conversation = changedConversation;
         RebuildMessageData();
         RebuildMessageLayout();
 
@@ -389,48 +401,8 @@ public class ChatMessageScrollController : MonoBehaviour
 
         if (hasNewNewestMessage)
         {
-            SetNewMessagesButtonVisible(true);
+            SetHasNewMessagesBelow(true);
         }
-    }
-
-    private void OnSessionParticipantsChanged(ChatConversationData session)
-    {
-        if (!IsSameConversation(session, conversation))
-        {
-            return;
-        }
-
-        bool keepBottomPinned = followingBottom || IsAtBottom();
-        ViewAnchor anchor = keepBottomPinned ? default : CaptureViewAnchor();
-
-        RebuildMessageLayout();
-
-        if (keepBottomPinned)
-        {
-            ScrollToBottom();
-        }
-        else
-        {
-            RestoreViewAnchor(anchor);
-        }
-    }
-
-    private void OnConversationJoined(ChatConversationData joinedConversation)
-    {
-        if (joinedConversation != null && joinedConversation.conversationType == ChatConversationType.Session)
-        {
-            SetConversation(joinedConversation);
-        }
-    }
-
-    private void OnConversationLeft(ChatConversationReference leftConversation)
-    {
-        if (leftConversation == null || conversation == null || leftConversation.Key != conversation.Key)
-        {
-            return;
-        }
-
-        ClearDisplay();
     }
 
     private bool IsSameConversation(ChatConversationData first, ChatConversationData second)
@@ -468,12 +440,12 @@ public class ChatMessageScrollController : MonoBehaviour
             hasCachedThemeType = true;
         }
 
-        List<PlayerProfileData> sessionProfiles = BuildSessionProfiles();
+        List<PlayerProfileData> conversationProfiles = BuildConversationProfiles();
         ChatMessageRowUI measureView = GetMeasurementView();
 
         for (int i = 0; i < messages.Count; i++)
         {
-            MessagePresentation presentation = BuildPresentation(messages[i], i, sessionProfiles);
+            MessagePresentation presentation = BuildPresentation(messages[i], i, conversationProfiles);
             presentations.Add(presentation);
 
             float height = 1f;
@@ -499,7 +471,7 @@ public class ChatMessageScrollController : MonoBehaviour
         RefreshVisibleMessageViews();
     }
 
-    private MessagePresentation BuildPresentation(ChatMessageData message, int messageIndex, IReadOnlyList<PlayerProfileData> sessionProfiles)
+    private MessagePresentation BuildPresentation(ChatMessageData message, int messageIndex, IReadOnlyList<PlayerProfileData> conversationProfiles)
     {
         UIThemeBackgroundType backgroundType = messageIndex % 2 == 0
             ? UIThemeBackgroundType.ChatMessageRowA
@@ -507,14 +479,7 @@ public class ChatMessageScrollController : MonoBehaviour
 
         if (message == null)
         {
-            return new MessagePresentation(
-                null,
-                string.Empty,
-                backgroundType,
-                UIThemeTextType.Default,
-                false,
-                Color.white,
-                false);
+            return new MessagePresentation(null, string.Empty, backgroundType, UIThemeTextType.Default, false, Color.white, false);
         }
 
         if (message.isLocalSystemMessage)
@@ -529,11 +494,9 @@ public class ChatMessageScrollController : MonoBehaviour
                 false);
         }
 
-        string identity = ResolveMessageIdentity(message, sessionProfiles);
+        string identity = ResolveMessageIdentity(message, conversationProfiles);
         string displayText = $"{identity}: {message.message ?? string.Empty}";
-        Sprite icon = UIIconManager.instance != null
-            ? UIIconManager.instance.GetPlayerIconSpriteById(message.senderIconId)
-            : null;
+        Sprite icon = UIIconManager.instance != null ? UIIconManager.instance.GetPlayerIconSpriteById(message.senderIconId) : null;
 
         UIThemeTextType textType = GetMessageTextType(message);
         bool useColorOverride = TryGetColorOverride(textType, out Color colorOverride);
@@ -606,19 +569,18 @@ public class ChatMessageScrollController : MonoBehaviour
         }
     }
 
-    private List<PlayerProfileData> BuildSessionProfiles()
+    private List<PlayerProfileData> BuildConversationProfiles()
     {
         List<PlayerProfileData> profiles = new List<PlayerProfileData>();
-        ChatConversationData session = ChatManager.instance?.SessionConversation;
 
-        if (session?.participants == null)
+        if (conversation?.participants == null)
         {
             return profiles;
         }
 
-        for (int i = 0; i < session.participants.Count; i++)
+        for (int i = 0; i < conversation.participants.Count; i++)
         {
-            ChatParticipantData participant = session.participants[i];
+            ChatParticipantData participant = conversation.participants[i];
 
             if (participant != null && participant.IsValid)
             {
@@ -629,21 +591,26 @@ public class ChatMessageScrollController : MonoBehaviour
         return profiles;
     }
 
-    private string ResolveMessageIdentity(ChatMessageData message, IReadOnlyList<PlayerProfileData> sessionProfiles)
+    private string ResolveMessageIdentity(ChatMessageData message, IReadOnlyList<PlayerProfileData> conversationProfiles)
     {
         if (message == null)
         {
             return "Player";
         }
 
-        string playerName = string.IsNullOrWhiteSpace(message.senderPlayerName)
-            ? "Player"
-            : message.senderPlayerName.Trim();
+        string playerName = string.IsNullOrWhiteSpace(message.senderPlayerName) ? "Player" : message.senderPlayerName.Trim();
 
         PlayerProfileData profile = PlayerProfileRegistry.instance?.GetProfile(message.senderUserId) ??
                                     new PlayerProfileData(message.senderUserId, playerName, message.senderIconId);
 
-        return PlayerDisplayIdentityResolver.GetDisplayName(profile, sessionProfiles);
+        return PlayerDisplayIdentityResolver.GetDisplayName(profile, conversationProfiles);
+    }
+
+    private void RefreshUserSettings()
+    {
+        userSettings = ChatSettingsManager.instance != null && ChatSettingsManager.instance.IsReady
+            ? ChatSettingsManager.instance.CurrentSettings
+            : new ChatSettingsData();
     }
 
     private float GetMessageTextSize()
@@ -914,7 +881,7 @@ public class ChatMessageScrollController : MonoBehaviour
         if (IsAtBottom())
         {
             followingBottom = true;
-            SetNewMessagesButtonVisible(false);
+            SetHasNewMessagesBelow(false);
         }
         else
         {
@@ -945,7 +912,7 @@ public class ChatMessageScrollController : MonoBehaviour
         suppressScrollRefresh = false;
 
         followingBottom = true;
-        SetNewMessagesButtonVisible(false);
+        SetHasNewMessagesBelow(false);
         RefreshVisibleMessageViews();
     }
 
@@ -1046,31 +1013,34 @@ public class ChatMessageScrollController : MonoBehaviour
 
     private void UpdateEmptyState()
     {
-        bool isEmpty = messages.Count == 0;
+        bool showEmptyState = conversation != null && messages.Count == 0;
 
         if (emptyChatText != null)
         {
-            emptyChatText.text = isEmpty ? "No messages yet." : string.Empty;
-            emptyChatText.gameObject.SetActive(isEmpty);
-        }
-
-        if (isEmpty)
-        {
-            SetNewMessagesButtonVisible(false);
+            emptyChatText.text = showEmptyState ? "No messages yet." : string.Empty;
+            emptyChatText.gameObject.SetActive(showEmptyState);
         }
     }
 
-    private void SetNewMessagesButtonVisible(bool visible)
+    private void SetHasNewMessagesBelow(bool hasNewMessages)
     {
-        if (newMessagesButton != null)
+        if (hasNewMessagesBelow == hasNewMessages)
         {
-            newMessagesButton.gameObject.SetActive(visible);
+            return;
         }
+
+        hasNewMessagesBelow = hasNewMessages;
+        NewMessagesStateChanged?.Invoke(hasNewMessagesBelow);
     }
 
     private void OnUserChatSettingsChanged(ChatSettingsData settings)
     {
         userSettings = settings?.Clone() ?? new ChatSettingsData();
+
+        if (conversation == null)
+        {
+            return;
+        }
 
         bool keepBottomPinned = followingBottom || IsAtBottom();
         ViewAnchor anchor = keepBottomPinned ? default : CaptureViewAnchor();
@@ -1089,6 +1059,11 @@ public class ChatMessageScrollController : MonoBehaviour
 
     private void OnProfileChanged(PlayerProfileData _)
     {
+        if (conversation == null)
+        {
+            return;
+        }
+
         bool keepBottomPinned = followingBottom || IsAtBottom();
         ViewAnchor anchor = keepBottomPinned ? default : CaptureViewAnchor();
 

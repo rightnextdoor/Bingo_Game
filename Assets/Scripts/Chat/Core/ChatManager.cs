@@ -41,6 +41,7 @@ public class ChatManager : MonoBehaviour
     private string activeConversationKey = string.Empty;
     private string sessionConversationKey = string.Empty;
     private string lastPrivateMessageUserId = string.Empty;
+    private string lastSuggestedUserId = string.Empty;
     private string lastServiceError = string.Empty;
 
     public bool IsReady => isReady;
@@ -49,6 +50,7 @@ public class ChatManager : MonoBehaviour
     public bool HasSessionConversation => !string.IsNullOrWhiteSpace(sessionConversationKey) && conversations.ContainsKey(sessionConversationKey);
     public string LastServiceError => lastServiceError;
     public string LastPrivateMessageUserId => lastPrivateMessageUserId;
+    public string LastSuggestedUserId => lastSuggestedUserId;
     public IReadOnlyDictionary<string, ChatConversationData> Conversations => conversations;
     public IReadOnlyCollection<string> BlockedUserIds => blockedUserIds;
 
@@ -351,6 +353,7 @@ public class ChatManager : MonoBehaviour
         {
             sessionConversationKey = string.Empty;
             lastPrivateMessageUserId = string.Empty;
+            lastSuggestedUserId = string.Empty;
             ClearSessionBlocks();
             return true;
         }
@@ -362,6 +365,7 @@ public class ChatManager : MonoBehaviour
         {
             sessionConversationKey = string.Empty;
             lastPrivateMessageUserId = string.Empty;
+            lastSuggestedUserId = string.Empty;
             ClearSessionBlocks();
         }
 
@@ -861,6 +865,11 @@ public class ChatManager : MonoBehaviour
             lastPrivateMessageUserId = string.Empty;
         }
 
+        if (!string.IsNullOrWhiteSpace(lastSuggestedUserId) && !TryGetSessionParticipant(lastSuggestedUserId, out _))
+        {
+            lastSuggestedUserId = string.Empty;
+        }
+
         SessionParticipantsChanged?.Invoke(session);
     }
 
@@ -946,6 +955,11 @@ public class ChatManager : MonoBehaviour
             matches.Sort((left, right) => CompareSuggestionMatches(left, right, normalizedQuery));
         }
 
+        if (!string.IsNullOrWhiteSpace(lastSuggestedUserId))
+        {
+            MoveParticipantToFront(matches, lastSuggestedUserId);
+        }
+
         List<PlayerProfileData> relevantProfiles = BuildSessionProfileList();
         int resultCount = Mathf.Min(Mathf.Max(1, maximumResults), matches.Count);
 
@@ -959,6 +973,18 @@ public class ChatManager : MonoBehaviour
         }
 
         return suggestions;
+    }
+
+    public bool RememberSuggestedUser(string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId) || IsCurrentLocalUser(userId) ||
+            !TryGetSessionParticipant(userId, out ChatParticipantData participant) || participant == null)
+        {
+            return false;
+        }
+
+        lastSuggestedUserId = participant.userId;
+        return true;
     }
 
     public bool TryResolveCommandTargetAndRemainder(string arguments, bool requireRemainder, out ChatParticipantData participant, out string remainder)
@@ -1747,6 +1773,7 @@ public class ChatManager : MonoBehaviour
         activeConversationKey = string.Empty;
         sessionConversationKey = string.Empty;
         lastPrivateMessageUserId = string.Empty;
+        lastSuggestedUserId = string.Empty;
         ClearSessionBlocks();
 
         if (hadConversations)

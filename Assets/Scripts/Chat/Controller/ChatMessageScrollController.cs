@@ -390,8 +390,12 @@ public class ChatMessageScrollController : MonoBehaviour
 
         string currentNewestMessageId = GetNewestMessageId();
         bool hasNewNewestMessage = !string.Equals(previousNewestMessageId, currentNewestMessageId, StringComparison.Ordinal);
+        bool currentUserSentNewestMessage = hasNewNewestMessage &&
+                                            messages.Count > 0 &&
+                                            messages[messages.Count - 1] != null &&
+                                            messages[messages.Count - 1].isFromCurrentUser;
 
-        if (keepBottomPinned)
+        if (keepBottomPinned || currentUserSentNewestMessage)
         {
             ScrollToBottom();
             return;

@@ -393,8 +393,6 @@ public class ChatSettingsController : MonoBehaviour
 
         if (workingData != null && ChatSettingsManager.instance != null && ChatSettingsManager.instance.IsReady)
         {
-            ChatSettingsData latest = ChatSettingsManager.instance.CurrentSettings;
-            workingData.lastSelectedChatTab = latest.lastSelectedChatTab;
             ChatSettingsManager.instance.UpdateChatSettings(workingData);
         }
 

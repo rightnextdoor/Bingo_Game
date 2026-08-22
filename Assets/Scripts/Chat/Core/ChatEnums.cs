@@ -5,12 +5,6 @@ public enum ChatConversationType
     FriendGroup
 }
 
-public enum ChatTabType
-{
-    Session,
-    Friends
-}
-
 public enum ChatCommandAvailability
 {
     All,

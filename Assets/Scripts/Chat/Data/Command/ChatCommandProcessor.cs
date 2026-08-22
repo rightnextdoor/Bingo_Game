@@ -60,7 +60,6 @@ public class ChatCommandProcessor : MonoBehaviour
                 return chatManager.ToggleHelp(commandCatalog.BuildHelpMessage());
 
             case "msg":
-            case "reply":
                 return await ProcessPrivateMessageAsync(arguments);
 
             case "block":

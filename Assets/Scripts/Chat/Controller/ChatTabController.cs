@@ -3,66 +3,110 @@ using UnityEngine;
 using UnityEngine.UI;
 
 [DisallowMultipleComponent]
-public class ChatTabController : MonoBehaviour, IUIThemeTarget
+public class ChatTabController : MonoBehaviour
 {
+    #region Fields
+
     [Header("Tabs")]
     [SerializeField] private Button lobbyTabButton;
-    [SerializeField] private UIThemeButton lobbyTabTheme;
     [SerializeField] private Button friendsTabButton;
-    [SerializeField] private UIThemeButton friendsTabTheme;
 
     [Header("Content")]
     [SerializeField] private GameObject lobbyChatContent;
     [SerializeField] private GameObject friendsContent;
 
-    private UIThemeManager themeManager;
-    private ChatTabType selectedTab = ChatTabType.Session;
+    private bool lobbySelected = true;
 
-    public ChatTabType SelectedTab => selectedTab;
-    public event Action<ChatTabType> TabChanged;
+    public bool IsLobbySelected => lobbySelected;
+    public bool IsFriendsSelected => !lobbySelected;
+
+    public event Action SelectionChanged;
+
+    #endregion
+
+    #region Unity Methods
 
     private void Awake()
     {
-        ClearContentState();
+        ApplySelection(false);
     }
 
     private void OnEnable()
     {
         RegisterListeners();
-        RegisterWithThemeManager();
-        ApplySelectedTab(false);
+        ApplySelection(false);
     }
 
     private void OnDisable()
     {
         UnregisterListeners();
-        UnregisterFromThemeManager();
     }
 
-    public void SetSelectedTab(ChatTabType tab, bool notify = true)
+    #endregion
+
+    #region Selection
+
+    public void SelectLobby(bool notify = true)
     {
-        if (!Enum.IsDefined(typeof(ChatTabType), tab))
+        SetLobbySelected(true, notify);
+    }
+
+    public void SelectFriends(bool notify = true)
+    {
+        SetLobbySelected(false, notify);
+    }
+
+    public void SetLobbySelected(bool selected, bool notify = true)
+    {
+        bool changed = lobbySelected != selected;
+        lobbySelected = selected;
+        ApplySelection(notify && changed);
+    }
+
+    private void ApplySelection(bool notify)
+    {
+        if (lobbyTabButton != null)
         {
-            tab = ChatTabType.Session;
+            lobbyTabButton.interactable = !lobbySelected;
         }
 
-        bool changed = selectedTab != tab;
-        selectedTab = tab;
-        ApplySelectedTab(notify && changed);
+        if (friendsTabButton != null)
+        {
+            friendsTabButton.interactable = lobbySelected;
+        }
+
+        if (lobbyChatContent != null)
+        {
+            lobbyChatContent.SetActive(lobbySelected);
+        }
+
+        if (friendsContent != null)
+        {
+            friendsContent.SetActive(!lobbySelected);
+        }
+
+        if (notify)
+        {
+            SelectionChanged?.Invoke();
+        }
     }
+
+    #endregion
+
+    #region UI Events
 
     private void RegisterListeners()
     {
         if (lobbyTabButton != null)
         {
-            lobbyTabButton.onClick.RemoveListener(SelectLobbyTab);
-            lobbyTabButton.onClick.AddListener(SelectLobbyTab);
+            lobbyTabButton.onClick.RemoveListener(OnLobbyClicked);
+            lobbyTabButton.onClick.AddListener(OnLobbyClicked);
         }
 
         if (friendsTabButton != null)
         {
-            friendsTabButton.onClick.RemoveListener(SelectFriendsTab);
-            friendsTabButton.onClick.AddListener(SelectFriendsTab);
+            friendsTabButton.onClick.RemoveListener(OnFriendsClicked);
+            friendsTabButton.onClick.AddListener(OnFriendsClicked);
         }
     }
 
@@ -70,125 +114,24 @@ public class ChatTabController : MonoBehaviour, IUIThemeTarget
     {
         if (lobbyTabButton != null)
         {
-            lobbyTabButton.onClick.RemoveListener(SelectLobbyTab);
+            lobbyTabButton.onClick.RemoveListener(OnLobbyClicked);
         }
 
         if (friendsTabButton != null)
         {
-            friendsTabButton.onClick.RemoveListener(SelectFriendsTab);
+            friendsTabButton.onClick.RemoveListener(OnFriendsClicked);
         }
     }
 
-    private void SelectLobbyTab()
+    private void OnLobbyClicked()
     {
-        SetSelectedTab(ChatTabType.Session);
+        SelectLobby();
     }
 
-    private void SelectFriendsTab()
+    private void OnFriendsClicked()
     {
-        SetSelectedTab(ChatTabType.Friends);
+        SelectFriends();
     }
 
-    private void ApplySelectedTab(bool notify)
-    {
-        bool showLobby = selectedTab == ChatTabType.Session;
-
-        if (lobbyChatContent != null)
-        {
-            lobbyChatContent.SetActive(showLobby);
-        }
-
-        if (friendsContent != null)
-        {
-            friendsContent.SetActive(!showLobby);
-        }
-
-        ReapplyTheme();
-
-        if (notify)
-        {
-            TabChanged?.Invoke(selectedTab);
-        }
-    }
-
-    private void ClearContentState()
-    {
-        if (lobbyChatContent != null)
-        {
-            lobbyChatContent.SetActive(false);
-        }
-
-        if (friendsContent != null)
-        {
-            friendsContent.SetActive(false);
-        }
-    }
-
-    private void RegisterWithThemeManager()
-    {
-        themeManager ??= UIThemeManager.instance;
-        themeManager?.Register(this);
-    }
-
-    private void UnregisterFromThemeManager()
-    {
-        if (themeManager != null)
-        {
-            themeManager.Unregister(this);
-            themeManager = null;
-        }
-    }
-
-    public void ReapplyTheme()
-    {
-        lobbyTabTheme?.ReapplyTheme();
-        friendsTabTheme?.ReapplyTheme();
-
-        themeManager ??= UIThemeManager.instance;
-
-        if (themeManager == null)
-        {
-            return;
-        }
-
-        UIThemeStyle style = themeManager.ApplyTheme(UIThemeSectionType.Button, UIThemeButtonType.ChatTab) as UIThemeStyle;
-
-        if (style == null)
-        {
-            return;
-        }
-
-        ApplyPersistentSelectedColor(lobbyTabButton, selectedTab == ChatTabType.Session, style);
-        ApplyPersistentSelectedColor(friendsTabButton, selectedTab == ChatTabType.Friends, style);
-    }
-
-    private void ApplyPersistentSelectedColor(Button button, bool selected, UIThemeStyle style)
-    {
-        if (button == null || style == null)
-        {
-            return;
-        }
-
-        ColorBlock colors = button.colors;
-
-        if (selected)
-        {
-            colors.normalColor = style.SelectedColor;
-            colors.highlightedColor = style.SelectedColor;
-            colors.pressedColor = style.PressedColor;
-            colors.selectedColor = style.SelectedColor;
-        }
-        else
-        {
-            colors.normalColor = style.NormalColor;
-            colors.highlightedColor = style.HighlightedColor;
-            colors.pressedColor = style.PressedColor;
-            colors.selectedColor = style.SelectedColor;
-        }
-
-        colors.disabledColor = style.DisabledColor;
-        colors.colorMultiplier = style.ColorMultiplier;
-        colors.fadeDuration = style.FadeDuration;
-        button.colors = colors;
-    }
+    #endregion
 }

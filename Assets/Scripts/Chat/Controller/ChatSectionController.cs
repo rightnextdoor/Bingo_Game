@@ -48,16 +48,11 @@ public class ChatSectionController : MonoBehaviour
 
     private void InitializeView()
     {
-        ChatTabType initialTab = ChatTabType.Session;
-
-        if (ChatSettingsManager.instance != null && ChatSettingsManager.instance.IsReady)
-        {
-            initialTab = ChatSettingsManager.instance.CurrentSettings.lastSelectedChatTab;
-        }
-
-        tabController?.SetSelectedTab(initialTab, false);
+        tabController?.SelectLobby(false);
         lobbyChatController?.RefreshFromCurrentSession();
-        ApplyTabState(initialTab, false);
+
+        RefreshAvailability();
+        RefreshNewMessagesButton();
     }
 
     #endregion
@@ -73,7 +68,7 @@ public class ChatSectionController : MonoBehaviour
 
         if (tabController != null)
         {
-            tabController.TabChanged += OnTabChanged;
+            tabController.SelectionChanged += OnTabSelectionChanged;
         }
 
         ChatMessageScrollController lobbyMessageScroll = lobbyChatController?.MessageScrollController;
@@ -113,7 +108,7 @@ public class ChatSectionController : MonoBehaviour
 
         if (tabController != null)
         {
-            tabController.TabChanged -= OnTabChanged;
+            tabController.SelectionChanged -= OnTabSelectionChanged;
         }
 
         ChatMessageScrollController lobbyMessageScroll = lobbyChatController?.MessageScrollController;
@@ -147,40 +142,10 @@ public class ChatSectionController : MonoBehaviour
 
     #region Tabs
 
-    private void OnTabChanged(ChatTabType tab)
-    {
-        ApplyTabState(tab, true);
-    }
-
-    private void ApplyTabState(ChatTabType tab, bool saveSelection)
+    private void OnTabSelectionChanged()
     {
         RefreshAvailability();
         RefreshNewMessagesButton();
-
-        if (saveSelection)
-        {
-            SaveSelectedTab(tab);
-        }
-    }
-
-    private void SaveSelectedTab(ChatTabType tab)
-    {
-        ChatSettingsManager settingsManager = ChatSettingsManager.instance;
-
-        if (settingsManager == null || !settingsManager.IsReady)
-        {
-            return;
-        }
-
-        ChatSettingsData settings = settingsManager.CurrentSettings;
-
-        if (settings.lastSelectedChatTab == tab)
-        {
-            return;
-        }
-
-        settings.lastSelectedChatTab = tab;
-        settingsManager.UpdateChatSettings(settings);
     }
 
     #endregion
@@ -206,11 +171,11 @@ public class ChatSectionController : MonoBehaviour
 
     private ChatMessageScrollController GetActiveMessageScroll()
     {
-        ChatTabType selectedTab = tabController != null ? tabController.SelectedTab : ChatTabType.Session;
+        bool lobbySelected = tabController == null || tabController.IsLobbySelected;
 
-        return selectedTab == ChatTabType.Friends
-            ? friendsChatController?.MessageScrollController
-            : lobbyChatController?.MessageScrollController;
+        return lobbySelected
+            ? lobbyChatController?.MessageScrollController
+            : friendsChatController?.MessageScrollController;
     }
 
     private void SetNewMessagesButtonVisible(bool visible)
@@ -228,8 +193,8 @@ public class ChatSectionController : MonoBehaviour
     private void RefreshAvailability()
     {
         ChatManager chatManager = ChatManager.instance;
-        bool sessionSelected = tabController == null || tabController.SelectedTab == ChatTabType.Session;
-        bool canSend = sessionSelected && chatManager != null && chatManager.IsChatEnabled &&
+        bool lobbySelected = tabController == null || tabController.IsLobbySelected;
+        bool canSend = lobbySelected && chatManager != null && chatManager.IsChatEnabled &&
                        chatManager.IsChatAvailable && chatManager.HasSessionConversation;
 
         inputController?.SetInteractable(canSend);

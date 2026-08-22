@@ -15,8 +15,6 @@ public class ChatSettingsData
     public bool overridePrivateMessageColor;
     public Color privateMessageColor = Color.white;
 
-    public ChatTabType lastSelectedChatTab = ChatTabType.Session;
-
     public ChatSettingsData()
     {
     }
@@ -38,8 +36,6 @@ public class ChatSettingsData
 
         overridePrivateMessageColor = other.overridePrivateMessageColor;
         privateMessageColor = other.privateMessageColor;
-
-        lastSelectedChatTab = other.lastSelectedChatTab;
     }
 
     public ChatSettingsData Clone()

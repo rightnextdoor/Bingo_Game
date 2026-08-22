@@ -352,9 +352,8 @@ public class ChatRoomBlockController : MonoBehaviour
 
         bool enterPressed = Keyboard.current.enterKey.wasPressedThisFrame || Keyboard.current.numpadEnterKey.wasPressedThisFrame;
         bool tabPressed = Keyboard.current.tabKey.wasPressedThisFrame;
-        bool spacePressed = Keyboard.current.spaceKey.wasPressedThisFrame;
 
-        if (suggestionController.HasSuggestions && (enterPressed || tabPressed || spacePressed))
+        if (suggestionController.HasSuggestions && (enterPressed || tabPressed))
         {
             suggestionController.AcceptSelected();
             KeepSearchFocused();

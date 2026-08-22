@@ -204,6 +204,8 @@ public class ChatInputController : MonoBehaviour
             return;
         }
 
+        RememberCompletedCommand(input);
+
         submitting = true;
         RefreshInteractableState();
         suggestionController?.ClearSuggestions();
@@ -258,9 +260,162 @@ public class ChatInputController : MonoBehaviour
 
         ChatManager chatManager = ChatManager.instance;
 
-        if (suggestionController == null || chatManager == null ||
-            !TryGetSuggestionContext(input, out string commandPrefix, out string query) ||
-            string.IsNullOrWhiteSpace(query))
+        if (suggestionController == null || chatManager == null)
+        {
+            return;
+        }
+
+        commandCatalog ??= chatManager.GetComponent<ChatCommandCatalog>();
+
+        if (commandCatalog == null || !commandCatalog.IsReady)
+        {
+            return;
+        }
+
+        if (TryRefreshCommandSuggestion(input, chatManager))
+        {
+            return;
+        }
+
+        RefreshUserSuggestion(input, chatManager);
+    }
+
+    private bool TryRefreshCommandSuggestion(string input, ChatManager chatManager)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return false;
+        }
+
+        string trimmedStart = input.TrimStart();
+
+        if (!trimmedStart.StartsWith("/", StringComparison.Ordinal) || trimmedStart.IndexOf(' ') >= 0)
+        {
+            return false;
+        }
+
+        string leadingWhitespace = input.Substring(0, input.Length - trimmedStart.Length);
+        string commandQuery = trimmedStart.Substring(1);
+        ChatCommandDefinition command = FindCommandSuggestion(commandQuery, chatManager);
+
+        if (command == null)
+        {
+            return true;
+        }
+
+        string completedText = leadingWhitespace + "/" + command.name;
+
+        if (string.Equals(input, completedText, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        suggestionController.SetTextSuggestion(
+            completedText,
+            () => ApplyCommandSuggestion(leadingWhitespace, command));
+
+        return true;
+    }
+
+    private ChatCommandDefinition FindCommandSuggestion(string query, ChatManager chatManager)
+    {
+        string preferredCommandName = chatManager?.LastSuggestedCommandName ?? string.Empty;
+
+        if (!string.IsNullOrWhiteSpace(preferredCommandName))
+        {
+            ChatCommandDefinition preferredCommand = commandCatalog.FindCommand(preferredCommandName);
+
+            if (preferredCommand != null && IsCommandAvailable(preferredCommand, chatManager) &&
+                (string.IsNullOrEmpty(query) || preferredCommand.name.StartsWith(query, StringComparison.OrdinalIgnoreCase)))
+            {
+                return preferredCommand;
+            }
+        }
+
+        if (string.IsNullOrEmpty(query))
+        {
+            return null;
+        }
+
+        IReadOnlyList<ChatCommandDefinition> commands = commandCatalog.Commands;
+
+        for (int i = 0; i < commands.Count; i++)
+        {
+            ChatCommandDefinition command = commands[i];
+
+            if (command == null || !command.enabled || !IsCommandAvailable(command, chatManager))
+            {
+                continue;
+            }
+
+            if (command.name.StartsWith(query, StringComparison.OrdinalIgnoreCase))
+            {
+                return command;
+            }
+        }
+
+        return null;
+    }
+
+    private bool IsCommandAvailable(ChatCommandDefinition command, ChatManager chatManager)
+    {
+        if (command == null)
+        {
+            return false;
+        }
+
+        switch (command.availability)
+        {
+            case ChatCommandAvailability.All:
+                return true;
+
+            case ChatCommandAvailability.SessionOnly:
+                return chatManager != null && chatManager.HasSessionConversation;
+
+            case ChatCommandAvailability.FriendsOnly:
+                return false;
+
+            default:
+                return false;
+        }
+    }
+
+    private void ApplyCommandSuggestion(string leadingWhitespace, ChatCommandDefinition command)
+    {
+        if (chatInputField == null || command == null)
+        {
+            return;
+        }
+
+        string replacement = leadingWhitespace + "/" + command.name;
+
+        if (command.targetsSessionUser)
+        {
+            replacement += " ";
+        }
+
+        SetInputWithoutNotify(replacement);
+        ChatManager.instance?.RememberSuggestedCommand(command.name);
+        suggestionController?.ClearSuggestions();
+
+        if (command.targetsSessionUser)
+        {
+            RefreshSuggestions(replacement);
+        }
+
+        FocusInput();
+    }
+
+    private void RefreshUserSuggestion(string input, ChatManager chatManager)
+    {
+        if (!TryGetUserSuggestionContext(input, out ChatCommandDefinition command, out string commandPrefix, out string query))
+        {
+            return;
+        }
+
+        ChatManager.instance?.RememberSuggestedCommand(command.name);
+
+        if (string.IsNullOrWhiteSpace(query) && string.IsNullOrWhiteSpace(chatManager.LastSuggestedUserId))
         {
             return;
         }
@@ -272,39 +427,41 @@ public class ChatInputController : MonoBehaviour
             return;
         }
 
-        List<ChatSuggestionData> suggestions = new List<ChatSuggestionData>(1);
         ChatUserSuggestion source = managerSuggestions[0];
 
-        if (source != null && !string.IsNullOrWhiteSpace(source.userId) && !string.IsNullOrWhiteSpace(source.playerName))
+        if (source == null || string.IsNullOrWhiteSpace(source.userId) || string.IsNullOrWhiteSpace(source.playerName))
         {
-            suggestions.Add(new ChatSuggestionData
+            return;
+        }
+
+        List<ChatSuggestionData> suggestions = new List<ChatSuggestionData>(1)
+        {
+            new ChatSuggestionData
             {
                 userId = source.userId,
                 playerName = source.playerName,
                 iconId = source.iconId,
                 displayName = source.displayName
-            });
-        }
+            }
+        };
 
         suggestionController.SetSuggestions(
             suggestions,
-            suggestion => ApplySuggestion(commandPrefix, suggestion, false),
+            suggestion => ApplyUserSuggestion(commandPrefix, suggestion),
             suggestion => commandPrefix + suggestion.displayName);
     }
 
-    private bool TryGetSuggestionContext(string input, out string commandPrefix, out string query)
+    private bool TryGetUserSuggestionContext(
+        string input,
+        out ChatCommandDefinition command,
+        out string commandPrefix,
+        out string query)
     {
+        command = null;
         commandPrefix = string.Empty;
         query = string.Empty;
 
         if (string.IsNullOrWhiteSpace(input))
-        {
-            return false;
-        }
-
-        commandCatalog ??= ChatManager.instance != null ? ChatManager.instance.GetComponent<ChatCommandCatalog>() : null;
-
-        if (commandCatalog == null || !commandCatalog.IsReady)
         {
             return false;
         }
@@ -324,14 +481,15 @@ public class ChatInputController : MonoBehaviour
         }
 
         string commandToken = trimmedStart.Substring(1, commandSpaceIndex - 1);
-        ChatCommandDefinition command = commandCatalog.FindCommand(commandToken);
+        command = commandCatalog.FindCommand(commandToken);
 
-        if (command == null || !command.targetsSessionUser)
+        if (command == null || !command.targetsSessionUser || !IsCommandAvailable(command, ChatManager.instance))
         {
             return false;
         }
 
-        commandPrefix = trimmedStart.Substring(0, commandSpaceIndex + 1);
+        string leadingWhitespace = input.Substring(0, input.Length - trimmedStart.Length);
+        commandPrefix = leadingWhitespace + trimmedStart.Substring(0, commandSpaceIndex + 1);
         string arguments = trimmedStart.Substring(commandSpaceIndex + 1);
 
         if (HasResolvedTargetWithRemainder(arguments))
@@ -409,48 +567,72 @@ public class ChatInputController : MonoBehaviour
 
         if (Keyboard.current.tabKey.wasPressedThisFrame)
         {
-            AcceptSelectedSuggestion(false);
-            KeepInputFocused();
-            return;
-        }
-
-        if (Keyboard.current.spaceKey.wasPressedThisFrame)
-        {
-            AcceptSelectedSuggestion(true);
+            suggestionController.AcceptSelected();
             KeepInputFocused();
         }
     }
 
-    private void AcceptSelectedSuggestion(bool appendSpace)
-    {
-        if (chatInputField == null || suggestionController?.SelectedSuggestion == null ||
-            !TryGetSuggestionContext(chatInputField.text, out string commandPrefix, out _))
-        {
-            return;
-        }
-
-        ApplySuggestion(commandPrefix, suggestionController.SelectedSuggestion.Clone(), appendSpace);
-    }
-
-    private void ApplySuggestion(string commandPrefix, ChatSuggestionData suggestion, bool appendSpace)
+    private void ApplyUserSuggestion(string commandPrefix, ChatSuggestionData suggestion)
     {
         if (chatInputField == null || suggestion == null)
         {
             return;
         }
 
-        string replacement = commandPrefix + suggestion.displayName + (appendSpace ? " " : string.Empty);
+        string replacement = commandPrefix + suggestion.displayName;
 
-        suppressValueChanged = true;
-        chatInputField.SetTextWithoutNotify(replacement);
-        chatInputField.caretPosition = replacement.Length;
-        chatInputField.selectionAnchorPosition = replacement.Length;
-        chatInputField.selectionFocusPosition = replacement.Length;
-        suppressValueChanged = false;
-
+        SetInputWithoutNotify(replacement);
         ChatManager.instance?.RememberSuggestedUser(suggestion.userId);
         suggestionController?.ClearSuggestions();
         FocusInput();
+    }
+
+    private void SetInputWithoutNotify(string text)
+    {
+        if (chatInputField == null)
+        {
+            return;
+        }
+
+        string value = text ?? string.Empty;
+
+        suppressValueChanged = true;
+        chatInputField.SetTextWithoutNotify(value);
+        chatInputField.caretPosition = value.Length;
+        chatInputField.selectionAnchorPosition = value.Length;
+        chatInputField.selectionFocusPosition = value.Length;
+        suppressValueChanged = false;
+    }
+
+    private void RememberCompletedCommand(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return;
+        }
+
+        commandCatalog ??= ChatManager.instance != null ? ChatManager.instance.GetComponent<ChatCommandCatalog>() : null;
+
+        if (commandCatalog == null || !commandCatalog.IsReady)
+        {
+            return;
+        }
+
+        string trimmed = input.TrimStart();
+
+        if (!trimmed.StartsWith("/", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        int commandEndIndex = trimmed.IndexOf(' ');
+        string commandToken = commandEndIndex < 0 ? trimmed.Substring(1) : trimmed.Substring(1, commandEndIndex - 1);
+        ChatCommandDefinition command = commandCatalog.FindCommand(commandToken);
+
+        if (command != null)
+        {
+            ChatManager.instance?.RememberSuggestedCommand(command.name);
+        }
     }
 
     private void KeepInputFocused()

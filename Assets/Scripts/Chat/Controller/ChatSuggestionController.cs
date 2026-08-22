@@ -24,9 +24,15 @@ public class ChatSuggestionController : MonoBehaviour
 
     private Action<ChatSuggestionData> suggestionAccepted;
     private Func<ChatSuggestionData, string> completionTextProvider;
+    private Action textSuggestionAccepted;
+    private string textSuggestion = string.Empty;
     private int selectedIndex = -1;
+    private bool inputTextHidden;
+    private float inputTextCanvasAlpha = 1f;
+    private bool hasInputTextBaseMargin;
+    private Vector4 inputTextBaseMargin;
 
-    public bool HasSuggestions => suggestions.Count > 0;
+    public bool HasSuggestions => suggestions.Count > 0 || !string.IsNullOrWhiteSpace(textSuggestion);
     public bool HasPanel => suggestionPanel != null && scrollRect != null && content != null && rowPrefab != null;
     public int SelectedIndex => selectedIndex;
     public ChatSuggestionData SelectedSuggestion =>
@@ -38,8 +44,15 @@ public class ChatSuggestionController : MonoBehaviour
 
     private void Awake()
     {
+        CaptureInputTextBaseMargin();
         ApplyPlaceholderStyle();
         ClearSuggestions();
+    }
+
+    private void OnDisable()
+    {
+        RestoreInputTextLayout();
+        ShowInputText();
     }
 
     #endregion
@@ -88,14 +101,32 @@ public class ChatSuggestionController : MonoBehaviour
         RefreshSuggestionText();
     }
 
+    public void SetTextSuggestion(string completedText, Action onAccepted)
+    {
+        ClearSuggestions();
+
+        if (string.IsNullOrWhiteSpace(completedText))
+        {
+            return;
+        }
+
+        textSuggestion = completedText;
+        textSuggestionAccepted = onAccepted;
+        RefreshSuggestionText();
+    }
+
     public void ClearSuggestions()
     {
         suggestions.Clear();
         selectedIndex = -1;
         suggestionAccepted = null;
         completionTextProvider = null;
+        textSuggestionAccepted = null;
+        textSuggestion = string.Empty;
 
         SetSuggestionText(string.Empty);
+        RestoreInputTextLayout();
+        ShowInputText();
         ClearSuggestionRows();
 
         if (suggestionPanel != null)
@@ -107,37 +138,234 @@ public class ChatSuggestionController : MonoBehaviour
     public void RefreshSuggestionText()
     {
         ApplyPlaceholderStyle();
+        RestoreInputTextLayout();
 
-        ChatSuggestionData selected = SelectedSuggestion;
-
-        if (inputField == null || suggestionText == null || selected == null || completionTextProvider == null)
+        if (inputField == null || suggestionText == null)
         {
-            SetSuggestionText(string.Empty);
+            ClearSuggestionText();
             return;
         }
 
         string typedText = inputField.text ?? string.Empty;
-        string completedText = completionTextProvider(selected) ?? string.Empty;
+        string completedText = textSuggestion;
 
-        if (string.IsNullOrWhiteSpace(completedText) ||
-            completedText.Length <= typedText.Length ||
-            !completedText.StartsWith(typedText, StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(completedText))
         {
-            SetSuggestionText(string.Empty);
+            ChatSuggestionData selected = SelectedSuggestion;
+
+            if (selected == null || completionTextProvider == null)
+            {
+                ClearSuggestionText();
+                return;
+            }
+
+            completedText = completionTextProvider(selected) ?? string.Empty;
+        }
+
+        if (!TryBuildSuggestionText(typedText, completedText, out string renderedText, out int visualCaretCharacterIndex))
+        {
+            ClearSuggestionText();
             return;
         }
 
-        string remainingText = completedText.Substring(typedText.Length);
-        suggestionText.richText = true;
-        suggestionText.text = $"<color=#FFFFFF00><noparse>{typedText}</noparse></color><noparse>{remainingText}</noparse>";
+        SetSuggestionText(renderedText);
+        MoveInputCaretToSuggestionPosition(visualCaretCharacterIndex);
+        HideInputText();
+    }
+
+    private bool TryBuildSuggestionText(
+        string typedText,
+        string completedText,
+        out string renderedText,
+        out int visualCaretCharacterIndex)
+    {
+        renderedText = string.Empty;
+        visualCaretCharacterIndex = 0;
+
+        if (string.IsNullOrWhiteSpace(typedText) || string.IsNullOrWhiteSpace(completedText))
+        {
+            return false;
+        }
+
+        int commonPrefixLength = GetCommonPrefixLength(typedText, completedText);
+
+        if (commonPrefixLength == typedText.Length)
+        {
+            if (completedText.Length <= typedText.Length)
+            {
+                return false;
+            }
+
+            renderedText = BuildNormalText(typedText) + BuildSuggestionText(completedText.Substring(typedText.Length));
+            visualCaretCharacterIndex = typedText.Length;
+            return true;
+        }
+
+        string typedQuery = typedText.Substring(commonPrefixLength);
+
+        if (string.IsNullOrWhiteSpace(typedQuery))
+        {
+            return false;
+        }
+
+        int matchIndex = completedText.IndexOf(typedQuery, commonPrefixLength, StringComparison.OrdinalIgnoreCase);
+
+        if (matchIndex < 0)
+        {
+            return false;
+        }
+
+        int matchEndIndex = matchIndex + typedQuery.Length;
+
+        string typedPrefix = typedText.Substring(0, commonPrefixLength);
+        string suggestionPrefix = completedText.Substring(commonPrefixLength, matchIndex - commonPrefixLength);
+        string suggestionSuffix = matchEndIndex < completedText.Length ? completedText.Substring(matchEndIndex) : string.Empty;
+
+        renderedText =
+            BuildNormalText(typedPrefix) +
+            BuildSuggestionText(suggestionPrefix) +
+            BuildNormalText(typedQuery) +
+            BuildSuggestionText(suggestionSuffix);
+
+        visualCaretCharacterIndex = typedPrefix.Length + suggestionPrefix.Length + typedQuery.Length;
+        return true;
+    }
+
+    private int GetCommonPrefixLength(string left, string right)
+    {
+        int length = Mathf.Min(left.Length, right.Length);
+        int index = 0;
+
+        while (index < length && char.ToUpperInvariant(left[index]) == char.ToUpperInvariant(right[index]))
+        {
+            index++;
+        }
+
+        return index;
+    }
+
+    private string BuildNormalText(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return string.Empty;
+        }
+
+        Color color = inputField != null && inputField.textComponent != null ? inputField.textComponent.color : Color.white;
+        return $"<color=#{ColorUtility.ToHtmlStringRGBA(color)}><noparse>{text}</noparse></color>";
+    }
+
+    private string BuildSuggestionText(string text)
+    {
+        return string.IsNullOrEmpty(text) ? string.Empty : $"<noparse>{text}</noparse>";
+    }
+
+    private void ClearSuggestionText()
+    {
+        SetSuggestionText(string.Empty);
+        RestoreInputTextLayout();
+        ShowInputText();
     }
 
     private void SetSuggestionText(string text)
     {
-        if (suggestionText != null)
+        if (suggestionText == null)
         {
-            suggestionText.text = text ?? string.Empty;
+            return;
         }
+
+        suggestionText.richText = true;
+        suggestionText.text = text ?? string.Empty;
+        suggestionText.ForceMeshUpdate(true, true);
+    }
+
+    private void CaptureInputTextBaseMargin()
+    {
+        if (inputField == null || inputField.textComponent == null)
+        {
+            return;
+        }
+
+        inputTextBaseMargin = inputField.textComponent.margin;
+        hasInputTextBaseMargin = true;
+    }
+
+    private void MoveInputCaretToSuggestionPosition(int visualCaretCharacterIndex)
+    {
+        if (inputField == null || inputField.textComponent == null || suggestionText == null)
+        {
+            return;
+        }
+
+        if (!hasInputTextBaseMargin)
+        {
+            CaptureInputTextBaseMargin();
+        }
+
+        TMP_Text inputText = inputField.textComponent;
+
+        inputField.ForceLabelUpdate();
+        inputText.ForceMeshUpdate(true, true);
+        suggestionText.ForceMeshUpdate(true, true);
+
+        float currentCaretX = GetCharacterEndX(inputText, inputField.text?.Length ?? 0);
+        float visualCaretX = GetCharacterEndX(suggestionText, visualCaretCharacterIndex);
+        float offsetX = visualCaretX - currentCaretX;
+
+        Vector4 margin = hasInputTextBaseMargin ? inputTextBaseMargin : inputText.margin;
+        margin.x += offsetX;
+        inputText.margin = margin;
+
+        inputText.ForceMeshUpdate(true, true);
+        inputField.ForceLabelUpdate();
+    }
+
+    private float GetCharacterEndX(TMP_Text textComponent, int characterCount)
+    {
+        if (textComponent == null || characterCount <= 0 || textComponent.textInfo == null ||
+            textComponent.textInfo.characterCount <= 0)
+        {
+            return 0f;
+        }
+
+        int characterIndex = Mathf.Clamp(characterCount - 1, 0, textComponent.textInfo.characterCount - 1);
+        return textComponent.textInfo.characterInfo[characterIndex].xAdvance;
+    }
+
+    private void RestoreInputTextLayout()
+    {
+        if (!hasInputTextBaseMargin || inputField == null || inputField.textComponent == null)
+        {
+            return;
+        }
+
+        inputField.textComponent.margin = inputTextBaseMargin;
+        inputField.textComponent.ForceMeshUpdate(true, true);
+        inputField.ForceLabelUpdate();
+    }
+
+    private void HideInputText()
+    {
+        if (inputTextHidden || inputField == null || inputField.textComponent == null)
+        {
+            return;
+        }
+
+        CanvasRenderer canvasRenderer = inputField.textComponent.canvasRenderer;
+        inputTextCanvasAlpha = canvasRenderer.GetAlpha();
+        canvasRenderer.SetAlpha(0f);
+        inputTextHidden = true;
+    }
+
+    private void ShowInputText()
+    {
+        if (!inputTextHidden || inputField == null || inputField.textComponent == null)
+        {
+            return;
+        }
+
+        inputField.textComponent.canvasRenderer.SetAlpha(inputTextCanvasAlpha);
+        inputTextHidden = false;
     }
 
     #endregion
@@ -167,6 +395,14 @@ public class ChatSuggestionController : MonoBehaviour
 
     public bool AcceptSelected()
     {
+        if (!string.IsNullOrWhiteSpace(textSuggestion))
+        {
+            Action callback = textSuggestionAccepted;
+            ClearSuggestions();
+            callback?.Invoke();
+            return true;
+        }
+
         ChatSuggestionData selected = SelectedSuggestion;
 
         if (selected == null)
@@ -174,11 +410,11 @@ public class ChatSuggestionController : MonoBehaviour
             return false;
         }
 
-        Action<ChatSuggestionData> callback = suggestionAccepted;
+        Action<ChatSuggestionData> userCallback = suggestionAccepted;
         ChatSuggestionData accepted = selected.Clone();
 
         ClearSuggestions();
-        callback?.Invoke(accepted);
+        userCallback?.Invoke(accepted);
         return true;
     }
 

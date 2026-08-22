@@ -42,6 +42,7 @@ public class ChatManager : MonoBehaviour
     private string sessionConversationKey = string.Empty;
     private string lastPrivateMessageUserId = string.Empty;
     private string lastSuggestedUserId = string.Empty;
+    private string lastSuggestedCommandName = string.Empty;
     private string lastServiceError = string.Empty;
 
     public bool IsReady => isReady;
@@ -51,6 +52,7 @@ public class ChatManager : MonoBehaviour
     public string LastServiceError => lastServiceError;
     public string LastPrivateMessageUserId => lastPrivateMessageUserId;
     public string LastSuggestedUserId => lastSuggestedUserId;
+    public string LastSuggestedCommandName => lastSuggestedCommandName;
     public IReadOnlyDictionary<string, ChatConversationData> Conversations => conversations;
     public IReadOnlyCollection<string> BlockedUserIds => blockedUserIds;
 
@@ -945,7 +947,7 @@ public class ChatManager : MonoBehaviour
         }
 
         if (string.IsNullOrWhiteSpace(normalizedQuery) &&
-            (command.name == "msg" || command.name == "reply") &&
+            (command.name == "msg") &&
             !string.IsNullOrWhiteSpace(lastPrivateMessageUserId))
         {
             MoveParticipantToFront(matches, lastPrivateMessageUserId);
@@ -984,6 +986,24 @@ public class ChatManager : MonoBehaviour
         }
 
         lastSuggestedUserId = participant.userId;
+        return true;
+    }
+
+    public bool RememberSuggestedCommand(string commandName)
+    {
+        if (string.IsNullOrWhiteSpace(commandName) || commandCatalog == null || !commandCatalog.IsReady)
+        {
+            return false;
+        }
+
+        ChatCommandDefinition command = commandCatalog.FindCommand(commandName);
+
+        if (command == null || !command.enabled)
+        {
+            return false;
+        }
+
+        lastSuggestedCommandName = command.name;
         return true;
     }
 
@@ -1140,12 +1160,17 @@ public class ChatManager : MonoBehaviour
 
     private bool ParticipantMatchesQuery(ChatParticipantData participant, string query)
     {
+        if (participant == null || string.IsNullOrWhiteSpace(query))
+        {
+            return false;
+        }
+
         string playerName = participant.playerName ?? string.Empty;
         string userId = participant.userId ?? string.Empty;
         string displayName = GetParticipantDisplayName(participant.userId);
 
-        return playerName.StartsWith(query, StringComparison.OrdinalIgnoreCase) ||
-               userId.StartsWith(query, StringComparison.OrdinalIgnoreCase) ||
+        return playerName.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0 ||
+               userId.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0 ||
                displayName.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0;
     }
 
@@ -1169,23 +1194,42 @@ public class ChatManager : MonoBehaviour
             return int.MaxValue;
         }
 
-        if (string.Equals(participant.playerName, query, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(participant.userId, query, StringComparison.OrdinalIgnoreCase))
+        string playerName = participant.playerName ?? string.Empty;
+        string userId = participant.userId ?? string.Empty;
+        string displayName = GetParticipantDisplayName(participant.userId);
+
+        if (string.Equals(playerName, query, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(userId, query, StringComparison.OrdinalIgnoreCase))
         {
             return 0;
         }
 
-        if ((participant.playerName ?? string.Empty).StartsWith(query, StringComparison.OrdinalIgnoreCase))
+        if (playerName.StartsWith(query, StringComparison.OrdinalIgnoreCase))
         {
             return 1;
         }
 
-        if ((participant.userId ?? string.Empty).StartsWith(query, StringComparison.OrdinalIgnoreCase))
+        if (userId.StartsWith(query, StringComparison.OrdinalIgnoreCase))
         {
             return 2;
         }
 
-        return 3;
+        if (playerName.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            return 3;
+        }
+
+        if (userId.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            return 4;
+        }
+
+        if (displayName.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            return 5;
+        }
+
+        return int.MaxValue;
     }
 
     private void MoveParticipantToFront(List<ChatParticipantData> participants, string userId)
@@ -1774,6 +1818,7 @@ public class ChatManager : MonoBehaviour
         sessionConversationKey = string.Empty;
         lastPrivateMessageUserId = string.Empty;
         lastSuggestedUserId = string.Empty;
+        lastSuggestedCommandName = string.Empty;
         ClearSessionBlocks();
 
         if (hadConversations)

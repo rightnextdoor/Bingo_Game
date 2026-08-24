@@ -24,4 +24,9 @@ MonoBehaviour:
   displaySeconds: 1.5
   fadeOutSeconds: 0.35
   tooltipOpenDelay: 0.45
+  tooltipMinimumWidth: 120
+  tooltipMaximumWidth: 360
+  tooltipMinimumHeight: 44
+  tooltipMaximumHeight: 220
+  tooltipGrowthDirection: 1
   tooltipOffset: {x: 18, y: -18}

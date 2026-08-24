@@ -31,6 +31,13 @@ public class UIMessageData : ScriptableObject
     [Header("Tooltip Timing")]
     [SerializeField, Min(0f)] private float tooltipOpenDelay;
 
+    [Header("Tooltip Size")]
+    [SerializeField, Min(1f)] private float tooltipMinimumWidth = 120f;
+    [SerializeField, Min(1f)] private float tooltipMaximumWidth = 360f;
+    [SerializeField, Min(1f)] private float tooltipMinimumHeight = 44f;
+    [SerializeField, Min(1f)] private float tooltipMaximumHeight = 220f;
+    [SerializeField] private TooltipGrowthDirection tooltipGrowthDirection = TooltipGrowthDirection.Default;
+
     [Header("Tooltip Position")]
     [SerializeField] private Vector2 tooltipOffset = new Vector2(18f, -18f);
 
@@ -46,6 +53,11 @@ public class UIMessageData : ScriptableObject
     public float DisplaySeconds => displaySeconds;
     public float FadeOutSeconds => fadeOutSeconds;
     public float TooltipOpenDelay => tooltipOpenDelay;
+    public float TooltipMinimumWidth => tooltipMinimumWidth;
+    public float TooltipMaximumWidth => tooltipMaximumWidth;
+    public float TooltipMinimumHeight => tooltipMinimumHeight;
+    public float TooltipMaximumHeight => tooltipMaximumHeight;
+    public TooltipGrowthDirection TooltipGrowthDirection => tooltipGrowthDirection;
     public Vector2 TooltipOffset => tooltipOffset;
 
     public string BuildMessage(Dictionary<string, string> replacements = null)

@@ -9,6 +9,13 @@ public enum TooltipImageMode
     None
 }
 
+public enum TooltipGrowthDirection
+{
+    Default,
+    Up,
+    Down
+}
+
 [DisallowMultipleComponent]
 public class UI_ToolTip : MonoBehaviour
 {
@@ -20,11 +27,6 @@ public class UI_ToolTip : MonoBehaviour
 
     private static readonly Vector2 TextPadding = new Vector2(14f, 10f);
     private static readonly Vector2 ScreenPadding = new Vector2(12f, 12f);
-
-    private const float MinWidth = 120f;
-    private const float MaxWidth = 360f;
-    private const float MinHeight = 44f;
-    private const float MaxHeight = 220f;
 
     private RectTransform parentRect;
     private Canvas parentCanvas;
@@ -71,7 +73,12 @@ public class UI_ToolTip : MonoBehaviour
         FinishShowing(
             message,
             targetRect,
-            messageData.TooltipOffset
+            messageData.TooltipOffset,
+            messageData.TooltipMinimumWidth,
+            messageData.TooltipMaximumWidth,
+            messageData.TooltipMinimumHeight,
+            messageData.TooltipMaximumHeight,
+            messageData.TooltipGrowthDirection
         );
     }
 
@@ -95,7 +102,15 @@ public class UI_ToolTip : MonoBehaviour
             message
         );
 
-        ResizeToFitMessage(message);
+        ResizeToFitMessage(
+            message,
+            messageData.TooltipMinimumWidth,
+            messageData.TooltipMaximumWidth,
+            messageData.TooltipMinimumHeight,
+            messageData.TooltipMaximumHeight
+        );
+
+        SetTooltipPivot(messageData.TooltipGrowthDirection);
         PositionFixed(messageData.TooltipOffset);
 
         if (canvasGroup != null)
@@ -132,7 +147,12 @@ public class UI_ToolTip : MonoBehaviour
         FinishShowing(
             message,
             targetRect,
-            visualStyle.TooltipOffset
+            visualStyle.TooltipOffset,
+            visualStyle.TooltipMinimumWidth,
+            visualStyle.TooltipMaximumWidth,
+            visualStyle.TooltipMinimumHeight,
+            visualStyle.TooltipMaximumHeight,
+            visualStyle.TooltipGrowthDirection
         );
     }
 
@@ -166,10 +186,16 @@ public class UI_ToolTip : MonoBehaviour
     private void FinishShowing(
         string message,
         RectTransform targetRect,
-        Vector2 tooltipOffset)
+        Vector2 tooltipOffset,
+        float minimumWidth,
+        float maximumWidth,
+        float minimumHeight,
+        float maximumHeight,
+        TooltipGrowthDirection growthDirection)
     {
-        ResizeToFitMessage(message);
-        PositionNearTarget(targetRect, tooltipOffset);
+        ResizeToFitMessage(message, minimumWidth, maximumWidth, minimumHeight, maximumHeight);
+        SetTooltipPivot(growthDirection);
+        PositionNearTarget(targetRect, tooltipOffset, growthDirection);
 
         if (canvasGroup != null)
         {
@@ -250,31 +276,39 @@ public class UI_ToolTip : MonoBehaviour
         }
     }
 
-    private void ResizeToFitMessage(string message)
+    private void ResizeToFitMessage(
+        string message,
+        float minimumWidth,
+        float maximumWidth,
+        float minimumHeight,
+        float maximumHeight)
     {
         if (toolTipRect == null || messageText == null)
         {
             return;
         }
 
-        float maxTextWidth = Mathf.Max(10f, MaxWidth - TextPadding.x * 2f);
+        minimumWidth = Mathf.Max(1f, minimumWidth);
+        maximumWidth = Mathf.Max(minimumWidth, maximumWidth);
+        minimumHeight = Mathf.Max(1f, minimumHeight);
+        maximumHeight = Mathf.Max(minimumHeight, maximumHeight);
 
+        float maxTextWidth = Mathf.Max(10f, maximumWidth - TextPadding.x * 2f);
         Vector2 preferredSize = messageText.GetPreferredValues(message, maxTextWidth, 0f);
 
         float finalWidth = Mathf.Clamp(
             preferredSize.x + TextPadding.x * 2f,
-            MinWidth,
-            MaxWidth
+            minimumWidth,
+            maximumWidth
         );
 
         float finalTextWidth = Mathf.Max(10f, finalWidth - TextPadding.x * 2f);
-
         Vector2 wrappedPreferredSize = messageText.GetPreferredValues(message, finalTextWidth, 0f);
 
         float finalHeight = Mathf.Clamp(
             wrappedPreferredSize.y + TextPadding.y * 2f,
-            MinHeight,
-            MaxHeight
+            minimumHeight,
+            maximumHeight
         );
 
         toolTipRect.sizeDelta = new Vector2(finalWidth, finalHeight);
@@ -284,7 +318,6 @@ public class UI_ToolTip : MonoBehaviour
         textRect.anchorMin = Vector2.zero;
         textRect.anchorMax = Vector2.one;
         textRect.pivot = new Vector2(0.5f, 0.5f);
-
         textRect.offsetMin = new Vector2(TextPadding.x, TextPadding.y);
         textRect.offsetMax = new Vector2(-TextPadding.x, -TextPadding.y);
 
@@ -292,131 +325,85 @@ public class UI_ToolTip : MonoBehaviour
         LayoutRebuilder.ForceRebuildLayoutImmediate(toolTipRect);
     }
 
-    private void PositionNearTarget(RectTransform targetRect, Vector2 tooltipOffset)
+    private void PositionNearTarget(
+        RectTransform targetRect,
+        Vector2 tooltipOffset,
+        TooltipGrowthDirection growthDirection)
     {
-        if (toolTipRect == null ||
-            parentRect == null ||
-            targetRect == null)
+        if (toolTipRect == null || parentRect == null || targetRect == null)
         {
             return;
         }
 
         targetRect.GetWorldCorners(targetWorldCorners);
 
-        Vector2 targetMin = new Vector2(
-            float.MaxValue,
-            float.MaxValue
-        );
-
-        Vector2 targetMax = new Vector2(
-            float.MinValue,
-            float.MinValue
-        );
+        Vector2 targetMin = new Vector2(float.MaxValue, float.MaxValue);
+        Vector2 targetMax = new Vector2(float.MinValue, float.MinValue);
 
         for (int i = 0; i < targetWorldCorners.Length; i++)
         {
-            Vector3 localCorner =
-                parentRect.InverseTransformPoint(
-                    targetWorldCorners[i]
-                );
+            Vector3 localCorner = parentRect.InverseTransformPoint(targetWorldCorners[i]);
 
-            targetMin.x = Mathf.Min(
-                targetMin.x,
-                localCorner.x
-            );
-
-            targetMin.y = Mathf.Min(
-                targetMin.y,
-                localCorner.y
-            );
-
-            targetMax.x = Mathf.Max(
-                targetMax.x,
-                localCorner.x
-            );
-
-            targetMax.y = Mathf.Max(
-                targetMax.y,
-                localCorner.y
-            );
+            targetMin.x = Mathf.Min(targetMin.x, localCorner.x);
+            targetMin.y = Mathf.Min(targetMin.y, localCorner.y);
+            targetMax.x = Mathf.Max(targetMax.x, localCorner.x);
+            targetMax.y = Mathf.Max(targetMax.y, localCorner.y);
         }
 
         Vector2 size = toolTipRect.rect.size;
         Rect parentArea = parentRect.rect;
 
-        float horizontalOffset = Mathf.Abs(tooltipOffset.x);
-        float verticalOffset = Mathf.Abs(tooltipOffset.y);
+        float preferredLeft = targetMin.x - size.x + tooltipOffset.x;
+        float preferredBottom;
 
-        float targetX =
-            targetMin.x - horizontalOffset - size.x;
-
-        float targetY =
-            targetMin.y - verticalOffset;
-
-        if (targetX < parentArea.xMin + ScreenPadding.x)
+        switch (growthDirection)
         {
-            targetX =
-                targetMax.x + horizontalOffset;
+            case TooltipGrowthDirection.Up:
+                preferredBottom = targetMax.y + tooltipOffset.y;
+                break;
+
+            case TooltipGrowthDirection.Down:
+                preferredBottom = targetMin.y - size.y + tooltipOffset.y;
+                break;
+
+            default:
+                preferredBottom = targetMin.y - size.y + tooltipOffset.y;
+
+                if (!FitsVertically(preferredBottom, size.y, parentArea))
+                {
+                    preferredBottom = targetMax.y + tooltipOffset.y;
+                }
+                break;
         }
 
-        if (targetX + size.x >
-            parentArea.xMax - ScreenPadding.x)
-        {
-            targetX =
-                parentArea.xMax -
-                ScreenPadding.x -
-                size.x;
-        }
+        Vector2 fittedBottomLeft = FitBottomLeftInsideParent(
+            new Vector2(preferredLeft, preferredBottom),
+            size,
+            parentArea);
 
-        if (targetY - size.y <
-            parentArea.yMin + ScreenPadding.y)
-        {
-            targetY =
-                targetMax.y +
-                verticalOffset +
-                size.y;
-        }
+        SetAnchoredPositionFromBottomLeft(fittedBottomLeft, size);
+    }
 
-        if (targetY >
-            parentArea.yMax - ScreenPadding.y)
-        {
-            targetY =
-                parentArea.yMax -
-                ScreenPadding.y;
-        }
+    private bool FitsVertically(float bottom, float height, Rect parentArea)
+    {
+        float minBottom = parentArea.yMin + ScreenPadding.y;
+        float maxTop = parentArea.yMax - ScreenPadding.y;
+        float top = bottom + height;
 
-        float minX =
-            parentArea.xMin +
-            ScreenPadding.x;
+        return bottom >= minBottom && top <= maxTop;
+    }
 
-        float maxX =
-            parentArea.xMax -
-            ScreenPadding.x -
-            size.x;
+    private Vector2 FitBottomLeftInsideParent(Vector2 bottomLeft, Vector2 size, Rect parentArea)
+    {
+        float minLeft = parentArea.xMin + ScreenPadding.x;
+        float maxLeft = parentArea.xMax - ScreenPadding.x - size.x;
+        float minBottom = parentArea.yMin + ScreenPadding.y;
+        float maxBottom = parentArea.yMax - ScreenPadding.y - size.y;
 
-        float minY =
-            parentArea.yMin +
-            ScreenPadding.y +
-            size.y;
+        bottomLeft.x = ClampEvenIfRangeIsSmall(bottomLeft.x, minLeft, maxLeft);
+        bottomLeft.y = ClampEvenIfRangeIsSmall(bottomLeft.y, minBottom, maxBottom);
 
-        float maxY =
-            parentArea.yMax -
-            ScreenPadding.y;
-
-        targetX = ClampEvenIfRangeIsSmall(
-            targetX,
-            minX,
-            maxX
-        );
-
-        targetY = ClampEvenIfRangeIsSmall(
-            targetY,
-            minY,
-            maxY
-        );
-
-        toolTipRect.anchoredPosition =
-            new Vector2(targetX, targetY);
+        return bottomLeft;
     }
 
     private void PositionFixed(Vector2 anchoredPosition)
@@ -428,15 +415,59 @@ public class UI_ToolTip : MonoBehaviour
 
         Vector2 size = toolTipRect.rect.size;
         Rect parentArea = parentRect.rect;
+        Vector2 pivot = toolTipRect.pivot;
 
-        float minX = parentArea.xMin + ScreenPadding.x;
-        float maxX = parentArea.xMax - ScreenPadding.x - size.x;
-        float minY = parentArea.yMin + ScreenPadding.y + size.y;
-        float maxY = parentArea.yMax - ScreenPadding.y;
+        Vector2 bottomLeft = anchoredPosition - new Vector2(size.x * pivot.x, size.y * pivot.y);
 
-        toolTipRect.anchoredPosition = new Vector2(
-            ClampEvenIfRangeIsSmall(anchoredPosition.x, minX, maxX),
-            ClampEvenIfRangeIsSmall(anchoredPosition.y, minY, maxY));
+        float minLeft = parentArea.xMin + ScreenPadding.x;
+        float maxLeft = parentArea.xMax - ScreenPadding.x - size.x;
+        float minBottom = parentArea.yMin + ScreenPadding.y;
+        float maxBottom = parentArea.yMax - ScreenPadding.y - size.y;
+
+        bottomLeft.x = ClampEvenIfRangeIsSmall(bottomLeft.x, minLeft, maxLeft);
+        bottomLeft.y = ClampEvenIfRangeIsSmall(bottomLeft.y, minBottom, maxBottom);
+
+        SetAnchoredPositionFromBottomLeft(bottomLeft, size);
+    }
+
+    private void SetTooltipPivot(TooltipGrowthDirection growthDirection)
+    {
+        if (toolTipRect == null)
+        {
+            return;
+        }
+
+        Vector2 anchoredPosition = toolTipRect.anchoredPosition;
+
+        switch (growthDirection)
+        {
+            case TooltipGrowthDirection.Up:
+                toolTipRect.pivot = new Vector2(0f, 0f);
+                break;
+
+            case TooltipGrowthDirection.Down:
+            case TooltipGrowthDirection.Default:
+            default:
+                toolTipRect.pivot = new Vector2(0f, 1f);
+                break;
+        }
+
+        toolTipRect.anchoredPosition = anchoredPosition;
+    }
+
+    private void SetAnchoredPositionFromBottomLeft(Vector2 bottomLeft, Vector2 size)
+    {
+        if (toolTipRect == null)
+        {
+            return;
+        }
+
+        Vector2 pivot = toolTipRect.pivot;
+
+        toolTipRect.anchoredPosition = bottomLeft + new Vector2(
+            size.x * pivot.x,
+            size.y * pivot.y
+        );
     }
 
     private void FindMissingReferences()

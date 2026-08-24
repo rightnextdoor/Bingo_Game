@@ -23,4 +23,10 @@ MonoBehaviour:
   backgroundColor: {r: 0.22745098, g: 0.25882354, b: 0.3137255, a: 1}
   displaySeconds: 1.5
   fadeOutSeconds: 0.35
+  tooltipOpenDelay: 0
+  tooltipMinimumWidth: 120
+  tooltipMaximumWidth: 360
+  tooltipMinimumHeight: 44
+  tooltipMaximumHeight: 220
+  tooltipGrowthDirection: 0
   tooltipOffset: {x: 18, y: -18}

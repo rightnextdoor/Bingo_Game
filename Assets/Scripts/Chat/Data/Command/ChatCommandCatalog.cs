@@ -20,11 +20,11 @@ public class ChatCommandCatalog : MonoBehaviour
 
         commands.Clear();
         commands.Add(new ChatCommandDefinition("help", "/help", "Show or hide chat help.", ChatCommandAvailability.All, false));
-        commands.Add(new ChatCommandDefinition("msg", "/msg <player> <message>", "Send a private Session message.", ChatCommandAvailability.SessionOnly, true, "message", "whisper", "w"));
-        commands.Add(new ChatCommandDefinition("block", "/block <player>", "Block a Session player.", ChatCommandAvailability.SessionOnly, true));
-        commands.Add(new ChatCommandDefinition("unblock", "/unblock <player>", "Unblock a Session player.", ChatCommandAvailability.SessionOnly, true));
-        commands.Add(new ChatCommandDefinition("friend", "/friend <player>", "Add a Session player as a friend (coming later).", ChatCommandAvailability.SessionOnly, true));
-        commands.Add(new ChatCommandDefinition("report", "/report <player>", "Report a Session player.", ChatCommandAvailability.SessionOnly, true));
+        commands.Add(new ChatCommandDefinition("msg", "/msg <player> <message>", "Send a private message.", ChatCommandAvailability.SessionOnly, true, "message", "whisper", "w"));
+        commands.Add(new ChatCommandDefinition("block", "/block <player>", "Block a player.", ChatCommandAvailability.SessionOnly, true));
+        commands.Add(new ChatCommandDefinition("unblock", "/unblock <player>", "Unblock a player.", ChatCommandAvailability.SessionOnly, true));
+        commands.Add(new ChatCommandDefinition("friend", "/friend <player>", "Add a player as a friend.", ChatCommandAvailability.SessionOnly, true));
+        commands.Add(new ChatCommandDefinition("report", "/report <player>", "Report a player.", ChatCommandAvailability.SessionOnly, true));
 
         isReady = true;
         return true;
@@ -54,6 +54,7 @@ public class ChatCommandCatalog : MonoBehaviour
     {
         StringBuilder builder = new StringBuilder();
         builder.AppendLine("Chat Commands");
+        builder.AppendLine();
 
         for (int i = 0; i < commands.Count; i++)
         {
@@ -64,11 +65,11 @@ public class ChatCommandCatalog : MonoBehaviour
                 continue;
             }
 
-            builder.AppendLine();
-            builder.AppendLine(command.usage);
-            builder.Append(command.description);
+            builder.Append(command.usage);
+            builder.Append('\t');
+            builder.AppendLine(command.description);
         }
 
-        return builder.ToString();
+        return builder.ToString().TrimEnd();
     }
 }

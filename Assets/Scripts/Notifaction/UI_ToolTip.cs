@@ -1,3 +1,6 @@
+using System.Collections.Generic;
+using System.Globalization;
+using System.Text;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -78,7 +81,8 @@ public class UI_ToolTip : MonoBehaviour
             messageData.TooltipMaximumWidth,
             messageData.TooltipMinimumHeight,
             messageData.TooltipMaximumHeight,
-            messageData.TooltipGrowthDirection
+            messageData.TooltipGrowthDirection,
+            messageData.MessageType == UIMessageType.ChatHelp
         );
     }
 
@@ -107,7 +111,8 @@ public class UI_ToolTip : MonoBehaviour
             messageData.TooltipMinimumWidth,
             messageData.TooltipMaximumWidth,
             messageData.TooltipMinimumHeight,
-            messageData.TooltipMaximumHeight
+            messageData.TooltipMaximumHeight,
+            messageData.MessageType == UIMessageType.ChatHelp
         );
 
         SetTooltipPivot(messageData.TooltipGrowthDirection);
@@ -152,7 +157,8 @@ public class UI_ToolTip : MonoBehaviour
             visualStyle.TooltipMaximumWidth,
             visualStyle.TooltipMinimumHeight,
             visualStyle.TooltipMaximumHeight,
-            visualStyle.TooltipGrowthDirection
+            visualStyle.TooltipGrowthDirection,
+            false
         );
     }
 
@@ -191,9 +197,17 @@ public class UI_ToolTip : MonoBehaviour
         float maximumWidth,
         float minimumHeight,
         float maximumHeight,
-        TooltipGrowthDirection growthDirection)
+        TooltipGrowthDirection growthDirection,
+        bool useChatHelpLayout)
     {
-        ResizeToFitMessage(message, minimumWidth, maximumWidth, minimumHeight, maximumHeight);
+        ResizeToFitMessage(
+            message,
+            minimumWidth,
+            maximumWidth,
+            minimumHeight,
+            maximumHeight,
+            useChatHelpLayout);
+
         SetTooltipPivot(growthDirection);
         PositionNearTarget(targetRect, tooltipOffset, growthDirection);
 
@@ -281,7 +295,8 @@ public class UI_ToolTip : MonoBehaviour
         float minimumWidth,
         float maximumWidth,
         float minimumHeight,
-        float maximumHeight)
+        float maximumHeight,
+        bool useChatHelpLayout)
     {
         if (toolTipRect == null || messageText == null)
         {
@@ -292,6 +307,26 @@ public class UI_ToolTip : MonoBehaviour
         maximumWidth = Mathf.Max(minimumWidth, maximumWidth);
         minimumHeight = Mathf.Max(1f, minimumHeight);
         maximumHeight = Mathf.Max(minimumHeight, maximumHeight);
+
+        if (useChatHelpLayout)
+        {
+            ResizeChatHelpMessage(message, minimumWidth, maximumWidth, minimumHeight, maximumHeight);
+            return;
+        }
+
+        ResizeDefaultMessage(message, minimumWidth, maximumWidth, minimumHeight, maximumHeight);
+    }
+
+    private void ResizeDefaultMessage(
+        string message,
+        float minimumWidth,
+        float maximumWidth,
+        float minimumHeight,
+        float maximumHeight)
+    {
+        messageText.textWrappingMode = TextWrappingModes.Normal;
+        messageText.overflowMode = TextOverflowModes.Ellipsis;
+        messageText.text = message;
 
         float maxTextWidth = Mathf.Max(10f, maximumWidth - TextPadding.x * 2f);
         Vector2 preferredSize = messageText.GetPreferredValues(message, maxTextWidth, 0f);
@@ -311,7 +346,216 @@ public class UI_ToolTip : MonoBehaviour
             maximumHeight
         );
 
-        toolTipRect.sizeDelta = new Vector2(finalWidth, finalHeight);
+        ApplyTooltipSize(finalWidth, finalHeight);
+    }
+
+    private void ResizeChatHelpMessage(
+        string message,
+        float minimumWidth,
+        float maximumWidth,
+        float minimumHeight,
+        float maximumHeight)
+    {
+        ParseChatHelpMessage(
+            message,
+            out string title,
+            out List<string> commands,
+            out List<string> descriptions);
+
+        if (commands.Count == 0)
+        {
+            ResizeDefaultMessage(message, minimumWidth, maximumWidth, minimumHeight, maximumHeight);
+            return;
+        }
+
+        messageText.textWrappingMode = TextWrappingModes.NoWrap;
+        messageText.overflowMode = TextOverflowModes.Overflow;
+
+        float widestCommand = 0f;
+        float widestDescription = 0f;
+
+        for (int i = 0; i < commands.Count; i++)
+        {
+            widestCommand = Mathf.Max(widestCommand, MeasurePlainTextWidth(commands[i]));
+            widestDescription = Mathf.Max(widestDescription, MeasurePlainTextWidth(descriptions[i]));
+        }
+
+        float titleWidth = MeasurePlainTextWidth(title);
+        float columnGap = TextPadding.x;
+        float requiredTextWidth = Mathf.Max(
+            titleWidth,
+            widestCommand + columnGap + widestDescription);
+
+        float finalWidth = Mathf.Clamp(
+            requiredTextWidth + TextPadding.x * 2f,
+            minimumWidth,
+            maximumWidth);
+
+        float finalTextWidth = Mathf.Max(10f, finalWidth - TextPadding.x * 2f);
+        float descriptionStart = Mathf.Min(widestCommand + columnGap, finalTextWidth);
+        float descriptionWidth = Mathf.Max(0f, finalTextWidth - descriptionStart);
+
+        string formattedMessage = BuildChatHelpText(
+            title,
+            commands,
+            descriptions,
+            descriptionStart,
+            descriptionWidth);
+
+        messageText.text = formattedMessage;
+
+        Vector2 preferredSize = messageText.GetPreferredValues(
+            formattedMessage,
+            finalTextWidth,
+            0f);
+
+        float finalHeight = Mathf.Clamp(
+            preferredSize.y + TextPadding.y * 2f,
+            minimumHeight,
+            maximumHeight);
+
+        ApplyTooltipSize(finalWidth, finalHeight);
+        messageText.ForceMeshUpdate(true, true);
+    }
+
+    private void ParseChatHelpMessage(
+        string message,
+        out string title,
+        out List<string> commands,
+        out List<string> descriptions)
+    {
+        title = string.Empty;
+        commands = new List<string>();
+        descriptions = new List<string>();
+
+        string normalizedMessage = (message ?? string.Empty).Replace("\r\n", "\n");
+        string[] lines = normalizedMessage.Split('\n');
+        bool titleFound = false;
+
+        for (int i = 0; i < lines.Length; i++)
+        {
+            string line = lines[i] ?? string.Empty;
+
+            if (!titleFound && !string.IsNullOrWhiteSpace(line))
+            {
+                title = line.Trim();
+                titleFound = true;
+                continue;
+            }
+
+            int separatorIndex = line.IndexOf('\t');
+
+            if (separatorIndex < 0)
+            {
+                continue;
+            }
+
+            commands.Add(line.Substring(0, separatorIndex).TrimEnd());
+            descriptions.Add(line.Substring(separatorIndex + 1).Trim());
+        }
+    }
+
+    private string BuildChatHelpText(
+        string title,
+        IReadOnlyList<string> commands,
+        IReadOnlyList<string> descriptions,
+        float descriptionStart,
+        float descriptionWidth)
+    {
+        StringBuilder builder = new StringBuilder();
+
+        builder.Append("<align=\"center\"><noparse>");
+        builder.Append(title);
+        builder.AppendLine("</noparse></align>");
+        builder.AppendLine();
+        builder.Append("<align=\"left\">");
+
+        string descriptionPosition = descriptionStart.ToString("0.##", CultureInfo.InvariantCulture);
+
+        for (int i = 0; i < commands.Count; i++)
+        {
+            string description = TruncateTextToWidth(descriptions[i], descriptionWidth);
+
+            builder.Append("<noparse>");
+            builder.Append(commands[i]);
+            builder.Append("</noparse>");
+            builder.Append("<pos=");
+            builder.Append(descriptionPosition);
+            builder.Append("px><noparse>");
+            builder.Append(description);
+            builder.Append("</noparse>");
+
+            if (i < commands.Count - 1)
+            {
+                builder.AppendLine();
+            }
+        }
+
+        builder.Append("</align>");
+        return builder.ToString();
+    }
+
+    private string TruncateTextToWidth(string text, float maximumWidth)
+    {
+        string value = text ?? string.Empty;
+
+        if (string.IsNullOrEmpty(value) || maximumWidth <= 0f)
+        {
+            return string.Empty;
+        }
+
+        if (MeasurePlainTextWidth(value) <= maximumWidth)
+        {
+            return value;
+        }
+
+        const string ellipsis = "...";
+        float ellipsisWidth = MeasurePlainTextWidth(ellipsis);
+
+        if (ellipsisWidth > maximumWidth)
+        {
+            return string.Empty;
+        }
+
+        int low = 0;
+        int high = value.Length;
+
+        while (low < high)
+        {
+            int middle = (low + high + 1) / 2;
+            string candidate = value.Substring(0, middle).TrimEnd() + ellipsis;
+
+            if (MeasurePlainTextWidth(candidate) <= maximumWidth)
+            {
+                low = middle;
+            }
+            else
+            {
+                high = middle - 1;
+            }
+        }
+
+        return value.Substring(0, low).TrimEnd() + ellipsis;
+    }
+
+    private float MeasurePlainTextWidth(string text)
+    {
+        bool richText = messageText.richText;
+        messageText.richText = false;
+
+        Vector2 preferredSize = messageText.GetPreferredValues(
+            text ?? string.Empty,
+            0f,
+            0f);
+
+        messageText.richText = richText;
+        return preferredSize.x;
+    }
+
+    private void ApplyTooltipSize(float width, float height)
+    {
+        toolTipRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, width);
+        toolTipRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, height);
 
         RectTransform textRect = messageText.rectTransform;
 

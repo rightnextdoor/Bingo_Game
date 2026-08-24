@@ -29,4 +29,4 @@ MonoBehaviour:
   tooltipMinimumHeight: 44
   tooltipMaximumHeight: 220
   tooltipGrowthDirection: 0
-  tooltipOffset: {x: 18, y: -18}
+  tooltipOffset: {x: 100, y: -18}

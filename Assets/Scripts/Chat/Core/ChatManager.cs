@@ -70,6 +70,8 @@ public class ChatManager : MonoBehaviour
     public event Action<ChatConversationData> ActiveConversationChanged;
     public event Action<ChatConversationData> SessionParticipantsChanged;
     public event Action BlockedUsersChanged;
+    public event Action ChatHelpToggleRequested;
+    public event Action ChatHelpCloseRequested;
 
     #endregion
 
@@ -947,7 +949,7 @@ public class ChatManager : MonoBehaviour
         }
 
         if (string.IsNullOrWhiteSpace(normalizedQuery) &&
-            (command.name == "msg") &&
+            command.name == "msg" &&
             !string.IsNullOrWhiteSpace(lastPrivateMessageUserId))
         {
             MoveParticipantToFront(matches, lastPrivateMessageUserId);
@@ -1436,39 +1438,20 @@ public class ChatManager : MonoBehaviour
 
     #region Help
 
-    public ChatCommandResult ToggleHelp(string helpMessage)
+    public ChatCommandResult RequestHelpToggle()
     {
-        ToolTipManager toolTipManager = ToolTipManager.instance;
-        UIMessageCatalog messageCatalog = UIMessageCatalog.instance;
-
-        if (toolTipManager == null || messageCatalog == null)
+        if (ChatHelpToggleRequested == null)
         {
             return ChatCommandResult.Failed("Chat help is not available in this scene.");
         }
 
-        if (toolTipManager.IsShowing(UIMessageType.ChatHelp))
-        {
-            toolTipManager.HideToolTip();
-            return ChatCommandResult.Succeeded();
-        }
-
-        UIMessageData helpMessageData = messageCatalog.GetMessage(UIMessageType.ChatHelp);
-
-        if (helpMessageData == null)
-        {
-            return ChatCommandResult.Failed("Chat help message data was not found.");
-        }
-
-        toolTipManager.ShowFixedToolTip(helpMessageData, helpMessage);
+        ChatHelpToggleRequested.Invoke();
         return ChatCommandResult.Succeeded();
     }
 
-    public void CloseHelp()
+    private void RequestHelpClose()
     {
-        if (ToolTipManager.instance != null && ToolTipManager.instance.IsShowing(UIMessageType.ChatHelp))
-        {
-            ToolTipManager.instance.HideToolTip();
-        }
+        ChatHelpCloseRequested?.Invoke();
     }
 
     #endregion
@@ -1804,7 +1787,7 @@ public class ChatManager : MonoBehaviour
 
     public async Task ShutdownChatAsync()
     {
-        CloseHelp();
+        RequestHelpClose();
 
         if (chatService != null)
         {

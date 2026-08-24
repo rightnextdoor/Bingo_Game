@@ -57,7 +57,7 @@ public class ChatCommandProcessor : MonoBehaviour
         switch (command.name)
         {
             case "help":
-                return chatManager.ToggleHelp(commandCatalog.BuildHelpMessage());
+                return chatManager.RequestHelpToggle();
 
             case "msg":
                 return await ProcessPrivateMessageAsync(arguments);

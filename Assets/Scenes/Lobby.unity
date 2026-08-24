@@ -462,6 +462,7 @@ GameObject:
   - component: {fileID: 221862320}
   - component: {fileID: 221862319}
   - component: {fileID: 221862318}
+  - component: {fileID: 221862321}
   m_Layer: 5
   m_Name: ChatSettingsIcon
   m_TagString: Untagged
@@ -546,6 +547,26 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 221862316}
   m_CullTransparentMesh: 1
+--- !u!114 &221862321
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 221862316}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3b9d2e7d032d32944b8b70126e45114d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UITopBarIconSlot
+  iconImage: {fileID: 221862319}
+  normalColor: {r: 1, g: 1, b: 1, a: 1}
+  hoverColor: {r: 0.94509804, g: 0.9529412, b: 0.9607843, a: 1}
+  pressedColor: {r: 0.7882353, g: 0.81960785, b: 0.8509804, a: 1}
+  disabledColor: {r: 0.34901962, g: 0.38039216, b: 0.44313726, a: 0.7058824}
+  normalScale: 1
+  hoverScale: 1.08
+  pressedScale: 0.92
 --- !u!1 &300677665
 GameObject:
   m_ObjectHideFlags: 0
@@ -3168,6 +3189,7 @@ GameObject:
   - component: {fileID: 1871468299}
   - component: {fileID: 1871468298}
   - component: {fileID: 1871468297}
+  - component: {fileID: 1871468300}
   m_Layer: 5
   m_Name: ChatHelpIcon
   m_TagString: Untagged
@@ -3252,6 +3274,26 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1871468295}
   m_CullTransparentMesh: 1
+--- !u!114 &1871468300
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1871468295}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3b9d2e7d032d32944b8b70126e45114d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UITopBarIconSlot
+  iconImage: {fileID: 1871468298}
+  normalColor: {r: 1, g: 1, b: 1, a: 1}
+  hoverColor: {r: 0.94509804, g: 0.9529412, b: 0.9607843, a: 1}
+  pressedColor: {r: 0.7882353, g: 0.81960785, b: 0.8509804, a: 1}
+  disabledColor: {r: 0.34901962, g: 0.38039216, b: 0.44313726, a: 0.7058824}
+  normalScale: 1
+  hoverScale: 1.08
+  pressedScale: 0.92
 --- !u!1 &1908377633
 GameObject:
   m_ObjectHideFlags: 0
@@ -16685,17 +16727,11 @@ MonoBehaviour:
   m_GameObject: {fileID: 8929404476382235543}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9e7f352680f8d474e84cd1863182c1b4, type: 3}
+  m_Script: {fileID: 11500000, guid: d02538f7117ebfd43af66eaaa70f53fc, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ChatHeaderController
-  helpButton: {fileID: 0}
-  helpIconImage: {fileID: 0}
-  helpTargetRect: {fileID: 0}
-  helpIconType: 0
-  helpHoverDelay: 0.45
-  settingsButton: {fileID: 0}
-  settingsIconImage: {fileID: 0}
-  settingsIconType: 0
+  m_EditorClassIdentifier: Assembly-CSharp::ChatIconController
+  helpIconSlot: {fileID: 1871468300}
+  settingsIconSlot: {fileID: 221862321}
 --- !u!224 &8970902860696258276
 RectTransform:
   m_ObjectHideFlags: 0

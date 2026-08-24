@@ -28,6 +28,9 @@ public class UIMessageData : ScriptableObject
     [SerializeField] private float displaySeconds = 1.5f;
     [SerializeField] private float fadeOutSeconds = 0.35f;
 
+    [Header("Tooltip Timing")]
+    [SerializeField, Min(0f)] private float tooltipOpenDelay;
+
     [Header("Tooltip Position")]
     [SerializeField] private Vector2 tooltipOffset = new Vector2(18f, -18f);
 
@@ -42,6 +45,7 @@ public class UIMessageData : ScriptableObject
     public Color BackgroundColor => backgroundColor;
     public float DisplaySeconds => displaySeconds;
     public float FadeOutSeconds => fadeOutSeconds;
+    public float TooltipOpenDelay => tooltipOpenDelay;
     public Vector2 TooltipOffset => tooltipOffset;
 
     public string BuildMessage(Dictionary<string, string> replacements = null)

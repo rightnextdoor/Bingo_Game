@@ -25429,6 +25429,7 @@ GameObject:
   - component: {fileID: 2869725866555170828}
   - component: {fileID: 3630565617364820752}
   - component: {fileID: 4155471568805028185}
+  - component: {fileID: 2453300978671844023}
   m_Layer: 5
   m_Name: ChatReportPopup
   m_TagString: Untagged
@@ -25536,6 +25537,27 @@ MonoBehaviour:
   m_ChildScaleWidth: 0
   m_ChildScaleHeight: 0
   m_ReverseArrangement: 0
+--- !u!114 &2453300978671844023
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2645917981963157939}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6b44ae4ae865fd640994ee46ea52339e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ChatReportController
+  playerNameText: {fileID: 986340574142216343}
+  userIdText: {fileID: 4183945033966663065}
+  reasonDropdown: {fileID: 4967323317017027009}
+  reportMessageInput: {fileID: 3547006028329143725}
+  messageCharacterLimit: 500
+  blockUserToggle: {fileID: 5056301828822484803}
+  errorText: {fileID: 5174865343412598722}
+  cancelButton: {fileID: 3938818546596290217}
+  sendButton: {fileID: 2839881596357773511}
 --- !u!1 &2653232023875820917
 GameObject:
   m_ObjectHideFlags: 0

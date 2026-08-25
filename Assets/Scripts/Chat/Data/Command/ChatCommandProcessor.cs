@@ -51,7 +51,7 @@ public class ChatCommandProcessor : MonoBehaviour
 
         if (command.availability == ChatCommandAvailability.SessionOnly && !chatManager.HasSessionConversation)
         {
-            return ChatCommandResult.Failed("That command is only available in a multiplayer Session chat.");
+            return ChatCommandResult.Failed("That command is only available in multiplayer chat.");
         }
 
         switch (command.name)
@@ -63,16 +63,16 @@ public class ChatCommandProcessor : MonoBehaviour
                 return await ProcessPrivateMessageAsync(arguments);
 
             case "block":
-                return ProcessBlockCommand(arguments, true);
+                return ProcessBlockCommand(arguments);
 
             case "unblock":
-                return ProcessBlockCommand(arguments, false);
+                return ProcessUnblockCommand(arguments);
 
             case "report":
                 return ProcessReportCommand(arguments);
 
             case "friend":
-                return ProcessFriendPlaceholder(arguments);
+                return ProcessFriendCommand(arguments);
 
             default:
                 return ChatCommandResult.Failed("That chat command is not available.");
@@ -83,7 +83,7 @@ public class ChatCommandProcessor : MonoBehaviour
     {
         if (!chatManager.TryResolveCommandTargetAndRemainder(arguments, true, out ChatParticipantData participant, out string message))
         {
-            return ChatCommandResult.Failed("Select a Session player and enter a message.");
+            return ChatCommandResult.Failed("Select a player and enter a message.");
         }
 
         if (string.IsNullOrWhiteSpace(message))
@@ -95,50 +95,93 @@ public class ChatCommandProcessor : MonoBehaviour
         return sendResult.success ? ChatCommandResult.Succeeded() : ChatCommandResult.Failed(sendResult.failureMessage);
     }
 
-    private ChatCommandResult ProcessBlockCommand(string arguments, bool shouldBlock)
+    private ChatCommandResult ProcessBlockCommand(string arguments)
     {
-        if (!chatManager.TryResolveCommandTargetAndRemainder(arguments, false, out ChatParticipantData participant, out _))
+        if (!chatManager.TryResolveCommandTargetAndRemainder(arguments, false, out ChatParticipantData participant, out _, true))
         {
-            return ChatCommandResult.Failed("Select a Session player for that command.");
+            return ChatCommandResult.Failed(ChatBlockError.GetMessage(ChatBlockErrorType.PlayerNotFound));
         }
 
-        bool changed = chatManager.SetUserBlocked(participant.userId, shouldBlock);
-
-        if (!changed)
+        if (IsCurrentUser(participant.userId))
         {
-            string unchangedMessage = shouldBlock ? "That player is already blocked." : "That player is not blocked.";
-            return ChatCommandResult.Succeeded(unchangedMessage);
+            return ChatCommandResult.Failed(ChatBlockError.GetMessage(ChatBlockErrorType.CannotBlockSelf));
         }
 
-        string displayName = chatManager.GetParticipantDisplayName(participant.userId);
-        string responseMessage = shouldBlock ? $"Blocked {displayName}." : $"Unblocked {displayName}.";
-        return ChatCommandResult.Succeeded(responseMessage);
+        if (chatManager.IsUserBlocked(participant.userId))
+        {
+            return ChatCommandResult.Failed(ChatBlockError.GetMessage(ChatBlockErrorType.PlayerAlreadyBlocked));
+        }
+
+        if (!chatManager.SetUserBlocked(participant, true))
+        {
+            return ChatCommandResult.Failed(ChatBlockError.GetMessage(ChatBlockErrorType.PlayerNotFound));
+        }
+
+        return ChatCommandResult.Succeeded();
+    }
+
+    private ChatCommandResult ProcessUnblockCommand(string arguments)
+    {
+        ChatParticipantData participant = null;
+
+        if (!chatManager.TryResolveCommandTargetAndRemainder(arguments, false, out participant, out _, true) &&
+            !chatManager.TryResolveBlockedUserCommandTarget(arguments, out participant))
+        {
+            return ChatCommandResult.Failed(ChatBlockError.GetMessage(ChatBlockErrorType.PlayerNotFound));
+        }
+
+        if (IsCurrentUser(participant.userId))
+        {
+            return ChatCommandResult.Failed(ChatBlockError.GetMessage(ChatBlockErrorType.CannotBlockSelf));
+        }
+
+        if (!chatManager.IsUserBlocked(participant.userId))
+        {
+            return ChatCommandResult.Failed(ChatBlockError.GetMessage(ChatBlockErrorType.PlayerNotBlocked));
+        }
+
+        if (!chatManager.SetUserBlocked(participant.userId, false))
+        {
+            return ChatCommandResult.Failed(ChatBlockError.GetMessage(ChatBlockErrorType.PlayerNotBlocked));
+        }
+
+        return ChatCommandResult.Succeeded();
     }
 
     private ChatCommandResult ProcessReportCommand(string arguments)
     {
         if (!chatManager.TryResolveCommandTargetAndRemainder(arguments, false, out ChatParticipantData participant, out _))
         {
-            return ChatCommandResult.Failed("Select a Session player to report.");
+            return ChatCommandResult.Failed("Player not found.");
         }
 
         ChatConversationReference conversation = chatManager.SessionConversation?.Reference;
 
         if (!ChatReportController.OpenForParticipant(participant, conversation))
         {
-            return ChatCommandResult.Failed("The report popup is not available in this scene.");
+            return ChatCommandResult.Failed("The report command failed.");
         }
 
         return ChatCommandResult.Succeeded();
     }
 
-    private ChatCommandResult ProcessFriendPlaceholder(string arguments)
+    private ChatCommandResult ProcessFriendCommand(string arguments)
     {
-        if (!chatManager.TryResolveCommandTargetAndRemainder(arguments, false, out _, out _))
+        if (!chatManager.TryResolveCommandTargetAndRemainder(arguments, false, out ChatParticipantData participant, out _))
         {
-            return ChatCommandResult.Failed("Select a Session player for that command.");
+            return ChatCommandResult.Failed("Player not found.");
         }
 
-        return ChatCommandResult.Failed("Friends are not available yet.");
+        return chatManager.AddFriend(participant)
+            ? ChatCommandResult.Succeeded()
+            : ChatCommandResult.Failed("The player could not be added to friends.");
+    }
+
+    private bool IsCurrentUser(string userId)
+    {
+        return !string.IsNullOrWhiteSpace(userId) &&
+               UserManager.instance != null &&
+               UserManager.instance.HasUser &&
+               string.Equals(UserManager.instance.UserId, userId, StringComparison.Ordinal);
     }
 }

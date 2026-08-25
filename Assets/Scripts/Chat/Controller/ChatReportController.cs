@@ -56,40 +56,12 @@ public class ChatReportController : MonoBehaviour
 
     public static bool OpenForParticipant(ChatParticipantData participant, ChatConversationReference conversation)
     {
-        if (participant == null || !participant.IsValid)
+        if (participant == null || !participant.IsValid || PopupManager.instance == null)
         {
             return false;
         }
 
-        ChatReportController controller = FindControllerIncludingInactive();
-
-        if (controller == null)
-        {
-            return false;
-        }
-
-        if (PopupManager.instance != null)
-        {
-            PopupManager.instance.OpenPopup(PopupId.ChatReport);
-
-            if (PopupManager.instance.ActivePopupId != PopupId.ChatReport)
-            {
-                return false;
-            }
-        }
-        else
-        {
-            controller.gameObject.SetActive(true);
-        }
-
-        controller.SetReportedParticipant(participant, conversation);
-        return true;
-    }
-
-    private static ChatReportController FindControllerIncludingInactive()
-    {
-        ChatReportController[] controllers = FindObjectsByType<ChatReportController>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-        return controllers != null && controllers.Length > 0 ? controllers[0] : null;
+        return PopupManager.instance.OpenChatReportPopup(participant, conversation);
     }
 
     public void SetReportedParticipant(ChatParticipantData participant, ChatConversationReference newConversation)

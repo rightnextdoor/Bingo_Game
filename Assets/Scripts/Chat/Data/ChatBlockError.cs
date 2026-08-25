@@ -2,6 +2,7 @@ public enum ChatBlockErrorType
 {
     None,
     PlayerAlreadyBlocked,
+    PlayerNotBlocked,
     PlayerNotFound,
     CannotBlockSelf
 }
@@ -14,6 +15,9 @@ public static class ChatBlockError
         {
             case ChatBlockErrorType.PlayerAlreadyBlocked:
                 return "Player is already blocked.";
+
+            case ChatBlockErrorType.PlayerNotBlocked:
+                return "Player is not blocked.";
 
             case ChatBlockErrorType.PlayerNotFound:
                 return "Player not found.";

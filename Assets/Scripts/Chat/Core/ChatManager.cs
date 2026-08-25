@@ -22,7 +22,7 @@ public class ChatManager : MonoBehaviour
     private LobbyManager lobbyManager;
 
     private readonly Dictionary<string, ChatConversationData> conversations = new Dictionary<string, ChatConversationData>();
-    private readonly HashSet<string> blockedUserIds = new HashSet<string>(StringComparer.Ordinal);
+    private readonly Dictionary<string, ChatParticipantData> blockedUsers = new Dictionary<string, ChatParticipantData>(StringComparer.Ordinal);
 
     private bool isReady;
     private bool isChatEnabled = true;
@@ -54,7 +54,7 @@ public class ChatManager : MonoBehaviour
     public string LastSuggestedUserId => lastSuggestedUserId;
     public string LastSuggestedCommandName => lastSuggestedCommandName;
     public IReadOnlyDictionary<string, ChatConversationData> Conversations => conversations;
-    public IReadOnlyCollection<string> BlockedUserIds => blockedUserIds;
+    public IReadOnlyCollection<string> BlockedUserIds => blockedUsers.Keys;
 
     public ChatConversationData ActiveConversation =>
         conversations.TryGetValue(activeConversationKey, out ChatConversationData conversation) ? conversation : null;
@@ -583,14 +583,14 @@ public class ChatManager : MonoBehaviour
 
         if (!TryGetSessionParticipant(recipientUserId, out ChatParticipantData recipient))
         {
-            return ChatSendResult.Failed("That player is not in the current Session chat.");
+            return ChatSendResult.Failed("That player is not in the current chat.");
         }
 
         ChatParticipantData localParticipant = GetCurrentLocalParticipant();
 
         if (localParticipant == null || string.Equals(localParticipant.userId, recipient.userId, StringComparison.Ordinal))
         {
-            return ChatSendResult.Failed("A private message must target another Session player.");
+            return ChatSendResult.Failed("A private message must target another player.");
         }
 
         if (!await EnsureChatReadyAsync())
@@ -786,8 +786,8 @@ public class ChatManager : MonoBehaviour
 
     private int GetMaximumRetainedMessages()
     {
-        return ChatSettings.instance != null
-            ? ChatSettings.instance.MaximumRetainedMessages
+        return ChatConfigSettings.instance != null
+            ? ChatConfigSettings.instance.MaximumRetainedMessages
             : 200;
     }
 
@@ -1009,7 +1009,12 @@ public class ChatManager : MonoBehaviour
         return true;
     }
 
-    public bool TryResolveCommandTargetAndRemainder(string arguments, bool requireRemainder, out ChatParticipantData participant, out string remainder)
+    public bool TryResolveCommandTargetAndRemainder(
+        string arguments,
+        bool requireRemainder,
+        out ChatParticipantData participant,
+        out string remainder,
+        bool includeCurrentUser = false)
     {
         participant = null;
         remainder = string.Empty;
@@ -1026,7 +1031,8 @@ public class ChatManager : MonoBehaviour
         {
             ChatParticipantData candidate = SessionConversation.participants[i];
 
-            if (candidate == null || !candidate.IsValid || IsCurrentLocalUser(candidate.userId))
+            if (candidate == null || !candidate.IsValid ||
+                (!includeCurrentUser && IsCurrentLocalUser(candidate.userId)))
             {
                 continue;
             }
@@ -1048,7 +1054,7 @@ public class ChatManager : MonoBehaviour
         string targetToken = firstSpaceIndex < 0 ? trimmedArguments : trimmedArguments.Substring(0, firstSpaceIndex);
         string tokenRemainder = firstSpaceIndex < 0 ? string.Empty : trimmedArguments.Substring(firstSpaceIndex + 1).TrimStart();
 
-        if (!TryResolveSessionParticipantByQuery(targetToken, out participant))
+        if (!TryResolveSessionParticipantByQuery(targetToken, includeCurrentUser, out participant))
         {
             return false;
         }
@@ -1057,7 +1063,7 @@ public class ChatManager : MonoBehaviour
         return !requireRemainder || !string.IsNullOrWhiteSpace(remainder);
     }
 
-    private bool TryResolveSessionParticipantByQuery(string query, out ChatParticipantData participant)
+    private bool TryResolveSessionParticipantByQuery(string query, bool includeCurrentUser, out ChatParticipantData participant)
     {
         participant = null;
 
@@ -1073,7 +1079,8 @@ public class ChatManager : MonoBehaviour
         {
             ChatParticipantData candidate = SessionConversation.participants[i];
 
-            if (candidate == null || !candidate.IsValid || IsCurrentLocalUser(candidate.userId))
+            if (candidate == null || !candidate.IsValid ||
+                (!includeCurrentUser && IsCurrentLocalUser(candidate.userId)))
             {
                 continue;
             }
@@ -1307,11 +1314,129 @@ public class ChatManager : MonoBehaviour
 
     #endregion
 
+    #region Friends
+
+    public bool AddFriend(ChatParticipantData participant)
+    {
+        if (participant == null || !participant.IsValid || IsCurrentLocalUser(participant.userId))
+        {
+            return false;
+        }
+
+        Debug.Log($"[ChatFriend] {participant.playerName} ({participant.userId}) was added to friends.");
+        return true;
+    }
+
+    #endregion
+
     #region Blocking
 
     public bool IsUserBlocked(string userId)
     {
-        return !string.IsNullOrWhiteSpace(userId) && blockedUserIds.Contains(userId.Trim());
+        return !string.IsNullOrWhiteSpace(userId) && blockedUsers.ContainsKey(userId.Trim());
+    }
+
+    public IReadOnlyList<ChatParticipantData> GetBlockedUsersSnapshot()
+    {
+        List<ChatParticipantData> snapshot = new List<ChatParticipantData>(blockedUsers.Count);
+
+        foreach (ChatParticipantData participant in blockedUsers.Values)
+        {
+            if (participant != null && participant.IsValid)
+            {
+                snapshot.Add(participant.Clone());
+            }
+        }
+
+        return snapshot;
+    }
+
+    public bool TryGetBlockedUser(string userId, out ChatParticipantData participant)
+    {
+        participant = null;
+
+        if (string.IsNullOrWhiteSpace(userId) ||
+            !blockedUsers.TryGetValue(userId.Trim(), out ChatParticipantData blockedParticipant) ||
+            blockedParticipant == null)
+        {
+            return false;
+        }
+
+        participant = blockedParticipant.Clone();
+        return true;
+    }
+
+    public bool TryResolveBlockedUserCommandTarget(string arguments, out ChatParticipantData participant)
+    {
+        participant = null;
+
+        if (string.IsNullOrWhiteSpace(arguments) || blockedUsers.Count == 0)
+        {
+            return false;
+        }
+
+        string query = arguments.Trim();
+        string normalizedQuery = NormalizeTargetQuery(query);
+        List<PlayerProfileData> profiles = BuildBlockedProfileList();
+        ChatParticipantData singleMatch = null;
+
+        foreach (ChatParticipantData candidate in blockedUsers.Values)
+        {
+            if (candidate == null || !candidate.IsValid)
+            {
+                continue;
+            }
+
+            string displayName = PlayerDisplayIdentityResolver.GetDisplayName(
+                new PlayerProfileData(candidate.userId, candidate.playerName, candidate.iconId),
+                profiles);
+
+            bool matches =
+                string.Equals(candidate.playerName, normalizedQuery, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(candidate.userId, normalizedQuery, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(displayName, query, StringComparison.OrdinalIgnoreCase);
+
+            if (!matches)
+            {
+                continue;
+            }
+
+            if (singleMatch != null)
+            {
+                participant = null;
+                return false;
+            }
+
+            singleMatch = candidate;
+        }
+
+        participant = singleMatch?.Clone();
+        return participant != null;
+    }
+
+    public bool SetUserBlocked(ChatParticipantData participant, bool blocked)
+    {
+        if (participant == null || !participant.IsValid || IsCurrentLocalUser(participant.userId))
+        {
+            return false;
+        }
+
+        if (!blocked)
+        {
+            return SetUserBlocked(participant.userId, false);
+        }
+
+        string userId = participant.userId.Trim();
+
+        if (blockedUsers.ContainsKey(userId))
+        {
+            return false;
+        }
+
+        blockedUsers[userId] = participant.Clone();
+        RemoveMessagesFromBlockedUser(userId);
+        BlockedUsersChanged?.Invoke();
+        return true;
     }
 
     public bool SetUserBlocked(string userId, bool blocked)
@@ -1322,18 +1447,26 @@ public class ChatManager : MonoBehaviour
         }
 
         string normalizedUserId = userId.Trim();
-        bool changed = blocked ? blockedUserIds.Add(normalizedUserId) : blockedUserIds.Remove(normalizedUserId);
 
-        if (!changed)
+        if (!blocked)
+        {
+            if (!blockedUsers.Remove(normalizedUserId))
+            {
+                return false;
+            }
+
+            BlockedUsersChanged?.Invoke();
+            return true;
+        }
+
+        if (blockedUsers.ContainsKey(normalizedUserId) ||
+            !TryGetSessionParticipant(normalizedUserId, out ChatParticipantData participant))
         {
             return false;
         }
 
-        if (blocked)
-        {
-            RemoveMessagesFromBlockedUser(normalizedUserId);
-        }
-
+        blockedUsers[normalizedUserId] = participant.Clone();
+        RemoveMessagesFromBlockedUser(normalizedUserId);
         BlockedUsersChanged?.Invoke();
         return true;
     }
@@ -1353,13 +1486,15 @@ public class ChatManager : MonoBehaviour
 
                 string normalizedUserId = userId.Trim();
 
-                if (!blockedUserIds.Add(normalizedUserId))
+                if (blockedUsers.ContainsKey(normalizedUserId) ||
+                    !TryGetSessionParticipant(normalizedUserId, out ChatParticipantData participant))
                 {
                     continue;
                 }
 
-                changed = true;
+                blockedUsers[normalizedUserId] = participant.Clone();
                 RemoveMessagesFromBlockedUser(normalizedUserId);
+                changed = true;
             }
         }
 
@@ -1372,7 +1507,7 @@ public class ChatManager : MonoBehaviour
                     continue;
                 }
 
-                if (blockedUserIds.Remove(userId.Trim()))
+                if (blockedUsers.Remove(userId.Trim()))
                 {
                     changed = true;
                 }
@@ -1383,6 +1518,21 @@ public class ChatManager : MonoBehaviour
         {
             BlockedUsersChanged?.Invoke();
         }
+    }
+
+    private List<PlayerProfileData> BuildBlockedProfileList()
+    {
+        List<PlayerProfileData> profiles = new List<PlayerProfileData>(blockedUsers.Count);
+
+        foreach (ChatParticipantData participant in blockedUsers.Values)
+        {
+            if (participant != null && participant.IsValid)
+            {
+                profiles.Add(new PlayerProfileData(participant.userId, participant.playerName, participant.iconId));
+            }
+        }
+
+        return profiles;
     }
 
     private void RemoveMessagesFromBlockedUser(string userId)
@@ -1425,12 +1575,12 @@ public class ChatManager : MonoBehaviour
 
     private void ClearSessionBlocks()
     {
-        if (blockedUserIds.Count == 0)
+        if (blockedUsers.Count == 0)
         {
             return;
         }
 
-        blockedUserIds.Clear();
+        blockedUsers.Clear();
         BlockedUsersChanged?.Invoke();
     }
 
@@ -1561,6 +1711,13 @@ public class ChatManager : MonoBehaviour
 
                 participant.playerName = profile.playerName;
                 participant.iconId = profile.iconId;
+
+                if (blockedUsers.TryGetValue(profile.userId, out ChatParticipantData blockedParticipant))
+                {
+                    blockedParticipant.playerName = profile.playerName;
+                    blockedParticipant.iconId = profile.iconId;
+                }
+
                 SessionParticipantsChanged?.Invoke(session);
                 break;
             }

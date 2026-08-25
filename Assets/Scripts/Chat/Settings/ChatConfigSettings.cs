@@ -1,11 +1,11 @@
 using UnityEngine;
 
 [DisallowMultipleComponent]
-public class ChatSettings : MonoBehaviour
+public class ChatConfigSettings : MonoBehaviour
 {
     #region Singleton / Settings
 
-    public static ChatSettings instance;
+    public static ChatConfigSettings instance;
 
     [Header("Message Display")]
     [SerializeField, Min(1f)] private float messageTextSize = 24f;

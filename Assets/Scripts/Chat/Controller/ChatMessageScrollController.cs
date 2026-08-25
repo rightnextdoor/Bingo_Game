@@ -696,12 +696,12 @@ public class ChatMessageScrollController : MonoBehaviour
 
     private float GetMessageTextSize()
     {
-        return ChatSettings.instance != null ? ChatSettings.instance.MessageTextSize : 18f;
+        return ChatConfigSettings.instance != null ? ChatConfigSettings.instance.MessageTextSize : 18f;
     }
 
     private float GetMessageSpacing()
     {
-        return ChatSettings.instance != null ? ChatSettings.instance.MessageSpacing : 2f;
+        return ChatConfigSettings.instance != null ? ChatConfigSettings.instance.MessageSpacing : 2f;
     }
 
     private float GetContentWidth()

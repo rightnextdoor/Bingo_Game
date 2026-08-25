@@ -162,6 +162,39 @@ public class PopupManager : MonoBehaviour
         OpenPopup(nextPopupId);
     }
 
+    public bool OpenChatReportPopup(ChatParticipantData participant, ChatConversationReference conversation)
+    {
+        if (participant == null || !participant.IsValid)
+        {
+            return false;
+        }
+
+        GameObject popup = GetPopupObject(PopupId.ChatReport);
+
+        if (popup == null)
+        {
+            return false;
+        }
+
+        OpenPopup(PopupId.ChatReport);
+
+        if (activePopupId != PopupId.ChatReport)
+        {
+            return false;
+        }
+
+        ChatReportController controller = popup.GetComponentInChildren<ChatReportController>(true);
+
+        if (controller == null)
+        {
+            CloseActivePopup();
+            return false;
+        }
+
+        controller.SetReportedParticipant(participant, conversation);
+        return true;
+    }
+
     public bool OpenFailurePopup(string message)
     {
         GameObject popup = GetPopupObject(PopupId.Failure);

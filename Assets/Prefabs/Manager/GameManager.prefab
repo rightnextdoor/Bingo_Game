@@ -28,7 +28,6 @@ GameObject:
   - component: {fileID: 2222644560770358961}
   - component: {fileID: 8181335114522364486}
   - component: {fileID: 5465094055987081418}
-  - component: {fileID: 6242602821692666047}
   m_Layer: 0
   m_Name: GameManager
   m_TagString: Untagged
@@ -374,18 +373,3 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2acf0b889da93574696000fcfd633776, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerProfileRegistry
---- !u!114 &6242602821692666047
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8215340122209812844}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c5ab9d8806b869c4e9f642aa9538d3c6, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ChatSettings
-  messageTextSize: 24
-  messageSpacing: 2
-  maximumRetainedMessages: 200

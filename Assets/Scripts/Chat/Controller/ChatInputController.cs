@@ -78,11 +78,7 @@ public class ChatInputController : MonoBehaviour
 
     private void ClearRuntimeUi()
     {
-        if (chatInputField != null)
-        {
-            chatInputField.SetTextWithoutNotify(string.Empty);
-        }
-
+        SetInputWithoutNotify(string.Empty);
         suggestionController?.ClearSuggestions();
     }
 
@@ -159,14 +155,7 @@ public class ChatInputController : MonoBehaviour
 
     public void ClearInput()
     {
-        suppressValueChanged = true;
-
-        if (chatInputField != null)
-        {
-            chatInputField.SetTextWithoutNotify(string.Empty);
-        }
-
-        suppressValueChanged = false;
+        SetInputWithoutNotify(string.Empty);
         suggestionController?.ClearSuggestions();
     }
 
@@ -180,12 +169,87 @@ public class ChatInputController : MonoBehaviour
 
     private void OnInputSubmitted(string value)
     {
-        _ = SubmitAsync(value);
+        string submittedInput = GetSubmissionInput(value);
+        _ = SubmitAfterInputEventAsync(submittedInput);
+    }
+
+    private async Task SubmitAfterInputEventAsync(string input)
+    {
+        await Task.Yield();
+        await SubmitAsync(input);
     }
 
     private void OnSendClicked()
     {
-        _ = SubmitAsync(chatInputField != null ? chatInputField.text : string.Empty);
+        string input = chatInputField != null ? chatInputField.text : string.Empty;
+        _ = SubmitAsync(GetSubmissionInput(input));
+    }
+
+    private string GetSubmissionInput(string input)
+    {
+        string submittedInput = chatInputField != null ? chatInputField.text : input ?? string.Empty;
+
+        if (!ShouldAcceptPlayerSuggestionOnSubmit(submittedInput))
+        {
+            return submittedInput;
+        }
+
+        ChatSuggestionData selectedSuggestion = suggestionController.SelectedSuggestion;
+
+        if (selectedSuggestion == null || string.IsNullOrWhiteSpace(selectedSuggestion.displayName))
+        {
+            return submittedInput;
+        }
+
+        if (!TryGetUserSuggestionContext(
+                submittedInput,
+                out ChatCommandDefinition command,
+                out string commandPrefix,
+                out _))
+        {
+            return submittedInput;
+        }
+
+        ChatManager.instance?.RememberSuggestedCommand(command.name);
+        ChatManager.instance?.RememberSuggestedUser(selectedSuggestion.userId);
+
+        return commandPrefix + selectedSuggestion.displayName;
+    }
+
+    private bool ShouldAcceptPlayerSuggestionOnSubmit(string input)
+    {
+        if (suggestionController == null || !suggestionController.HasSuggestions || string.IsNullOrWhiteSpace(input))
+        {
+            return false;
+        }
+
+        commandCatalog ??= ChatManager.instance != null ? ChatManager.instance.GetComponent<ChatCommandCatalog>() : null;
+
+        if (commandCatalog == null || !commandCatalog.IsReady)
+        {
+            return false;
+        }
+
+        string trimmedInput = input.TrimStart();
+
+        if (!trimmedInput.StartsWith("/", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        int commandEndIndex = trimmedInput.IndexOf(' ');
+
+        if (commandEndIndex <= 1)
+        {
+            return false;
+        }
+
+        string commandName = trimmedInput.Substring(1, commandEndIndex - 1);
+        ChatCommandDefinition command = commandCatalog.FindCommand(commandName);
+
+        return command != null &&
+               command.targetsSessionUser &&
+               !string.Equals(command.name, "msg", StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task SubmitAsync(string input)
@@ -195,48 +259,49 @@ public class ChatInputController : MonoBehaviour
             return;
         }
 
+        string submittedInput = input ?? string.Empty;
+        ClearInput();
+
         ChatManager chatManager = ChatManager.instance;
-        ChatErrorType inputError = ChatError.CheckInput(input, chatManager);
+        ChatErrorType inputError = ChatError.CheckInput(submittedInput, chatManager);
 
         if (inputError != ChatErrorType.None)
         {
             HandleChatError(inputError, ChatError.GetMessage(inputError));
-            return;
-        }
-
-        RememberCompletedCommand(input);
-
-        submitting = true;
-        RefreshInteractableState();
-        suggestionController?.ClearSuggestions();
-
-        ChatSendResult result = await chatManager.SubmitMessageAsync(input);
-
-        submitting = false;
-        RefreshInteractableState();
-
-        if (result != null && result.success)
-        {
-            ClearInput();
             FocusInput();
             return;
         }
 
-        HandleChatError(
-            ChatErrorType.SendFailed,
-            string.IsNullOrWhiteSpace(result?.failureMessage) ? ChatError.GetMessage(ChatErrorType.SendFailed) : result.failureMessage);
+        RememberCompletedCommand(submittedInput);
+
+        submitting = true;
+        RefreshInteractableState();
+
+        ChatSendResult result = await chatManager.SubmitMessageAsync(submittedInput);
+
+        submitting = false;
+        RefreshInteractableState();
+
+        if (result == null || !result.success)
+        {
+            HandleChatError(
+                ChatErrorType.SendFailed,
+                string.IsNullOrWhiteSpace(result?.failureMessage)
+                    ? ChatError.GetMessage(ChatErrorType.SendFailed)
+                    : result.failureMessage);
+        }
 
         FocusInput();
     }
 
     public void HandleChatError(ChatErrorType errorType, string message)
     {
-        if (errorType == ChatErrorType.None)
+        if (errorType == ChatErrorType.None || string.IsNullOrWhiteSpace(message))
         {
             return;
         }
 
-        // Future Chat error presentation routes through this method.
+        ChatManager.instance?.AddLocalSystemMessage(message);
     }
 
     private void FocusInput()
@@ -595,13 +660,28 @@ public class ChatInputController : MonoBehaviour
         }
 
         string value = text ?? string.Empty;
+        int endPosition = value.Length;
 
         suppressValueChanged = true;
-        chatInputField.SetTextWithoutNotify(value);
-        chatInputField.caretPosition = value.Length;
-        chatInputField.selectionAnchorPosition = value.Length;
-        chatInputField.selectionFocusPosition = value.Length;
-        suppressValueChanged = false;
+
+        try
+        {
+            chatInputField.SetTextWithoutNotify(value);
+
+            chatInputField.stringPosition = endPosition;
+            chatInputField.selectionStringAnchorPosition = endPosition;
+            chatInputField.selectionStringFocusPosition = endPosition;
+
+            chatInputField.caretPosition = endPosition;
+            chatInputField.selectionAnchorPosition = endPosition;
+            chatInputField.selectionFocusPosition = endPosition;
+
+            chatInputField.ForceLabelUpdate();
+        }
+        finally
+        {
+            suppressValueChanged = false;
+        }
     }
 
     private void RememberCompletedCommand(string input)

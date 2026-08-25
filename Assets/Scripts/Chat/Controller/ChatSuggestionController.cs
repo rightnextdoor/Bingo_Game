@@ -93,8 +93,8 @@ public class ChatSuggestionController : MonoBehaviour
 
         if (HasPanel)
         {
-            BuildSuggestionRows();
             suggestionPanel.SetActive(true);
+            BuildSuggestionRows();
             ScrollSelectedRowIntoView();
         }
 

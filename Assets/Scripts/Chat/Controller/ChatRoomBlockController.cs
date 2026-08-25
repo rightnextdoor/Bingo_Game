@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -13,6 +14,7 @@ public class ChatRoomBlockController : MonoBehaviour
 
     [Header("Search")]
     [SerializeField] private TMP_InputField blockSearchInput;
+    [SerializeField] private Button addPlayerButton;
     [SerializeField] private ChatSuggestionController suggestionController;
     [SerializeField] private TMP_Text errorText;
 
@@ -20,6 +22,8 @@ public class ChatRoomBlockController : MonoBehaviour
     [SerializeField] private ScrollRect blockedUsersScrollRect;
     [SerializeField] private RectTransform blockedUsersContent;
     [SerializeField] private ChatBlockedUserRowUI blockedUserRowPrefab;
+    [SerializeField, Min(1f)] private float blockedUserRowHeight = 56f;
+    [SerializeField, Min(0)] private int extraVisibleRows = 1;
     [SerializeField] private TMP_Text emptyBlockedText;
 
     private readonly Dictionary<string, ChatParticipantData> participantSnapshot = new Dictionary<string, ChatParticipantData>(StringComparer.Ordinal);
@@ -28,8 +32,8 @@ public class ChatRoomBlockController : MonoBehaviour
     private readonly HashSet<string> addedByPopup = new HashSet<string>(StringComparer.Ordinal);
     private readonly HashSet<string> removedByPopup = new HashSet<string>(StringComparer.Ordinal);
     private readonly List<ChatParticipantData> blockedUsers = new List<ChatParticipantData>();
-    private readonly List<ChatBlockedUserRowUI> spawnedBlockedUserRows = new List<ChatBlockedUserRowUI>();
 
+    private VirtualizedScrollList virtualizedList;
     private ChatParticipantData localParticipantSnapshot;
     private bool hasSnapshot;
     private bool isLoadingUi;
@@ -43,6 +47,8 @@ public class ChatRoomBlockController : MonoBehaviour
     private void Awake()
     {
         ResolveReferences();
+        ConfigureSearchInput();
+        InitializeVirtualizedList();
         ClearUi();
     }
 
@@ -54,6 +60,11 @@ public class ChatRoomBlockController : MonoBehaviour
     private void OnDisable()
     {
         UnregisterListeners();
+    }
+
+    private void OnDestroy()
+    {
+        UnsubscribeFromVirtualizedList();
     }
 
     private void Update()
@@ -71,6 +82,58 @@ public class ChatRoomBlockController : MonoBehaviour
         {
             blockedUsersContent = blockedUsersScrollRect.content;
         }
+    }
+
+    private void ConfigureSearchInput()
+    {
+        if (blockSearchInput != null)
+        {
+            blockSearchInput.lineType = TMP_InputField.LineType.SingleLine;
+        }
+    }
+
+    private void InitializeVirtualizedList()
+    {
+        if (blockedUsersScrollRect == null || blockedUsersContent == null || blockedUserRowPrefab == null)
+        {
+            return;
+        }
+
+        virtualizedList = GetComponent<VirtualizedScrollList>();
+
+        if (virtualizedList == null)
+        {
+            virtualizedList = gameObject.AddComponent<VirtualizedScrollList>();
+        }
+
+        UnsubscribeFromVirtualizedList();
+
+        if (!virtualizedList.Initialize(
+                blockedUsersScrollRect,
+                blockedUsersContent,
+                blockedUserRowPrefab.gameObject,
+                null,
+                null,
+                blockedUserRowHeight,
+                extraVisibleRows))
+        {
+            virtualizedList = null;
+            return;
+        }
+
+        virtualizedList.ItemBound += OnBlockedItemBound;
+        virtualizedList.ItemReleased += OnBlockedItemReleased;
+    }
+
+    private void UnsubscribeFromVirtualizedList()
+    {
+        if (virtualizedList == null)
+        {
+            return;
+        }
+
+        virtualizedList.ItemBound -= OnBlockedItemBound;
+        virtualizedList.ItemReleased -= OnBlockedItemReleased;
     }
 
     #endregion
@@ -158,6 +221,15 @@ public class ChatRoomBlockController : MonoBehaviour
         {
             blockSearchInput.onValueChanged.RemoveListener(OnSearchChanged);
             blockSearchInput.onValueChanged.AddListener(OnSearchChanged);
+
+            blockSearchInput.onSubmit.RemoveListener(OnSearchSubmitted);
+            blockSearchInput.onSubmit.AddListener(OnSearchSubmitted);
+        }
+
+        if (addPlayerButton != null)
+        {
+            addPlayerButton.onClick.RemoveListener(OnAddPlayerClicked);
+            addPlayerButton.onClick.AddListener(OnAddPlayerClicked);
         }
     }
 
@@ -166,6 +238,12 @@ public class ChatRoomBlockController : MonoBehaviour
         if (blockSearchInput != null)
         {
             blockSearchInput.onValueChanged.RemoveListener(OnSearchChanged);
+            blockSearchInput.onSubmit.RemoveListener(OnSearchSubmitted);
+        }
+
+        if (addPlayerButton != null)
+        {
+            addPlayerButton.onClick.RemoveListener(OnAddPlayerClicked);
         }
     }
 
@@ -289,44 +367,122 @@ public class ChatRoomBlockController : MonoBehaviour
 
     private void OnSuggestionAccepted(ChatSuggestionData suggestion)
     {
-        if (suggestion == null)
+        if (suggestion == null || !suggestion.IsValid)
         {
             ShowError(ChatBlockErrorType.PlayerNotFound);
             return;
         }
 
-        ChatBlockErrorType errorType = GetBlockError(suggestion.userId);
+        string displayName = string.IsNullOrWhiteSpace(suggestion.displayName) ? suggestion.playerName : suggestion.displayName;
+
+        SetSearchInputWithoutNotify(displayName);
+        ChatManager.instance?.RememberSuggestedUser(suggestion.userId);
+        suggestionController?.ClearSuggestions();
+        ClearError();
+        FocusSearchInput();
+    }
+
+    private void OnSearchSubmitted(string value)
+    {
+        ChatSuggestionData selectedSuggestion = suggestionController?.SelectedSuggestion?.Clone();
+        _ = SubmitAfterInputEventAsync(value, selectedSuggestion);
+    }
+
+    private async Task SubmitAfterInputEventAsync(string input, ChatSuggestionData selectedSuggestion)
+    {
+        await Task.Yield();
+        SubmitSearch(input, selectedSuggestion);
+    }
+
+    private void OnAddPlayerClicked()
+    {
+        string input = blockSearchInput != null ? blockSearchInput.text : string.Empty;
+        ChatSuggestionData selectedSuggestion = suggestionController?.SelectedSuggestion?.Clone();
+        SubmitSearch(input, selectedSuggestion);
+    }
+
+    private void SubmitSearch(string input, ChatSuggestionData selectedSuggestion)
+    {
+        SetSearchInputWithoutNotify(string.Empty);
+        suggestionController?.ClearSuggestions();
+
+        if (!hasSnapshot)
+        {
+            ShowError(ChatBlockErrorType.PlayerNotFound);
+            FocusSearchInput();
+            return;
+        }
+
+        if (!TryResolveSubmissionTarget(input, selectedSuggestion, out ChatParticipantData participant))
+        {
+            ShowError(GetBlockSearchError(input));
+            FocusSearchInput();
+            return;
+        }
+
+        ChatBlockErrorType errorType = GetBlockError(participant.userId);
 
         if (errorType != ChatBlockErrorType.None)
         {
             ShowError(errorType);
+            FocusSearchInput();
             return;
         }
 
-        isLoadingUi = true;
-
-        if (blockSearchInput != null)
+        if (!AddWorkingBlock(participant.userId))
         {
-            string displayName = string.IsNullOrWhiteSpace(suggestion.displayName) ? suggestion.playerName : suggestion.displayName;
-            blockSearchInput.SetTextWithoutNotify(displayName);
-            blockSearchInput.caretPosition = displayName.Length;
-            blockSearchInput.selectionAnchorPosition = displayName.Length;
-            blockSearchInput.selectionFocusPosition = displayName.Length;
-        }
-
-        isLoadingUi = false;
-
-        suggestionController?.ClearSuggestions();
-
-        if (!AddWorkingBlock(suggestion.userId))
-        {
-            ShowError(GetBlockError(suggestion.userId));
+            ShowError(GetBlockError(participant.userId));
+            FocusSearchInput();
             return;
         }
 
+        ChatManager.instance?.RememberSuggestedUser(participant.userId);
         ClearError();
         RefreshBlockedList();
-        KeepSearchFocused();
+        FocusSearchInput();
+    }
+
+    private bool TryResolveSubmissionTarget(
+        string input,
+        ChatSuggestionData selectedSuggestion,
+        out ChatParticipantData participant)
+    {
+        participant = null;
+
+        if (selectedSuggestion != null && selectedSuggestion.IsValid &&
+            participantSnapshot.TryGetValue(selectedSuggestion.userId, out ChatParticipantData selectedParticipant) &&
+            selectedParticipant != null)
+        {
+            participant = selectedParticipant;
+            return true;
+        }
+
+        string normalizedQuery = NormalizeQuery(input);
+
+        if (string.IsNullOrWhiteSpace(normalizedQuery))
+        {
+            return false;
+        }
+
+        ChatParticipantData singleMatch = null;
+
+        foreach (ChatParticipantData candidate in participantSnapshot.Values)
+        {
+            if (candidate == null || !MatchesExactParticipant(candidate, normalizedQuery))
+            {
+                continue;
+            }
+
+            if (singleMatch != null)
+            {
+                return false;
+            }
+
+            singleMatch = candidate;
+        }
+
+        participant = singleMatch;
+        return participant != null;
     }
 
     private void HandleSearchKeyboardInput()
@@ -350,27 +506,11 @@ public class ChatRoomBlockController : MonoBehaviour
             return;
         }
 
-        bool enterPressed = Keyboard.current.enterKey.wasPressedThisFrame || Keyboard.current.numpadEnterKey.wasPressedThisFrame;
-        bool tabPressed = Keyboard.current.tabKey.wasPressedThisFrame;
-
-        if (suggestionController.HasSuggestions && (enterPressed || tabPressed))
+        if (suggestionController.HasSuggestions && Keyboard.current.tabKey.wasPressedThisFrame)
         {
             suggestionController.AcceptSelected();
             KeepSearchFocused();
-            return;
         }
-
-        if (!suggestionController.HasSuggestions && (enterPressed || tabPressed))
-        {
-            ShowSearchError();
-            KeepSearchFocused();
-        }
-    }
-
-    private void ShowSearchError()
-    {
-        string query = blockSearchInput != null ? blockSearchInput.text : string.Empty;
-        ShowError(GetBlockSearchError(query));
     }
 
     private ChatBlockErrorType GetBlockSearchError(string query)
@@ -446,6 +586,40 @@ public class ChatRoomBlockController : MonoBehaviour
         }
     }
 
+    private void FocusSearchInput()
+    {
+        if (blockSearchInput == null || !blockSearchInput.interactable)
+        {
+            return;
+        }
+
+        blockSearchInput.ActivateInputField();
+        EventSystem.current?.SetSelectedGameObject(blockSearchInput.gameObject);
+    }
+
+    private void SetSearchInputWithoutNotify(string text)
+    {
+        if (blockSearchInput == null)
+        {
+            return;
+        }
+
+        string value = text ?? string.Empty;
+        int endPosition = value.Length;
+
+        blockSearchInput.SetTextWithoutNotify(value);
+
+        blockSearchInput.stringPosition = endPosition;
+        blockSearchInput.selectionStringAnchorPosition = endPosition;
+        blockSearchInput.selectionStringFocusPosition = endPosition;
+
+        blockSearchInput.caretPosition = endPosition;
+        blockSearchInput.selectionAnchorPosition = endPosition;
+        blockSearchInput.selectionFocusPosition = endPosition;
+
+        blockSearchInput.ForceLabelUpdate();
+    }
+
     #endregion
 
     #region Working Block List
@@ -499,7 +673,12 @@ public class ChatRoomBlockController : MonoBehaviour
 
         blockedUsers.Sort((left, right) => string.Compare(left?.playerName, right?.playerName, StringComparison.OrdinalIgnoreCase));
 
-        RebuildBlockedUserRows();
+        if (virtualizedList == null)
+        {
+            InitializeVirtualizedList();
+        }
+
+        virtualizedList?.SetItemCount(blockedUsers.Count);
 
         if (emptyBlockedText != null)
         {
@@ -508,43 +687,22 @@ public class ChatRoomBlockController : MonoBehaviour
         }
     }
 
-    private void RebuildBlockedUserRows()
+    private void OnBlockedItemBound(GameObject itemObject, int index)
     {
-        ClearBlockedUserRows();
-
-        if (blockedUsersContent == null || blockedUserRowPrefab == null)
+        if (itemObject == null || index < 0 || index >= blockedUsers.Count)
         {
             return;
         }
 
-        for (int i = 0; i < blockedUsers.Count; i++)
-        {
-            ChatBlockedUserRowUI row = Instantiate(blockedUserRowPrefab, blockedUsersContent);
-            row.gameObject.SetActive(true);
-            row.Setup(blockedUsers[i], RemoveWorkingBlock);
-            spawnedBlockedUserRows.Add(row);
-        }
-
-        LayoutRebuilder.ForceRebuildLayoutImmediate(blockedUsersContent);
+        itemObject.GetComponent<ChatBlockedUserRowUI>()?.Setup(blockedUsers[index], RemoveWorkingBlock);
     }
 
-    private void ClearBlockedUserRows()
+    private void OnBlockedItemReleased(GameObject itemObject, int _)
     {
-        for (int i = spawnedBlockedUserRows.Count - 1; i >= 0; i--)
+        if (itemObject != null)
         {
-            ChatBlockedUserRowUI row = spawnedBlockedUserRows[i];
-
-            if (row == null)
-            {
-                continue;
-            }
-
-            row.Clear();
-            row.gameObject.SetActive(false);
-            DestroyObject(row.gameObject);
+            itemObject.GetComponent<ChatBlockedUserRowUI>()?.Clear();
         }
-
-        spawnedBlockedUserRows.Clear();
     }
 
     #endregion
@@ -570,7 +728,7 @@ public class ChatRoomBlockController : MonoBehaviour
         }
 
         errorText.text = string.Empty;
-        errorText.gameObject.SetActive(true);
+        errorText.gameObject.SetActive(false);
     }
 
     #endregion
@@ -581,10 +739,7 @@ public class ChatRoomBlockController : MonoBehaviour
     {
         isLoadingUi = true;
 
-        if (blockSearchInput != null)
-        {
-            blockSearchInput.SetTextWithoutNotify(string.Empty);
-        }
+        SetSearchInputWithoutNotify(string.Empty);
 
         if (emptyBlockedText != null)
         {
@@ -594,7 +749,7 @@ public class ChatRoomBlockController : MonoBehaviour
 
         ClearError();
         suggestionController?.ClearSuggestions();
-        ClearBlockedUserRows();
+        virtualizedList?.SetItemCount(0);
 
         if (blockedUsersScrollRect != null)
         {
@@ -607,24 +762,5 @@ public class ChatRoomBlockController : MonoBehaviour
 
     #endregion
 
-    #region Helpers
 
-    private void DestroyObject(GameObject target)
-    {
-        if (target == null)
-        {
-            return;
-        }
-
-        if (Application.isPlaying)
-        {
-            Destroy(target);
-        }
-        else
-        {
-            DestroyImmediate(target);
-        }
-    }
-
-    #endregion
 }

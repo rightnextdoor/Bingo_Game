@@ -22,6 +22,7 @@ public class ChatMessageScrollController : MonoBehaviour
 
     [Header("State UI")]
     [SerializeField] private TMP_Text emptyChatText;
+    [SerializeField] private Button newMessagesButton;
 
     private readonly List<ChatMessageData> messages = new List<ChatMessageData>();
     private readonly List<MessagePresentation> presentations = new List<MessagePresentation>();
@@ -44,12 +45,13 @@ public class ChatMessageScrollController : MonoBehaviour
     private bool suppressScrollRefresh;
     private bool followingBottom = true;
     private bool hasNewMessagesBelow;
+    private bool hasSavedInactiveViewAnchor;
+    private bool hasObservedNewestMessage;
+    private ViewAnchor savedInactiveViewAnchor;
+    private string observedNewestMessageId = string.Empty;
 
     public ChatConversationData Conversation => conversation;
-    public bool HasNewMessagesBelow => hasNewMessagesBelow;
     public bool IsFollowingBottom => followingBottom;
-
-    public event Action<bool> NewMessagesStateChanged;
 
     #endregion
 
@@ -65,27 +67,36 @@ public class ChatMessageScrollController : MonoBehaviour
     private void OnEnable()
     {
         RegisterListeners();
+        RegisterNewMessagesButton();
         RefreshUserSettings();
 
         if (conversation != null)
         {
-            RefreshConversation();
+            RefreshAfterInactive();
+        }
+        else
+        {
+            RefreshNewMessagesButton();
         }
     }
 
     private void Start()
     {
         RegisterListeners();
+        RegisterNewMessagesButton();
     }
 
     private void OnDisable()
     {
+        SaveInactiveViewState();
         UnregisterListeners();
+        UnregisterNewMessagesButton();
     }
 
     private void OnDestroy()
     {
         UnregisterListeners();
+        UnregisterNewMessagesButton();
         ClearMessageViewPool();
         DestroyMeasurementView();
     }
@@ -280,6 +291,25 @@ public class ChatMessageScrollController : MonoBehaviour
         }
     }
 
+    private void RegisterNewMessagesButton()
+    {
+        if (newMessagesButton == null)
+        {
+            return;
+        }
+
+        newMessagesButton.onClick.RemoveListener(OnNewMessagesClicked);
+        newMessagesButton.onClick.AddListener(OnNewMessagesClicked);
+    }
+
+    private void UnregisterNewMessagesButton()
+    {
+        if (newMessagesButton != null)
+        {
+            newMessagesButton.onClick.RemoveListener(OnNewMessagesClicked);
+        }
+    }
+
     #endregion
 
     #region Conversation
@@ -295,11 +325,15 @@ public class ChatMessageScrollController : MonoBehaviour
 
         conversation = newConversation;
         followingBottom = true;
+        hasSavedInactiveViewAnchor = false;
+        hasObservedNewestMessage = false;
+        observedNewestMessageId = string.Empty;
         SetHasNewMessagesBelow(false);
 
         RebuildMessageData();
         RebuildMessageLayout();
         ScrollToBottom();
+        RecordObservedNewestMessage();
     }
 
     public void RefreshConversation()
@@ -311,7 +345,38 @@ public class ChatMessageScrollController : MonoBehaviour
         }
 
         bool keepBottomPinned = followingBottom || IsAtBottom();
+        string previousNewestMessageId = GetNewestMessageId();
         ViewAnchor anchor = keepBottomPinned ? default : CaptureViewAnchor();
+
+        RebuildMessageData();
+        RebuildMessageLayout();
+
+        string currentNewestMessageId = GetNewestMessageId();
+        bool hasNewNewestMessage = !string.Equals(previousNewestMessageId, currentNewestMessageId, StringComparison.Ordinal);
+        bool currentUserSentNewestMessage = HasCurrentUserSentNewestMessage(hasNewNewestMessage);
+
+        if (keepBottomPinned || currentUserSentNewestMessage)
+        {
+            ScrollToBottom();
+        }
+        else
+        {
+            RestoreViewAnchor(anchor);
+
+            if (hasNewNewestMessage)
+            {
+                SetHasNewMessagesBelow(true);
+            }
+        }
+
+        RecordObservedNewestMessage();
+    }
+
+    private void RefreshAfterInactive()
+    {
+        bool keepBottomPinned = followingBottom;
+        bool hasNewMessagesWhileInactive = HasConversationChangedSinceObserved();
+        ViewAnchor anchor = hasSavedInactiveViewAnchor ? savedInactiveViewAnchor : CaptureViewAnchor();
 
         RebuildMessageData();
         RebuildMessageLayout();
@@ -323,7 +388,41 @@ public class ChatMessageScrollController : MonoBehaviour
         else
         {
             RestoreViewAnchor(anchor);
+
+            if (hasNewMessagesWhileInactive)
+            {
+                SetHasNewMessagesBelow(true);
+            }
+            else
+            {
+                RefreshNewMessagesButton();
+            }
         }
+
+        hasSavedInactiveViewAnchor = false;
+        RecordObservedNewestMessage();
+    }
+
+    private void SaveInactiveViewState()
+    {
+        if (!initialized || conversation == null)
+        {
+            return;
+        }
+
+        if (IsAtBottom())
+        {
+            followingBottom = true;
+            hasSavedInactiveViewAnchor = false;
+        }
+        else
+        {
+            followingBottom = false;
+            savedInactiveViewAnchor = CaptureViewAnchor();
+            hasSavedInactiveViewAnchor = true;
+        }
+
+        RecordObservedNewestMessage();
     }
 
     public void ClearDisplay()
@@ -350,6 +449,9 @@ public class ChatMessageScrollController : MonoBehaviour
         }
 
         followingBottom = true;
+        hasSavedInactiveViewAnchor = false;
+        hasObservedNewestMessage = false;
+        observedNewestMessageId = string.Empty;
         SetHasNewMessagesBelow(false);
     }
 
@@ -380,33 +482,8 @@ public class ChatMessageScrollController : MonoBehaviour
             return;
         }
 
-        bool keepBottomPinned = followingBottom || IsAtBottom();
-        string previousNewestMessageId = GetNewestMessageId();
-        ViewAnchor anchor = keepBottomPinned ? default : CaptureViewAnchor();
-
         conversation = changedConversation;
-        RebuildMessageData();
-        RebuildMessageLayout();
-
-        string currentNewestMessageId = GetNewestMessageId();
-        bool hasNewNewestMessage = !string.Equals(previousNewestMessageId, currentNewestMessageId, StringComparison.Ordinal);
-        bool currentUserSentNewestMessage = hasNewNewestMessage &&
-                                            messages.Count > 0 &&
-                                            messages[messages.Count - 1] != null &&
-                                            messages[messages.Count - 1].isFromCurrentUser;
-
-        if (keepBottomPinned || currentUserSentNewestMessage)
-        {
-            ScrollToBottom();
-            return;
-        }
-
-        RestoreViewAnchor(anchor);
-
-        if (hasNewNewestMessage)
-        {
-            SetHasNewMessagesBelow(true);
-        }
+        RefreshConversation();
     }
 
     private bool IsSameConversation(ChatConversationData first, ChatConversationData second)
@@ -1028,13 +1105,57 @@ public class ChatMessageScrollController : MonoBehaviour
 
     private void SetHasNewMessagesBelow(bool hasNewMessages)
     {
-        if (hasNewMessagesBelow == hasNewMessages)
+        hasNewMessagesBelow = hasNewMessages;
+        RefreshNewMessagesButton();
+    }
+
+    private void RefreshNewMessagesButton()
+    {
+        if (newMessagesButton != null && isActiveAndEnabled)
         {
-            return;
+            newMessagesButton.gameObject.SetActive(hasNewMessagesBelow);
+        }
+    }
+
+    private void OnNewMessagesClicked()
+    {
+        ScrollToBottom();
+    }
+
+    private bool HasConversationChangedSinceObserved()
+    {
+        if (!hasObservedNewestMessage)
+        {
+            return false;
         }
 
-        hasNewMessagesBelow = hasNewMessages;
-        NewMessagesStateChanged?.Invoke(hasNewMessagesBelow);
+        string currentNewestMessageId = GetConversationNewestMessageId();
+        return !string.Equals(observedNewestMessageId, currentNewestMessageId, StringComparison.Ordinal);
+    }
+
+    private void RecordObservedNewestMessage()
+    {
+        observedNewestMessageId = GetNewestMessageId();
+        hasObservedNewestMessage = true;
+    }
+
+    private bool HasCurrentUserSentNewestMessage(bool hasNewNewestMessage)
+    {
+        return hasNewNewestMessage &&
+               messages.Count > 0 &&
+               messages[messages.Count - 1] != null &&
+               messages[messages.Count - 1].isFromCurrentUser;
+    }
+
+    private string GetConversationNewestMessageId()
+    {
+        if (conversation?.messages == null || conversation.messages.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        ChatMessageData message = conversation.messages[conversation.messages.Count - 1];
+        return message?.messageId ?? string.Empty;
     }
 
     private void OnUserChatSettingsChanged(ChatSettingsData settings)

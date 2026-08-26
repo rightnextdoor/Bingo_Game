@@ -69,6 +69,7 @@ public class ChatMessageScrollController : MonoBehaviour
         RegisterListeners();
         RegisterNewMessagesButton();
         RefreshUserSettings();
+        UpdateEmptyState();
 
         if (conversation != null)
         {
@@ -253,6 +254,8 @@ public class ChatMessageScrollController : MonoBehaviour
         {
             ChatManager.instance.ConversationMessagesChanged -= OnConversationMessagesChanged;
             ChatManager.instance.ConversationMessagesChanged += OnConversationMessagesChanged;
+            ChatManager.instance.ChatConnectionStateChanged -= OnChatConnectionStateChanged;
+            ChatManager.instance.ChatConnectionStateChanged += OnChatConnectionStateChanged;
         }
 
         if (ChatSettingsManager.instance != null)
@@ -278,6 +281,7 @@ public class ChatMessageScrollController : MonoBehaviour
         if (ChatManager.instance != null)
         {
             ChatManager.instance.ConversationMessagesChanged -= OnConversationMessagesChanged;
+            ChatManager.instance.ChatConnectionStateChanged -= OnChatConnectionStateChanged;
         }
 
         if (ChatSettingsManager.instance != null)
@@ -453,6 +457,7 @@ public class ChatMessageScrollController : MonoBehaviour
         hasObservedNewestMessage = false;
         observedNewestMessageId = string.Empty;
         SetHasNewMessagesBelow(false);
+        UpdateEmptyState();
     }
 
     private void RebuildMessageData()
@@ -1094,13 +1099,35 @@ public class ChatMessageScrollController : MonoBehaviour
 
     private void UpdateEmptyState()
     {
-        bool showEmptyState = conversation != null && messages.Count == 0;
-
-        if (emptyChatText != null)
+        if (emptyChatText == null)
         {
-            emptyChatText.text = showEmptyState ? "No messages yet." : string.Empty;
-            emptyChatText.gameObject.SetActive(showEmptyState);
+            return;
         }
+
+        string statusText = string.Empty;
+        ChatManager chatManager = ChatManager.instance;
+
+        if (chatManager != null)
+        {
+            switch (chatManager.ConnectionState)
+            {
+                case ChatConnectionState.Connecting:
+                    statusText = "Connecting to chat...";
+                    break;
+
+                case ChatConnectionState.Unavailable:
+                    statusText = "Could not connect to chat. Try enabling Chat again in Settings.";
+                    break;
+            }
+        }
+
+        emptyChatText.text = statusText;
+        emptyChatText.gameObject.SetActive(!string.IsNullOrWhiteSpace(statusText));
+    }
+
+    private void OnChatConnectionStateChanged(ChatConnectionState _)
+    {
+        UpdateEmptyState();
     }
 
     private void SetHasNewMessagesBelow(bool hasNewMessages)

@@ -8,23 +8,12 @@ public class OnlineServicesStartup : MonoBehaviour
 
     private OnlineServicesRoot onlineServicesRoot;
     private OnlineConnectionManager connectionManager;
-    private GameSceneManager gameSceneManager;
 
     private bool isReady;
     private bool hasAutomaticAttemptStarted;
-    private bool isSubscribedToSceneManager;
 
     public bool IsReady => isReady;
     public bool HasAutomaticAttemptStarted => hasAutomaticAttemptStarted;
-
-    #endregion
-
-    #region Unity Methods
-
-    private void OnDestroy()
-    {
-        UnsubscribeFromSceneManager();
-    }
 
     #endregion
 
@@ -47,45 +36,18 @@ public class OnlineServicesStartup : MonoBehaviour
         }
 
         connectionManager = OnlineConnectionManager.instance;
-        gameSceneManager = GameSceneManager.instance;
 
-        if (connectionManager == null || !connectionManager.IsReady || gameSceneManager == null)
+        if (connectionManager == null || !connectionManager.IsReady)
         {
             return false;
         }
 
-        SubscribeToSceneManager();
-
         isReady = true;
+        StartAutomaticConnectionAttempt();
         return true;
     }
 
-    #endregion
-
-    #region Scene Events
-
-    private void SubscribeToSceneManager()
-    {
-        if (isSubscribedToSceneManager || gameSceneManager == null)
-        {
-            return;
-        }
-
-        gameSceneManager.SceneReadyToStart += OnSceneReadyToStart;
-        isSubscribedToSceneManager = true;
-    }
-
-    private void UnsubscribeFromSceneManager()
-    {
-        if (isSubscribedToSceneManager && gameSceneManager != null)
-        {
-            gameSceneManager.SceneReadyToStart -= OnSceneReadyToStart;
-        }
-
-        isSubscribedToSceneManager = false;
-    }
-
-    private async void OnSceneReadyToStart(GameSceneType _)
+    private async void StartAutomaticConnectionAttempt()
     {
         if (hasAutomaticAttemptStarted || connectionManager == null)
         {
@@ -93,7 +55,6 @@ public class OnlineServicesStartup : MonoBehaviour
         }
 
         hasAutomaticAttemptStarted = true;
-
         await connectionManager.EnsureConnectedAsync();
     }
 

@@ -11,3 +11,11 @@ public enum ChatCommandAvailability
     SessionOnly,
     FriendsOnly
 }
+
+public enum ChatConnectionState
+{
+    Disabled,
+    Connecting,
+    Ready,
+    Unavailable
+}

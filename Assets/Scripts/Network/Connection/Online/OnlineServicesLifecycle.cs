@@ -11,6 +11,7 @@ public class OnlineServicesLifecycle : MonoBehaviour
 
     private bool isReady;
     private bool isSubscribedToConnectionManager;
+    private bool hasReachedOnline;
 
     public bool IsReady => isReady;
 
@@ -52,6 +53,7 @@ public class OnlineServicesLifecycle : MonoBehaviour
 
         SubscribeToConnectionManager();
 
+        hasReachedOnline = connectionManager.IsOnline;
         isReady = true;
         return true;
     }
@@ -83,13 +85,18 @@ public class OnlineServicesLifecycle : MonoBehaviour
 
     private void OnConnectionStateChanged(OnlineConnectionState state)
     {
-        if (state != OnlineConnectionState.Offline)
+        if (state == OnlineConnectionState.Online)
+        {
+            hasReachedOnline = true;
+            return;
+        }
+
+        if (state != OnlineConnectionState.Offline || !hasReachedOnline)
         {
             return;
         }
 
-        FailureManager.instance?.OnlineFailure?.ReportFailure(
-            OnlineFailureType.ConnectionLost);
+        FailureManager.instance?.OnlineFailure?.ReportFailure(OnlineFailureType.ConnectionLost);
     }
 
     #endregion

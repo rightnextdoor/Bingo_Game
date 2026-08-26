@@ -45,6 +45,7 @@ public class VivoxChatService : MonoBehaviour, IChatService
     private bool isShuttingDown;
     private bool serviceUnavailable;
 
+    private Task<bool> readinessTask;
     private string lastError = string.Empty;
 
     public bool IsReady =>
@@ -98,6 +99,36 @@ public class VivoxChatService : MonoBehaviour, IChatService
         }
 
         UpdateLocalParticipant(participant);
+
+        if (IsReady)
+        {
+            lastError = string.Empty;
+            return true;
+        }
+
+        if (readinessTask != null && !readinessTask.IsCompleted)
+        {
+            return await readinessTask;
+        }
+
+        Task<bool> activeTask = EnsureReadyInternalAsync();
+        readinessTask = activeTask;
+
+        try
+        {
+            return await activeTask;
+        }
+        finally
+        {
+            if (readinessTask == activeTask)
+            {
+                readinessTask = null;
+            }
+        }
+    }
+
+    private async Task<bool> EnsureReadyInternalAsync()
+    {
         lastError = string.Empty;
         serviceUnavailable = false;
 
@@ -619,6 +650,11 @@ public class VivoxChatService : MonoBehaviour, IChatService
     {
         serviceUnavailable = true;
         lastError = string.IsNullOrWhiteSpace(reason) ? "Chat is unavailable." : reason;
+
+        channelNameByConversationKey.Clear();
+        conversationByChannelName.Clear();
+        providerPlayerIdByUserIdByConversationKey.Clear();
+
         ServiceUnavailable?.Invoke(lastError);
     }
 
@@ -637,6 +673,13 @@ public class VivoxChatService : MonoBehaviour, IChatService
 
         try
         {
+            Task<bool> activeReadinessTask = readinessTask;
+
+            if (activeReadinessTask != null && !activeReadinessTask.IsCompleted)
+            {
+                await activeReadinessTask;
+            }
+
             if (VivoxService.Instance != null && VivoxService.Instance.IsLoggedIn)
             {
                 await VivoxService.Instance.LeaveAllChannelsAsync();

@@ -57,6 +57,7 @@ public class LobbyManager : MonoBehaviour
     public bool HasEnteredLobby => entryState == LobbyEntryState.Completed && lobbyClientState.HasLobby;
 
     public event Action<LobbyEntryState> LobbyEntryStateChanged;
+    public event Action<string> NetworkSessionTargetResolved;
     public event Action<LobbyEntryResult> LobbyEntryCompleted;
     public event Action<LobbyEntryResult> LobbyEntryFailed;
 
@@ -177,6 +178,21 @@ public class LobbyManager : MonoBehaviour
 
         SetEntryState(LobbyEntryState.WaitingForService);
 
+        if (runtimeType == SessionRuntimeType.Network && !await EnsureRequiredOnlineConnectionAsync())
+        {
+            CompleteLobbyEntryFailure(
+                LobbyEntryResult.Failed(
+                    LobbyEntryFailureType.ServiceUnavailable,
+                    "Online services could not connect."));
+
+            return;
+        }
+
+        if (currentEntryAttemptVersion != entryAttemptVersion)
+        {
+            return;
+        }
+
         activeLobbyService =
             await WaitForLobbyServiceAsync(runtimeType);
 
@@ -236,6 +252,11 @@ public class LobbyManager : MonoBehaviour
             return;
         }
 
+        if (runtimeType == SessionRuntimeType.Network)
+        {
+            NetworkSessionTargetResolved?.Invoke(result.lobbyId);
+        }
+
         if (runtimeType == SessionRuntimeType.Local)
         {
             if (result.localLobby?.Controller == null || !result.localLobby.Controller.HasPlayer(userData.userId))
@@ -278,6 +299,18 @@ public class LobbyManager : MonoBehaviour
         SetEntryState(LobbyEntryState.Completed);
 
         LobbyEntryCompleted?.Invoke(result);
+    }
+
+    private async Task<bool> EnsureRequiredOnlineConnectionAsync()
+    {
+        OnlineConnectionManager onlineConnectionManager = OnlineConnectionManager.instance;
+
+        if (onlineConnectionManager == null || !onlineConnectionManager.IsReady)
+        {
+            return false;
+        }
+
+        return await onlineConnectionManager.EnsureConnectedAsync();
     }
 
     private async Task<ILobbyService> WaitForLobbyServiceAsync(SessionRuntimeType selectedRuntimeType)

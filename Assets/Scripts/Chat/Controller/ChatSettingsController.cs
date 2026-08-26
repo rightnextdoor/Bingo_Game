@@ -104,6 +104,12 @@ public class ChatSettingsController : MonoBehaviour
         }
 
         workingData = ChatSettingsManager.instance.CurrentSettings;
+
+        if (ChatManager.instance != null && ChatManager.instance.IsReady)
+        {
+            workingData.chatEnabled = ChatManager.instance.IsChatEnabled;
+        }
+
         LoadWorkingDataIntoUi();
         roomBlockController?.BeginSnapshot();
         workingSessionActive = true;

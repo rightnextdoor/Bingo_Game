@@ -24,6 +24,8 @@ public class ChatManager : MonoBehaviour
     private readonly Dictionary<string, ChatConversationData> conversations = new Dictionary<string, ChatConversationData>();
     private readonly Dictionary<string, ChatParticipantData> blockedUsers = new Dictionary<string, ChatParticipantData>(StringComparer.Ordinal);
 
+    private const float SessionPreparationLoadTimeoutSeconds = 15f;
+
     private bool isReady;
     private bool isChatEnabled = true;
     private bool isSubscribedToConnectionManager;
@@ -33,22 +35,30 @@ public class ChatManager : MonoBehaviour
     private bool isSubscribedToProfileRegistry;
     private bool isSubscribedToLobbyManager;
     private bool lastReportedChatAvailable;
+    private bool isSessionPreparationResolved = true;
 
     private Task<bool> serviceReadyTask;
     private Task<bool> sessionJoinTask;
     private Task<bool> sessionLeaveTask;
 
+    private string sessionJoinTaskLobbyId = string.Empty;
     private string activeConversationKey = string.Empty;
     private string sessionConversationKey = string.Empty;
     private string lastPrivateMessageUserId = string.Empty;
     private string lastSuggestedUserId = string.Empty;
     private string lastSuggestedCommandName = string.Empty;
     private string lastServiceError = string.Empty;
+    private string pendingSessionLobbyId = string.Empty;
+    private float sessionPreparationLoadDeadline;
+    private int sessionPreparationVersion;
+    private ChatConnectionState connectionState = ChatConnectionState.Disabled;
 
     public bool IsReady => isReady;
     public bool IsChatEnabled => isChatEnabled;
     public bool IsChatAvailable => isReady && isChatEnabled && chatService != null && chatService.IsReady;
     public bool HasSessionConversation => !string.IsNullOrWhiteSpace(sessionConversationKey) && conversations.ContainsKey(sessionConversationKey);
+    public bool IsSessionPreparationResolved => isSessionPreparationResolved;
+    public ChatConnectionState ConnectionState => connectionState;
     public string LastServiceError => lastServiceError;
     public string LastPrivateMessageUserId => lastPrivateMessageUserId;
     public string LastSuggestedUserId => lastSuggestedUserId;
@@ -63,6 +73,7 @@ public class ChatManager : MonoBehaviour
         conversations.TryGetValue(sessionConversationKey, out ChatConversationData conversation) ? conversation : null;
 
     public event Action<bool> ChatAvailabilityChanged;
+    public event Action<ChatConnectionState> ChatConnectionStateChanged;
     public event Action<ChatConversationData> ConversationJoined;
     public event Action<ChatConversationReference> ConversationLeft;
     public event Action<ChatMessageData> MessageReceived;
@@ -100,6 +111,28 @@ public class ChatManager : MonoBehaviour
         }
 
         instance = this;
+    }
+
+    private void Start()
+    {
+        SubscribeToProfileRegistry();
+        SubscribeToLobbyManager();
+    }
+
+    private void Update()
+    {
+        if (isSessionPreparationResolved || sessionPreparationLoadDeadline <= 0f)
+        {
+            return;
+        }
+
+        if (Time.realtimeSinceStartup < sessionPreparationLoadDeadline)
+        {
+            return;
+        }
+
+        sessionPreparationLoadDeadline = 0f;
+        isSessionPreparationResolved = true;
     }
 
     private void OnDestroy()
@@ -162,6 +195,7 @@ public class ChatManager : MonoBehaviour
 
         isReady = true;
         lastReportedChatAvailable = IsChatAvailable;
+        SetChatConnectionState(isChatEnabled ? ChatConnectionState.Connecting : ChatConnectionState.Disabled);
 
         if (connectionManager.IsOnline && isChatEnabled)
         {
@@ -174,7 +208,7 @@ public class ChatManager : MonoBehaviour
 
             if (lobbyManager.RuntimeType == SessionRuntimeType.Network)
             {
-                StartJoinSession(lobbyManager.CurrentLobbyId);
+                BeginSessionPreparation(lobbyManager.CurrentLobbyId);
             }
         }
 
@@ -207,9 +241,17 @@ public class ChatManager : MonoBehaviour
         if (chatService.IsReady)
         {
             lastServiceError = string.Empty;
+
+            if (string.IsNullOrWhiteSpace(pendingSessionLobbyId) || HasMatchingSessionConversation(pendingSessionLobbyId))
+            {
+                SetChatConnectionState(ChatConnectionState.Ready);
+            }
+
             PublishChatAvailabilityIfChanged();
             return true;
         }
+
+        SetChatConnectionState(ChatConnectionState.Connecting);
 
         if (serviceReadyTask != null && !serviceReadyTask.IsCompleted)
         {
@@ -235,9 +277,26 @@ public class ChatManager : MonoBehaviour
     private async Task<bool> EnsureChatServiceReadyInternalAsync(ChatParticipantData localParticipant)
     {
         bool ready = await chatService.EnsureReadyAsync(localParticipant);
-        lastServiceError = ready ? string.Empty : chatService.LastError;
+
+        if (!ready)
+        {
+            if (isChatEnabled && connectionState != ChatConnectionState.Unavailable)
+            {
+                HandleChatConnectionFailure(chatService.LastError);
+            }
+
+            return false;
+        }
+
+        lastServiceError = string.Empty;
+
+        if (isChatEnabled && (string.IsNullOrWhiteSpace(pendingSessionLobbyId) || HasMatchingSessionConversation(pendingSessionLobbyId)))
+        {
+            SetChatConnectionState(ChatConnectionState.Ready);
+        }
+
         PublishChatAvailabilityIfChanged();
-        return ready;
+        return true;
     }
 
     private async void StartEnsureChatReady()
@@ -247,7 +306,35 @@ public class ChatManager : MonoBehaviour
             return;
         }
 
+        if (!string.IsNullOrWhiteSpace(pendingSessionLobbyId))
+        {
+            StartJoinSession(pendingSessionLobbyId, sessionPreparationVersion);
+            return;
+        }
+
         TryJoinCurrentNetworkSession();
+    }
+
+    private void HandleChatConnectionFailure(string reason)
+    {
+        lastServiceError = string.IsNullOrWhiteSpace(reason) ? "Chat is unavailable." : reason;
+        isChatEnabled = false;
+        isSessionPreparationResolved = true;
+        sessionPreparationLoadDeadline = 0f;
+        SetChatConnectionState(ChatConnectionState.Unavailable);
+        ClearChatConversationState();
+        PublishChatAvailabilityIfChanged();
+    }
+
+    private void SetChatConnectionState(ChatConnectionState state)
+    {
+        if (connectionState == state)
+        {
+            return;
+        }
+
+        connectionState = state;
+        ChatConnectionStateChanged?.Invoke(connectionState);
     }
 
     private void PublishChatAvailabilityIfChanged()
@@ -267,6 +354,48 @@ public class ChatManager : MonoBehaviour
 
     #region Session Lifecycle
 
+    public void BeginSessionPreparation(string lobbyId)
+    {
+        string normalizedLobbyId = lobbyId?.Trim() ?? string.Empty;
+
+        if (!isReady || string.IsNullOrWhiteSpace(normalizedLobbyId))
+        {
+            isSessionPreparationResolved = true;
+            sessionPreparationLoadDeadline = 0f;
+            return;
+        }
+
+        pendingSessionLobbyId = normalizedLobbyId;
+        sessionPreparationVersion++;
+
+        if (!isChatEnabled)
+        {
+            isSessionPreparationResolved = true;
+            sessionPreparationLoadDeadline = 0f;
+
+            if (connectionState != ChatConnectionState.Unavailable)
+            {
+                SetChatConnectionState(ChatConnectionState.Disabled);
+            }
+
+            return;
+        }
+
+        if (HasMatchingSessionConversation(normalizedLobbyId) && chatService != null && chatService.IsReady)
+        {
+            isSessionPreparationResolved = true;
+            sessionPreparationLoadDeadline = 0f;
+            SetChatConnectionState(ChatConnectionState.Ready);
+            RefreshSessionParticipants(lobbyManager?.CurrentLobbyViewData);
+            return;
+        }
+
+        isSessionPreparationResolved = false;
+        sessionPreparationLoadDeadline = Time.realtimeSinceStartup + SessionPreparationLoadTimeoutSeconds;
+        SetChatConnectionState(ChatConnectionState.Connecting);
+        StartJoinSession(normalizedLobbyId, sessionPreparationVersion);
+    }
+
     public async Task<bool> JoinSessionAsync(string lobbyId)
     {
         if (!isReady || !isChatEnabled || string.IsNullOrWhiteSpace(lobbyId))
@@ -274,21 +403,31 @@ public class ChatManager : MonoBehaviour
             return false;
         }
 
-        ChatConversationReference requestedSession = new ChatConversationReference(lobbyId.Trim(), ChatConversationType.Session);
-
-        if (HasSessionConversation && string.Equals(SessionConversation.conversationId, requestedSession.conversationId, StringComparison.Ordinal))
-        {
-            RefreshSessionParticipants(lobbyManager?.CurrentLobbyViewData);
-            return true;
-        }
+        string normalizedLobbyId = lobbyId.Trim();
 
         if (sessionJoinTask != null && !sessionJoinTask.IsCompleted)
         {
-            return await sessionJoinTask;
+            Task<bool> activeJoinTask = sessionJoinTask;
+            string activeJoinLobbyId = sessionJoinTaskLobbyId;
+            bool activeResult = await activeJoinTask;
+
+            if (string.Equals(activeJoinLobbyId, normalizedLobbyId, StringComparison.Ordinal))
+            {
+                return activeResult;
+            }
+
+            if (!isChatEnabled)
+            {
+                return false;
+            }
+
+            return await JoinSessionAsync(normalizedLobbyId);
         }
 
-        Task<bool> activeTask = JoinSessionInternalAsync(requestedSession);
+        ChatConversationReference requestedSession = new ChatConversationReference(normalizedLobbyId, ChatConversationType.Session);
+        Task<bool> activeTask = JoinSessionRequestInternalAsync(requestedSession);
         sessionJoinTask = activeTask;
+        sessionJoinTaskLobbyId = normalizedLobbyId;
 
         try
         {
@@ -299,8 +438,31 @@ public class ChatManager : MonoBehaviour
             if (sessionJoinTask == activeTask)
             {
                 sessionJoinTask = null;
+                sessionJoinTaskLobbyId = string.Empty;
             }
         }
+    }
+
+    private async Task<bool> JoinSessionRequestInternalAsync(ChatConversationReference requestedSession)
+    {
+        if (HasSessionConversation && string.Equals(SessionConversation.conversationId, requestedSession.conversationId, StringComparison.Ordinal))
+        {
+            if (!await EnsureChatReadyAsync())
+            {
+                return false;
+            }
+
+            if (!await chatService.JoinConversationAsync(requestedSession))
+            {
+                lastServiceError = chatService.LastError;
+                return false;
+            }
+
+            RefreshSessionParticipants(lobbyManager?.CurrentLobbyViewData);
+            return true;
+        }
+
+        return await JoinSessionInternalAsync(requestedSession);
     }
 
     private async Task<bool> JoinSessionInternalAsync(ChatConversationReference requestedSession)
@@ -376,9 +538,38 @@ public class ChatManager : MonoBehaviour
         return left;
     }
 
-    private async void StartJoinSession(string lobbyId)
+    private async void StartJoinSession(string lobbyId, int preparationVersion)
     {
-        await JoinSessionAsync(lobbyId);
+        bool joined = await JoinSessionAsync(lobbyId);
+
+        if (preparationVersion != sessionPreparationVersion ||
+            !string.Equals(pendingSessionLobbyId, lobbyId, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        isSessionPreparationResolved = true;
+        sessionPreparationLoadDeadline = 0f;
+
+        if (!isChatEnabled)
+        {
+            if (connectionState != ChatConnectionState.Unavailable)
+            {
+                SetChatConnectionState(ChatConnectionState.Disabled);
+            }
+
+            return;
+        }
+
+        if (joined)
+        {
+            lastServiceError = string.Empty;
+            SetChatConnectionState(ChatConnectionState.Ready);
+            PublishChatAvailabilityIfChanged();
+            return;
+        }
+
+        HandleChatConnectionFailure(string.IsNullOrWhiteSpace(lastServiceError) ? chatService?.LastError : lastServiceError);
     }
 
     private async void StartLeaveSession()
@@ -395,7 +586,22 @@ public class ChatManager : MonoBehaviour
             return;
         }
 
-        StartJoinSession(lobbyManager.CurrentLobbyId);
+        BeginSessionPreparation(lobbyManager.CurrentLobbyId);
+    }
+
+    private bool HasMatchingSessionConversation(string lobbyId)
+    {
+        return HasSessionConversation &&
+               !string.IsNullOrWhiteSpace(lobbyId) &&
+               string.Equals(SessionConversation.conversationId, lobbyId.Trim(), StringComparison.Ordinal);
+    }
+
+    private void ClearPendingSessionPreparation()
+    {
+        pendingSessionLobbyId = string.Empty;
+        sessionPreparationVersion++;
+        isSessionPreparationResolved = true;
+        sessionPreparationLoadDeadline = 0f;
     }
 
     #endregion
@@ -1747,7 +1953,8 @@ public class ChatManager : MonoBehaviour
             return;
         }
 
-        lobbyManager.LobbyEntryCompleted += OnLobbyEntryCompleted;
+        lobbyManager.NetworkSessionTargetResolved += OnNetworkSessionTargetResolved;
+        lobbyManager.LobbyEntryFailed += OnLobbyEntryFailed;
         lobbyManager.LobbyExitCompleted += OnLobbyExitCompleted;
         lobbyManager.LobbyForcedExit += OnLobbyForcedExit;
         lobbyManager.LobbyViewUpdated += OnLobbyViewUpdated;
@@ -1758,7 +1965,8 @@ public class ChatManager : MonoBehaviour
     {
         if (isSubscribedToLobbyManager && lobbyManager != null)
         {
-            lobbyManager.LobbyEntryCompleted -= OnLobbyEntryCompleted;
+            lobbyManager.NetworkSessionTargetResolved -= OnNetworkSessionTargetResolved;
+            lobbyManager.LobbyEntryFailed -= OnLobbyEntryFailed;
             lobbyManager.LobbyExitCompleted -= OnLobbyExitCompleted;
             lobbyManager.LobbyForcedExit -= OnLobbyForcedExit;
             lobbyManager.LobbyViewUpdated -= OnLobbyViewUpdated;
@@ -1767,23 +1975,26 @@ public class ChatManager : MonoBehaviour
         isSubscribedToLobbyManager = false;
     }
 
-    private void OnLobbyEntryCompleted(LobbyEntryResult result)
+    private void OnNetworkSessionTargetResolved(string lobbyId)
     {
-        if (result == null || !result.success || lobbyManager == null || lobbyManager.RuntimeType != SessionRuntimeType.Network || !isChatEnabled)
-        {
-            return;
-        }
+        BeginSessionPreparation(lobbyId);
+    }
 
-        StartJoinSession(result.lobbyId);
+    private void OnLobbyEntryFailed(LobbyEntryResult _)
+    {
+        ClearPendingSessionPreparation();
+        StartLeaveSession();
     }
 
     private void OnLobbyExitCompleted(LobbyExitResult _)
     {
+        ClearPendingSessionPreparation();
         StartLeaveSession();
     }
 
     private void OnLobbyForcedExit(LobbyExitNotification _)
     {
+        ClearPendingSessionPreparation();
         StartLeaveSession();
     }
 
@@ -1827,34 +2038,55 @@ public class ChatManager : MonoBehaviour
         if (chatSettingsManager == null || !chatSettingsManager.IsReady)
         {
             isChatEnabled = false;
+            SetChatConnectionState(ChatConnectionState.Disabled);
             return;
         }
 
         ChatSettingsData chatSettings = chatSettingsManager.CurrentSettings;
         isChatEnabled = chatSettings == null || chatSettings.chatEnabled;
+        SetChatConnectionState(isChatEnabled ? ChatConnectionState.Connecting : ChatConnectionState.Disabled);
     }
 
     private void OnChatSettingsChanged(ChatSettingsData chatSettings)
     {
-        bool wasEnabled = isChatEnabled;
-        isChatEnabled = chatSettings == null || chatSettings.chatEnabled;
+        bool requestedEnabled = chatSettings == null || chatSettings.chatEnabled;
 
-        if (wasEnabled == isChatEnabled)
+        if (requestedEnabled == isChatEnabled)
         {
             PublishChatAvailabilityIfChanged();
             return;
         }
 
+        isChatEnabled = requestedEnabled;
+        lastServiceError = string.Empty;
+
         if (!isChatEnabled)
         {
+            ClearPendingSessionPreparation();
+            SetChatConnectionState(ChatConnectionState.Disabled);
             StartShutdownChat();
+            PublishChatAvailabilityIfChanged();
             return;
         }
 
-        if (connectionManager != null && connectionManager.IsOnline)
+        SetChatConnectionState(ChatConnectionState.Connecting);
+        PublishChatAvailabilityIfChanged();
+
+        if (connectionManager == null || !connectionManager.IsOnline)
         {
-            StartEnsureChatReady();
+            SetChatConnectionState(ChatConnectionState.Unavailable);
+            return;
         }
+
+        lobbyManager ??= LobbyManager.instance;
+
+        if (lobbyManager != null && lobbyManager.HasEnteredLobby && lobbyManager.RuntimeType == SessionRuntimeType.Network)
+        {
+            BeginSessionPreparation(lobbyManager.CurrentLobbyId);
+            return;
+        }
+
+        StartEnsureChatReady();
     }
 
     #endregion
@@ -1886,6 +2118,13 @@ public class ChatManager : MonoBehaviour
     {
         switch (state)
         {
+            case OnlineConnectionState.Connecting:
+                if (isChatEnabled)
+                {
+                    SetChatConnectionState(ChatConnectionState.Connecting);
+                }
+                break;
+
             case OnlineConnectionState.Online:
                 if (isChatEnabled)
                 {
@@ -1894,6 +2133,13 @@ public class ChatManager : MonoBehaviour
                 break;
 
             case OnlineConnectionState.Offline:
+                ClearPendingSessionPreparation();
+
+                if (isChatEnabled)
+                {
+                    SetChatConnectionState(ChatConnectionState.Unavailable);
+                }
+
                 StartShutdownChat();
                 break;
         }
@@ -1929,8 +2175,15 @@ public class ChatManager : MonoBehaviour
 
     private void OnChatServiceUnavailable(string reason)
     {
-        lastServiceError = reason ?? string.Empty;
-        PublishChatAvailabilityIfChanged();
+        if (!isChatEnabled)
+        {
+            lastServiceError = reason ?? string.Empty;
+            SetChatConnectionState(ChatConnectionState.Disabled);
+            PublishChatAvailabilityIfChanged();
+            return;
+        }
+
+        HandleChatConnectionFailure(reason);
     }
 
     #endregion
@@ -1951,8 +2204,23 @@ public class ChatManager : MonoBehaviour
             await chatService.ShutdownAsync();
         }
 
+        ClearChatConversationState();
+
+        if (!isChatEnabled)
+        {
+            SetChatConnectionState(connectionState == ChatConnectionState.Unavailable
+                ? ChatConnectionState.Unavailable
+                : ChatConnectionState.Disabled);
+        }
+
+        PublishChatAvailabilityIfChanged();
+    }
+
+    private void ClearChatConversationState()
+    {
         bool hadConversations = conversations.Count > 0;
 
+        ClearConversationMessages();
         conversations.Clear();
         activeConversationKey = string.Empty;
         sessionConversationKey = string.Empty;
@@ -1966,8 +2234,21 @@ public class ChatManager : MonoBehaviour
             ActiveConversationChanged?.Invoke(null);
             SessionParticipantsChanged?.Invoke(null);
         }
+    }
 
-        PublishChatAvailabilityIfChanged();
+    private void ClearConversationMessages()
+    {
+        foreach (ChatConversationData conversation in conversations.Values)
+        {
+            if (conversation?.messages == null)
+            {
+                continue;
+            }
+
+            conversation.messages.Clear();
+            conversation.unreadCount = 0;
+            ConversationMessagesChanged?.Invoke(conversation);
+        }
     }
 
     #endregion

@@ -2363,13 +2363,42 @@ public class NetworkLobbyManager : MonoBehaviour
 
         Lobby lobby = FindUserLobby(userId);
 
-        if (lobby?.Controller == null || !lobby.Controller.ApplyHostSettings(userId, settingsData))
+        if (lobby?.Controller == null || !lobby.Controller.ApplyHostSettings(userId, settingsData, out List<LobbyExitResult> capacityTrimResults))
         {
             return false;
         }
 
+        ProcessCapacityTrimmedPlayers(lobby, capacityTrimResults);
         BroadcastLobbySettingsChanged(lobby, lobby.Controller.BuildViewData(false));
         return true;
+    }
+
+    private void ProcessCapacityTrimmedPlayers(Lobby lobby, IReadOnlyList<LobbyExitResult> capacityTrimResults)
+    {
+        if (lobby == null || capacityTrimResults == null || capacityTrimResults.Count == 0)
+        {
+            return;
+        }
+
+        for (int i = 0; i < capacityTrimResults.Count; i++)
+        {
+            LobbyExitResult exitResult = capacityTrimResults[i];
+
+            if (exitResult == null || !exitResult.success || string.IsNullOrWhiteSpace(exitResult.userId))
+            {
+                continue;
+            }
+
+            pendingJoinStartedTimeByUserId.Remove(exitResult.userId);
+
+            if (connectionRegistry == null || !connectionRegistry.TryGetClientId(exitResult.userId, out ulong targetClientId))
+            {
+                continue;
+            }
+
+            StopInitialSync(targetClientId);
+            NetworkLobbyConnection.TrySendForcedLobbyExit(targetClientId, LobbyExitNotification.Kicked(lobby.GetLobbyId()));
+        }
     }
 
     public void ProcessAuthorityStartLobby(ulong clientId)

@@ -58,6 +58,7 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
 
     private bool isUiReady;
     private bool isLoadingUi;
+    private bool botCountChanged;
 
     public LobbyHostSettingsData WorkingData => workingData;
     public bool IsUiReady => isUiReady;
@@ -105,6 +106,7 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
 
         isUiReady = false;
         isLoadingUi = false;
+        botCountChanged = false;
     }
 
     #endregion
@@ -252,10 +254,12 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
             addBotsToggle.SetIsOnWithoutNotify(workingData.addBots);
         }
 
+        workingData.botCount = 0;
+        botCountChanged = false;
+
         if (botCountInput != null)
         {
-            int botCountValue = workingData.addBots ? Mathf.Max(1, workingData.botCount) : 1;
-            botCountInput.SetTextWithoutNotify(botCountValue.ToString());
+            botCountInput.SetTextWithoutNotify(string.Empty);
         }
 
         ApplyPatternState();
@@ -792,18 +796,15 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
         }
 
         workingData.addBots = isOn;
+        workingData.botCount = 0;
+        botCountChanged = false;
 
-        if (!isOn)
+        if (botCountInput != null)
         {
-            workingData.botCount = 0;
-            ClearError();
-        }
-        else if (botCountInput != null && string.IsNullOrWhiteSpace(botCountInput.text))
-        {
-            botCountInput.SetTextWithoutNotify("1");
-            workingData.botCount = 1;
+            botCountInput.SetTextWithoutNotify(string.Empty);
         }
 
+        ClearError();
         ApplyAddBotsState();
     }
 
@@ -814,6 +815,8 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
             return;
         }
 
+        botCountChanged = true;
+
         if (TryGetBotCountValue(false, out int botCount))
         {
             workingData.botCount = botCount;
@@ -822,7 +825,11 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
             {
                 ClearError();
             }
+
+            return;
         }
+
+        workingData.botCount = 0;
     }
 
     #endregion
@@ -930,7 +937,7 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
         bool addBots = addBotsToggle != null && addBotsToggle.isOn;
         int botCount = 0;
 
-        if (addBots && !TryGetBotCountValue(true, out botCount))
+        if (addBots && botCountChanged && !TryGetBotCountValue(true, out botCount))
         {
             return false;
         }

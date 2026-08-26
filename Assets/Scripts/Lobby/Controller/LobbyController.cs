@@ -1380,6 +1380,13 @@ public class LobbyController
 
     public bool ApplyHostSettings(string requesterUserId, LobbyHostSettingsData settingsData)
     {
+        return ApplyHostSettings(requesterUserId, settingsData, out _);
+    }
+
+    public bool ApplyHostSettings(string requesterUserId, LobbyHostSettingsData settingsData, out List<LobbyExitResult> capacityTrimResults)
+    {
+        capacityTrimResults = new List<LobbyExitResult>();
+
         if (lobby == null || settingsData == null)
         {
             return false;
@@ -1435,6 +1442,7 @@ public class LobbyController
 
         ResolveGameModeData();
         TrimPendingBotsToCapacity();
+        capacityTrimResults = TrimPlayersToCapacity();
 
         if (requestedBotCount > 0)
         {
@@ -1450,6 +1458,55 @@ public class LobbyController
 
         pendingViewRefresh = true;
         return true;
+    }
+
+    private List<LobbyExitResult> TrimPlayersToCapacity()
+    {
+        List<LobbyExitResult> removalResults = new List<LobbyExitResult>();
+        int playersToRemove = Mathf.Max(0, PlayerCount - maxPlayer);
+
+        if (playersToRemove <= 0)
+        {
+            return removalResults;
+        }
+
+        List<string> userIdsToRemove = new List<string>(playersToRemove);
+
+        for (int i = players.Count - 1; i >= 0 && userIdsToRemove.Count < playersToRemove; i--)
+        {
+            LobbyPlayerData playerData = players[i];
+
+            if (playerData?.userData == null || playerData.isHost || playerData.userData.userTag != UserTag.Bot)
+            {
+                continue;
+            }
+
+            userIdsToRemove.Add(playerData.userData.userId);
+        }
+
+        for (int i = players.Count - 1; i >= 0 && userIdsToRemove.Count < playersToRemove; i--)
+        {
+            LobbyPlayerData playerData = players[i];
+
+            if (playerData?.userData == null || playerData.isHost || playerData.userData.userTag == UserTag.Bot)
+            {
+                continue;
+            }
+
+            userIdsToRemove.Add(playerData.userData.userId);
+        }
+
+        for (int i = 0; i < userIdsToRemove.Count; i++)
+        {
+            LobbyExitResult removalResult = RemovePlayer(userIdsToRemove[i], LobbyPlayerExitReason.Kicked);
+
+            if (removalResult != null && removalResult.success)
+            {
+                removalResults.Add(removalResult);
+            }
+        }
+
+        return removalResults;
     }
 
     private void ApplyDefaultPatterns(BingoGameModeData gameModeData)

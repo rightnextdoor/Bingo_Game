@@ -19,11 +19,8 @@ public class ChatSettingsController : MonoBehaviour
 
     [Header("Colors")]
     [SerializeField] private Button currentUserColorButton;
-    [SerializeField] private Image currentUserColorSwatch;
     [SerializeField] private Button otherUserColorButton;
-    [SerializeField] private Image otherUserColorSwatch;
     [SerializeField] private Button privateColorButton;
-    [SerializeField] private Image privateColorSwatch;
     [SerializeField] private Button resetColorsButton;
     [SerializeField] private ColorPickerController colorPickerController;
 
@@ -122,9 +119,9 @@ public class ChatSettingsController : MonoBehaviour
             chatEnabledToggle.SetIsOnWithoutNotify(false);
         }
 
-        ClearSwatch(currentUserColorSwatch);
-        ClearSwatch(otherUserColorSwatch);
-        ClearSwatch(privateColorSwatch);
+        ClearColorButton(currentUserColorButton);
+        ClearColorButton(otherUserColorButton);
+        ClearColorButton(privateColorButton);
 
         if (settingsScrollView != null)
         {
@@ -134,11 +131,13 @@ public class ChatSettingsController : MonoBehaviour
         loadingUi = false;
     }
 
-    private void ClearSwatch(Image swatch)
+    private void ClearColorButton(Button button)
     {
-        if (swatch != null)
+        Image image = GetColorButtonImage(button);
+
+        if (image != null)
         {
-            swatch.color = Color.clear;
+            image.color = Color.clear;
         }
     }
 
@@ -156,7 +155,7 @@ public class ChatSettingsController : MonoBehaviour
             chatEnabledToggle.SetIsOnWithoutNotify(workingData.chatEnabled);
         }
 
-        RefreshColorSwatches();
+        RefreshColorButtons();
 
         if (settingsScrollView != null)
         {
@@ -274,7 +273,7 @@ public class ChatSettingsController : MonoBehaviour
                 break;
         }
 
-        RefreshColorSwatches();
+        RefreshColorButtons();
     }
 
     private void ResetColors()
@@ -289,30 +288,48 @@ public class ChatSettingsController : MonoBehaviour
         workingData.overridePrivateMessageColor = false;
         activeColorTarget = ChatColorTarget.None;
         colorPickerController?.Close();
-        RefreshColorSwatches();
+        RefreshColorButtons();
     }
 
-    private void RefreshColorSwatches()
+    private void RefreshColorButtons()
     {
         if (workingData == null)
         {
             return;
         }
 
-        SetSwatch(currentUserColorSwatch, GetEffectiveWorkingColor(ChatColorTarget.CurrentUser));
-        SetSwatch(otherUserColorSwatch, GetEffectiveWorkingColor(ChatColorTarget.OtherUser));
-        SetSwatch(privateColorSwatch, GetEffectiveWorkingColor(ChatColorTarget.Private));
+        SetColorButton(currentUserColorButton, GetEffectiveWorkingColor(ChatColorTarget.CurrentUser));
+        SetColorButton(otherUserColorButton, GetEffectiveWorkingColor(ChatColorTarget.OtherUser));
+        SetColorButton(privateColorButton, GetEffectiveWorkingColor(ChatColorTarget.Private));
     }
 
-    private void SetSwatch(Image swatch, Color color)
+    private void SetColorButton(Button button, Color color)
     {
-        if (swatch == null)
+        Image image = GetColorButtonImage(button);
+
+        if (image == null)
         {
             return;
         }
 
         color.a = 1f;
-        swatch.color = color;
+        image.color = color;
+        image.enabled = true;
+    }
+
+    private Image GetColorButtonImage(Button button)
+    {
+        if (button == null)
+        {
+            return null;
+        }
+
+        if (button.targetGraphic is Image targetImage)
+        {
+            return targetImage;
+        }
+
+        return button.GetComponent<Image>();
     }
 
     private Color GetEffectiveWorkingColor(ChatColorTarget target)

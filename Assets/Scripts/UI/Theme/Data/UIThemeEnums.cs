@@ -37,7 +37,8 @@ public enum UIThemeBackgroundType
     ChatMessageRowA,
     ChatMessageRowB,
     ChatSuggestionRow,
-    ChatSuggestionRowHighlight
+    ChatSuggestionRowHighlight,
+    ChatPickerHeader
 }
 
 public enum UIThemeButtonType
@@ -67,7 +68,8 @@ public enum UIThemeTextType
 
 public enum UIThemeInputType
 {
-    Default
+    Default,
+    ColorPicker
 }
 
 public enum UIThemeDropdownType

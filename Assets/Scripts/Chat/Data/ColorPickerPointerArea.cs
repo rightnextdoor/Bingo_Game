@@ -8,10 +8,12 @@ public enum ColorPickerPointerAreaType
 }
 
 [DisallowMultipleComponent]
-public class ColorPickerPointerArea : MonoBehaviour, IPointerDownHandler, IDragHandler
+public class ColorPickerPointerArea : MonoBehaviour, IPointerDownHandler, IDragHandler, IPointerUpHandler
 {
     [SerializeField] private ColorPickerController colorPickerController;
     [SerializeField] private ColorPickerPointerAreaType areaType;
+
+    private bool pointerActive;
 
     private void Awake()
     {
@@ -23,11 +25,36 @@ public class ColorPickerPointerArea : MonoBehaviour, IPointerDownHandler, IDragH
 
     public void OnPointerDown(PointerEventData eventData)
     {
-        colorPickerController?.HandlePointer(areaType, eventData);
+        pointerActive = colorPickerController != null && colorPickerController.BeginPointer(areaType, eventData);
     }
 
     public void OnDrag(PointerEventData eventData)
     {
-        colorPickerController?.HandlePointer(areaType, eventData);
+        if (pointerActive)
+        {
+            colorPickerController?.DragPointer(areaType, eventData);
+        }
+    }
+
+    public void OnPointerUp(PointerEventData eventData)
+    {
+        if (!pointerActive)
+        {
+            return;
+        }
+
+        pointerActive = false;
+        colorPickerController?.EndPointer(areaType);
+    }
+
+    private void OnDisable()
+    {
+        if (!pointerActive)
+        {
+            return;
+        }
+
+        pointerActive = false;
+        colorPickerController?.EndPointer(areaType);
     }
 }

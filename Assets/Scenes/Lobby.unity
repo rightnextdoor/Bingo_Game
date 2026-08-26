@@ -11012,7 +11012,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: -6813974994511889503, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
       propertyPath: vivoxConnectionEnabled
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 633853011194982010, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
       propertyPath: playMode

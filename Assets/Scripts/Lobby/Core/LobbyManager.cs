@@ -39,6 +39,7 @@ public class LobbyManager : MonoBehaviour
     private bool isSubscribedToMultiplayerSessionLifecycle;
     private GameSceneManager gameSceneManager;
     private bool isSubscribedToGameSceneManager;
+    private bool isSubscribedToPlayerProfiles;
 
     public bool HasPendingLobbySetupData => pendingLobbySetupData != null;
     public LobbySetupData PendingLobbySetupData => pendingLobbySetupData;
@@ -56,6 +57,7 @@ public class LobbyManager : MonoBehaviour
     public bool HasEnteredLobby => entryState == LobbyEntryState.Completed && lobbyClientState.HasLobby;
 
     public event Action<LobbyEntryState> LobbyEntryStateChanged;
+    public event Action<string> NetworkSessionTargetResolved;
     public event Action<LobbyEntryResult> LobbyEntryCompleted;
     public event Action<LobbyEntryResult> LobbyEntryFailed;
 
@@ -90,24 +92,28 @@ public class LobbyManager : MonoBehaviour
     {
         SubscribeToNetworkEvents();
         SubscribeToSceneEvents();
+        SubscribeToPlayerProfiles();
     }
 
     private void Start()
     {
         SubscribeToNetworkEvents();
         SubscribeToSceneEvents();
+        SubscribeToPlayerProfiles();
     }
 
     private void OnDisable()
     {
         UnsubscribeFromNetworkEvents();
         UnsubscribeFromSceneEvents();
+        UnsubscribeFromPlayerProfiles();
     }
 
     private void OnDestroy()
     {
         UnsubscribeFromNetworkEvents();
         UnsubscribeFromSceneEvents();
+        UnsubscribeFromPlayerProfiles();
         UnsubscribeFromLocalLobbyController();
 
         if (instance == this)
@@ -172,6 +178,21 @@ public class LobbyManager : MonoBehaviour
 
         SetEntryState(LobbyEntryState.WaitingForService);
 
+        if (runtimeType == SessionRuntimeType.Network && !await EnsureRequiredOnlineConnectionAsync())
+        {
+            CompleteLobbyEntryFailure(
+                LobbyEntryResult.Failed(
+                    LobbyEntryFailureType.ServiceUnavailable,
+                    "Online services could not connect."));
+
+            return;
+        }
+
+        if (currentEntryAttemptVersion != entryAttemptVersion)
+        {
+            return;
+        }
+
         activeLobbyService =
             await WaitForLobbyServiceAsync(runtimeType);
 
@@ -231,6 +252,11 @@ public class LobbyManager : MonoBehaviour
             return;
         }
 
+        if (runtimeType == SessionRuntimeType.Network)
+        {
+            NetworkSessionTargetResolved?.Invoke(result.lobbyId);
+        }
+
         if (runtimeType == SessionRuntimeType.Local)
         {
             if (result.localLobby?.Controller == null || !result.localLobby.Controller.HasPlayer(userData.userId))
@@ -273,6 +299,18 @@ public class LobbyManager : MonoBehaviour
         SetEntryState(LobbyEntryState.Completed);
 
         LobbyEntryCompleted?.Invoke(result);
+    }
+
+    private async Task<bool> EnsureRequiredOnlineConnectionAsync()
+    {
+        OnlineConnectionManager onlineConnectionManager = OnlineConnectionManager.instance;
+
+        if (onlineConnectionManager == null || !onlineConnectionManager.IsReady)
+        {
+            return false;
+        }
+
+        return await onlineConnectionManager.EnsureConnectedAsync();
     }
 
     private async Task<ILobbyService> WaitForLobbyServiceAsync(SessionRuntimeType selectedRuntimeType)
@@ -782,6 +820,7 @@ public class LobbyManager : MonoBehaviour
         currentUserId = string.Empty;
         activeLobbyService = null;
         lastEntryResult = null;
+        PlayerProfileRegistry.instance?.ClearLobbyProfiles();
     }
 
     private void ApplyPendingNetworkLobbyViewData()
@@ -801,10 +840,13 @@ public class LobbyManager : MonoBehaviour
 
     private void PublishCurrentLobbyView()
     {
-        if (lobbyClientState.ViewData != null)
+        if (lobbyClientState.ViewData == null)
         {
-            LobbyViewUpdated?.Invoke(lobbyClientState.ViewData);
+            return;
         }
+
+        PlayerProfileRegistry.instance?.SyncFromLobbyView(lobbyClientState.ViewData);
+        LobbyViewUpdated?.Invoke(lobbyClientState.ViewData);
     }
 
     public LobbyBoardData GetPlayerBoard(string userId)
@@ -824,7 +866,61 @@ public class LobbyManager : MonoBehaviour
             return;
         }
 
-        gameSceneManager.ReturnToMainSceneAfterLobbyFailure();
+        gameSceneManager.ReturnToMainSceneAfterFailure();
+    }
+
+    #endregion
+
+    #region Player Profiles
+
+    private void SubscribeToPlayerProfiles()
+    {
+        if (isSubscribedToPlayerProfiles || PlayerProfileRegistry.instance == null)
+        {
+            return;
+        }
+
+        PlayerProfileRegistry.instance.ProfileChanged += OnPlayerProfileChanged;
+        isSubscribedToPlayerProfiles = true;
+    }
+
+    private void UnsubscribeFromPlayerProfiles()
+    {
+        if (isSubscribedToPlayerProfiles && PlayerProfileRegistry.instance != null)
+        {
+            PlayerProfileRegistry.instance.ProfileChanged -= OnPlayerProfileChanged;
+        }
+
+        isSubscribedToPlayerProfiles = false;
+    }
+
+    private void OnPlayerProfileChanged(PlayerProfileData profile)
+    {
+        if (profile == null || !profile.IsValid || !lobbyClientState.HasLobby)
+        {
+            return;
+        }
+
+        lobbyClientState.ApplyPlayerProfile(profile);
+
+        if (!string.Equals(profile.userId, currentUserId, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (runtimeType == SessionRuntimeType.Local)
+        {
+            currentLobby?.Controller?.UpdatePlayerProfile(profile);
+            return;
+        }
+
+        if (runtimeType != SessionRuntimeType.Network)
+        {
+            return;
+        }
+
+        NetworkPlayerProfileConnection connection = NetworkPlayerProfileConnection.GetLocalConnection();
+        connection?.RequestProfileUpdate(profile);
     }
 
     #endregion
@@ -1023,7 +1119,9 @@ public class LobbyManager : MonoBehaviour
 
         LobbyEntryFailed?.Invoke(result);
 
-        Debug.LogWarning($"[LobbyManager] Lobby entry failed. " + $"Type: {result.failureType}. " + $"Message: {result.failureMessage}");
+        Debug.LogWarning($"[LobbyManager] Lobby entry failed. Type: {result.failureType}. Message: {result.failureMessage}");
+
+        ReturnToMainScene();
     }
 
     #endregion

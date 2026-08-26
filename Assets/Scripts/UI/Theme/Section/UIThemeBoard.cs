@@ -101,6 +101,14 @@ public class UIThemeBoard : MonoBehaviour, IUIThemeTarget
         return themeManager != null;
     }
 
+    public UIThemeBoardType BoardType => boardType;
+
+    public void SetBoardType(UIThemeBoardType newBoardType)
+    {
+        boardType = newBoardType;
+        ReapplyTheme();
+    }
+
     public void ReapplyTheme()
     {
         if (!CacheThemeManager())

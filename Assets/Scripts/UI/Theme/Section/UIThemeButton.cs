@@ -60,6 +60,14 @@ public class UIThemeButton : MonoBehaviour, IUIThemeTarget
         return themeManager != null;
     }
 
+    public UIThemeButtonType ButtonType => buttonType;
+
+    public void SetButtonType(UIThemeButtonType newButtonType)
+    {
+        buttonType = newButtonType;
+        ReapplyTheme();
+    }
+
     public void ReapplyTheme()
     {
         if (!CacheThemeManager())

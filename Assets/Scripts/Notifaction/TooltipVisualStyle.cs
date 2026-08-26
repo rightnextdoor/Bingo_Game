@@ -30,6 +30,12 @@ public class TooltipVisualStyle
     [SerializeField] private float displaySeconds = 1.5f;
     [SerializeField] private float fadeOutSeconds = 0.35f;
 
+    [SerializeField, Min(1f)] private float tooltipMinimumWidth = 120f;
+    [SerializeField, Min(1f)] private float tooltipMaximumWidth = 360f;
+    [SerializeField, Min(1f)] private float tooltipMinimumHeight = 44f;
+    [SerializeField, Min(1f)] private float tooltipMaximumHeight = 220f;
+    [SerializeField] private TooltipGrowthDirection tooltipGrowthDirection = TooltipGrowthDirection.Default;
+
     [SerializeField]
     private Vector2 tooltipOffset =
         new Vector2(18f, -18f);
@@ -51,6 +57,11 @@ public class TooltipVisualStyle
     public float DisplaySeconds => displaySeconds;
     public float FadeOutSeconds => fadeOutSeconds;
 
+    public float TooltipMinimumWidth => tooltipMinimumWidth;
+    public float TooltipMaximumWidth => tooltipMaximumWidth;
+    public float TooltipMinimumHeight => tooltipMinimumHeight;
+    public float TooltipMaximumHeight => tooltipMaximumHeight;
+    public TooltipGrowthDirection TooltipGrowthDirection => tooltipGrowthDirection;
     public Vector2 TooltipOffset => tooltipOffset;
 
     #endregion
@@ -146,6 +157,21 @@ public class TooltipVisualStyle
     public TooltipVisualStyle SetFadeOutSeconds(float newFadeOutSeconds)
     {
         fadeOutSeconds = Mathf.Max(0f, newFadeOutSeconds);
+        return this;
+    }
+
+    public TooltipVisualStyle SetTooltipSize(float minimumWidth, float maximumWidth, float minimumHeight, float maximumHeight)
+    {
+        tooltipMinimumWidth = Mathf.Max(1f, minimumWidth);
+        tooltipMaximumWidth = Mathf.Max(tooltipMinimumWidth, maximumWidth);
+        tooltipMinimumHeight = Mathf.Max(1f, minimumHeight);
+        tooltipMaximumHeight = Mathf.Max(tooltipMinimumHeight, maximumHeight);
+        return this;
+    }
+
+    public TooltipVisualStyle SetTooltipGrowthDirection(TooltipGrowthDirection newGrowthDirection)
+    {
+        tooltipGrowthDirection = newGrowthDirection;
         return this;
     }
 

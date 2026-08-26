@@ -26,6 +26,7 @@ public class NetworkLobbyManager : MonoBehaviour
 
     private bool isReady;
     private bool isSubscribedToConnectionRegistry;
+    private bool isSubscribedToPlayerProfileConnection;
 
     private NetworkRoot networkRoot;
     private NetworkBootstrap networkBootstrap;
@@ -82,6 +83,7 @@ public class NetworkLobbyManager : MonoBehaviour
         connectionRegistry = NetworkConnectionRegistry.instance;
 
         SubscribeToConnectionRegistry();
+        SubscribeToPlayerProfileConnection();
 
         isReady = true;
     }
@@ -89,6 +91,7 @@ public class NetworkLobbyManager : MonoBehaviour
     private void OnDestroy()
     {
         UnsubscribeFromConnectionRegistry();
+        UnsubscribeFromPlayerProfileConnection();
         UnsubscribeFromAllLobbyControllers();
         StopAllLobbyRuntimeRoutines();
         StopAllInitialSyncRoutines();
@@ -1908,6 +1911,73 @@ public class NetworkLobbyManager : MonoBehaviour
 
     #endregion
 
+    #region Player Profiles
+
+    private void SubscribeToPlayerProfileConnection()
+    {
+        if (isSubscribedToPlayerProfileConnection)
+        {
+            return;
+        }
+
+        NetworkPlayerProfileConnection.AuthorityProfileUpdateRequested += OnAuthorityPlayerProfileUpdateRequested;
+        isSubscribedToPlayerProfileConnection = true;
+    }
+
+    private void UnsubscribeFromPlayerProfileConnection()
+    {
+        if (!isSubscribedToPlayerProfileConnection)
+        {
+            return;
+        }
+
+        NetworkPlayerProfileConnection.AuthorityProfileUpdateRequested -= OnAuthorityPlayerProfileUpdateRequested;
+        isSubscribedToPlayerProfileConnection = false;
+    }
+
+    private void OnAuthorityPlayerProfileUpdateRequested(ulong clientId, PlayerProfileData profile)
+    {
+        if (profile == null || !profile.IsValid || !TryGetConnectedUserId(clientId, out string userId) ||
+            !string.Equals(profile.userId, userId, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        Lobby lobby = FindUserLobby(userId);
+
+        if (lobby?.Controller == null || !lobby.Controller.UpdatePlayerProfile(profile))
+        {
+            return;
+        }
+
+        BroadcastPlayerProfileUpdate(lobby, profile);
+    }
+
+    private void BroadcastPlayerProfileUpdate(Lobby lobby, PlayerProfileData profile)
+    {
+        if (lobby?.Controller == null || profile == null || !profile.IsValid || connectionRegistry == null || !connectionRegistry.IsReady)
+        {
+            return;
+        }
+
+        IReadOnlyList<LobbyPlayerData> players = lobby.Controller.Players;
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            LobbyPlayerData playerData = players[i];
+            string userId = playerData?.userData?.userId;
+
+            if (string.IsNullOrWhiteSpace(userId) || !connectionRegistry.TryGetClientId(userId, out ulong targetClientId))
+            {
+                continue;
+            }
+
+            NetworkPlayerProfileConnection.TrySendProfileUpdate(targetClientId, profile);
+        }
+    }
+
+    #endregion
+
     #region Setup
 
     private bool CanInitialize()
@@ -2039,6 +2109,33 @@ public class NetworkLobbyManager : MonoBehaviour
         return true;
     }
 
+    public bool TryRemoveStressPlayer(string lobbyId, string userId, out string failureReason)
+    {
+        failureReason = string.Empty;
+
+        if (!TryGetStressLobby(lobbyId, out Lobby lobby) || lobby.Controller == null)
+        {
+            failureReason = "The target lobby could not be found.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(userId) || !lobby.Controller.HasPlayer(userId))
+        {
+            failureReason = "The fake player is no longer in the target lobby.";
+            return false;
+        }
+
+        LobbyExitResult result = RemovePlayerFromLobby(userId, LobbyPlayerExitReason.VoluntaryLeave);
+
+        if (result == null || !result.success)
+        {
+            failureReason = result?.failureMessage ?? "The fake player could not leave the lobby.";
+            return false;
+        }
+
+        return true;
+    }
+
     public bool TrySetStressPlayerSceneReady(string lobbyId, string userId, out string failureReason)
     {
         failureReason = string.Empty;
@@ -2090,6 +2187,100 @@ public class NetworkLobbyManager : MonoBehaviour
         }
 
         BroadcastPlayerBoardUpdate(lobby, userId);
+        return true;
+    }
+
+    public bool TryBroadcastStressChatMessage(
+        string lobbyId,
+        ChatParticipantData sender,
+        string message,
+        bool isPrivate,
+        string recipientUserId,
+        out int recipientCount,
+        out string failureReason)
+    {
+        recipientCount = 0;
+        failureReason = string.Empty;
+
+        if (networkBootstrap == null || !networkBootstrap.IsAuthority)
+        {
+            failureReason = "This process is not the network authority.";
+            return false;
+        }
+
+        if (!TryGetStressLobby(lobbyId, out Lobby lobby) || lobby?.Controller == null)
+        {
+            failureReason = "The target lobby could not be found.";
+            return false;
+        }
+
+        if (sender == null || !sender.IsValid || string.IsNullOrWhiteSpace(message))
+        {
+            failureReason = "The synthetic chat message is invalid.";
+            return false;
+        }
+
+        if (connectionRegistry == null || !connectionRegistry.IsReady)
+        {
+            failureReason = "The connection registry is not ready.";
+            return false;
+        }
+
+        string resolvedRecipientUserId = isPrivate ? recipientUserId?.Trim() ?? string.Empty : string.Empty;
+
+        if (isPrivate)
+        {
+            if (string.IsNullOrWhiteSpace(resolvedRecipientUserId) || !lobby.Controller.HasPlayer(resolvedRecipientUserId) ||
+                !connectionRegistry.TryGetClientId(resolvedRecipientUserId, out ulong recipientClientId))
+            {
+                failureReason = "The private-message recipient is not connected to the target lobby.";
+                return false;
+            }
+
+            if (!NetworkLobbyConnection.TrySendStressChatMessage(
+                    recipientClientId,
+                    lobbyId,
+                    sender.userId,
+                    sender.playerName,
+                    sender.iconId,
+                    message.Trim(),
+                    true,
+                    resolvedRecipientUserId))
+            {
+                failureReason = "The synthetic private message could not be sent to the target client.";
+                return false;
+            }
+
+            recipientCount = 1;
+            return true;
+        }
+
+        int sentCount = 0;
+
+        SendToLobbyPlayers(lobby, clientId =>
+        {
+            if (NetworkLobbyConnection.TrySendStressChatMessage(
+                    clientId,
+                    lobbyId,
+                    sender.userId,
+                    sender.playerName,
+                    sender.iconId,
+                    message.Trim(),
+                    false,
+                    string.Empty))
+            {
+                sentCount++;
+            }
+        });
+
+        recipientCount = sentCount;
+
+        if (recipientCount <= 0)
+        {
+            failureReason = "The synthetic public message did not have any connected Lobby recipients.";
+            return false;
+        }
+
         return true;
     }
 
@@ -2172,13 +2363,42 @@ public class NetworkLobbyManager : MonoBehaviour
 
         Lobby lobby = FindUserLobby(userId);
 
-        if (lobby?.Controller == null || !lobby.Controller.ApplyHostSettings(userId, settingsData))
+        if (lobby?.Controller == null || !lobby.Controller.ApplyHostSettings(userId, settingsData, out List<LobbyExitResult> capacityTrimResults))
         {
             return false;
         }
 
+        ProcessCapacityTrimmedPlayers(lobby, capacityTrimResults);
         BroadcastLobbySettingsChanged(lobby, lobby.Controller.BuildViewData(false));
         return true;
+    }
+
+    private void ProcessCapacityTrimmedPlayers(Lobby lobby, IReadOnlyList<LobbyExitResult> capacityTrimResults)
+    {
+        if (lobby == null || capacityTrimResults == null || capacityTrimResults.Count == 0)
+        {
+            return;
+        }
+
+        for (int i = 0; i < capacityTrimResults.Count; i++)
+        {
+            LobbyExitResult exitResult = capacityTrimResults[i];
+
+            if (exitResult == null || !exitResult.success || string.IsNullOrWhiteSpace(exitResult.userId))
+            {
+                continue;
+            }
+
+            pendingJoinStartedTimeByUserId.Remove(exitResult.userId);
+
+            if (connectionRegistry == null || !connectionRegistry.TryGetClientId(exitResult.userId, out ulong targetClientId))
+            {
+                continue;
+            }
+
+            StopInitialSync(targetClientId);
+            NetworkLobbyConnection.TrySendForcedLobbyExit(targetClientId, LobbyExitNotification.Kicked(lobby.GetLobbyId()));
+        }
     }
 
     public void ProcessAuthorityStartLobby(ulong clientId)

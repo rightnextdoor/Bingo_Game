@@ -9,8 +9,10 @@ public enum PopupId
     UserInfo,
     Leaderboard,
     Settings,
-    LobbyEntryFailure,
-    HostSettings
+    Failure,
+    HostSettings,
+    ChatSettings,
+    ChatReport
 }
 
 [Serializable]
@@ -160,28 +162,62 @@ public class PopupManager : MonoBehaviour
         OpenPopup(nextPopupId);
     }
 
-    public bool OpenLobbyEntryFailurePopup(string message)
+    public bool OpenChatReportPopup(ChatParticipantData participant, ChatConversationReference conversation)
     {
-        GameObject popup = GetPopupObject(PopupId.LobbyEntryFailure);
-
-        if (popup == null)
+        if (participant == null || !participant.IsValid)
         {
-            Debug.LogWarning("PopupManager could not find the Lobby Entry Failure popup.");
             return false;
         }
 
-        LobbyEntryFailurePopupController popupController = popup.GetComponent<LobbyEntryFailurePopupController>();
+        GameObject popup = GetPopupObject(PopupId.ChatReport);
+
+        if (popup == null)
+        {
+            return false;
+        }
+
+        OpenPopup(PopupId.ChatReport);
+
+        if (activePopupId != PopupId.ChatReport)
+        {
+            return false;
+        }
+
+        ChatReportController controller = popup.GetComponentInChildren<ChatReportController>(true);
+
+        if (controller == null)
+        {
+            CloseActivePopup();
+            return false;
+        }
+
+        controller.SetReportedParticipant(participant, conversation);
+        return true;
+    }
+
+    public bool OpenFailurePopup(string message)
+    {
+        GameObject popup = GetPopupObject(PopupId.Failure);
+
+        if (popup == null)
+        {
+            Debug.LogWarning("PopupManager could not find the Failure popup.");
+            return false;
+        }
+
+        FailurePopupController popupController = popup.GetComponent<FailurePopupController>();
 
         if (popupController == null)
         {
-            Debug.LogWarning("Lobby Entry Failure popup does not have a LobbyEntryFailurePopupController.");
+            Debug.LogWarning("Failure popup does not have a FailurePopupController.");
             return false;
         }
 
         popupController.SetFailureMessage(message);
-        OpenPopup(PopupId.LobbyEntryFailure);
 
-        return activePopupId == PopupId.LobbyEntryFailure;
+        OpenPopup(PopupId.Failure);
+
+        return activePopupId == PopupId.Failure;
     }
 
     public void CloseActivePopup()

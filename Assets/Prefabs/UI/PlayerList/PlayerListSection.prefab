@@ -252,6 +252,8 @@ MonoBehaviour:
   verticalLayoutGroup: {fileID: 4661595579646384903}
   contentSizeFitter: {fileID: 8848724469208173393}
   scrollRect: {fileID: 8895088479330382292}
+  rowHeightOverride: 0
+  extraVisibleRows: 2
 --- !u!1 &4296748287946452984
 GameObject:
   m_ObjectHideFlags: 0
@@ -802,7 +804,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 575403797663094394}
   m_HandleRect: {fileID: 7789484766055149550}
   m_Direction: 2
-  m_Value: 0
+  m_Value: 1
   m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:

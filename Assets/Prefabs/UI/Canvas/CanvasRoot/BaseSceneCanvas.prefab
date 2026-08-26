@@ -10670,6 +10670,8 @@ MonoBehaviour:
   notificationAreaCanvasGroup: {fileID: 0}
   notificationBackground: {fileID: 0}
   notificationText: {fileID: 0}
+  maximumWidth: 850
+  minimumFontSize: 24
   delayBetweenMessages: 0.35
 --- !u!114 &6719722440119976974
 MonoBehaviour:
@@ -13404,6 +13406,10 @@ PrefabInstance:
       propertyPath: m_AnchoredPosition.y
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 7025982397301118776, guid: 1081001668a67c9488608f7502962f1a, type: 3}
+      propertyPath: m_Texture
+      value: 
+      objectReference: {fileID: 0}
     - target: {fileID: 7038869623095688753, guid: 1081001668a67c9488608f7502962f1a, type: 3}
       propertyPath: m_AnchorMax.x
       value: 0
@@ -13703,6 +13709,10 @@ PrefabInstance:
     - target: {fileID: 8275797955570062232, guid: 1081001668a67c9488608f7502962f1a, type: 3}
       propertyPath: m_AnchorMax.y
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8351387970043118379, guid: 1081001668a67c9488608f7502962f1a, type: 3}
+      propertyPath: m_Texture
+      value: 
       objectReference: {fileID: 0}
     - target: {fileID: 8523754182183055215, guid: 1081001668a67c9488608f7502962f1a, type: 3}
       propertyPath: m_AnchorMax.y

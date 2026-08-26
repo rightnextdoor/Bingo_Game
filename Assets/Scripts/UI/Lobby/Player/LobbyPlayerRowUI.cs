@@ -16,6 +16,7 @@ public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
     [Header("Player")]
     [SerializeField] private Image playerIconImage;
     [SerializeField] private TMP_Text playerNameText;
+    [SerializeField] private TMP_Text playerIdText;
 
     [Header("Board")]
     [SerializeField] private LobbyPlayerBoardPreviewController boardPreviewController;
@@ -76,7 +77,7 @@ public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
         kickRequested = onKickRequested;
 
         SetPlayerIcon(playerData.iconId);
-        SetPlayerName(playerData.playerName, playerData.userId);
+        SetPlayerIdentity(playerData.playerName, playerData.displayUserId);
 
         if (refreshBoard)
         {
@@ -105,6 +106,11 @@ public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
         if (playerNameText != null)
         {
             playerNameText.text = string.Empty;
+        }
+
+        if (playerIdText != null)
+        {
+            playerIdText.text = string.Empty;
         }
 
         SetImageActive(botIconImage, false);
@@ -136,36 +142,28 @@ public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
         playerIconImage.preserveAspect = true;
     }
 
-    private void SetPlayerName(string playerName, string playerUserId)
+    private void SetPlayerIdentity(string playerName, string displayUserId)
     {
-        if (playerNameText == null)
+        if (playerNameText != null)
+        {
+            playerNameText.text = string.IsNullOrWhiteSpace(playerName) ? "Player" : playerName;
+        }
+
+        if (playerIdText != null)
+        {
+            playerIdText.text = string.IsNullOrWhiteSpace(displayUserId) ? string.Empty : $"#{displayUserId}";
+        }
+    }
+
+    public void UpdateProfile(PlayerListPlayerData playerData)
+    {
+        if (playerData == null || !string.Equals(userId, playerData.userId, StringComparison.Ordinal))
         {
             return;
         }
 
-        string displayName = string.IsNullOrWhiteSpace(playerName)
-            ? "Player"
-            : playerName.Trim();
-
-        string shortId = GetShortUserId(playerUserId);
-
-        playerNameText.text = string.IsNullOrWhiteSpace(shortId)
-            ? displayName
-            : $"{displayName} #{shortId}";
-    }
-
-    private string GetShortUserId(string playerUserId)
-    {
-        if (string.IsNullOrWhiteSpace(playerUserId))
-        {
-            return string.Empty;
-        }
-
-        playerUserId = playerUserId.Trim();
-
-        return playerUserId.Length <= 4
-            ? playerUserId
-            : playerUserId.Substring(0, 4);
+        SetPlayerIcon(playerData.iconId);
+        SetPlayerIdentity(playerData.playerName, playerData.displayUserId);
     }
 
     #endregion

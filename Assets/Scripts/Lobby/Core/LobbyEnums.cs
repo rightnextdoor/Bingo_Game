@@ -35,26 +35,3 @@ public enum LobbyCloseReason
     Empty,
     HostLeft
 }
-
-public enum LobbyEntryFailureType
-{
-    None,
-    InvalidSetupData,
-    UserMissing,
-    ServiceUnavailable,
-    NetworkConnectionFailed,
-    NetworkLobbyConnectionUnavailable,
-    LobbyNotFound,
-    LobbyFull,
-    InvalidPassword,
-    AlreadyInLobby,
-    LobbyCreationFailed,
-    LobbyJoinFailed,
-    LobbyLeaveFailed,
-    KickedFromLobby,
-    LobbyClosed,
-    ConnectionLost,
-    LobbyStarted,
-    JoinTimedOut,
-    Unknown
-}

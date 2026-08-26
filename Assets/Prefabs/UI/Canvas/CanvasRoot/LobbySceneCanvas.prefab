@@ -1975,7 +1975,7 @@ MonoBehaviour:
     m_NormalColor: {r: 1, g: 1, b: 1, a: 1}
     m_HighlightedColor: {r: 0.4878233, g: 0.93530995, b: 0.5914784, a: 1}
     m_PressedColor: {r: 0.03191264, g: 0.6765498, b: 0.18123537, a: 1}
-    m_SelectedColor: {r: 0.085929975, g: 0.76819396, b: 0.24396853, a: 1}
+    m_SelectedColor: {r: 1, g: 1, b: 1, a: 1}
     m_DisabledColor: {r: 0.5019608, g: 0.5019608, b: 0.5019608, a: 1}
     m_ColorMultiplier: 1
     m_FadeDuration: 0.1
@@ -2272,7 +2272,7 @@ MonoBehaviour:
     m_NormalColor: {r: 1, g: 1, b: 1, a: 1}
     m_HighlightedColor: {r: 0.4878233, g: 0.93530995, b: 0.5914784, a: 1}
     m_PressedColor: {r: 0.03191264, g: 0.6765498, b: 0.18123537, a: 1}
-    m_SelectedColor: {r: 0.085929975, g: 0.76819396, b: 0.24396853, a: 1}
+    m_SelectedColor: {r: 1, g: 1, b: 1, a: 1}
     m_DisabledColor: {r: 0.5019608, g: 0.5019608, b: 0.5019608, a: 1}
     m_ColorMultiplier: 1
     m_FadeDuration: 0.1
@@ -3065,6 +3065,8 @@ MonoBehaviour:
   notificationAreaCanvasGroup: {fileID: 4509499577661523881}
   notificationBackground: {fileID: 8372055660891130998}
   notificationText: {fileID: 3662698859541835334}
+  maximumWidth: 850
+  minimumFontSize: 24
   delayBetweenMessages: 0.35
 --- !u!114 &4280927998697078096
 MonoBehaviour:
@@ -8024,6 +8026,8 @@ MonoBehaviour:
   headerController: {fileID: 3125939120294729740}
   customPanelController: {fileID: 1754632596755634815}
   boardSectionController: {fileID: 8539127619334000714}
+  playerListController: {fileID: 0}
+  gameInfoController: {fileID: 0}
 --- !u!1 &8378469237569626618
 GameObject:
   m_ObjectHideFlags: 0
@@ -13839,6 +13843,14 @@ PrefabInstance:
     - target: {fileID: 6035635953207925447, guid: 1081001668a67c9488608f7502962f1a, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7025982397301118776, guid: 1081001668a67c9488608f7502962f1a, type: 3}
+      propertyPath: m_Texture
+      value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 8351387970043118379, guid: 1081001668a67c9488608f7502962f1a, type: 3}
+      propertyPath: m_Texture
+      value: 
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

@@ -1,9 +1,9 @@
 using TMPro;
 using UnityEngine;
 
-public class LobbyEntryFailurePopupController : MonoBehaviour
+public class FailurePopupController : MonoBehaviour
 {
-    private const string DefaultFailureMessage = "The lobby could not be entered.";
+    private const string DefaultFailureMessage = "An error occurred.";
 
     [SerializeField] private TMP_Text failureMessageText;
 

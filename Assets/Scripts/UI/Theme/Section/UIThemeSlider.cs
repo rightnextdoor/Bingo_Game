@@ -62,6 +62,14 @@ public class UIThemeSlider : MonoBehaviour, IUIThemeTarget
         return themeManager != null;
     }
 
+    public UIThemeSliderType SliderType => sliderType;
+
+    public void SetSliderType(UIThemeSliderType newSliderType)
+    {
+        sliderType = newSliderType;
+        ReapplyTheme();
+    }
+
     public void ReapplyTheme()
     {
         if (!CacheThemeManager())

@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -27,12 +28,14 @@ public class UITopBarIconSlot : MonoBehaviour,
 
     private UIMessageType tooltipMessageType = UIMessageType.None;
     private ToolTipManager toolTipManager;
-
     private Action clickCallback;
-
+    private Func<string> tooltipMessageProvider;
+    private Coroutine tooltipDelayRoutine;
+    private float tooltipOpenDelay;
     private bool hasIcon;
     private bool isHovering;
     private bool isPressed;
+    private bool hoverTooltipShowing;
 
     private void Awake()
     {
@@ -42,26 +45,35 @@ public class UITopBarIconSlot : MonoBehaviour,
 
     private void OnDisable()
     {
-        if (isHovering && CacheToolTipManager())
-        {
-            toolTipManager.HideToolTip();
-        }
+        CancelTooltipDelay();
+        CloseHoverTooltip();
 
         isHovering = false;
         isPressed = false;
+        ApplyVisualState();
     }
 
-    public void Setup(Sprite iconSprite, Action onClicked, UIMessageType newTooltipMessageType)
+    public void Setup(
+        Sprite iconSprite,
+        Action onClicked,
+        UIMessageType newTooltipMessageType,
+        float newTooltipOpenDelay = 0f,
+        Func<string> newTooltipMessageProvider = null)
     {
+        CancelTooltipDelay();
+        CloseHoverTooltip();
         FindMissingReferences();
 
         clickCallback = onClicked;
         tooltipMessageType = newTooltipMessageType;
+        tooltipOpenDelay = Mathf.Max(0f, newTooltipOpenDelay);
+        tooltipMessageProvider = newTooltipMessageProvider;
 
         SetIcon(iconSprite);
 
         isHovering = false;
         isPressed = false;
+        hoverTooltipShowing = false;
 
         ApplyVisualState();
     }
@@ -83,6 +95,17 @@ public class UITopBarIconSlot : MonoBehaviour,
         ApplyVisualState();
     }
 
+    public void CancelTooltipDelay()
+    {
+        if (tooltipDelayRoutine == null)
+        {
+            return;
+        }
+
+        StopCoroutine(tooltipDelayRoutine);
+        tooltipDelayRoutine = null;
+    }
+
     public void OnPointerEnter(PointerEventData eventData)
     {
         isHovering = true;
@@ -95,22 +118,30 @@ public class UITopBarIconSlot : MonoBehaviour,
 
         UIMessageData messageData = UIMessageCatalog.instance.GetMessage(tooltipMessageType);
 
-        if (messageData != null)
+        if (messageData == null || toolTipManager.IsShowing(tooltipMessageType))
         {
-            toolTipManager.ShowToolTip(messageData, GetComponent<RectTransform>());
+            return;
         }
+
+        CancelTooltipDelay();
+
+        if (tooltipOpenDelay <= 0f)
+        {
+            ShowHoverTooltip(messageData);
+            return;
+        }
+
+        tooltipDelayRoutine = StartCoroutine(ShowHoverTooltipAfterDelay(messageData));
     }
 
     public void OnPointerExit(PointerEventData eventData)
     {
         isHovering = false;
         isPressed = false;
-        ApplyVisualState();
 
-        if (CacheToolTipManager())
-        {
-            toolTipManager.HideToolTip();
-        }
+        CancelTooltipDelay();
+        CloseHoverTooltip();
+        ApplyVisualState();
     }
 
     public void OnPointerDown(PointerEventData eventData)
@@ -137,12 +168,56 @@ public class UITopBarIconSlot : MonoBehaviour,
             return;
         }
 
-        if (CacheToolTipManager())
+        CancelTooltipDelay();
+        CloseHoverTooltip();
+        clickCallback?.Invoke();
+    }
+
+    private IEnumerator ShowHoverTooltipAfterDelay(UIMessageData messageData)
+    {
+        yield return new WaitForSecondsRealtime(tooltipOpenDelay);
+        tooltipDelayRoutine = null;
+
+        if (!isHovering || messageData == null || !CacheToolTipManager() || toolTipManager.IsShowing(tooltipMessageType))
+        {
+            yield break;
+        }
+
+        ShowHoverTooltip(messageData);
+    }
+
+    private void ShowHoverTooltip(UIMessageData messageData)
+    {
+        if (!isHovering || messageData == null || !CacheToolTipManager())
+        {
+            return;
+        }
+
+        RectTransform targetRect = transform as RectTransform;
+
+        if (targetRect == null)
+        {
+            return;
+        }
+
+        string messageOverride = tooltipMessageProvider?.Invoke();
+        toolTipManager.ShowToolTip(messageData, targetRect, messageOverride);
+        hoverTooltipShowing = true;
+    }
+
+    private void CloseHoverTooltip()
+    {
+        if (!hoverTooltipShowing)
+        {
+            return;
+        }
+
+        if (CacheToolTipManager() && toolTipManager.IsShowing(tooltipMessageType))
         {
             toolTipManager.HideToolTip();
         }
 
-        clickCallback?.Invoke();
+        hoverTooltipShowing = false;
     }
 
     private void ApplyVisualState()

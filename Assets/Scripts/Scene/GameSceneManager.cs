@@ -133,7 +133,7 @@ public class GameSceneManager : MonoBehaviour
         loadingRoutine = StartCoroutine(CurrentSceneLoadingRoutine(sceneType));
     }
 
-    public void ReturnToMainSceneAfterLobbyFailure()
+    public void ReturnToMainSceneAfterFailure()
     {
         if (isLoadingScene)
         {
@@ -293,8 +293,9 @@ public class GameSceneManager : MonoBehaviour
         bool minimumTimeDone = loader == null || loader.HasMinimumShowTimePassed;
         bool sceneReady = sceneReadyController == null || sceneReadyController.AreAllReady();
         bool lobbyEntryFinished = IsLobbyEntryFinished();
+        bool lobbyChatPreparationFinished = IsLobbyChatPreparationFinished();
 
-        return minimumTimeDone && sceneReady && lobbyEntryFinished;
+        return minimumTimeDone && sceneReady && lobbyEntryFinished && lobbyChatPreparationFinished;
     }
 
     #endregion
@@ -337,6 +338,26 @@ public class GameSceneManager : MonoBehaviour
         {
             return LoadingFaderManager.instance;
         }
+    }
+
+    private bool IsLobbyChatPreparationFinished()
+    {
+        if (currentSceneType != GameSceneType.Lobby)
+        {
+            return true;
+        }
+
+        LobbyManager lobbyManager = LobbyManager.instance;
+
+        if (lobbyManager == null ||
+            lobbyManager.EntryState == LobbyEntryState.Failed ||
+            lobbyManager.RuntimeType != SessionRuntimeType.Network)
+        {
+            return true;
+        }
+
+        ChatManager chatManager = ChatManager.instance;
+        return chatManager == null || !chatManager.IsReady || chatManager.IsSessionPreparationResolved;
     }
 
     private bool IsLobbyEntryFinished()

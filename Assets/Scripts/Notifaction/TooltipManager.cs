@@ -27,7 +27,6 @@ public class ToolTipManager : MonoBehaviour
         }
 
         instance = this;
-
         HideToolTip();
     }
 
@@ -39,7 +38,12 @@ public class ToolTipManager : MonoBehaviour
         }
     }
 
-    public void ShowToolTip(UIMessageData messageData, RectTransform targetRect)
+    public bool IsShowing(UIMessageType messageType)
+    {
+        return currentMessageData != null && currentMessageData.MessageType == messageType;
+    }
+
+    public void ShowToolTip(UIMessageData messageData, RectTransform targetRect, string messageOverride = null)
     {
         if (messageData == null || targetRect == null || toolTipUI == null)
         {
@@ -50,9 +54,23 @@ public class ToolTipManager : MonoBehaviour
         currentVisualStyle = null;
         currentTargetRect = targetRect;
 
-        string message = messageData.BuildMessage();
-
+        string message = string.IsNullOrWhiteSpace(messageOverride) ? messageData.BuildMessage() : messageOverride;
         toolTipUI.ShowNearTarget(messageData, message, targetRect);
+    }
+
+    public void ShowFixedToolTip(UIMessageData messageData, string messageOverride = null)
+    {
+        if (messageData == null || toolTipUI == null)
+        {
+            return;
+        }
+
+        currentMessageData = messageData;
+        currentVisualStyle = null;
+        currentTargetRect = null;
+
+        string message = string.IsNullOrWhiteSpace(messageOverride) ? messageData.BuildMessage() : messageOverride;
+        toolTipUI.ShowFixed(messageData, message);
     }
 
     public void ShowToolTip(TooltipVisualStyle visualStyle, RectTransform targetRect)
@@ -66,10 +84,7 @@ public class ToolTipManager : MonoBehaviour
         currentVisualStyle = visualStyle;
         currentTargetRect = targetRect;
 
-        toolTipUI.ShowNearTarget(
-            visualStyle,
-            targetRect
-        );
+        toolTipUI.ShowNearTarget(visualStyle, targetRect);
     }
 
     public void HideToolTip()

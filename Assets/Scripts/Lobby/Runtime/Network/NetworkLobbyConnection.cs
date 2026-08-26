@@ -436,13 +436,12 @@ public class NetworkLobbyConnection : NetworkBehaviour
 
         string json = JsonUtility.ToJson(notification);
 
-        return ScheduleAuthoritySend(
-            notification.lobbyId,
-            json,
-            MultiplayerNetworkPriority.Critical,
-            MultiplayerNetworkWorkType.Event,
-            string.Empty,
-            () => TrySend(connection, clientId, () => connection.ReceiveForcedLobbyExitRpc(json, connection.RpcTarget.Single(clientId, RpcTargetUse.Temp))));
+        return TrySend(
+            connection,
+            clientId,
+            () => connection.ReceiveForcedLobbyExitRpc(
+                json,
+                connection.RpcTarget.Single(clientId, RpcTargetUse.Temp)));
     }
 
     public static bool TrySendPlayerBoardUpdate(ulong clientId, LobbyPlayerBoardUpdateData updateData)
@@ -624,6 +623,54 @@ public class NetworkLobbyConnection : NetworkBehaviour
             $"lobby-snapshot:{clientId}",
             () => TrySend(connection, clientId, () => connection.ReceiveLobbySyncSnapshotRpc(json, connection.RpcTarget.Single(clientId, RpcTargetUse.Temp))));
     }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    public static bool TrySetStressVivoxConnectionAvailable(ulong clientId, bool connectionAvailable, float retryFailureDelaySeconds)
+    {
+        if (!TryGetServerConnection(clientId, out NetworkLobbyConnection connection))
+        {
+            return false;
+        }
+
+        return TrySend(
+            connection,
+            clientId,
+            () => connection.ReceiveStressVivoxConnectionAvailableRpc(
+                connectionAvailable,
+                Mathf.Max(0f, retryFailureDelaySeconds),
+                connection.RpcTarget.Single(clientId, RpcTargetUse.Temp)));
+    }
+
+    public static bool TrySendStressChatMessage(
+        ulong clientId,
+        string lobbyId,
+        string senderUserId,
+        string senderPlayerName,
+        string senderIconId,
+        string message,
+        bool isPrivate,
+        string recipientUserId)
+    {
+        if (string.IsNullOrWhiteSpace(lobbyId) || string.IsNullOrWhiteSpace(senderUserId) || string.IsNullOrWhiteSpace(message) ||
+            !TryGetServerConnection(clientId, out NetworkLobbyConnection connection))
+        {
+            return false;
+        }
+
+        return TrySend(
+            connection,
+            clientId,
+            () => connection.ReceiveStressChatMessageRpc(
+                lobbyId,
+                senderUserId,
+                senderPlayerName ?? string.Empty,
+                senderIconId ?? string.Empty,
+                message,
+                isPrivate,
+                recipientUserId ?? string.Empty,
+                connection.RpcTarget.Single(clientId, RpcTargetUse.Temp)));
+    }
+#endif
 
     private static bool ScheduleAuthoritySend(
         string sessionId,
@@ -902,6 +949,55 @@ public class NetworkLobbyConnection : NetworkBehaviour
             LocalLobbySyncSnapshotReceived?.Invoke(data);
         }
     }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    [Rpc(SendTo.SpecifiedInParams)]
+    private void ReceiveStressVivoxConnectionAvailableRpc(bool connectionAvailable, float retryFailureDelaySeconds, RpcParams rpcParams = default)
+    {
+        OnlineServicesRoot root = OnlineServicesRoot.instance;
+        VivoxChatService service = root != null ? root.GetComponent<VivoxChatService>() : null;
+
+        if (service == null)
+        {
+            return;
+        }
+
+        _ = service.SetDevelopmentConnectionAvailableAsync(connectionAvailable, retryFailureDelaySeconds);
+    }
+
+    [Rpc(SendTo.SpecifiedInParams)]
+    private void ReceiveStressChatMessageRpc(
+        string lobbyId,
+        string senderUserId,
+        string senderPlayerName,
+        string senderIconId,
+        string message,
+        bool isPrivate,
+        string recipientUserId,
+        RpcParams rpcParams = default)
+    {
+        ChatManager manager = ChatManager.instance;
+
+        if (manager == null || !manager.IsReady || !manager.IsChatEnabled || !manager.IsChatAvailable || !manager.HasSessionConversation ||
+            string.IsNullOrWhiteSpace(lobbyId) || !string.Equals(manager.SessionConversation.conversationId, lobbyId, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (isPrivate)
+        {
+            string localUserId = UserManager.instance != null && UserManager.instance.HasUser ? UserManager.instance.UserId : string.Empty;
+
+            if (string.IsNullOrWhiteSpace(localUserId) || !string.Equals(localUserId, recipientUserId, StringComparison.Ordinal))
+            {
+                return;
+            }
+        }
+
+        ChatParticipantData sender = new ChatParticipantData(senderUserId, senderPlayerName, senderIconId);
+        manager.InjectStressSessionMessage(sender, message, isPrivate, recipientUserId, out _);
+    }
+#endif
 
     private T ReadJson<T>(string json) where T : class
     {

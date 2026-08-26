@@ -63,6 +63,14 @@ public class UIThemeInput : MonoBehaviour, IUIThemeTarget
         return themeManager != null;
     }
 
+    public UIThemeInputType InputType => inputType;
+
+    public void SetInputType(UIThemeInputType newInputType)
+    {
+        inputType = newInputType;
+        ReapplyTheme();
+    }
+
     public void ReapplyTheme()
     {
         if (!CacheThemeManager())

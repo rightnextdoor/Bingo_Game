@@ -51,9 +51,25 @@ public class LobbyPlayerListController : MonoBehaviour
         InitializeVirtualizedList();
     }
 
+    private void OnEnable()
+    {
+        SubscribeToPlayerProfiles();
+    }
+
+    private void Start()
+    {
+        SubscribeToPlayerProfiles();
+    }
+
+    private void OnDisable()
+    {
+        UnsubscribeFromPlayerProfiles();
+    }
+
     private void OnDestroy()
     {
         UnsubscribeFromVirtualizedList();
+        UnsubscribeFromPlayerProfiles();
     }
 
     private void Update()
@@ -173,6 +189,8 @@ public class LobbyPlayerListController : MonoBehaviour
             }
         }
 
+        ApplyCurrentProfiles();
+        RefreshResolvedDisplayNames();
         DisplayCurrentPlayers(playerCount, maxPlayer, maxPlayers);
     }
 
@@ -224,11 +242,20 @@ public class LobbyPlayerListController : MonoBehaviour
             playerIndexByUserId[playerData.userId] = players.Count;
             players.Add(playerData);
         }
+
+        ApplyCurrentProfiles();
+        RefreshResolvedDisplayNames();
     }
 
     private PlayerListPlayerData BuildPlayerData(LobbyPlayerViewData lobbyPlayerData)
     {
         PlayerListPlayerData playerData = new PlayerListPlayerData(lobbyPlayerData);
+
+        if (PlayerProfileRegistry.instance != null && PlayerProfileRegistry.instance.TryGetProfile(playerData.userId, out PlayerProfileData profile))
+        {
+            playerData.ApplyProfile(profile);
+        }
+
         LobbyBoardData latestBoard = LobbyManager.instance != null ? LobbyManager.instance.GetPlayerBoard(playerData.userId) : null;
 
         if (latestBoard != null)
@@ -303,6 +330,117 @@ public class LobbyPlayerListController : MonoBehaviour
         visibleRowsByUserId.Clear();
         selectedUserId = string.Empty;
         virtualizedList?.SetItemCount(0);
+    }
+
+    #endregion
+
+    #region Player Profiles
+
+    private void SubscribeToPlayerProfiles()
+    {
+        if (PlayerProfileRegistry.instance != null)
+        {
+            PlayerProfileRegistry.instance.ProfileChanged -= OnPlayerProfileChanged;
+            PlayerProfileRegistry.instance.ProfileChanged += OnPlayerProfileChanged;
+        }
+    }
+
+    private void UnsubscribeFromPlayerProfiles()
+    {
+        if (PlayerProfileRegistry.instance != null)
+        {
+            PlayerProfileRegistry.instance.ProfileChanged -= OnPlayerProfileChanged;
+        }
+    }
+
+    private void OnPlayerProfileChanged(PlayerProfileData profile)
+    {
+        if (profile == null || !playerIndexByUserId.TryGetValue(profile.userId, out int playerIndex) ||
+            playerIndex < 0 || playerIndex >= players.Count)
+        {
+            return;
+        }
+
+        players[playerIndex]?.ApplyProfile(profile);
+        RefreshResolvedDisplayNames();
+        RefreshVisibleProfiles();
+    }
+
+    private void ApplyCurrentProfiles()
+    {
+        if (PlayerProfileRegistry.instance == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            PlayerListPlayerData playerData = players[i];
+
+            if (playerData != null && PlayerProfileRegistry.instance.TryGetProfile(playerData.userId, out PlayerProfileData profile))
+            {
+                playerData.ApplyProfile(profile);
+            }
+        }
+    }
+
+    private void RefreshResolvedDisplayNames()
+    {
+        List<PlayerProfileData> profiles = new List<PlayerProfileData>(players.Count);
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            PlayerListPlayerData playerData = players[i];
+
+            if (playerData != null && !string.IsNullOrWhiteSpace(playerData.userId))
+            {
+                profiles.Add(playerData.BuildProfile());
+            }
+        }
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            PlayerListPlayerData playerData = players[i];
+
+            if (playerData == null)
+            {
+                continue;
+            }
+
+            playerData.displayName = PlayerDisplayIdentityResolver.GetDisplayName(playerData.BuildProfile(), profiles);
+            playerData.displayUserId = GetDisplayUserId(playerData);
+        }
+    }
+
+    private string GetDisplayUserId(PlayerListPlayerData playerData)
+    {
+        if (playerData == null || string.IsNullOrWhiteSpace(playerData.displayName))
+        {
+            return string.Empty;
+        }
+
+        int separatorIndex = playerData.displayName.LastIndexOf(" #", StringComparison.Ordinal);
+
+        if (separatorIndex < 0 || separatorIndex + 2 >= playerData.displayName.Length)
+        {
+            return string.Empty;
+        }
+
+        return playerData.displayName.Substring(separatorIndex + 2);
+    }
+
+    private void RefreshVisibleProfiles()
+    {
+        foreach (KeyValuePair<string, LobbyPlayerRowUI> pair in visibleRowsByUserId)
+        {
+            if (pair.Value == null || !playerIndexByUserId.TryGetValue(pair.Key, out int playerIndex) ||
+                playerIndex < 0 || playerIndex >= players.Count)
+            {
+                continue;
+            }
+
+            pair.Value.UpdateProfile(players[playerIndex]);
+        }
     }
 
     #endregion

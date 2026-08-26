@@ -7,5 +7,7 @@ public enum UIIconType
     LobbyCheckmark,
     LobbyKick,
     LobbyHost,
-    Bot
+    Bot,
+    ChatHelp,
+    ChatSettings
 }

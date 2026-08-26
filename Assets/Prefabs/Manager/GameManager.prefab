@@ -27,6 +27,7 @@ GameObject:
   - component: {fileID: 6480048657164182875}
   - component: {fileID: 2222644560770358961}
   - component: {fileID: 8181335114522364486}
+  - component: {fileID: 5465094055987081418}
   m_Layer: 0
   m_Name: GameManager
   m_TagString: Untagged
@@ -117,6 +118,8 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 8480b47ae6d3f1d4f8170e9e3c965ad9, type: 2}
   - {fileID: 11400000, guid: 068644c39875e8c48b1f2b0b2634a2f4, type: 2}
   - {fileID: 11400000, guid: f9931919e6c40394189a81b3e36ca8d5, type: 2}
+  - {fileID: 11400000, guid: 963e1c4eaa3f44e47af05b141988a7c6, type: 2}
+  - {fileID: 11400000, guid: d8f14069597052149ab639c1e9d4d7b5, type: 2}
 --- !u!114 &3196395910649869613
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -333,6 +336,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 5bec5c43d31197540a4171061924b568, type: 2}
   - {fileID: 11400000, guid: 46218c28a6bb0be4b87cec7b9e12859a, type: 2}
   - {fileID: 11400000, guid: 0bc73dc7f3109bc41af89f03d9dc1393, type: 2}
+  - {fileID: 11400000, guid: 0a27d4a2cc584594ea9079c855aa8666, type: 2}
 --- !u!114 &2222644560770358961
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -357,3 +361,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2705500cd69a2cd4cacf73956c3c58d7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NetworkLobbyService
+--- !u!114 &5465094055987081418
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8215340122209812844}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2acf0b889da93574696000fcfd633776, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerProfileRegistry

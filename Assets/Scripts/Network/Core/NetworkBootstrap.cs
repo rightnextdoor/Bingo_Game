@@ -488,7 +488,9 @@ public class NetworkBootstrap : MonoBehaviour
             return false;
         }
 
+        SetConnectionState(NetworkConnectionState.Disconnected);
         networkManager.Shutdown(true);
+
         return true;
     }
 #endif

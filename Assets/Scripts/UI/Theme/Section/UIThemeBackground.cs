@@ -56,6 +56,14 @@ public class UIThemeBackground : MonoBehaviour, IUIThemeTarget
         return themeManager != null;
     }
 
+    public UIThemeBackgroundType BackgroundType => backgroundType;
+
+    public void SetBackgroundType(UIThemeBackgroundType newBackgroundType)
+    {
+        backgroundType = newBackgroundType;
+        ReapplyTheme();
+    }
+
     public void ReapplyTheme()
     {
         if (!CacheThemeManager())

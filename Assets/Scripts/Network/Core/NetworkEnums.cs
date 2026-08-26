@@ -30,3 +30,11 @@ public enum NetworkRelayConnectionType
     Udp,
     Wss
 }
+
+public enum OnlineConnectionState
+{
+    NotStarted,
+    Connecting,
+    Online,
+    Offline
+}

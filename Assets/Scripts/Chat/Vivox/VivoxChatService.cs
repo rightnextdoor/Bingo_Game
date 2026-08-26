@@ -48,8 +48,17 @@ public class VivoxChatService : MonoBehaviour, IChatService
     private Task<bool> readinessTask;
     private string lastError = string.Empty;
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    private bool developmentConnectionAvailable = true;
+    private float developmentRetryFailureDelaySeconds = 2f;
+    public bool DevelopmentConnectionAvailable => developmentConnectionAvailable;
+#endif
+
     public bool IsReady =>
         isAdapterReady &&
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        developmentConnectionAvailable &&
+#endif
         !serviceUnavailable &&
         VivoxService.Instance != null &&
         VivoxService.Instance.InitializationState == VivoxInitializationState.Initialized &&
@@ -100,6 +109,16 @@ public class VivoxChatService : MonoBehaviour, IChatService
 
         UpdateLocalParticipant(participant);
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (!developmentConnectionAvailable)
+        {
+            if (!await WaitForDevelopmentConnectionAttemptAsync())
+            {
+                return false;
+            }
+        }
+#endif
+
         if (IsReady)
         {
             lastError = string.Empty;
@@ -130,6 +149,15 @@ public class VivoxChatService : MonoBehaviour, IChatService
     private async Task<bool> EnsureReadyInternalAsync()
     {
         lastError = string.Empty;
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (!developmentConnectionAvailable)
+        {
+            SetUnavailable("Vivox connection is disabled by the development simulation.");
+            return false;
+        }
+#endif
+
         serviceUnavailable = false;
 
         try
@@ -147,6 +175,14 @@ public class VivoxChatService : MonoBehaviour, IChatService
                 await VivoxService.Instance.InitializeAsync();
             }
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if (!developmentConnectionAvailable)
+            {
+                SetUnavailable("Vivox connection is disabled by the development simulation.");
+                return false;
+            }
+#endif
+
             if (!VivoxService.Instance.IsLoggedIn)
             {
                 LoginOptions loginOptions = new LoginOptions
@@ -156,6 +192,19 @@ public class VivoxChatService : MonoBehaviour, IChatService
 
                 await VivoxService.Instance.LoginAsync(loginOptions);
             }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if (!developmentConnectionAvailable)
+            {
+                if (VivoxService.Instance.IsLoggedIn)
+                {
+                    await VivoxService.Instance.LogoutAsync();
+                }
+
+                SetUnavailable("Vivox connection is disabled by the development simulation.");
+                return false;
+            }
+#endif
 
             if (!VivoxService.Instance.IsLoggedIn)
             {
@@ -294,6 +343,47 @@ public class VivoxChatService : MonoBehaviour, IChatService
             return ChatSendResult.Failed(lastError);
         }
     }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    public async Task<ChatSendResult> SendStressChannelMessageAsync(ChatConversationReference conversation, ChatParticipantData simulatedSender, string message)
+    {
+        if (!IsReady)
+        {
+            return ChatSendResult.Failed(string.IsNullOrWhiteSpace(lastError) ? "Chat is not available." : lastError);
+        }
+
+        if (conversation == null || !conversation.IsValid || conversation.conversationType != ChatConversationType.Session)
+        {
+            return ChatSendResult.Failed("The Session conversation is not valid.");
+        }
+
+        if (simulatedSender == null || !simulatedSender.IsValid || string.IsNullOrWhiteSpace(message))
+        {
+            return ChatSendResult.Failed("The synthetic sender or message is invalid.");
+        }
+
+        if (!channelNameByConversationKey.TryGetValue(conversation.Key, out string channelName))
+        {
+            return ChatSendResult.Failed("The chat conversation has not been joined.");
+        }
+
+        try
+        {
+            MessageOptions messageOptions = new MessageOptions
+            {
+                Metadata = BuildMessageMetadata(conversation, false, string.Empty, simulatedSender)
+            };
+
+            await VivoxService.Instance.SendChannelTextMessageAsync(channelName, message.Trim(), messageOptions);
+            return ChatSendResult.Succeeded();
+        }
+        catch (Exception exception)
+        {
+            lastError = exception.Message;
+            return ChatSendResult.Failed(lastError);
+        }
+    }
+#endif
 
     public async Task<ChatSendResult> SendDirectMessageAsync(ChatConversationReference conversation, string recipientUserId, string message)
     {
@@ -450,6 +540,10 @@ public class VivoxChatService : MonoBehaviour, IChatService
 
         long timestampUnixMilliseconds = new DateTimeOffset(receivedTime).ToUnixTimeMilliseconds();
 
+        bool isFromCurrentUser = metadata != null && localParticipant != null && !string.IsNullOrWhiteSpace(metadata.userId)
+            ? string.Equals(metadata.userId, localParticipant.userId, StringComparison.Ordinal)
+            : vivoxMessage.FromSelf;
+
         return new ChatMessageData(
             vivoxMessage.MessageId,
             vivoxMessage.MessageId,
@@ -461,14 +555,19 @@ public class VivoxChatService : MonoBehaviour, IChatService
             vivoxMessage.SenderPlayerId,
             vivoxMessage.MessageText,
             timestampUnixMilliseconds,
-            vivoxMessage.FromSelf,
+            isFromCurrentUser,
             isPrivate,
             metadata?.recipientUserId);
     }
 
     private string BuildMessageMetadata(ChatConversationReference conversation, bool isPrivate, string recipientUserId)
     {
-        if (localParticipant == null)
+        return BuildMessageMetadata(conversation, isPrivate, recipientUserId, localParticipant);
+    }
+
+    private string BuildMessageMetadata(ChatConversationReference conversation, bool isPrivate, string recipientUserId, ChatParticipantData participant)
+    {
+        if (participant == null || !participant.IsValid)
         {
             return string.Empty;
         }
@@ -477,9 +576,9 @@ public class VivoxChatService : MonoBehaviour, IChatService
         {
             conversationId = conversation?.conversationId ?? string.Empty,
             conversationType = conversation?.conversationType ?? ChatConversationType.Session,
-            userId = localParticipant.userId,
-            playerName = localParticipant.playerName,
-            iconId = localParticipant.iconId,
+            userId = participant.userId,
+            playerName = participant.playerName,
+            iconId = participant.iconId,
             isPrivate = isPrivate,
             recipientUserId = recipientUserId ?? string.Empty
         };
@@ -657,6 +756,79 @@ public class VivoxChatService : MonoBehaviour, IChatService
 
         ServiceUnavailable?.Invoke(lastError);
     }
+
+    #endregion
+
+    #region Development Simulation
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+
+    public async Task<bool> SetDevelopmentConnectionAvailableAsync(bool available, float retryFailureDelaySeconds = 2f)
+    {
+        developmentRetryFailureDelaySeconds = Mathf.Max(0f, retryFailureDelaySeconds);
+        developmentConnectionAvailable = available;
+
+        if (available)
+        {
+            // Deliberately do not reconnect here. The user should retry through the
+            // normal Chat setting so the real recovery path is exercised.
+            lastError = "Vivox connection is available again. Retry Chat through Settings to reconnect.";
+            return true;
+        }
+
+        SetUnavailable("Vivox connection is disabled by the development simulation.");
+
+        if (VivoxService.Instance == null)
+        {
+            return true;
+        }
+
+        try
+        {
+            // Keep this as an unexpected provider loss. Do not set isShuttingDown.
+            if (VivoxService.Instance.IsLoggedIn)
+            {
+                await VivoxService.Instance.LogoutAsync();
+            }
+
+            if (!serviceUnavailable)
+            {
+                SetUnavailable("Vivox connection is disabled by the development simulation.");
+            }
+
+            return !IsReady;
+        }
+        catch (Exception exception)
+        {
+            SetUnavailable(exception.Message);
+            return false;
+        }
+    }
+
+    public async Task<bool> SimulateUnexpectedConnectionLossAsync()
+    {
+        return await SetDevelopmentConnectionAvailableAsync(false);
+    }
+
+    private async Task<bool> WaitForDevelopmentConnectionAttemptAsync()
+    {
+        float delaySeconds = Mathf.Max(0f, developmentRetryFailureDelaySeconds);
+
+        if (delaySeconds > 0f)
+        {
+            await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
+        }
+
+        if (developmentConnectionAvailable)
+        {
+            return true;
+        }
+
+        SetUnavailable("Vivox connection is disabled by the development simulation.");
+        return false;
+    }
+
+#endif
 
     #endregion
 

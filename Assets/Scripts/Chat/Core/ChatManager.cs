@@ -36,6 +36,7 @@ public class ChatManager : MonoBehaviour
     private bool isSubscribedToLobbyManager;
     private bool lastReportedChatAvailable;
     private bool isSessionPreparationResolved = true;
+    private bool suppressChatSettingsChanged;
 
     private Task<bool> serviceReadyTask;
     private Task<bool> sessionJoinTask;
@@ -323,7 +324,31 @@ public class ChatManager : MonoBehaviour
         sessionPreparationLoadDeadline = 0f;
         SetChatConnectionState(ChatConnectionState.Unavailable);
         ClearChatConversationState();
+        DisableSavedChatSettingAfterFailure();
+        StartShutdownChat();
         PublishChatAvailabilityIfChanged();
+    }
+
+    private void DisableSavedChatSettingAfterFailure()
+    {
+        if (chatSettingsManager == null || !chatSettingsManager.IsReady || !chatSettingsManager.IsChatEnabled)
+        {
+            return;
+        }
+
+        ChatSettingsData settings = chatSettingsManager.CurrentSettings;
+        settings.chatEnabled = false;
+
+        suppressChatSettingsChanged = true;
+
+        try
+        {
+            chatSettingsManager.UpdateChatSettings(settings);
+        }
+        finally
+        {
+            suppressChatSettingsChanged = false;
+        }
     }
 
     private void SetChatConnectionState(ChatConnectionState state)
@@ -867,6 +892,45 @@ public class ChatManager : MonoBehaviour
         AddMessageToConversation(targetConversation, localMessage);
         return true;
     }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    public bool InjectStressSessionMessage(ChatParticipantData sender, string message, bool isPrivate, string recipientUserId, out bool visible)
+    {
+        visible = false;
+
+        if (!isReady || !HasSessionConversation || sender == null || !sender.IsValid || string.IsNullOrWhiteSpace(message))
+        {
+            return false;
+        }
+
+        string resolvedRecipientUserId = isPrivate ? recipientUserId?.Trim() ?? string.Empty : string.Empty;
+
+        if (isPrivate && string.IsNullOrWhiteSpace(resolvedRecipientUserId))
+        {
+            return false;
+        }
+
+        string messageId = $"stress-{Guid.NewGuid():N}";
+        ChatMessageData stressMessage = new ChatMessageData(
+            messageId,
+            string.Empty,
+            SessionConversation.conversationId,
+            ChatConversationType.Session,
+            sender.userId,
+            sender.playerName,
+            sender.iconId,
+            string.Empty,
+            message.Trim(),
+            DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            false,
+            isPrivate,
+            resolvedRecipientUserId);
+
+        OnChatMessageReceived(stressMessage);
+        visible = ContainsMessage(SessionConversation, messageId);
+        return true;
+    }
+#endif
 
     public async Task<bool> LoadHistoryAsync(ChatConversationReference conversation, int maximumMessages)
     {
@@ -2049,19 +2113,30 @@ public class ChatManager : MonoBehaviour
 
     private void OnChatSettingsChanged(ChatSettingsData chatSettings)
     {
+        if (suppressChatSettingsChanged)
+        {
+            return;
+        }
+
         bool requestedEnabled = chatSettings == null || chatSettings.chatEnabled;
 
         if (requestedEnabled == isChatEnabled)
         {
+            if (requestedEnabled && connectionState == ChatConnectionState.Unavailable)
+            {
+                StartChatRetryFromSettings();
+                return;
+            }
+
             PublishChatAvailabilityIfChanged();
             return;
         }
 
         isChatEnabled = requestedEnabled;
-        lastServiceError = string.Empty;
 
         if (!isChatEnabled)
         {
+            lastServiceError = string.Empty;
             ClearPendingSessionPreparation();
             SetChatConnectionState(ChatConnectionState.Disabled);
             StartShutdownChat();
@@ -2069,12 +2144,20 @@ public class ChatManager : MonoBehaviour
             return;
         }
 
+        StartChatRetryFromSettings();
+    }
+
+    private void StartChatRetryFromSettings()
+    {
+        lastServiceError = string.Empty;
         SetChatConnectionState(ChatConnectionState.Connecting);
         PublishChatAvailabilityIfChanged();
 
         if (connectionManager == null || !connectionManager.IsOnline)
         {
+            lastServiceError = "Chat is unavailable.";
             SetChatConnectionState(ChatConnectionState.Unavailable);
+            PublishChatAvailabilityIfChanged();
             return;
         }
 
@@ -2177,7 +2260,18 @@ public class ChatManager : MonoBehaviour
     {
         if (!isChatEnabled)
         {
-            lastServiceError = reason ?? string.Empty;
+            if (connectionState == ChatConnectionState.Unavailable)
+            {
+                if (string.IsNullOrWhiteSpace(lastServiceError))
+                {
+                    lastServiceError = string.IsNullOrWhiteSpace(reason) ? "Chat is unavailable." : reason;
+                }
+
+                PublishChatAvailabilityIfChanged();
+                return;
+            }
+
+            lastServiceError = string.Empty;
             SetChatConnectionState(ChatConnectionState.Disabled);
             PublishChatAvailabilityIfChanged();
             return;

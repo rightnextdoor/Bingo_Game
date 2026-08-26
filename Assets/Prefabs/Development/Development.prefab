@@ -10,14 +10,11 @@ GameObject:
   m_Component:
   - component: {fileID: 1290380241951259866}
   - component: {fileID: 633853011194982010}
-  - component: {fileID: 5179758250553139109}
   - component: {fileID: 3515003745649080825}
   - component: {fileID: 8635193435336926230}
   - component: {fileID: 91398956343745977}
-  - component: {fileID: 2715090340337549302}
-  - component: {fileID: 5965249215158017029}
-  - component: {fileID: 1787420868634442607}
-  - component: {fileID: 5177889571896862763}
+  - component: {fileID: -5042643707935708557}
+  - component: {fileID: -6813974994511889503}
   - component: {fileID: 7817590989810674380}
   - component: {fileID: 7440050942383293183}
   - component: {fileID: 5427336919033162558}
@@ -56,30 +53,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LobbySimulationController
   simulateOnStart: 1
-  playMode: 2
+  playMode: 3
   gameModeType: 0
   ballCountType: 75
---- !u!114 &5179758250553139109
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4922679368307309324}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2fa1b0a3700eb1a4798fa5913991658a, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::GameSimulationController
-  lobbyBoardSectionController: {fileID: 0}
-  gameController: {fileID: 2715090340337549302}
-  boardController: {fileID: 0}
-  validator: {fileID: 1787420868634442607}
-  enableSimulation: 0
-  patternTypes: 0500000006000000
-  simulateWinning: 1
-  gameOver: 1
-  resetSimulation: 0
 --- !u!114 &3515003745649080825
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -154,7 +130,7 @@ MonoBehaviour:
   stopRerolling: 0
   stopSimulation: 0
   inspectorDefaultsVersion: 1
---- !u!114 &2715090340337549302
+--- !u!114 &-5042643707935708557
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -163,15 +139,10 @@ MonoBehaviour:
   m_GameObject: {fileID: 4922679368307309324}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 737ee52291be94b46b91d50cc05fa867, type: 3}
+  m_Script: {fileID: 11500000, guid: 67ab8084706f32b4790d07eae09157a7, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::GameController
-  bingoChecker: {fileID: 5965249215158017029}
-  boardController: {fileID: 0}
-  bingoButton: {fileID: 0}
-  useDirectBingoButtonInput: 0
-  playerId: TestPlayer
---- !u!114 &5965249215158017029
+  m_EditorClassIdentifier: Assembly-CSharp::ChatActivitySimulation
+--- !u!114 &-6813974994511889503
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -180,40 +151,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 4922679368307309324}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ef2c34adc3644e34fac2323d95d0b3e6, type: 3}
+  m_Script: {fileID: 11500000, guid: 28bfb1ef53d44b943934b51ce497cc21, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::BingoChecker
-  validator: {fileID: 1787420868634442607}
-  animationController: {fileID: 5177889571896862763}
---- !u!114 &1787420868634442607
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4922679368307309324}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 74ca514913282e44087d772aca802d01, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::BingoPatternValidator
---- !u!114 &5177889571896862763
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4922679368307309324}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fee62df935a43c64598eff2703c5a377, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::BingoCheckAnimationController
-  boardController: {fileID: 0}
-  cellCheckSeconds: 0.3
-  patternResultSeconds: 1
-  finalPatternSeconds: 2
-  failureColor: {r: 1, g: 0, b: 0, a: 1}
+  m_EditorClassIdentifier: Assembly-CSharp::ChatBurstStressSimulation
 --- !u!114 &7817590989810674380
 MonoBehaviour:
   m_ObjectHideFlags: 0

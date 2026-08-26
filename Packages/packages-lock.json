@@ -289,6 +289,16 @@
       "dependencies": {},
       "url": "https://packages.unity.com"
     },
+    "com.unity.services.moderation": {
+      "version": "1.0.2",
+      "depth": 0,
+      "source": "registry",
+      "dependencies": {
+        "com.unity.services.core": "1.11.0",
+        "com.unity.nuget.newtonsoft-json": "3.2.1"
+      },
+      "url": "https://packages.unity.com"
+    },
     "com.unity.services.multiplayer": {
       "version": "2.2.4",
       "depth": 0,

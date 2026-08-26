@@ -421,6 +421,45 @@ public class StressFakePlayerManager : MonoBehaviour
     }
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
+    public bool TryRemovePlayer(string userId, out string failureReason)
+    {
+        failureReason = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(userId) || !playersByUserId.TryGetValue(userId.Trim(), out StressFakePlayerRecord record) || record == null)
+        {
+            failureReason = "The synthetic player could not be found.";
+            return false;
+        }
+
+        if (record.state == StressFakePlayerState.Removed)
+        {
+            return true;
+        }
+
+        if (record.state == StressFakePlayerState.Failed)
+        {
+            failureReason = "The synthetic player is already in a failed state.";
+            return false;
+        }
+
+        if (NetworkLobbyManager.instance == null || !NetworkLobbyManager.instance.IsReady)
+        {
+            failureReason = "The network lobby manager is not ready.";
+            return false;
+        }
+
+        if (!NetworkLobbyManager.instance.TryRemoveStressPlayer(record.lobbyId, record.userId, out failureReason))
+        {
+            return false;
+        }
+
+        record.state = StressFakePlayerState.Removed;
+        loadingUserIds.Remove(record.userId);
+        return true;
+    }
+#endif
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
 
     private void ProcessLoadingPlayers()
     {

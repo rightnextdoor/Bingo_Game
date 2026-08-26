@@ -2109,6 +2109,33 @@ public class NetworkLobbyManager : MonoBehaviour
         return true;
     }
 
+    public bool TryRemoveStressPlayer(string lobbyId, string userId, out string failureReason)
+    {
+        failureReason = string.Empty;
+
+        if (!TryGetStressLobby(lobbyId, out Lobby lobby) || lobby.Controller == null)
+        {
+            failureReason = "The target lobby could not be found.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(userId) || !lobby.Controller.HasPlayer(userId))
+        {
+            failureReason = "The fake player is no longer in the target lobby.";
+            return false;
+        }
+
+        LobbyExitResult result = RemovePlayerFromLobby(userId, LobbyPlayerExitReason.VoluntaryLeave);
+
+        if (result == null || !result.success)
+        {
+            failureReason = result?.failureMessage ?? "The fake player could not leave the lobby.";
+            return false;
+        }
+
+        return true;
+    }
+
     public bool TrySetStressPlayerSceneReady(string lobbyId, string userId, out string failureReason)
     {
         failureReason = string.Empty;
@@ -2160,6 +2187,100 @@ public class NetworkLobbyManager : MonoBehaviour
         }
 
         BroadcastPlayerBoardUpdate(lobby, userId);
+        return true;
+    }
+
+    public bool TryBroadcastStressChatMessage(
+        string lobbyId,
+        ChatParticipantData sender,
+        string message,
+        bool isPrivate,
+        string recipientUserId,
+        out int recipientCount,
+        out string failureReason)
+    {
+        recipientCount = 0;
+        failureReason = string.Empty;
+
+        if (networkBootstrap == null || !networkBootstrap.IsAuthority)
+        {
+            failureReason = "This process is not the network authority.";
+            return false;
+        }
+
+        if (!TryGetStressLobby(lobbyId, out Lobby lobby) || lobby?.Controller == null)
+        {
+            failureReason = "The target lobby could not be found.";
+            return false;
+        }
+
+        if (sender == null || !sender.IsValid || string.IsNullOrWhiteSpace(message))
+        {
+            failureReason = "The synthetic chat message is invalid.";
+            return false;
+        }
+
+        if (connectionRegistry == null || !connectionRegistry.IsReady)
+        {
+            failureReason = "The connection registry is not ready.";
+            return false;
+        }
+
+        string resolvedRecipientUserId = isPrivate ? recipientUserId?.Trim() ?? string.Empty : string.Empty;
+
+        if (isPrivate)
+        {
+            if (string.IsNullOrWhiteSpace(resolvedRecipientUserId) || !lobby.Controller.HasPlayer(resolvedRecipientUserId) ||
+                !connectionRegistry.TryGetClientId(resolvedRecipientUserId, out ulong recipientClientId))
+            {
+                failureReason = "The private-message recipient is not connected to the target lobby.";
+                return false;
+            }
+
+            if (!NetworkLobbyConnection.TrySendStressChatMessage(
+                    recipientClientId,
+                    lobbyId,
+                    sender.userId,
+                    sender.playerName,
+                    sender.iconId,
+                    message.Trim(),
+                    true,
+                    resolvedRecipientUserId))
+            {
+                failureReason = "The synthetic private message could not be sent to the target client.";
+                return false;
+            }
+
+            recipientCount = 1;
+            return true;
+        }
+
+        int sentCount = 0;
+
+        SendToLobbyPlayers(lobby, clientId =>
+        {
+            if (NetworkLobbyConnection.TrySendStressChatMessage(
+                    clientId,
+                    lobbyId,
+                    sender.userId,
+                    sender.playerName,
+                    sender.iconId,
+                    message.Trim(),
+                    false,
+                    string.Empty))
+            {
+                sentCount++;
+            }
+        });
+
+        recipientCount = sentCount;
+
+        if (recipientCount <= 0)
+        {
+            failureReason = "The synthetic public message did not have any connected Lobby recipients.";
+            return false;
+        }
+
         return true;
     }
 

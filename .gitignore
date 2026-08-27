@@ -149,3 +149,8 @@ Desktop.ini
 # to commit the whole package source. Remove this line only if we intentionally
 # customize/own the embedded URP package.
 /[Pp]ackages/com.unity.render-pipelines.universal/
+
+# ----------------------------------------------------------------------
+# Local ChatGPT planning and working files - do not commit
+# ----------------------------------------------------------------------
+/ChatGPT/

@@ -12,7 +12,8 @@ public enum PopupId
     Failure,
     HostSettings,
     ChatSettings,
-    ChatReport
+    ChatReport,
+    GameRejoin
 }
 
 [Serializable]
@@ -137,6 +138,11 @@ public class PopupManager : MonoBehaviour
 
         createUserAfterCreateAction = afterCreateAction;
         OpenPopup(PopupId.CreateUser);
+    }
+
+    public void OpenGameRejoinPopup()
+    {
+        OpenPopup(PopupId.GameRejoin);
     }
 
     public void OpenAfterUserCreatedPopup()

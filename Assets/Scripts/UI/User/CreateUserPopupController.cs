@@ -6,7 +6,7 @@ public class CreateUserPopupController : MonoBehaviour
 {
     [Header("Managers")]
     private PopupManager popupManager;
-    [SerializeField] private UIIconManager iconManager;
+    private UIIconManager iconManager;
     [SerializeField] private IconSelectPopupController iconSelectPopupController;
 
     [Header("Input")]

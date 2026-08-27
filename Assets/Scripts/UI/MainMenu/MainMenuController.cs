@@ -92,8 +92,8 @@ public class MainMenuController : MonoBehaviour
     {
         if (landingPlayButton != null)
         {
-            landingPlayButton.onClick.RemoveListener(ShowModeSelectScreen);
-            landingPlayButton.onClick.AddListener(ShowModeSelectScreen);
+            landingPlayButton.onClick.RemoveListener(OnLandingPlayButtonClicked);
+            landingPlayButton.onClick.AddListener(OnLandingPlayButtonClicked);
         }
 
         if (soloButton != null)
@@ -149,7 +149,7 @@ public class MainMenuController : MonoBehaviour
     {
         if (landingPlayButton != null)
         {
-            landingPlayButton.onClick.RemoveListener(ShowModeSelectScreen);
+            landingPlayButton.onClick.RemoveListener(OnLandingPlayButtonClicked);
         }
 
         if (soloButton != null)
@@ -206,6 +206,29 @@ public class MainMenuController : MonoBehaviour
         SetScreenActive(landingScreen, false);
         SetScreenActive(modeSelectScreen, true);
         SetScreenActive(modeSetupScreen, false);
+    }
+
+    private void OnLandingPlayButtonClicked()
+    {
+        CacheManagers();
+
+        UserData currentUser = userManager?.CurrentUser;
+
+        if (currentUser != null &&
+            currentUser.HasUser &&
+            !string.IsNullOrWhiteSpace(currentUser.lastGameId))
+        {
+            if (popupManager == null)
+            {
+                Debug.LogWarning("MainMenuController could not open Game Rejoin because PopupManager was not found.");
+                return;
+            }
+
+            popupManager.OpenGameRejoinPopup();
+            return;
+        }
+
+        ShowModeSelectScreen();
     }
 
     private void SetScreenActive(GameObject screen, bool isActive)

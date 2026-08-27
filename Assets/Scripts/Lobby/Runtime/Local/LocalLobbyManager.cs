@@ -62,11 +62,32 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
 
         for (int i = 0; i < lobbies.Count; i++)
         {
-            LobbyController controller = lobbies[i]?.Controller;
+            Lobby lobby = lobbies[i];
+            LobbyController controller = lobby?.Controller;
 
             if (controller != null && controller.HasPendingWork)
             {
                 controller.ProcessPendingWorkBatch(WorkBatchSize, out _);
+            }
+
+            if (lobby != null &&
+                lobby.lobbyState == LobbyState.FinalCountdown &&
+                controller != null &&
+                controller.Timer.HasExpired())
+            {
+                if (LocalGameSessionManager.instance != null &&
+                    LocalGameSessionManager.instance.HasGameForLobby(lobby.GetLobbyId()))
+                {
+                    controller.CompleteFinalCountdown();
+                }
+                else
+                {
+                    HandleGameCreationFailure(lobby, GameSessionResult.Failed(
+                        GameSessionOperationType.Create,
+                        GameSessionFailureType.GameCreationFailed,
+                        "The local Game was not created before the final countdown ended.",
+                        lobbyId: lobby.GetLobbyId()));
+                }
             }
         }
     }
@@ -162,6 +183,7 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
 
         Lobby lobby = new Lobby(lobbySetupData);
         lobby.Controller.PlayerExitProcessed += OnLobbyPlayerExitProcessed;
+        lobby.Controller.FinalCountdownStarted += OnLobbyFinalCountdownStarted;
         lobby.Controller.SetBotUserProvider(GetLocalBotUsers);
         lobbies.Add(lobby);
         return lobby;
@@ -177,6 +199,14 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
         if (lobby.Controller != null)
         {
             lobby.Controller.PlayerExitProcessed -= OnLobbyPlayerExitProcessed;
+            lobby.Controller.FinalCountdownStarted -= OnLobbyFinalCountdownStarted;
+        }
+
+        LocalGameSessionManager.instance?.DeleteGameForLobby(lobby.GetLobbyId());
+
+        if (GameSessionManager.instance != null && GameSessionManager.instance.CurrentLobbyId == lobby.GetLobbyId())
+        {
+            GameSessionManager.instance.ClearCurrentGame(true);
         }
 
         lobbies.Remove(lobby);
@@ -230,6 +260,67 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
 
     #region Lobby Events
 
+    private void OnLobbyFinalCountdownStarted(LobbyController controller)
+    {
+        Lobby lobby = FindLobbyByController(controller);
+
+        if (lobby == null)
+        {
+            return;
+        }
+
+        GameSessionManager.instance?.PrepareForGameCreation(lobby.GetLobbyId(), SessionRuntimeType.Local);
+
+        if (LocalGameSessionManager.instance == null || !LocalGameSessionManager.instance.IsReady)
+        {
+            HandleGameCreationFailure(lobby, GameSessionResult.Failed(
+                GameSessionOperationType.Create,
+                GameSessionFailureType.ServiceUnavailable,
+                "The local Game session manager is not ready.",
+                lobbyId: lobby.GetLobbyId()));
+            return;
+        }
+
+        GameSessionSetupData setupData = GameSessionSetupData.FromLobby(lobby);
+        GameSessionResult result = LocalGameSessionManager.instance.CreateGame(setupData);
+
+        if (result == null || !result.success)
+        {
+            HandleGameCreationFailure(lobby, result);
+            return;
+        }
+
+        if (GameSessionManager.instance == null)
+        {
+            LocalGameSessionManager.instance.DeleteGameForLobby(lobby.GetLobbyId());
+            HandleGameCreationFailure(lobby, GameSessionResult.Failed(
+                GameSessionOperationType.Create,
+                GameSessionFailureType.ServiceUnavailable,
+                "The Game session coordinator is not available.",
+                lobbyId: lobby.GetLobbyId()));
+            return;
+        }
+
+        GameSessionManager.instance.ReceiveGameCreationResult(result);
+    }
+
+    private void HandleGameCreationFailure(Lobby lobby, GameSessionResult result)
+    {
+        if (lobby?.Controller == null)
+        {
+            return;
+        }
+
+        GameSessionResult failureResult = result ?? GameSessionResult.Failed(
+            GameSessionOperationType.Create,
+            GameSessionFailureType.GameCreationFailed,
+            "The local Game could not be created.",
+            lobbyId: lobby.GetLobbyId());
+
+        GameSessionManager.instance?.ReceiveGameCreationResult(failureResult);
+        lobby.Controller.ResetAfterGameCreationFailure();
+    }
+
     private void OnLobbyPlayerExitProcessed(LobbyController controller, LobbyExitResult exitResult)
     {
         if (controller == null || exitResult == null || !exitResult.success || !exitResult.shouldCloseLobby)
@@ -257,6 +348,7 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
             if (lobby?.Controller != null)
             {
                 lobby.Controller.PlayerExitProcessed -= OnLobbyPlayerExitProcessed;
+                lobby.Controller.FinalCountdownStarted -= OnLobbyFinalCountdownStarted;
             }
         }
     }

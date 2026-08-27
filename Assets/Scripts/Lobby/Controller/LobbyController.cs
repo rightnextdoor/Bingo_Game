@@ -1222,6 +1222,33 @@ public class LobbyController
         return true;
     }
 
+    public bool ResetAfterGameCreationFailure()
+    {
+        if (lobby == null ||
+            (lobby.lobbyState != LobbyState.FinalCountdown && lobby.lobbyState != LobbyState.InGame))
+        {
+            return false;
+        }
+
+        lobby.lobbyState = LobbyState.Open;
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            LobbyPlayerData playerData = players[i];
+
+            if (playerData?.userData == null)
+            {
+                continue;
+            }
+
+            playerData.isReady = playerData.userData.userTag == UserTag.Bot;
+        }
+
+        InitializeTimer(lobby.playMode);
+        RefreshViews();
+        return true;
+    }
+
     #endregion
 
     #region Custom Lobby Access

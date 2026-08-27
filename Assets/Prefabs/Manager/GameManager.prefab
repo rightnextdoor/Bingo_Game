@@ -28,6 +28,9 @@ GameObject:
   - component: {fileID: 2222644560770358961}
   - component: {fileID: 8181335114522364486}
   - component: {fileID: 5465094055987081418}
+  - component: {fileID: 1122387465010203041}
+  - component: {fileID: 1122387465010203042}
+  - component: {fileID: 1122387465010203043}
   m_Layer: 0
   m_Name: GameManager
   m_TagString: Untagged
@@ -373,3 +376,39 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2acf0b889da93574696000fcfd633776, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerProfileRegistry
+--- !u!114 &1122387465010203041
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8215340122209812844}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2e31978b6b854559b7f4d014aa66d730, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::GameSessionManager
+--- !u!114 &1122387465010203042
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8215340122209812844}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a19fa2eefb49476d853c94d4b22dad54, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::LocalGameSessionManager
+--- !u!114 &1122387465010203043
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8215340122209812844}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f4cad388a0cc4c1d9fd6ec0efb15165d, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::NetworkGameSessionService

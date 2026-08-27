@@ -293,9 +293,10 @@ public class GameSceneManager : MonoBehaviour
         bool minimumTimeDone = loader == null || loader.HasMinimumShowTimePassed;
         bool sceneReady = sceneReadyController == null || sceneReadyController.AreAllReady();
         bool lobbyEntryFinished = IsLobbyEntryFinished();
+        bool gameEntryFinished = IsGameEntryFinished();
         bool lobbyChatPreparationFinished = IsLobbyChatPreparationFinished();
 
-        return minimumTimeDone && sceneReady && lobbyEntryFinished && lobbyChatPreparationFinished;
+        return minimumTimeDone && sceneReady && lobbyEntryFinished && gameEntryFinished && lobbyChatPreparationFinished;
     }
 
     #endregion
@@ -373,6 +374,22 @@ public class GameSceneManager : MonoBehaviour
         }
 
         return LobbyManager.instance.EntryState == LobbyEntryState.Completed || LobbyManager.instance.EntryState == LobbyEntryState.Failed;
+    }
+
+    private bool IsGameEntryFinished()
+    {
+        if (currentSceneType != GameSceneType.Game)
+        {
+            return true;
+        }
+
+        if (GameSessionManager.instance == null)
+        {
+            return false;
+        }
+
+        return GameSessionManager.instance.EntryState == GameSessionEntryState.Completed ||
+               GameSessionManager.instance.EntryState == GameSessionEntryState.Failed;
     }
 
     private bool TryConsumeLoadingRedirect(out GameSceneType sceneType)

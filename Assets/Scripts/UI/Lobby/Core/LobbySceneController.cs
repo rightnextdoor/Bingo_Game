@@ -13,7 +13,6 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
 
     private LobbyController lobbyController;
     private Coroutine bindRoutine;
-    private Coroutine localStartRoutine;
 
     private void OnEnable()
     {
@@ -29,12 +28,6 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
         {
             StopCoroutine(bindRoutine);
             bindRoutine = null;
-        }
-
-        if (localStartRoutine != null)
-        {
-            StopCoroutine(localStartRoutine);
-            localStartRoutine = null;
         }
 
         UnsubscribeFromHeader();
@@ -406,12 +399,6 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
                 return;
             }
 
-            if (localStartRoutine != null)
-            {
-                StopCoroutine(localStartRoutine);
-            }
-
-            localStartRoutine = StartCoroutine(WaitForLocalFinalCountdown(controller));
             return;
         }
 
@@ -425,22 +412,6 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
 
         SaveCurrentHostLobbySettings(lobbyManager);
         lobbyService.StartLobby();
-    }
-
-    private IEnumerator WaitForLocalFinalCountdown(LobbyController controller)
-    {
-        while (controller != null &&
-               controller.TimerEndTime > LobbyTimer.GetCurrentTime())
-        {
-            yield return null;
-        }
-
-        if (controller != null)
-        {
-            controller.CompleteFinalCountdown();
-        }
-
-        localStartRoutine = null;
     }
 
     private void TryLoadGameScene(LobbyViewData lobbyViewData)

@@ -316,7 +316,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::LobbySettings
   minimumPlayers: 6
   maxPlayerCount: 500
-  onlineTimerMinutes: 3
+  onlineTimerMinutes: 1
   finalCountdownSeconds: 10
   joinLockSeconds: 10
   pendingJoinTimeoutSeconds: 60
@@ -386,7 +386,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 2e31978b6b854559b7f4d014aa66d730, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GameSessionManager
 --- !u!114 &1122387465010203042
 MonoBehaviour:
@@ -398,7 +398,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a19fa2eefb49476d853c94d4b22dad54, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LocalGameSessionManager
 --- !u!114 &1122387465010203043
 MonoBehaviour:
@@ -410,5 +410,5 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f4cad388a0cc4c1d9fd6ec0efb15165d, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NetworkGameSessionService

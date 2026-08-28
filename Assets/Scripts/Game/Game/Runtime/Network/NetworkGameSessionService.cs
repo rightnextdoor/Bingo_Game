@@ -86,6 +86,111 @@ public class NetworkGameSessionService : MonoBehaviour, IGameSessionService
         return await connection.RequestRejoinGameAsync(gameId);
     }
 
+    public async Task<GameSessionResult> SetGameSceneReadyAsync(string gameId, UserData userData)
+    {
+        if (!isReady)
+        {
+            return GameSessionResult.Failed(
+                GameSessionOperationType.SceneReady,
+                GameSessionFailureType.ServiceUnavailable,
+                "The network Game service is not ready.",
+                gameId);
+        }
+
+        if (networkBootstrap == null || !networkBootstrap.IsConnected)
+        {
+            return GameSessionResult.Failed(
+                GameSessionOperationType.SceneReady,
+                GameSessionFailureType.NetworkConnectionFailed,
+                "A network connection is required to enter this Game scene.",
+                gameId);
+        }
+
+        NetworkGameSessionConnection connection = await WaitForLocalGameConnectionAsync();
+
+        if (connection == null)
+        {
+            return GameSessionResult.Failed(
+                GameSessionOperationType.SceneReady,
+                GameSessionFailureType.NetworkGameConnectionUnavailable,
+                "The network Game connection was not available.",
+                gameId);
+        }
+
+        return await connection.RequestGameSceneReadyAsync(gameId);
+    }
+
+    public async Task<GameSessionResult> SyncGameSessionAsync(string gameId, string lobbyId, UserData userData)
+    {
+        if (!isReady)
+        {
+            return GameSessionResult.Failed(
+                GameSessionOperationType.Sync,
+                GameSessionFailureType.ServiceUnavailable,
+                "The network Game service is not ready.",
+                gameId,
+                lobbyId);
+        }
+
+        if (networkBootstrap == null || !networkBootstrap.IsConnected)
+        {
+            return GameSessionResult.Failed(
+                GameSessionOperationType.Sync,
+                GameSessionFailureType.NetworkConnectionFailed,
+                "A network connection is required to synchronize this Game.",
+                gameId,
+                lobbyId);
+        }
+
+        NetworkGameSessionConnection connection = await WaitForLocalGameConnectionAsync();
+
+        if (connection == null)
+        {
+            return GameSessionResult.Failed(
+                GameSessionOperationType.Sync,
+                GameSessionFailureType.NetworkGameConnectionUnavailable,
+                "The network Game connection was not available.",
+                gameId,
+                lobbyId);
+        }
+
+        return await connection.RequestGameSessionSyncAsync(gameId, lobbyId);
+    }
+
+    public async Task<GameSessionResult> LeaveGameAsync(string gameId, UserData userData)
+    {
+        if (!isReady)
+        {
+            return GameSessionResult.Failed(
+                GameSessionOperationType.Leave,
+                GameSessionFailureType.ServiceUnavailable,
+                "The network Game service is not ready.",
+                gameId);
+        }
+
+        if (networkBootstrap == null || !networkBootstrap.IsConnected)
+        {
+            return GameSessionResult.Failed(
+                GameSessionOperationType.Leave,
+                GameSessionFailureType.NetworkConnectionFailed,
+                "A network connection is required to leave this Game session.",
+                gameId);
+        }
+
+        NetworkGameSessionConnection connection = await WaitForLocalGameConnectionAsync();
+
+        if (connection == null)
+        {
+            return GameSessionResult.Failed(
+                GameSessionOperationType.Leave,
+                GameSessionFailureType.NetworkGameConnectionUnavailable,
+                "The network Game connection was not available.",
+                gameId);
+        }
+
+        return await connection.RequestLeaveGameAsync(gameId);
+    }
+
     private async Task<NetworkGameSessionConnection> WaitForLocalGameConnectionAsync()
     {
         float timeoutTime = Time.realtimeSinceStartup + GameConnectionTimeoutSeconds;

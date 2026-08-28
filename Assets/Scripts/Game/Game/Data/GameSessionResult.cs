@@ -41,6 +41,25 @@ public class GameSessionResult
         };
     }
 
+    public static GameSessionResult Acknowledged(GameSessionOperationType operationType, GameSessionData gameSessionData)
+    {
+        if (gameSessionData == null || string.IsNullOrWhiteSpace(gameSessionData.gameId))
+        {
+            return Failed(operationType, GameSessionFailureType.Unknown, "The Game session data is missing.");
+        }
+
+        return new GameSessionResult
+        {
+            success = true,
+            operationType = operationType,
+            failureType = GameSessionFailureType.None,
+            failureMessage = string.Empty,
+            gameId = gameSessionData.gameId,
+            lobbyId = gameSessionData.lobbyId,
+            gameSessionData = null
+        };
+    }
+
     public static GameSessionResult Failed(
         GameSessionOperationType operationType,
         GameSessionFailureType failureType,

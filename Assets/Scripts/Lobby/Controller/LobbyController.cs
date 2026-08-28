@@ -474,6 +474,7 @@ public class LobbyController
             bool customHostLeft =
                 lobby != null &&
                 lobby.playMode == MainMenuPlayMode.Custom &&
+                lobby.lobbyState != LobbyState.InGame &&
                 wasHost;
 
             bool shouldCloseLobby = customHostLeft || IsEmpty;

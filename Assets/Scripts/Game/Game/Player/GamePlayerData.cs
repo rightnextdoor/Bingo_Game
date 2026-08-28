@@ -10,6 +10,7 @@ public class GamePlayerData
 
     public bool isLobbyHost;
     public bool isConnected;
+    public bool isGameSceneReady;
     public bool canRejoin;
 
     public LobbyBoardData boardData;
@@ -27,6 +28,7 @@ public class GamePlayerData
         iconId = string.Empty;
         isLobbyHost = false;
         isConnected = false;
+        isGameSceneReady = false;
         canRejoin = true;
         boardData = new LobbyBoardData();
     }
@@ -44,6 +46,7 @@ public class GamePlayerData
         iconId = lobbyPlayerData.userData.iconId ?? string.Empty;
         isLobbyHost = lobbyPlayerData.isHost;
         isConnected = true;
+        isGameSceneReady = userTag == UserTag.Bot;
         canRejoin = userTag != UserTag.Bot;
         boardData = new LobbyBoardData(lobbyPlayerData.boardData);
     }
@@ -61,6 +64,7 @@ public class GamePlayerData
         iconId = playerData.iconId ?? string.Empty;
         isLobbyHost = playerData.isLobbyHost;
         isConnected = playerData.isConnected;
+        isGameSceneReady = playerData.isGameSceneReady;
         canRejoin = playerData.canRejoin;
         boardData = new LobbyBoardData(playerData.boardData);
     }

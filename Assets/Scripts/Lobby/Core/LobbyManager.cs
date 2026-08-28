@@ -418,26 +418,46 @@ public class LobbyManager : MonoBehaviour
 
     public async void LeaveCurrentLobby()
     {
+        await LeaveCurrentLobbyAsync(true);
+    }
+
+    public async Task<LobbyExitResult> LeaveCurrentLobbyAsync(bool returnToMainScene)
+    {
         if (isLeavingLobby || isEnteringLobby)
         {
-            return;
+            return LobbyExitResult.Failed(
+                currentUserId,
+                LobbyPlayerExitReason.VoluntaryLeave,
+                "A lobby entry or exit operation is already in progress.");
         }
 
         if (!lobbyClientState.HasLobby)
         {
-            ReturnToMainScene();
-            return;
+            LobbyExitResult noLobbyResult = LobbyExitResult.Succeeded(
+                currentUserId,
+                LobbyPlayerExitReason.VoluntaryLeave,
+                false,
+                0,
+                false,
+                LobbyCloseReason.None);
+
+            if (returnToMainScene)
+            {
+                ReturnToMainScene();
+            }
+
+            return noLobbyResult;
         }
 
         if (string.IsNullOrWhiteSpace(currentUserId))
         {
-            CompleteLobbyExitFailure(
-                LobbyExitResult.Failed(
-                    currentUserId,
-                    LobbyPlayerExitReason.VoluntaryLeave,
-                    "The current lobby player could not be resolved."));
+            LobbyExitResult failureResult = LobbyExitResult.Failed(
+                currentUserId,
+                LobbyPlayerExitReason.VoluntaryLeave,
+                "The current lobby player could not be resolved.");
 
-            return;
+            CompleteLobbyExitFailure(failureResult);
+            return failureResult;
         }
 
         ILobbyService lobbyService =
@@ -445,13 +465,13 @@ public class LobbyManager : MonoBehaviour
 
         if (lobbyService == null || !lobbyService.IsReady)
         {
-            CompleteLobbyExitFailure(
-                LobbyExitResult.Failed(
-                    currentUserId,
-                    LobbyPlayerExitReason.VoluntaryLeave,
-                    "The lobby service was not ready."));
+            LobbyExitResult failureResult = LobbyExitResult.Failed(
+                currentUserId,
+                LobbyPlayerExitReason.VoluntaryLeave,
+                "The lobby service was not ready.");
 
-            return;
+            CompleteLobbyExitFailure(failureResult);
+            return failureResult;
         }
 
         isLeavingLobby = true;
@@ -483,7 +503,7 @@ public class LobbyManager : MonoBehaviour
                     LobbyPlayerExitReason.VoluntaryLeave,
                     "The lobby service did not return a leave result."));
 
-            return;
+            return result;
         }
 
         ClearCurrentLobby();
@@ -493,7 +513,12 @@ public class LobbyManager : MonoBehaviour
 
         LobbyExitCompleted?.Invoke(result);
 
-        ReturnToMainScene();
+        if (returnToMainScene)
+        {
+            ReturnToMainScene();
+        }
+
+        return result;
     }
 
     private void CompleteLobbyExitFailure(LobbyExitResult result)

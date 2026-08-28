@@ -9,7 +9,10 @@ public enum GameSessionOperationType
 {
     None,
     Create,
-    Rejoin
+    Rejoin,
+    Sync,
+    SceneReady,
+    Leave
 }
 
 public enum GameSessionEntryState

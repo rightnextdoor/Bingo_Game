@@ -1,32 +1,24 @@
-using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.UI;
 
 [DisallowMultipleComponent]
 public class GameController : MonoBehaviour
 {
-    #region Fields
+    #region Inspector Fields
 
-    [Header("Bingo")]
-    [SerializeField] private BingoChecker bingoChecker;
-    [SerializeField] private BingoBoardController boardController;
-    [SerializeField] private Button bingoButton;
-    [SerializeField] private bool useDirectBingoButtonInput;
+    [Header("Sections")]
+    [SerializeField] private GameHeaderController headerController;
+    [SerializeField] private LobbyPlayerListController playerListController;
+    [SerializeField] private GameInfoController gameInfoController;
+    [SerializeField] private LobbyCustomPanelController customPanelController;
 
-    [Header("Test Player")]
-    [SerializeField] private string playerId = "TestPlayer";
+    #endregion
 
-    private readonly List<int> calledNumbers = new List<int>();
-    private readonly List<BingoPatternType> patternTypes = new List<BingoPatternType>();
+    #region Private Fields
 
-    private BingoCheckResult lastBingoCheckResult;
-
-    public IReadOnlyList<int> CalledNumbers => calledNumbers;
-    public IReadOnlyList<BingoPatternType> PatternTypes => patternTypes;
-    public BingoCheckResult LastBingoCheckResult => lastBingoCheckResult;
-
-    public event Action<BingoCheckResult> BingoCheckResolved;
+    private readonly List<PlayerListPlayerData> visiblePlayers = new List<PlayerListPlayerData>();
+    private Coroutine bindRoutine;
 
     #endregion
 
@@ -34,186 +26,250 @@ public class GameController : MonoBehaviour
 
     private void OnEnable()
     {
-        if (bingoChecker != null)
-            bingoChecker.CheckCompleted += OnBingoCheckCompleted;
-
-        if (useDirectBingoButtonInput && bingoButton != null)
-            bingoButton.onClick.AddListener(OnBingoPressed);
+        SubscribeToHeader();
+        bindRoutine = StartCoroutine(BindWhenGameIsReady());
     }
 
     private void OnDisable()
     {
-        if (bingoChecker != null)
-            bingoChecker.CheckCompleted -= OnBingoCheckCompleted;
-
-        if (bingoButton != null)
-            bingoButton.onClick.RemoveListener(OnBingoPressed);
-    }
-
-    #endregion
-
-    #region Bingo
-
-    private void OnBingoPressed()
-    {
-        RequestBingo();
-    }
-
-    public bool RequestBingo()
-    {
-        if (bingoChecker == null ||
-            boardController == null ||
-            boardController.CurrentBoardData == null ||
-            bingoChecker.IsChecking ||
-            string.IsNullOrWhiteSpace(playerId))
+        if (bindRoutine != null)
         {
-            return false;
+            StopCoroutine(bindRoutine);
+            bindRoutine = null;
         }
 
-        boardController.SetInteractable(false);
-        SetBingoButtonInteractable(false);
-
-        List<int> markedCellIndices = boardController.GetMarkedCellIndicesSnapshot();
-
-        bool started =
-            bingoChecker.StartCheck(
-                playerId,
-                boardController.CurrentBoardData,
-                markedCellIndices,
-                calledNumbers,
-                patternTypes);
-
-        if (started)
-            return true;
-
-        boardController.SetInteractable(true);
-        SetBingoButtonInteractable(true);
-
-        return false;
-    }
-
-    private void OnBingoCheckCompleted(BingoCheckResult checkResult)
-    {
-        if (checkResult == null)
-            return;
-
-        lastBingoCheckResult = checkResult;
-
-        BingoCheckResolved?.Invoke(checkResult);
-
-        HandleBingoCheckResult(checkResult);
-    }
-
-    private void HandleBingoCheckResult(BingoCheckResult checkResult)
-    {
+        UnsubscribeFromHeader();
+        UnsubscribeFromGameSessionManager();
     }
 
     #endregion
 
-    #region Bingo Outcomes
+    #region Game Display
 
-    public void ContinuePlayerAfterBingoCheck()
+    public void DisplayGameInfo(GameSessionData gameSessionData)
     {
-        if (lastBingoCheckResult == null)
-            return;
-
-        bingoChecker?.ContinuePlaying(lastBingoCheckResult);
-
-        boardController?.SetInteractable(true);
-        SetBingoButtonInteractable(true);
-    }
-
-    public void FinishPlayerAsWinner()
-    {
-        if (lastBingoCheckResult == null)
-            return;
-
-        boardController?.SetInteractable(false);
-        SetBingoButtonInteractable(false);
-
-        bingoChecker?.PlayPlayerWonAnimation(lastBingoCheckResult);
-    }
-
-    public void FinishPlayerAsLoser()
-    {
-        if (lastBingoCheckResult == null)
-            return;
-
-        boardController?.SetInteractable(false);
-        SetBingoButtonInteractable(false);
-
-        bingoChecker?.PlayPlayerLostAnimation(lastBingoCheckResult);
-    }
-
-    private void SetBingoButtonInteractable(bool interactable)
-    {
-        if (bingoButton != null)
-            bingoButton.interactable = interactable;
-    }
-
-    #endregion
-
-    #region Called Numbers
-
-    public void AddCalledNumber(int number)
-    {
-        if (!calledNumbers.Contains(number))
-            calledNumbers.Add(number);
-    }
-
-    public void SetCalledNumbers(IReadOnlyCollection<int> numbers)
-    {
-        calledNumbers.Clear();
-
-        if (numbers == null)
-            return;
-
-        foreach (int number in numbers)
+        if (gameSessionData == null)
         {
-            if (!calledNumbers.Contains(number))
-                calledNumbers.Add(number);
+            ClearDisplay();
+            return;
+        }
+
+        GameModeManager gameModeManager = GameModeManager.instance;
+        BingoGameModeData gameModeData = gameModeManager != null
+            ? gameModeManager.GetGameModeData(gameSessionData.gameModeType)
+            : null;
+
+        string gameName = gameModeData != null && !string.IsNullOrWhiteSpace(gameModeData.GameName)
+            ? gameModeData.GameName
+            : gameSessionData.gameModeType.ToString();
+
+        headerController?.DisplayGameInfo(gameSessionData, gameName);
+        DisplayPlayerList(gameSessionData);
+        DisplayGameModeInfo(gameSessionData, gameModeData, gameName, gameModeManager);
+        DisplayCustomLobbyInfo(gameSessionData);
+    }
+
+    public void SetTimerSeconds(float remainingSeconds)
+    {
+        headerController?.SetTimerSeconds(remainingSeconds);
+    }
+
+    public void HideTimer()
+    {
+        headerController?.HideTimer();
+    }
+
+    private void DisplayPlayerList(GameSessionData gameSessionData)
+    {
+        visiblePlayers.Clear();
+        bool localPlayerIsHost = gameSessionData?.GetPlayer(UserManager.instance?.UserId)?.isLobbyHost == true;
+
+        if (gameSessionData?.players != null)
+        {
+            AddVisibleHost(gameSessionData.players, localPlayerIsHost);
+
+            for (int i = 0; i < gameSessionData.players.Count; i++)
+            {
+                GamePlayerData playerData = gameSessionData.players[i];
+
+                if (playerData == null || playerData.isLobbyHost)
+                {
+                    continue;
+                }
+
+                AddVisiblePlayer(playerData, localPlayerIsHost);
+            }
+        }
+
+        playerListController?.DisplayPlayers(visiblePlayers, visiblePlayers.Count);
+    }
+
+    private void AddVisibleHost(IReadOnlyList<GamePlayerData> players, bool localPlayerIsHost)
+    {
+        for (int i = 0; i < players.Count; i++)
+        {
+            GamePlayerData playerData = players[i];
+
+            if (playerData != null && playerData.isLobbyHost)
+            {
+                AddVisiblePlayer(playerData, localPlayerIsHost);
+                return;
+            }
         }
     }
 
-    public void ClearCalledNumbers()
+    private void AddVisiblePlayer(GamePlayerData gamePlayerData, bool localPlayerIsHost)
     {
-        calledNumbers.Clear();
+        if (gamePlayerData == null || !gamePlayerData.HasValidPlayer || !gamePlayerData.isGameSceneReady)
+        {
+            return;
+        }
+
+        PlayerListPlayerData playerData = new PlayerListPlayerData
+        {
+            userId = gamePlayerData.userId ?? string.Empty,
+            userTag = gamePlayerData.userTag,
+            playerName = gamePlayerData.playerName ?? string.Empty,
+            iconId = gamePlayerData.iconId ?? string.Empty,
+            isHost = gamePlayerData.isLobbyHost,
+            isReady = true,
+            boardData = new LobbyBoardData(gamePlayerData.boardData),
+            canKick = false,
+            showBotIcon = localPlayerIsHost && gamePlayerData.userTag == UserTag.Bot,
+            showReadyIcon = false
+        };
+
+        visiblePlayers.Add(playerData);
+    }
+
+    private void DisplayGameModeInfo(
+        GameSessionData gameSessionData,
+        BingoGameModeData gameModeData,
+        string gameName,
+        GameModeManager gameModeManager)
+    {
+        string gameDescription = gameModeData != null && !string.IsNullOrWhiteSpace(gameModeData.Description)
+            ? gameModeData.Description
+            : "No game information is available for this game mode.";
+
+        string ruleDescription = string.Empty;
+
+        if (gameSessionData.hasRule)
+        {
+            BingoGameRuleData ruleData = gameModeManager != null
+                ? gameModeManager.GetGameRuleData(gameSessionData.ruleType)
+                : null;
+
+            ruleDescription = ruleData != null && !string.IsNullOrWhiteSpace(ruleData.Description)
+                ? ruleData.Description
+                : "No rule description is available for this game mode.";
+        }
+
+        gameInfoController?.ShowGameInfo(
+            gameName,
+            gameDescription,
+            gameSessionData.ballCountType,
+            gameSessionData.hasRule,
+            ruleDescription,
+            gameSessionData.patternTypes);
+    }
+
+    private void DisplayCustomLobbyInfo(GameSessionData gameSessionData)
+    {
+        LobbyViewData lobbyViewData = new LobbyViewData
+        {
+            lobbyId = gameSessionData.lobbyId ?? string.Empty,
+            playMode = gameSessionData.playMode,
+            lobbyName = gameSessionData.lobbyName ?? string.Empty,
+            roomCode = gameSessionData.roomCode ?? string.Empty,
+            hasPassword = gameSessionData.hasPassword,
+            lobbyPassword = gameSessionData.lobbyPassword ?? string.Empty
+        };
+
+        customPanelController?.DisplayLobbyInfo(lobbyViewData);
+    }
+
+    private void ClearDisplay()
+    {
+        visiblePlayers.Clear();
+        headerController?.ClearHeader();
+        playerListController?.DisplayPlayers(visiblePlayers, 0);
+        gameInfoController?.ClearInfo();
+        customPanelController?.DisplayLobbyInfo(null);
     }
 
     #endregion
 
-    #region Patterns
+    #region Session Binding
 
-    public void SetPatternTypes(IReadOnlyCollection<BingoPatternType> patterns)
+    private IEnumerator BindWhenGameIsReady()
     {
-        patternTypes.Clear();
-
-        if (patterns == null)
-            return;
-
-        foreach (BingoPatternType patternType in patterns)
+        while (GameSessionManager.instance == null ||
+               !GameSessionManager.instance.HasEnteredGame ||
+               GameSessionManager.instance.CurrentGameSession == null ||
+               GameModeManager.instance == null ||
+               !GameModeManager.instance.IsReady)
         {
-            if (!patternTypes.Contains(patternType))
-                patternTypes.Add(patternType);
+            yield return null;
+        }
+
+        GameSessionManager gameSessionManager = GameSessionManager.instance;
+
+        gameSessionManager.GameSessionUpdated -= OnGameSessionUpdated;
+        gameSessionManager.GameSessionUpdated += OnGameSessionUpdated;
+
+        DisplayGameInfo(gameSessionManager.CurrentGameSession);
+        bindRoutine = null;
+    }
+
+    private void OnGameSessionUpdated(GameSessionData gameSessionData)
+    {
+        DisplayGameInfo(gameSessionData);
+    }
+
+    private void UnsubscribeFromGameSessionManager()
+    {
+        if (GameSessionManager.instance != null)
+        {
+            GameSessionManager.instance.GameSessionUpdated -= OnGameSessionUpdated;
         }
     }
 
     #endregion
 
-    #region Game Reset
+    #region Header
 
-    public void ResetGame()
+    private void SubscribeToHeader()
     {
-        calledNumbers.Clear();
-        patternTypes.Clear();
-        lastBingoCheckResult = null;
+        if (headerController == null)
+        {
+            return;
+        }
 
-        bingoChecker?.ClearAllCheckHistory();
-        boardController?.ClearCheckHighlights();
-        boardController?.ClearMarks();
-        boardController?.SetInteractable(true);
+        headerController.LeaveRequested -= LeaveGame;
+        headerController.LeaveRequested += LeaveGame;
+    }
 
-        SetBingoButtonInteractable(true);
+    private void UnsubscribeFromHeader()
+    {
+        if (headerController != null)
+        {
+            headerController.LeaveRequested -= LeaveGame;
+        }
+    }
+
+    private void LeaveGame()
+    {
+        headerController?.SetLeaveInteractable(false);
+
+        if (GameSessionManager.instance != null)
+        {
+            GameSessionManager.instance.LeaveCurrentGame();
+            return;
+        }
+
+        UserManager.instance?.ClearLastGameId();
+        GameSceneManager.instance?.LoadMainScene();
     }
 
     #endregion

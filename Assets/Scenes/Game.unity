@@ -9053,6 +9053,17 @@ RectTransform:
   m_CorrespondingSourceObject: {fileID: 6129143236806068351, guid: d8846def5de6d9949b26f6c0de0f962b, type: 3}
   m_PrefabInstance: {fileID: 951137297}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &951137299 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 1885875467568246202, guid: d8846def5de6d9949b26f6c0de0f962b, type: 3}
+  m_PrefabInstance: {fileID: 951137297}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6e96c7d8ac6f51e4c8e923aa65fefaa2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GameInfoController
 --- !u!1 &954277398
 GameObject:
   m_ObjectHideFlags: 0
@@ -11566,6 +11577,7 @@ GameObject:
   - component: {fileID: 1435931206}
   - component: {fileID: 1435931205}
   - component: {fileID: 1435931204}
+  - component: {fileID: 1435931208}
   m_Layer: 5
   m_Name: GameHeaderSection
   m_TagString: Untagged
@@ -11666,6 +11678,21 @@ MonoBehaviour:
   m_FlexibleWidth: -1
   m_FlexibleHeight: 0
   m_LayoutPriority: 1
+--- !u!114 &1435931208
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1435931202}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a4c63f5019e04c6199672d92865ca0d7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GameHeaderController
+  gameTitleText: {fileID: 820182703}
+  gameTimerText: {fileID: 1265577919}
+  leaveButton: {fileID: 1915108622}
 --- !u!1 &1503417224
 GameObject:
   m_ObjectHideFlags: 0
@@ -11712,6 +11739,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1508186095}
   - component: {fileID: 1508186096}
+  - component: {fileID: 1508186097}
   m_Layer: 5
   m_Name: GameContent
   m_TagString: Untagged
@@ -11766,6 +11794,22 @@ MonoBehaviour:
   m_ChildScaleWidth: 0
   m_ChildScaleHeight: 0
   m_ReverseArrangement: 0
+--- !u!114 &1508186097
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1508186094}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 737ee52291be94b46b91d50cc05fa867, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GameController
+  headerController: {fileID: 1435931208}
+  playerListController: {fileID: 2077969041}
+  gameInfoController: {fileID: 951137299}
+  customPanelController: {fileID: 1522804293}
 --- !u!1 &1522804291
 GameObject:
   m_ObjectHideFlags: 0
@@ -15677,6 +15721,17 @@ RectTransform:
   m_CorrespondingSourceObject: {fileID: 3374415198663376738, guid: ebcaa9cbc282b7949ac143ee7bcd0fad, type: 3}
   m_PrefabInstance: {fileID: 2077969039}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &2077969041 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 7718527478373198159, guid: ebcaa9cbc282b7949ac143ee7bcd0fad, type: 3}
+  m_PrefabInstance: {fileID: 2077969039}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6d5fc2b721c321c45a5c204b01205d3c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LobbyPlayerListController
 --- !u!1 &2122857816
 GameObject:
   m_ObjectHideFlags: 0

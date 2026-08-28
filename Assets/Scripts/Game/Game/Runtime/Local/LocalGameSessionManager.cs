@@ -85,6 +85,11 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
 
         if (existingSession != null)
         {
+            gameSessionData.revision = existingSession.revision + 1;
+        }
+
+        if (existingSession != null)
+        {
             int existingIndex = gameSessions.IndexOf(existingSession);
             gameSessions[existingIndex] = gameSessionData;
         }
@@ -150,7 +155,175 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
         }
 
         playerData.isConnected = true;
+        playerData.isGameSceneReady = false;
+        gameSessionData.revision++;
         return Task.FromResult(GameSessionResult.Succeeded(GameSessionOperationType.Rejoin, gameSessionData));
+    }
+
+    public Task<GameSessionResult> SyncGameSessionAsync(string gameId, string lobbyId, UserData userData)
+    {
+        if (!isReady)
+        {
+            return Task.FromResult(GameSessionResult.Failed(
+                GameSessionOperationType.Sync,
+                GameSessionFailureType.ServiceUnavailable,
+                "The local Game session manager is not ready.",
+                gameId,
+                lobbyId));
+        }
+
+        if (userData == null || !userData.HasUser)
+        {
+            return Task.FromResult(GameSessionResult.Failed(
+                GameSessionOperationType.Sync,
+                GameSessionFailureType.PlayerNotFound,
+                "The current player could not be resolved.",
+                gameId,
+                lobbyId));
+        }
+
+        GameSessionData gameSessionData = !string.IsNullOrWhiteSpace(gameId)
+            ? FindGame(gameId)
+            : FindGameByLobbyId(lobbyId);
+
+        if (gameSessionData == null)
+        {
+            return Task.FromResult(GameSessionResult.Failed(
+                GameSessionOperationType.Sync,
+                GameSessionFailureType.GameNotFound,
+                "The saved local Game no longer exists.",
+                gameId,
+                lobbyId));
+        }
+
+        GamePlayerData playerData = gameSessionData.GetPlayer(userData.userId);
+
+        if (playerData == null || playerData.userTag == UserTag.Bot)
+        {
+            return Task.FromResult(GameSessionResult.Failed(
+                GameSessionOperationType.Sync,
+                GameSessionFailureType.PlayerNotFound,
+                "The player is not part of this Game.",
+                gameSessionData.gameId,
+                gameSessionData.lobbyId));
+        }
+
+        return Task.FromResult(GameSessionResult.Succeeded(GameSessionOperationType.Sync, gameSessionData));
+    }
+
+    public Task<GameSessionResult> SetGameSceneReadyAsync(string gameId, UserData userData)
+    {
+        if (!isReady)
+        {
+            return Task.FromResult(GameSessionResult.Failed(
+                GameSessionOperationType.SceneReady,
+                GameSessionFailureType.ServiceUnavailable,
+                "The local Game session manager is not ready.",
+                gameId));
+        }
+
+        if (userData == null || !userData.HasUser)
+        {
+            return Task.FromResult(GameSessionResult.Failed(
+                GameSessionOperationType.SceneReady,
+                GameSessionFailureType.PlayerNotFound,
+                "The current player could not be resolved.",
+                gameId));
+        }
+
+        GameSessionData gameSessionData = FindGame(gameId);
+
+        if (gameSessionData == null)
+        {
+            return Task.FromResult(GameSessionResult.Failed(
+                GameSessionOperationType.SceneReady,
+                GameSessionFailureType.GameNotFound,
+                "The saved local Game no longer exists.",
+                gameId));
+        }
+
+        GamePlayerData playerData = gameSessionData.GetPlayer(userData.userId);
+
+        if (playerData == null || playerData.userTag == UserTag.Bot)
+        {
+            return Task.FromResult(GameSessionResult.Failed(
+                GameSessionOperationType.SceneReady,
+                GameSessionFailureType.PlayerNotFound,
+                "The player is not part of this Game.",
+                gameId,
+                gameSessionData.lobbyId));
+        }
+
+        if (!playerData.canRejoin || gameSessionData.gameState == GameSessionState.Completed)
+        {
+            return Task.FromResult(GameSessionResult.Failed(
+                GameSessionOperationType.SceneReady,
+                GameSessionFailureType.PlayerNotEligible,
+                "The player can no longer enter this Game scene.",
+                gameId,
+                gameSessionData.lobbyId));
+        }
+
+        if (!playerData.isConnected || !playerData.isGameSceneReady)
+        {
+            playerData.isConnected = true;
+            playerData.isGameSceneReady = true;
+            gameSessionData.revision++;
+        }
+
+        return Task.FromResult(GameSessionResult.Succeeded(GameSessionOperationType.SceneReady, gameSessionData));
+    }
+
+    public Task<GameSessionResult> LeaveGameAsync(string gameId, UserData userData)
+    {
+        if (!isReady)
+        {
+            return Task.FromResult(GameSessionResult.Failed(
+                GameSessionOperationType.Leave,
+                GameSessionFailureType.ServiceUnavailable,
+                "The local Game session manager is not ready.",
+                gameId));
+        }
+
+        if (userData == null || !userData.HasUser)
+        {
+            return Task.FromResult(GameSessionResult.Failed(
+                GameSessionOperationType.Leave,
+                GameSessionFailureType.PlayerNotFound,
+                "The current player could not be resolved.",
+                gameId));
+        }
+
+        GameSessionData gameSessionData = FindGame(gameId);
+
+        if (gameSessionData == null)
+        {
+            return Task.FromResult(GameSessionResult.Failed(
+                GameSessionOperationType.Leave,
+                GameSessionFailureType.GameNotFound,
+                "The saved local Game no longer exists.",
+                gameId));
+        }
+
+        GamePlayerData playerData = gameSessionData.GetPlayer(userData.userId);
+
+        if (playerData == null || playerData.userTag == UserTag.Bot)
+        {
+            return Task.FromResult(GameSessionResult.Failed(
+                GameSessionOperationType.Leave,
+                GameSessionFailureType.PlayerNotFound,
+                "The player is not part of this Game.",
+                gameId,
+                gameSessionData.lobbyId));
+        }
+
+        playerData.isConnected = false;
+        playerData.isGameSceneReady = false;
+        playerData.canRejoin = false;
+        gameSessionData.RemovePlayer(userData.userId);
+        gameSessionData.revision++;
+
+        return Task.FromResult(GameSessionResult.Succeeded(GameSessionOperationType.Leave, gameSessionData));
     }
 
     public bool DeleteGame(string gameId)

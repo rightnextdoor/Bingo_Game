@@ -342,6 +342,7 @@ public class NetworkLobbyManager : MonoBehaviour
 
         StopLobbyRuntime(lobby);
         NetworkGameSessionManager.instance?.DeleteGameForLobby(lobby.GetLobbyId(), false);
+        MultiplayerNetworkScheduler.instance?.ClearSession(lobby.GetLobbyId());
         relayJoinCodeByLobbyId.Remove(lobby.GetLobbyId());
         lobbyRevisions.Remove(lobby.GetLobbyId());
         pendingMemberPublicationsByLobbyId.Remove(lobby.GetLobbyId());
@@ -893,7 +894,12 @@ public class NetworkLobbyManager : MonoBehaviour
             NotificationService.instance.SendToUsers(userIds, UIMessageType.GameAboutToStart);
         }
 
-        GameSessionManager.instance?.PrepareForGameCreation(lobby.GetLobbyId(), SessionRuntimeType.Network);
+        if (GameSessionManager.instance != null &&
+            LobbyManager.instance != null &&
+            string.Equals(LobbyManager.instance.CurrentLobbyId, lobby.GetLobbyId(), StringComparison.Ordinal))
+        {
+            GameSessionManager.instance.PrepareForGameCreation(lobby.GetLobbyId(), SessionRuntimeType.Network);
+        }
 
         if (NetworkGameSessionManager.instance == null || !NetworkGameSessionManager.instance.IsReady)
         {

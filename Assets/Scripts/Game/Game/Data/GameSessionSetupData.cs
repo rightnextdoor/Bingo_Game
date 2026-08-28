@@ -9,6 +9,11 @@ public class GameSessionSetupData
     public SessionRuntimeType runtimeType;
     public MainMenuPlayMode playMode;
 
+    public string lobbyName;
+    public string roomCode;
+    public bool hasPassword;
+    public string lobbyPassword;
+
     public BingoGameModeType gameModeType;
     public bool hasRule;
     public BingoRuleType ruleType;
@@ -21,10 +26,14 @@ public class GameSessionSetupData
 
     public GameSessionSetupData()
     {
-        dataVersion = 1;
+        dataVersion = 2;
         lobbyId = string.Empty;
         runtimeType = SessionRuntimeType.Local;
         playMode = MainMenuPlayMode.None;
+        lobbyName = string.Empty;
+        roomCode = string.Empty;
+        hasPassword = false;
+        lobbyPassword = string.Empty;
         gameModeType = BingoGameModeType.Traditional;
         hasRule = false;
         ruleType = BingoRuleType.Traditional;
@@ -46,6 +55,10 @@ public class GameSessionSetupData
         lobbyId = setupData.lobbyId ?? string.Empty;
         runtimeType = setupData.runtimeType;
         playMode = setupData.playMode;
+        lobbyName = setupData.lobbyName ?? string.Empty;
+        roomCode = setupData.roomCode ?? string.Empty;
+        hasPassword = setupData.hasPassword;
+        lobbyPassword = setupData.lobbyPassword ?? string.Empty;
         gameModeType = setupData.gameModeType;
         hasRule = setupData.hasRule;
         ruleType = setupData.ruleType;
@@ -76,6 +89,7 @@ public class GameSessionSetupData
         }
 
         LobbyController controller = lobby.Controller;
+        LobbyViewData lobbyViewData = controller.BuildViewData(false);
         GameSessionSetupData setupData = new GameSessionSetupData
         {
             lobbyId = lobby.GetLobbyId(),
@@ -83,6 +97,10 @@ public class GameSessionSetupData
                 ? SessionRuntimeType.Local
                 : SessionRuntimeType.Network,
             playMode = lobby.playMode,
+            lobbyName = lobbyViewData?.lobbyName ?? controller.LobbyName,
+            roomCode = lobbyViewData?.roomCode ?? controller.RoomCode,
+            hasPassword = lobbyViewData?.hasPassword ?? controller.HasPassword,
+            lobbyPassword = lobbyViewData?.lobbyPassword ?? string.Empty,
             gameModeType = controller.GameModeType,
             hasRule = controller.HasRule,
             ruleType = controller.RuleType,

@@ -94,7 +94,17 @@ public class NetworkGameSessionManager : MonoBehaviour
             ? existingSession.gameId
             : GameIdPrefix + Guid.NewGuid().ToString("N");
 
+        if (existingSession != null)
+        {
+            MultiplayerNetworkScheduler.instance?.ClearSession(gameId);
+        }
+
         GameSessionData gameSessionData = new GameSessionData(gameId, setupData);
+
+        if (existingSession != null)
+        {
+            gameSessionData.revision = existingSession.revision + 1;
+        }
 
         if (existingSession != null)
         {
@@ -162,8 +172,183 @@ public class NetworkGameSessionManager : MonoBehaviour
                 gameSessionData.lobbyId);
         }
 
-        playerData.isConnected = true;
+        if (!playerData.isConnected || playerData.isGameSceneReady)
+        {
+            playerData.isConnected = true;
+            playerData.isGameSceneReady = false;
+            gameSessionData.revision++;
+            BroadcastGamePlayerStateChanged(gameSessionData, playerData);
+        }
+
         return GameSessionResult.Succeeded(GameSessionOperationType.Rejoin, gameSessionData);
+    }
+
+    public GameSessionResult ProcessAuthorityGameSessionSync(ulong clientId, string gameId, string lobbyId)
+    {
+        if (!CanProcessAuthorityOperation())
+        {
+            return GameSessionResult.Failed(
+                GameSessionOperationType.Sync,
+                GameSessionFailureType.ServiceUnavailable,
+                "The authoritative network Game session manager is not ready.",
+                gameId,
+                lobbyId);
+        }
+
+        if (!connectionRegistry.TryGetBingoUserId(clientId, out string userId))
+        {
+            return GameSessionResult.Failed(
+                GameSessionOperationType.Sync,
+                GameSessionFailureType.PlayerNotFound,
+                "The connected player could not be resolved.",
+                gameId,
+                lobbyId);
+        }
+
+        GameSessionData gameSessionData = !string.IsNullOrWhiteSpace(gameId)
+            ? FindGame(gameId)
+            : FindGameByLobbyId(lobbyId);
+
+        if (gameSessionData == null)
+        {
+            return GameSessionResult.Failed(
+                GameSessionOperationType.Sync,
+                GameSessionFailureType.GameNotFound,
+                "The saved network Game no longer exists.",
+                gameId,
+                lobbyId);
+        }
+
+        GamePlayerData playerData = gameSessionData.GetPlayer(userId);
+
+        if (playerData == null || playerData.userTag == UserTag.Bot)
+        {
+            return GameSessionResult.Failed(
+                GameSessionOperationType.Sync,
+                GameSessionFailureType.PlayerNotFound,
+                "The player is not part of this Game.",
+                gameSessionData.gameId,
+                gameSessionData.lobbyId);
+        }
+
+        return GameSessionResult.Succeeded(GameSessionOperationType.Sync, gameSessionData);
+    }
+
+    public GameSessionResult ProcessAuthorityGameSceneReady(ulong clientId, string gameId)
+    {
+        if (!CanProcessAuthorityOperation())
+        {
+            return GameSessionResult.Failed(
+                GameSessionOperationType.SceneReady,
+                GameSessionFailureType.ServiceUnavailable,
+                "The authoritative network Game session manager is not ready.",
+                gameId);
+        }
+
+        if (!connectionRegistry.TryGetBingoUserId(clientId, out string userId))
+        {
+            return GameSessionResult.Failed(
+                GameSessionOperationType.SceneReady,
+                GameSessionFailureType.PlayerNotFound,
+                "The connected player could not be resolved.",
+                gameId);
+        }
+
+        GameSessionData gameSessionData = FindGame(gameId);
+
+        if (gameSessionData == null)
+        {
+            return GameSessionResult.Failed(
+                GameSessionOperationType.SceneReady,
+                GameSessionFailureType.GameNotFound,
+                "The saved network Game no longer exists.",
+                gameId);
+        }
+
+        GamePlayerData playerData = gameSessionData.GetPlayer(userId);
+
+        if (playerData == null || playerData.userTag == UserTag.Bot)
+        {
+            return GameSessionResult.Failed(
+                GameSessionOperationType.SceneReady,
+                GameSessionFailureType.PlayerNotFound,
+                "The player is not part of this Game.",
+                gameId,
+                gameSessionData.lobbyId);
+        }
+
+        if (!playerData.canRejoin || gameSessionData.gameState == GameSessionState.Completed)
+        {
+            return GameSessionResult.Failed(
+                GameSessionOperationType.SceneReady,
+                GameSessionFailureType.PlayerNotEligible,
+                "The player can no longer enter this Game scene.",
+                gameId,
+                gameSessionData.lobbyId);
+        }
+
+        if (!playerData.isConnected || !playerData.isGameSceneReady)
+        {
+            playerData.isConnected = true;
+            playerData.isGameSceneReady = true;
+            gameSessionData.revision++;
+            BroadcastGamePlayerStateChanged(gameSessionData, playerData);
+        }
+
+        return GameSessionResult.Acknowledged(GameSessionOperationType.SceneReady, gameSessionData);
+    }
+
+    public GameSessionResult ProcessAuthorityLeave(ulong clientId, string gameId)
+    {
+        if (!CanProcessAuthorityOperation())
+        {
+            return GameSessionResult.Failed(
+                GameSessionOperationType.Leave,
+                GameSessionFailureType.ServiceUnavailable,
+                "The authoritative network Game session manager is not ready.",
+                gameId);
+        }
+
+        if (!connectionRegistry.TryGetBingoUserId(clientId, out string userId))
+        {
+            return GameSessionResult.Failed(
+                GameSessionOperationType.Leave,
+                GameSessionFailureType.PlayerNotFound,
+                "The connected player could not be resolved.",
+                gameId);
+        }
+
+        GameSessionData gameSessionData = FindGame(gameId);
+
+        if (gameSessionData == null)
+        {
+            return GameSessionResult.Failed(
+                GameSessionOperationType.Leave,
+                GameSessionFailureType.GameNotFound,
+                "The saved network Game no longer exists.",
+                gameId);
+        }
+
+        GamePlayerData playerData = gameSessionData.GetPlayer(userId);
+
+        if (playerData == null || playerData.userTag == UserTag.Bot)
+        {
+            return GameSessionResult.Failed(
+                GameSessionOperationType.Leave,
+                GameSessionFailureType.PlayerNotFound,
+                "The player is not part of this Game.",
+                gameId,
+                gameSessionData.lobbyId);
+        }
+
+        playerData.isConnected = false;
+        playerData.isGameSceneReady = false;
+        playerData.canRejoin = false;
+        gameSessionData.RemovePlayer(userId);
+        gameSessionData.revision++;
+        BroadcastGamePlayerLeft(gameSessionData, userId);
+
+        return GameSessionResult.Acknowledged(GameSessionOperationType.Leave, gameSessionData);
     }
 
     public bool DeleteGame(string gameId, bool notifyPlayers = true)
@@ -174,6 +359,8 @@ public class NetworkGameSessionManager : MonoBehaviour
         {
             return false;
         }
+
+        MultiplayerNetworkScheduler.instance?.ClearSession(gameSessionData.gameId);
 
         if (notifyPlayers)
         {
@@ -212,6 +399,54 @@ public class NetworkGameSessionManager : MonoBehaviour
             }
 
             NetworkGameSessionConnection.TrySendGameDeleted(clientId, gameSessionData.gameId);
+        }
+    }
+
+    private void BroadcastGamePlayerStateChanged(GameSessionData gameSessionData, GamePlayerData changedPlayerData)
+    {
+        if (gameSessionData?.players == null || changedPlayerData == null ||
+            connectionRegistry == null || !connectionRegistry.IsReady)
+        {
+            return;
+        }
+
+        GamePlayerStateChangedData updateData = new GamePlayerStateChangedData(gameSessionData, changedPlayerData);
+
+        for (int i = 0; i < gameSessionData.players.Count; i++)
+        {
+            GamePlayerData playerData = gameSessionData.players[i];
+
+            if (playerData == null || playerData.userTag == UserTag.Bot ||
+                !connectionRegistry.TryGetClientId(playerData.userId, out ulong clientId))
+            {
+                continue;
+            }
+
+            NetworkGameSessionConnection.TrySendGamePlayerStateChanged(clientId, updateData);
+        }
+    }
+
+    private void BroadcastGamePlayerLeft(GameSessionData gameSessionData, string userId)
+    {
+        if (gameSessionData?.players == null || string.IsNullOrWhiteSpace(userId) ||
+            connectionRegistry == null || !connectionRegistry.IsReady)
+        {
+            return;
+        }
+
+        GamePlayerLeftData updateData = new GamePlayerLeftData(gameSessionData, userId);
+
+        for (int i = 0; i < gameSessionData.players.Count; i++)
+        {
+            GamePlayerData playerData = gameSessionData.players[i];
+
+            if (playerData == null || playerData.userTag == UserTag.Bot ||
+                !connectionRegistry.TryGetClientId(playerData.userId, out ulong clientId))
+            {
+                continue;
+            }
+
+            NetworkGameSessionConnection.TrySendGamePlayerLeft(clientId, updateData);
         }
     }
 

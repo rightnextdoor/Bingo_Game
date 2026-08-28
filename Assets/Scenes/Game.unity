@@ -14286,6 +14286,18 @@ PrefabInstance:
       propertyPath: m_Name
       value: Development
       objectReference: {fileID: 0}
+    - target: {fileID: 6207814632284159071, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
+      propertyPath: botCount
+      value: 20
+      objectReference: {fileID: 0}
+    - target: {fileID: 6207814632284159071, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
+      propertyPath: playMode
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 6207814632284159071, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
+      propertyPath: roomSize
+      value: 20
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []

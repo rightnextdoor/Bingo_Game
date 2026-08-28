@@ -722,6 +722,31 @@ public class LobbyController
         return BotCount - previousBotCount;
     }
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    public int SetSimulationBotCount(int desiredBotCount)
+    {
+        EnsurePendingWorkCollections();
+        pendingBotUsers.Clear();
+
+        int humanPlayerCount = Mathf.Max(0, PlayerCount - BotCount);
+        int maximumBotCount = Mathf.Max(0, maxPlayer - humanPlayerCount);
+        int clampedBotCount = Mathf.Clamp(desiredBotCount, 0, maximumBotCount);
+        int currentBotCount = BotCount;
+
+        if (clampedBotCount < currentBotCount)
+        {
+            SetBotCountInternal(clampedBotCount);
+        }
+        else if (clampedBotCount > currentBotCount)
+        {
+            QueueRandomBotsInternal(clampedBotCount - currentBotCount, int.MaxValue);
+        }
+
+        pendingViewRefresh = true;
+        return clampedBotCount;
+    }
+#endif
+
     private bool SetBotCountInternal(int desiredBotCount)
     {
         desiredBotCount = Mathf.Max(0, desiredBotCount);

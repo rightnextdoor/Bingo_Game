@@ -2397,6 +2397,108 @@ public class NetworkLobbyManager : MonoBehaviour
         return true;
     }
 
+    public bool TryGetSimulationLobbyState(
+        string lobbyId,
+        out int humanPlayerCount,
+        out int playerCount,
+        out int sceneReadyPlayerCount,
+        out int botCount,
+        out bool hasPendingWork)
+    {
+        humanPlayerCount = 0;
+        playerCount = 0;
+        sceneReadyPlayerCount = 0;
+        botCount = 0;
+        hasPendingWork = false;
+
+        if (!TryGetStressLobby(lobbyId, out Lobby lobby) || lobby.Controller == null)
+        {
+            return false;
+        }
+
+        LobbyController controller = lobby.Controller;
+        playerCount = controller.PlayerCount;
+        sceneReadyPlayerCount = controller.SceneReadyPlayerCount;
+        botCount = controller.BotCount;
+        humanPlayerCount = Mathf.Max(0, playerCount - botCount);
+        hasPendingWork = controller.HasPendingWork;
+        return true;
+    }
+
+    public bool TryGetSimulationTestPlayerState(
+        string lobbyId,
+        int expectedTestPlayerCount,
+        out int joinedTestPlayerCount,
+        out int sceneReadyTestPlayerCount)
+    {
+        joinedTestPlayerCount = 0;
+        sceneReadyTestPlayerCount = 0;
+
+        if (!TryGetStressLobby(lobbyId, out Lobby lobby) || lobby.Controller == null)
+        {
+            return false;
+        }
+
+        for (int playerNumber = 1; playerNumber <= expectedTestPlayerCount; playerNumber++)
+        {
+            string userId = MultiplayerPlayModeTestContext.GetUserId(playerNumber);
+            LobbyPlayerData playerData = lobby.Controller.GetPlayer(userId);
+
+            if (playerData?.userData == null || playerData.userData.userTag == UserTag.Bot)
+            {
+                continue;
+            }
+
+            joinedTestPlayerCount++;
+
+            if (playerData.isLobbySceneReady)
+            {
+                sceneReadyTestPlayerCount++;
+            }
+        }
+
+        return true;
+    }
+
+    public bool TrySetSimulationBotCount(string lobbyId, int desiredBotCount, out int appliedBotCount, out string failureReason)
+    {
+        appliedBotCount = 0;
+        failureReason = string.Empty;
+
+        if (!TryGetStressLobby(lobbyId, out Lobby lobby) || lobby.Controller == null)
+        {
+            failureReason = "The simulation lobby could not be found.";
+            return false;
+        }
+
+        appliedBotCount = lobby.Controller.SetSimulationBotCount(desiredBotCount);
+        return true;
+    }
+
+    public bool TryBeginSimulationFinalCountdown(string lobbyId, string requesterUserId, out string failureReason)
+    {
+        failureReason = string.Empty;
+
+        if (!TryGetStressLobby(lobbyId, out Lobby lobby) || lobby.Controller == null)
+        {
+            failureReason = "The simulation lobby could not be found.";
+            return false;
+        }
+
+        bool started = lobby.playMode == MainMenuPlayMode.Online
+            ? lobby.Controller.BeginFinalCountdown()
+            : lobby.Controller.BeginFinalCountdown(requesterUserId);
+
+        if (!started)
+        {
+            failureReason = "The simulation lobby could not begin its final countdown.";
+            return false;
+        }
+
+        BroadcastLobbyStateChanged(lobby);
+        return true;
+    }
+
 #endif
 
     #endregion

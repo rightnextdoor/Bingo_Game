@@ -111,7 +111,9 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
 
     private void Update()
     {
-        if (GameSceneManager.instance == null ||
+        if (GameManager.instance == null ||
+            !GameManager.instance.HasCompletedSessionStartupCleanup ||
+            GameSceneManager.instance == null ||
             GameSceneManager.instance.CurrentSceneType != GameSceneType.Game ||
             HasEnteredGame ||
             isEnteringGame ||
@@ -326,6 +328,13 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         }
 
         GameSessionUpdated?.Invoke(null);
+    }
+
+    public void ResetForFreshApplicationStart()
+    {
+        ClearCurrentGame(false);
+        runtimeType = SessionRuntimeType.Local;
+        nextGameSessionSyncTime = 0f;
     }
 
     public async void LeaveCurrentGame()

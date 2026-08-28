@@ -146,6 +146,40 @@ public class UserDatabase : MonoBehaviour, ISaveManager
         return users;
     }
 
+    public bool ClearAllLastGameIds(bool saveAfterChange = true)
+    {
+        EnsureDatabaseData();
+
+        bool changed = false;
+
+        for (int i = 0; i < databaseData.users.Count; i++)
+        {
+            UserData user = databaseData.users[i];
+
+            if (user == null || string.IsNullOrWhiteSpace(user.lastGameId))
+            {
+                continue;
+            }
+
+            user.lastGameId = string.Empty;
+            changed = true;
+        }
+
+        if (!changed)
+        {
+            return false;
+        }
+
+        UserDatabaseChanged?.Invoke();
+
+        if (saveAfterChange)
+        {
+            SaveDatabase();
+        }
+
+        return true;
+    }
+
     public void AddOrUpdateCurrentUser(UserData userData)
     {
         if (userData == null)

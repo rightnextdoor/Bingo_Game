@@ -26,6 +26,18 @@ public class LobbySimulationController : MonoBehaviour
         }
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
+        while (GameSceneManager.instance == null)
+        {
+            yield return null;
+        }
+
+        yield return null;
+
+        if (GameSceneManager.instance.CurrentSceneType != GameSceneType.Lobby)
+        {
+            yield break;
+        }
+
         yield return WaitForSceneReady();
 
         if (!CanStartSimulation())
@@ -43,7 +55,11 @@ public class LobbySimulationController : MonoBehaviour
 
     private IEnumerator WaitForSceneReady()
     {
-        while (LobbyManager.instance == null || UserManager.instance == null || SceneReadyController.instance == null)
+        while (GameManager.instance == null ||
+               !GameManager.instance.HasCompletedSessionStartupCleanup ||
+               LobbyManager.instance == null ||
+               UserManager.instance == null ||
+               SceneReadyController.instance == null)
         {
             yield return null;
         }
@@ -89,7 +105,7 @@ public class LobbySimulationController : MonoBehaviour
             return;
         }
 
-        LobbyManager.instance.SetPendingLobbySetupData(lobbySetupData);
+        LobbyManager.instance.SetPendingLobbySetupData(lobbySetupData, false);
         LobbyManager.instance.BeginPendingLobbyEntry();
         StartCoroutine(ApplyPostEntrySimulation());
     }

@@ -89,7 +89,7 @@ public class GameSceneManager : MonoBehaviour
             return;
         }
 
-        BeginCurrentSceneLoading(startingSceneType);
+        BeginCurrentSceneLoading(ResolveStartingSceneType());
     }
 
     #endregion
@@ -319,6 +319,28 @@ public class GameSceneManager : MonoBehaviour
             default:
                 return string.Empty;
         }
+    }
+
+    private GameSceneType ResolveStartingSceneType()
+    {
+        string activeSceneName = UnitySceneManager.GetActiveScene().name;
+
+        if (string.Equals(activeSceneName, GetSceneName(GameSceneType.Lobby), StringComparison.Ordinal))
+        {
+            return GameSceneType.Lobby;
+        }
+
+        if (string.Equals(activeSceneName, GetSceneName(GameSceneType.Game), StringComparison.Ordinal))
+        {
+            return GameSceneType.Game;
+        }
+
+        if (string.Equals(activeSceneName, GetSceneName(GameSceneType.Main), StringComparison.Ordinal))
+        {
+            return GameSceneType.Main;
+        }
+
+        return startingSceneType;
     }
 
     #endregion

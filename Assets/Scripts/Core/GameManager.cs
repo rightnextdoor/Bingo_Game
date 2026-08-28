@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 
 [DefaultExecutionOrder(-1000)]
@@ -8,6 +9,7 @@ public class GameManager : MonoBehaviour, ISceneReadyCheck
     public static GameManager instance;
 
     private bool isReady;
+    private bool hasCompletedSessionStartupCleanup;
 
     [Header("Lifetime")]
     [SerializeField] private bool dontDestroyOnLoad = true;
@@ -19,6 +21,7 @@ public class GameManager : MonoBehaviour, ISceneReadyCheck
     public SaveManager Save => saveManager;
     public UserManager User => userManager;
     public PlayerProfileRegistry PlayerProfiles => playerProfileRegistry;
+    public bool HasCompletedSessionStartupCleanup => hasCompletedSessionStartupCleanup;
 
     public string ReadyName => "Game Manager";
     public bool IsReady => isReady;
@@ -52,11 +55,56 @@ public class GameManager : MonoBehaviour, ISceneReadyCheck
         }
     }
 
-    private void Start()
+    private IEnumerator Start()
     {
-        CacheManagerInstances();
-        isReady = HasSaveManager() && HasUserManager() && HasPlayerProfileRegistry();
+        isReady = false;
+        hasCompletedSessionStartupCleanup = false;
         RegisterReadyCheck();
+
+        CacheManagerInstances();
+
+        while (!HasSaveManager() ||
+               !HasUserManager() ||
+               !HasPlayerProfileRegistry() ||
+               UserDatabase.instance == null ||
+               LobbyManager.instance == null ||
+               LocalLobbyManager.instance == null ||
+               GameSessionManager.instance == null ||
+               LocalGameSessionManager.instance == null ||
+               !saveManager.HasLoadedData ||
+               !userManager.IsReady)
+        {
+            yield return null;
+            CacheManagerInstances();
+        }
+
+        ClearSessionDataForFreshApplicationStart();
+
+        hasCompletedSessionStartupCleanup = true;
+        isReady = true;
+    }
+
+    private void ClearSessionDataForFreshApplicationStart()
+    {
+        LobbyManager.instance.ResetForFreshApplicationStart();
+        LocalLobbyManager.instance.ResetForFreshApplicationStart();
+        GameSessionManager.instance.ResetForFreshApplicationStart();
+        LocalGameSessionManager.instance.ResetForFreshApplicationStart();
+        MultiplayerNetworkScheduler.instance?.ClearAll();
+
+        bool clearedSavedGameIds =
+            UserDatabase.instance.ClearAllLastGameIds(false);
+
+        if (!string.IsNullOrWhiteSpace(userManager.CurrentUser.lastGameId))
+        {
+            userManager.ClearLastGameId();
+            clearedSavedGameIds = true;
+        }
+
+        if (clearedSavedGameIds)
+        {
+            saveManager.SaveGameImmediate();
+        }
     }
 
     private void OnDestroy()

@@ -33,6 +33,7 @@ public class LobbyManager : MonoBehaviour
     private bool isEnteringLobby;
     private bool isLeavingLobby;
     private bool isLobbyResyncPending;
+    private bool returnToMainSceneOnEntryFailure = true;
     private int entryAttemptVersion;
 
     private MultiplayerSessionLifecycle multiplayerSessionLifecycle;
@@ -126,7 +127,7 @@ public class LobbyManager : MonoBehaviour
 
     #region Setup Data
 
-    public void SetPendingLobbySetupData(LobbySetupData lobbySetupData)
+    public void SetPendingLobbySetupData(LobbySetupData lobbySetupData, bool applySavedData = true)
     {
         if (lobbySetupData == null)
         {
@@ -135,7 +136,10 @@ public class LobbyManager : MonoBehaviour
             return;
         }
 
-        LobbySaveDataService.ApplySavedDataToSetup(lobbySetupData);
+        if (applySavedData)
+        {
+            LobbySaveDataService.ApplySavedDataToSetup(lobbySetupData);
+        }
 
         pendingLobbySetupData = lobbySetupData;
         lastEntryResult = null;
@@ -151,11 +155,24 @@ public class LobbyManager : MonoBehaviour
         pendingLobbySetupData = null;
     }
 
+    public void ResetForFreshApplicationStart()
+    {
+        entryAttemptVersion++;
+        isEnteringLobby = false;
+        isLeavingLobby = false;
+        pendingLobbySetupData = null;
+        pendingNetworkLobbyViewData = null;
+        runtimeType = SessionRuntimeType.Local;
+        returnToMainSceneOnEntryFailure = true;
+        ClearCurrentLobby();
+        SetEntryState(LobbyEntryState.Idle);
+    }
+
     #endregion
 
     #region Lobby Entry
 
-    public async void BeginPendingLobbyEntry()
+    public async void BeginPendingLobbyEntry(bool returnToMainSceneOnFailure = true)
     {
         if (isEnteringLobby || isLeavingLobby)
         {
@@ -163,6 +180,7 @@ public class LobbyManager : MonoBehaviour
         }
 
         isEnteringLobby = true;
+        returnToMainSceneOnEntryFailure = returnToMainSceneOnFailure;
         lastEntryResult = null;
 
         int currentEntryAttemptVersion = ++entryAttemptVersion;
@@ -293,6 +311,7 @@ public class LobbyManager : MonoBehaviour
 
         pendingLobbySetupData = null;
         isEnteringLobby = false;
+        returnToMainSceneOnEntryFailure = true;
 
         SubscribeToNetworkEvents();
 
@@ -1146,7 +1165,13 @@ public class LobbyManager : MonoBehaviour
 
         Debug.LogWarning($"[LobbyManager] Lobby entry failed. Type: {result.failureType}. Message: {result.failureMessage}");
 
-        ReturnToMainScene();
+        bool shouldReturnToMainScene = returnToMainSceneOnEntryFailure;
+        returnToMainSceneOnEntryFailure = true;
+
+        if (shouldReturnToMainScene)
+        {
+            ReturnToMainScene();
+        }
     }
 
     #endregion

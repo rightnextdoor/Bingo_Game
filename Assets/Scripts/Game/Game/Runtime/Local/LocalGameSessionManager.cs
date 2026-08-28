@@ -338,6 +338,11 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
         return gameSessionData != null && gameSessions.Remove(gameSessionData);
     }
 
+    public void ResetForFreshApplicationStart()
+    {
+        gameSessions.Clear();
+    }
+
     public bool HasGameForLobby(string lobbyId)
     {
         return FindGameByLobbyId(lobbyId) != null;

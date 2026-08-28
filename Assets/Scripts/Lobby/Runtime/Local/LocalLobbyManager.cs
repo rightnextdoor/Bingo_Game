@@ -212,6 +212,12 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
         lobbies.Remove(lobby);
     }
 
+    public void ResetForFreshApplicationStart()
+    {
+        UnsubscribeFromAllLobbyControllers();
+        lobbies.Clear();
+    }
+
     #endregion
 
     #region Lobby Lookup

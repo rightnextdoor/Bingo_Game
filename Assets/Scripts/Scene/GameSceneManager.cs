@@ -294,9 +294,9 @@ public class GameSceneManager : MonoBehaviour
         bool sceneReady = sceneReadyController == null || sceneReadyController.AreAllReady();
         bool lobbyEntryFinished = IsLobbyEntryFinished();
         bool gameEntryFinished = IsGameEntryFinished();
-        bool lobbyChatPreparationFinished = IsLobbyChatPreparationFinished();
+        bool sessionChatPreparationFinished = IsSessionChatPreparationFinished();
 
-        return minimumTimeDone && sceneReady && lobbyEntryFinished && gameEntryFinished && lobbyChatPreparationFinished;
+        return minimumTimeDone && sceneReady && lobbyEntryFinished && gameEntryFinished && sessionChatPreparationFinished;
     }
 
     #endregion
@@ -363,18 +363,30 @@ public class GameSceneManager : MonoBehaviour
         }
     }
 
-    private bool IsLobbyChatPreparationFinished()
+    private bool IsSessionChatPreparationFinished()
     {
-        if (currentSceneType != GameSceneType.Lobby)
+        bool requiresNetworkSessionChat = false;
+
+        if (currentSceneType == GameSceneType.Lobby)
         {
-            return true;
+            LobbyManager lobbyManager = LobbyManager.instance;
+
+            requiresNetworkSessionChat =
+                lobbyManager != null &&
+                lobbyManager.EntryState != LobbyEntryState.Failed &&
+                lobbyManager.RuntimeType == SessionRuntimeType.Network;
+        }
+        else if (currentSceneType == GameSceneType.Game)
+        {
+            GameSessionManager gameSessionManager = GameSessionManager.instance;
+
+            requiresNetworkSessionChat =
+                gameSessionManager != null &&
+                gameSessionManager.EntryState == GameSessionEntryState.Completed &&
+                gameSessionManager.RuntimeType == SessionRuntimeType.Network;
         }
 
-        LobbyManager lobbyManager = LobbyManager.instance;
-
-        if (lobbyManager == null ||
-            lobbyManager.EntryState == LobbyEntryState.Failed ||
-            lobbyManager.RuntimeType != SessionRuntimeType.Network)
+        if (!requiresNetworkSessionChat)
         {
             return true;
         }

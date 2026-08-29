@@ -24,6 +24,7 @@ public class NetworkGameSessionConnection : NetworkBehaviour
     public static event Action<GameSessionResult> LocalGameCreationResultReceived;
     public static event Action<GameSessionData> LocalGameSessionUpdatedReceived;
     public static event Action<GamePlayerStateChangedData> LocalGamePlayerStateChangedReceived;
+    public static event Action<GamePlayerMarkedCellChangedData> LocalGamePlayerMarkedCellChangedReceived;
     public static event Action<GamePlayerLeftData> LocalGamePlayerLeftReceived;
     public static event Action<string> LocalGameDeletedReceived;
 
@@ -34,6 +35,7 @@ public class NetworkGameSessionConnection : NetworkBehaviour
         LocalGameCreationResultReceived = null;
         LocalGameSessionUpdatedReceived = null;
         LocalGamePlayerStateChangedReceived = null;
+        LocalGamePlayerMarkedCellChangedReceived = null;
         LocalGamePlayerLeftReceived = null;
         LocalGameDeletedReceived = null;
     }
@@ -283,6 +285,20 @@ public class NetworkGameSessionConnection : NetworkBehaviour
         return await completionSource.Task;
     }
 
+    public bool RequestPlayerMarkedCell(
+        string gameId,
+        int cellIndex,
+        bool isMarked)
+    {
+        if (!IsSpawned || !IsOwner || string.IsNullOrWhiteSpace(gameId))
+        {
+            return false;
+        }
+
+        RequestPlayerMarkedCellRpc(gameId, cellIndex, isMarked);
+        return true;
+    }
+
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Owner)]
     private void RequestRejoinGameRpc(string requestId, string gameId, RpcParams rpcParams = default)
     {
@@ -424,6 +440,20 @@ public class NetworkGameSessionConnection : NetworkBehaviour
         }
     }
 
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Owner)]
+    private void RequestPlayerMarkedCellRpc(
+        string gameId,
+        int cellIndex,
+        bool isMarked,
+        RpcParams rpcParams = default)
+    {
+        NetworkGameSessionManager.instance?.ProcessAuthorityPlayerMarkedCell(
+            rpcParams.Receive.SenderClientId,
+            gameId,
+            cellIndex,
+            isMarked);
+    }
+
     public static bool TrySendGameCreationResult(ulong clientId, GameSessionResult result)
     {
         if (result == null || !TryGetServerConnection(clientId, out NetworkGameSessionConnection connection))
@@ -481,6 +511,29 @@ public class NetworkGameSessionConnection : NetworkBehaviour
             MultiplayerNetworkWorkType.Event,
             string.Empty,
             () => TrySend(connection, () => connection.ReceiveGamePlayerStateChangedRpc(
+                updateJson,
+                connection.RpcTarget.Single(clientId, RpcTargetUse.Temp))));
+    }
+
+    public static bool TrySendGamePlayerMarkedCellChanged(
+        ulong clientId,
+        GamePlayerMarkedCellChangedData updateData)
+    {
+        if (updateData == null ||
+            !TryGetServerConnection(clientId, out NetworkGameSessionConnection connection))
+        {
+            return false;
+        }
+
+        string updateJson = JsonUtility.ToJson(updateData);
+
+        return ScheduleAuthoritySend(
+            updateData.gameId,
+            updateJson,
+            MultiplayerNetworkPriority.Normal,
+            MultiplayerNetworkWorkType.Event,
+            string.Empty,
+            () => TrySend(connection, () => connection.ReceiveGamePlayerMarkedCellChangedRpc(
                 updateJson,
                 connection.RpcTarget.Single(clientId, RpcTargetUse.Temp))));
     }
@@ -602,6 +655,27 @@ public class NetworkGameSessionConnection : NetworkBehaviour
             if (updateData != null)
             {
                 LocalGamePlayerStateChangedReceived?.Invoke(updateData);
+            }
+        }
+        catch (Exception exception)
+        {
+            Debug.LogException(exception);
+        }
+    }
+
+    [Rpc(SendTo.SpecifiedInParams)]
+    private void ReceiveGamePlayerMarkedCellChangedRpc(
+        string updateJson,
+        RpcParams rpcParams = default)
+    {
+        try
+        {
+            GamePlayerMarkedCellChangedData updateData =
+                JsonUtility.FromJson<GamePlayerMarkedCellChangedData>(updateJson);
+
+            if (updateData != null)
+            {
+                LocalGamePlayerMarkedCellChangedReceived?.Invoke(updateData);
             }
         }
         catch (Exception exception)

@@ -488,15 +488,54 @@ public class LobbyPlayerListController : MonoBehaviour
 
     public void SetPlayerMarkedCell(string userId, int cellIndex, bool isMarked)
     {
-        if (string.IsNullOrWhiteSpace(userId))
+        if (string.IsNullOrWhiteSpace(userId) || cellIndex < 0)
         {
             return;
+        }
+
+        if (TryGetPlayerData(userId, out PlayerListPlayerData playerData))
+        {
+            playerData.markedCellIndices ??= new List<int>();
+
+            bool isFreeCell =
+                playerData.boardData?.usesFreeCell == true &&
+                cellIndex == 12;
+
+            if (isMarked || isFreeCell)
+            {
+                if (!playerData.markedCellIndices.Contains(cellIndex))
+                {
+                    playerData.markedCellIndices.Add(cellIndex);
+                    playerData.markedCellIndices.Sort();
+                }
+            }
+            else
+            {
+                playerData.markedCellIndices.Remove(cellIndex);
+            }
         }
 
         if (visibleRowsByUserId.TryGetValue(userId, out LobbyPlayerRowUI row) && row != null)
         {
             row.SetMarkedCell(cellIndex, isMarked);
         }
+    }
+
+    private bool TryGetPlayerData(
+        string userId,
+        out PlayerListPlayerData playerData)
+    {
+        playerData = null;
+
+        if (!playerIndexByUserId.TryGetValue(userId, out int playerIndex) ||
+            playerIndex < 0 ||
+            playerIndex >= players.Count)
+        {
+            return false;
+        }
+
+        playerData = players[playerIndex];
+        return playerData != null;
     }
 
     #endregion

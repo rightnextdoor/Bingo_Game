@@ -8,7 +8,6 @@ public class GameSimulationController : MonoBehaviour
     private const float LobbyEntryTimeoutSeconds = 30f;
     private const float NetworkPlayerSettleSeconds = 2f;
     private const float LobbyWorkTimeoutSeconds = 15f;
-    private const int MultiplayerPlayModeTestPlayerCount = 4;
 
     [Header("Simulation")]
     [SerializeField] private bool simulateOnStart = true;
@@ -143,12 +142,9 @@ public class GameSimulationController : MonoBehaviour
     {
         LobbyManager lobbyManager = LobbyManager.instance;
         float timeoutTime = Time.realtimeSinceStartup + LobbyEntryTimeoutSeconds;
-        bool waitForAllTestPlayers =
-            MultiplayerPlayModeTestContext.IsActive &&
-            playMode != MainMenuPlayMode.Solo;
 
         while (lobbyManager != null &&
-               (waitForAllTestPlayers || Time.realtimeSinceStartup < timeoutTime))
+               Time.realtimeSinceStartup < timeoutTime)
         {
             LobbySetupData setupData = BuildLobbySetupData();
             lobbyManager.SetPendingLobbySetupData(setupData, false);
@@ -288,7 +284,7 @@ public class GameSimulationController : MonoBehaviour
             networkLobbyManager = NetworkLobbyManager.instance;
         }
 
-        yield return WaitForNetworkTestPlayers(networkLobbyManager, lobbyId);
+        yield return WaitForRunningNetworkPlayers(networkLobbyManager, lobbyId);
 
         if (!CanAddNetworkSimulationBots(networkLobbyManager, lobbyId, out int currentPlayerCount))
         {
@@ -365,49 +361,47 @@ public class GameSimulationController : MonoBehaviour
         }
     }
 
-    private IEnumerator WaitForNetworkTestPlayers(NetworkLobbyManager networkLobbyManager, string lobbyId)
+    private IEnumerator WaitForRunningNetworkPlayers(NetworkLobbyManager networkLobbyManager, string lobbyId)
     {
+        float timeoutTime = Time.realtimeSinceStartup + LobbyEntryTimeoutSeconds;
         float stableSince = Time.realtimeSinceStartup;
         int previousHumanPlayerCount = -1;
+        int previousConnectedTestPlayerCount = -1;
 
-        while (true)
+        while (Time.realtimeSinceStartup < timeoutTime)
         {
-            if (MultiplayerPlayModeTestContext.IsActive)
-            {
-                if (networkLobbyManager.TryGetSimulationTestPlayerState(
-                        lobbyId,
-                        MultiplayerPlayModeTestPlayerCount,
-                        out int joinedTestPlayerCount,
-                        out int sceneReadyTestPlayerCount) &&
-                    joinedTestPlayerCount >= MultiplayerPlayModeTestPlayerCount &&
-                    sceneReadyTestPlayerCount >= MultiplayerPlayModeTestPlayerCount)
-                {
-                    yield break;
-                }
-
-                yield return null;
-                continue;
-            }
-
             if (!networkLobbyManager.TryGetSimulationLobbyState(
                     lobbyId,
                     out int humanPlayerCount,
                     out int playerCount,
                     out int sceneReadyPlayerCount,
                     out _,
-                    out _))
+                    out bool hasPendingWork) ||
+                !networkLobbyManager.TryGetRunningSimulationTestPlayerState(
+                    lobbyId,
+                    out int connectedTestPlayerCount,
+                    out int joinedTestPlayerCount,
+                    out int sceneReadyTestPlayerCount))
             {
                 yield return null;
                 continue;
             }
 
-            if (humanPlayerCount != previousHumanPlayerCount)
+            if (humanPlayerCount != previousHumanPlayerCount ||
+                connectedTestPlayerCount != previousConnectedTestPlayerCount)
             {
                 previousHumanPlayerCount = humanPlayerCount;
+                previousConnectedTestPlayerCount = connectedTestPlayerCount;
                 stableSince = Time.realtimeSinceStartup;
             }
 
-            if (sceneReadyPlayerCount >= playerCount &&
+            bool allConnectedTestPlayersReady =
+                joinedTestPlayerCount >= connectedTestPlayerCount &&
+                sceneReadyTestPlayerCount >= connectedTestPlayerCount;
+
+            if (!hasPendingWork &&
+                sceneReadyPlayerCount >= playerCount &&
+                allConnectedTestPlayersReady &&
                 Time.realtimeSinceStartup - stableSince >= NetworkPlayerSettleSeconds)
             {
                 yield break;
@@ -415,6 +409,9 @@ public class GameSimulationController : MonoBehaviour
 
             yield return null;
         }
+
+        Debug.LogWarning(
+            "[GameSimulation] Timed out while waiting for the running real test players to finish Lobby loading.");
     }
 
     private bool CanAddNetworkSimulationBots(NetworkLobbyManager networkLobbyManager, string lobbyId, out int playerCount)

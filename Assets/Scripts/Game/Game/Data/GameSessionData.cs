@@ -217,3 +217,32 @@ public class GamePlayerLeftData
         this.userId = userId ?? string.Empty;
     }
 }
+
+[Serializable]
+public class GamePlayerMarkedCellChangedData
+{
+    public string gameId;
+    public string userId;
+    public int cellIndex;
+    public bool isMarked;
+
+    public GamePlayerMarkedCellChangedData()
+    {
+        gameId = string.Empty;
+        userId = string.Empty;
+        cellIndex = -1;
+        isMarked = false;
+    }
+
+    public GamePlayerMarkedCellChangedData(
+        string gameId,
+        string userId,
+        int cellIndex,
+        bool isMarked) : this()
+    {
+        this.gameId = gameId ?? string.Empty;
+        this.userId = userId ?? string.Empty;
+        this.cellIndex = cellIndex;
+        this.isMarked = isMarked;
+    }
+}

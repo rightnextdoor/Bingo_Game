@@ -351,6 +351,44 @@ public class NetworkGameSessionManager : MonoBehaviour
         return GameSessionResult.Acknowledged(GameSessionOperationType.Leave, gameSessionData);
     }
 
+    public void ProcessAuthorityPlayerMarkedCell(
+        ulong clientId,
+        string gameId,
+        int cellIndex,
+        bool isMarked)
+    {
+        if (!CanProcessAuthorityOperation() ||
+            !connectionRegistry.TryGetBingoUserId(clientId, out string userId))
+        {
+            return;
+        }
+
+        GameSessionData gameSessionData = FindGame(gameId);
+        GamePlayerData playerData = gameSessionData?.GetPlayer(userId);
+        LobbyBoardData boardData = playerData?.boardData;
+
+        if (playerData == null ||
+            playerData.userTag == UserTag.Bot ||
+            !playerData.isConnected ||
+            !playerData.canRejoin ||
+            gameSessionData.gameState == GameSessionState.Completed ||
+            boardData?.cellNumbers == null ||
+            cellIndex < 0 ||
+            cellIndex >= boardData.cellNumbers.Count ||
+            (boardData.usesFreeCell && cellIndex == 12 && !isMarked))
+        {
+            return;
+        }
+
+        BroadcastGamePlayerMarkedCellChanged(
+            gameSessionData,
+            new GamePlayerMarkedCellChangedData(
+                gameSessionData.gameId,
+                userId,
+                cellIndex,
+                isMarked));
+    }
+
     public bool DeleteGame(string gameId, bool notifyPlayers = true)
     {
         GameSessionData gameSessionData = FindGame(gameId);
@@ -423,6 +461,32 @@ public class NetworkGameSessionManager : MonoBehaviour
             }
 
             NetworkGameSessionConnection.TrySendGamePlayerStateChanged(clientId, updateData);
+        }
+    }
+
+    private void BroadcastGamePlayerMarkedCellChanged(
+        GameSessionData gameSessionData,
+        GamePlayerMarkedCellChangedData updateData)
+    {
+        if (gameSessionData?.players == null || updateData == null ||
+            connectionRegistry == null || !connectionRegistry.IsReady)
+        {
+            return;
+        }
+
+        for (int i = 0; i < gameSessionData.players.Count; i++)
+        {
+            GamePlayerData playerData = gameSessionData.players[i];
+
+            if (playerData == null || playerData.userTag == UserTag.Bot ||
+                !connectionRegistry.TryGetClientId(playerData.userId, out ulong clientId))
+            {
+                continue;
+            }
+
+            NetworkGameSessionConnection.TrySendGamePlayerMarkedCellChanged(
+                clientId,
+                updateData);
         }
     }
 

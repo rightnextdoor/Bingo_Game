@@ -191,6 +191,32 @@ public class NetworkGameSessionService : MonoBehaviour, IGameSessionService
         return await connection.RequestLeaveGameAsync(gameId);
     }
 
+    public bool TrySetPlayerMarkedCell(
+        string gameId,
+        UserData userData,
+        int cellIndex,
+        bool isMarked,
+        out GamePlayerMarkedCellChangedData updateData)
+    {
+        updateData = null;
+
+        if (!isReady ||
+            networkBootstrap == null ||
+            !networkBootstrap.IsConnected ||
+            userData == null ||
+            !userData.HasUser ||
+            string.IsNullOrWhiteSpace(gameId))
+        {
+            return false;
+        }
+
+        NetworkGameSessionConnection connection =
+            NetworkGameSessionConnection.GetLocalConnection();
+
+        return connection != null &&
+               connection.RequestPlayerMarkedCell(gameId, cellIndex, isMarked);
+    }
+
     private async Task<NetworkGameSessionConnection> WaitForLocalGameConnectionAsync()
     {
         float timeoutTime = Time.realtimeSinceStartup + GameConnectionTimeoutSeconds;

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -18,6 +19,8 @@ public class BingoBoardController : MonoBehaviour
 
     public LobbyBoardData CurrentBoardData => currentBoardData;
     public IReadOnlyList<int> MarkedCellIndices => markedCellIndices;
+
+    public event Action<int, bool> MarkedCellChanged;
 
     #endregion
 
@@ -93,11 +96,13 @@ public class BingoBoardController : MonoBehaviour
         {
             markedCellIndices.Remove(cellIndex);
             cell.SetMarked(false);
+            MarkedCellChanged?.Invoke(cellIndex, false);
             return;
         }
 
         markedCellIndices.Add(cellIndex);
         cell.SetMarked(true);
+        MarkedCellChanged?.Invoke(cellIndex, true);
     }
 
     public List<int> GetMarkedCellIndicesSnapshot()

@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -9,6 +10,7 @@ public class GameController : MonoBehaviour
 
     [Header("Sections")]
     [SerializeField] private GameHeaderController headerController;
+    [SerializeField] private GameBoardSectionController boardSectionController;
     [SerializeField] private LobbyPlayerListController playerListController;
     [SerializeField] private GameInfoController gameInfoController;
     [SerializeField] private LobbyCustomPanelController customPanelController;
@@ -18,6 +20,8 @@ public class GameController : MonoBehaviour
     #region Private Fields
 
     private readonly List<PlayerListPlayerData> visiblePlayers = new List<PlayerListPlayerData>();
+    private readonly Dictionary<string, HashSet<int>> markedCellsByUserId =
+        new Dictionary<string, HashSet<int>>(StringComparer.Ordinal);
     private Coroutine bindRoutine;
 
     #endregion
@@ -27,6 +31,7 @@ public class GameController : MonoBehaviour
     private void OnEnable()
     {
         SubscribeToHeader();
+        SubscribeToBoardSection();
         bindRoutine = StartCoroutine(BindWhenGameIsReady());
     }
 
@@ -39,6 +44,7 @@ public class GameController : MonoBehaviour
         }
 
         UnsubscribeFromHeader();
+        UnsubscribeFromBoardSection();
         UnsubscribeFromGameSessionManager();
     }
 
@@ -64,6 +70,7 @@ public class GameController : MonoBehaviour
             : gameSessionData.gameModeType.ToString();
 
         headerController?.DisplayGameInfo(gameSessionData, gameName);
+        DisplayPlayerBoard(gameSessionData);
         DisplayPlayerList(gameSessionData);
         DisplayGameModeInfo(gameSessionData, gameModeData, gameName, gameModeManager);
         DisplayCustomLobbyInfo(gameSessionData);
@@ -134,6 +141,7 @@ public class GameController : MonoBehaviour
             isHost = gamePlayerData.isLobbyHost,
             isReady = true,
             boardData = new LobbyBoardData(gamePlayerData.boardData),
+            markedCellIndices = GetMarkedCellSnapshot(gamePlayerData.userId),
             canKick = false,
             showBotIcon = localPlayerIsHost && gamePlayerData.userTag == UserTag.Bot,
             showReadyIcon = false
@@ -192,10 +200,119 @@ public class GameController : MonoBehaviour
     private void ClearDisplay()
     {
         visiblePlayers.Clear();
+        markedCellsByUserId.Clear();
         headerController?.ClearHeader();
+        boardSectionController?.ClearBoard();
+        boardSectionController?.SetBoardInteractable(false);
+        boardSectionController?.SetBingoInteractable(false);
         playerListController?.DisplayPlayers(visiblePlayers, 0);
         gameInfoController?.ClearInfo();
         customPanelController?.DisplayLobbyInfo(null);
+    }
+
+    #endregion
+
+    #region Board
+
+    private void DisplayPlayerBoard(GameSessionData gameSessionData)
+    {
+        if (boardSectionController == null)
+        {
+            return;
+        }
+
+        string localUserId = UserManager.instance?.UserId;
+        GamePlayerData localPlayer = gameSessionData?.GetPlayer(localUserId);
+
+        bool boardDisplayed =
+            localPlayer?.boardData != null &&
+            boardSectionController.DisplayBoard(localPlayer.boardData);
+
+        if (!boardDisplayed)
+        {
+            boardSectionController.ClearBoard();
+        }
+
+        boardSectionController.SetBoardInteractable(boardDisplayed);
+        boardSectionController.SetBingoInteractable(boardDisplayed);
+    }
+
+    private void SubscribeToBoardSection()
+    {
+        if (boardSectionController == null)
+        {
+            return;
+        }
+
+        boardSectionController.BingoRequested -= OnBingoRequested;
+        boardSectionController.BingoRequested += OnBingoRequested;
+
+        boardSectionController.MarkedCellChanged -= OnBoardMarkedCellChanged;
+        boardSectionController.MarkedCellChanged += OnBoardMarkedCellChanged;
+    }
+
+    private void UnsubscribeFromBoardSection()
+    {
+        if (boardSectionController != null)
+        {
+            boardSectionController.BingoRequested -= OnBingoRequested;
+            boardSectionController.MarkedCellChanged -= OnBoardMarkedCellChanged;
+        }
+    }
+
+    private void OnBoardMarkedCellChanged(int cellIndex, bool isMarked)
+    {
+        if (GameSessionManager.instance == null ||
+            !GameSessionManager.instance.SetCurrentPlayerMarkedCell(cellIndex, isMarked))
+        {
+            Debug.LogWarning(
+                $"[GameController] Could not update marked cell {cellIndex} for the current player.");
+        }
+    }
+
+    private void OnBingoRequested(
+        LobbyBoardData boardData,
+        IReadOnlyList<int> markedCellIndices)
+    {
+        if (boardData?.cellNumbers == null)
+        {
+            Debug.LogWarning("[GameController] Bingo was pressed, but the board data was unavailable.");
+            return;
+        }
+
+        List<int> sortedCellIndices = markedCellIndices != null
+            ? new List<int>(markedCellIndices)
+            : new List<int>();
+
+        sortedCellIndices.Sort();
+
+        List<string> selectedCells = new List<string>();
+        const string columnLetters = "BINGO";
+
+        for (int i = 0; i < sortedCellIndices.Count; i++)
+        {
+            int cellIndex = sortedCellIndices[i];
+
+            if (cellIndex < 0 || cellIndex >= boardData.cellNumbers.Count)
+            {
+                continue;
+            }
+
+            if (boardData.usesFreeCell && cellIndex == 12)
+            {
+                selectedCells.Add("FREE");
+                continue;
+            }
+
+            int columnIndex = cellIndex % columnLetters.Length;
+            selectedCells.Add($"{columnLetters[columnIndex]}{boardData.cellNumbers[cellIndex]}");
+        }
+
+        string selectedCellText = selectedCells.Count > 0
+            ? string.Join(", ", selectedCells)
+            : "None";
+
+        Debug.Log($"[GameController] Bingo pressed. Selected cells: {selectedCellText}");
     }
 
     #endregion
@@ -218,6 +335,9 @@ public class GameController : MonoBehaviour
         gameSessionManager.GameSessionUpdated -= OnGameSessionUpdated;
         gameSessionManager.GameSessionUpdated += OnGameSessionUpdated;
 
+        gameSessionManager.GamePlayerMarkedCellChanged -= OnGamePlayerMarkedCellChanged;
+        gameSessionManager.GamePlayerMarkedCellChanged += OnGamePlayerMarkedCellChanged;
+
         DisplayGameInfo(gameSessionManager.CurrentGameSession);
         bindRoutine = null;
     }
@@ -227,11 +347,56 @@ public class GameController : MonoBehaviour
         DisplayGameInfo(gameSessionData);
     }
 
+    private void OnGamePlayerMarkedCellChanged(
+        GamePlayerMarkedCellChangedData updateData)
+    {
+        if (updateData == null || string.IsNullOrWhiteSpace(updateData.userId))
+        {
+            return;
+        }
+
+        if (!markedCellsByUserId.TryGetValue(
+                updateData.userId,
+                out HashSet<int> markedCells))
+        {
+            markedCells = new HashSet<int>();
+            markedCellsByUserId.Add(updateData.userId, markedCells);
+        }
+
+        if (updateData.isMarked)
+        {
+            markedCells.Add(updateData.cellIndex);
+        }
+        else
+        {
+            markedCells.Remove(updateData.cellIndex);
+        }
+
+        playerListController?.SetPlayerMarkedCell(
+            updateData.userId,
+            updateData.cellIndex,
+            updateData.isMarked);
+    }
+
+    private List<int> GetMarkedCellSnapshot(string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId) ||
+            !markedCellsByUserId.TryGetValue(userId, out HashSet<int> markedCells))
+        {
+            return new List<int>();
+        }
+
+        List<int> snapshot = new List<int>(markedCells);
+        snapshot.Sort();
+        return snapshot;
+    }
+
     private void UnsubscribeFromGameSessionManager()
     {
         if (GameSessionManager.instance != null)
         {
             GameSessionManager.instance.GameSessionUpdated -= OnGameSessionUpdated;
+            GameSessionManager.instance.GamePlayerMarkedCellChanged -= OnGamePlayerMarkedCellChanged;
         }
     }
 

@@ -49,6 +49,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
     public event Action<GameSessionResult> GameEntryCompleted;
     public event Action<GameSessionResult> GameEntryFailed;
     public event Action<GameSessionData> GameSessionUpdated;
+    public event Action<GamePlayerMarkedCellChangedData> GamePlayerMarkedCellChanged;
     public event Action<string> GameDeleted;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -76,6 +77,8 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         NetworkGameSessionConnection.LocalGameSessionUpdatedReceived += OnNetworkGameSessionUpdated;
         NetworkGameSessionConnection.LocalGamePlayerStateChangedReceived -= OnNetworkGamePlayerStateChanged;
         NetworkGameSessionConnection.LocalGamePlayerStateChangedReceived += OnNetworkGamePlayerStateChanged;
+        NetworkGameSessionConnection.LocalGamePlayerMarkedCellChangedReceived -= OnNetworkGamePlayerMarkedCellChanged;
+        NetworkGameSessionConnection.LocalGamePlayerMarkedCellChangedReceived += OnNetworkGamePlayerMarkedCellChanged;
         NetworkGameSessionConnection.LocalGamePlayerLeftReceived -= OnNetworkGamePlayerLeft;
         NetworkGameSessionConnection.LocalGamePlayerLeftReceived += OnNetworkGamePlayerLeft;
         NetworkGameSessionConnection.LocalGameDeletedReceived -= OnNetworkGameDeleted;
@@ -89,6 +92,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         NetworkGameSessionConnection.LocalGameCreationResultReceived -= ReceiveGameCreationResult;
         NetworkGameSessionConnection.LocalGameSessionUpdatedReceived -= OnNetworkGameSessionUpdated;
         NetworkGameSessionConnection.LocalGamePlayerStateChangedReceived -= OnNetworkGamePlayerStateChanged;
+        NetworkGameSessionConnection.LocalGamePlayerMarkedCellChangedReceived -= OnNetworkGamePlayerMarkedCellChanged;
         NetworkGameSessionConnection.LocalGamePlayerLeftReceived -= OnNetworkGamePlayerLeft;
         NetworkGameSessionConnection.LocalGameDeletedReceived -= OnNetworkGameDeleted;
         EndSceneEventSubscription();
@@ -99,6 +103,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         NetworkGameSessionConnection.LocalGameCreationResultReceived -= ReceiveGameCreationResult;
         NetworkGameSessionConnection.LocalGameSessionUpdatedReceived -= OnNetworkGameSessionUpdated;
         NetworkGameSessionConnection.LocalGamePlayerStateChangedReceived -= OnNetworkGamePlayerStateChanged;
+        NetworkGameSessionConnection.LocalGamePlayerMarkedCellChangedReceived -= OnNetworkGamePlayerMarkedCellChanged;
         NetworkGameSessionConnection.LocalGamePlayerLeftReceived -= OnNetworkGamePlayerLeft;
         NetworkGameSessionConnection.LocalGameDeletedReceived -= OnNetworkGameDeleted;
         EndSceneEventSubscription();
@@ -403,6 +408,38 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         return currentGameSession?.GetPlayer(UserManager.instance?.UserId);
     }
 
+    public bool SetCurrentPlayerMarkedCell(int cellIndex, bool isMarked)
+    {
+        if (!HasEnteredGame)
+        {
+            return false;
+        }
+
+        UserData userData = UserManager.instance?.CurrentUser;
+        IGameSessionService service = GetGameService(runtimeType);
+
+        if (userData == null ||
+            !userData.HasUser ||
+            service == null ||
+            !service.IsReady ||
+            !service.TrySetPlayerMarkedCell(
+                currentGameSession.gameId,
+                userData,
+                cellIndex,
+                isMarked,
+                out GamePlayerMarkedCellChangedData updateData))
+        {
+            return false;
+        }
+
+        if (updateData != null)
+        {
+            ApplyGamePlayerMarkedCellChanged(updateData);
+        }
+
+        return true;
+    }
+
     private bool TryApplySuccessfulResult(GameSessionResult result, out GameSessionResult failureResult)
     {
         failureResult = null;
@@ -491,6 +528,34 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         playerData.canRejoin = updateData.canRejoin;
         currentGameSession.revision = updateData.revision;
         GameSessionUpdated?.Invoke(new GameSessionData(currentGameSession));
+    }
+
+    private void ApplyGamePlayerMarkedCellChanged(
+        GamePlayerMarkedCellChangedData updateData)
+    {
+        if (updateData == null ||
+            currentGameSession == null ||
+            !string.Equals(updateData.gameId, currentGameSession.gameId, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        GamePlayerData playerData = currentGameSession.GetPlayer(updateData.userId);
+        LobbyBoardData boardData = playerData?.boardData;
+
+        if (boardData?.cellNumbers == null ||
+            updateData.cellIndex < 0 ||
+            updateData.cellIndex >= boardData.cellNumbers.Count)
+        {
+            return;
+        }
+
+        if (boardData.usesFreeCell && updateData.cellIndex == 12)
+        {
+            updateData.isMarked = true;
+        }
+
+        GamePlayerMarkedCellChanged?.Invoke(updateData);
     }
 
     private void ApplyGamePlayerLeft(GamePlayerLeftData updateData)
@@ -906,6 +971,12 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
     private void OnNetworkGamePlayerStateChanged(GamePlayerStateChangedData updateData)
     {
         ApplyGamePlayerStateChanged(updateData);
+    }
+
+    private void OnNetworkGamePlayerMarkedCellChanged(
+        GamePlayerMarkedCellChangedData updateData)
+    {
+        ApplyGamePlayerMarkedCellChanged(updateData);
     }
 
     private void OnNetworkGamePlayerLeft(GamePlayerLeftData updateData)

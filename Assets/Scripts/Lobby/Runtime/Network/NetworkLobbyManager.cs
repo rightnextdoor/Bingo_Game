@@ -2425,23 +2425,36 @@ public class NetworkLobbyManager : MonoBehaviour
         return true;
     }
 
-    public bool TryGetSimulationTestPlayerState(
+    public bool TryGetRunningSimulationTestPlayerState(
         string lobbyId,
-        int expectedTestPlayerCount,
+        out int connectedTestPlayerCount,
         out int joinedTestPlayerCount,
         out int sceneReadyTestPlayerCount)
     {
+        const int maximumTestPlayerCount = 4;
+
+        connectedTestPlayerCount = 0;
         joinedTestPlayerCount = 0;
         sceneReadyTestPlayerCount = 0;
 
-        if (!TryGetStressLobby(lobbyId, out Lobby lobby) || lobby.Controller == null)
+        if (!TryGetStressLobby(lobbyId, out Lobby lobby) ||
+            lobby.Controller == null ||
+            connectionRegistry == null ||
+            !connectionRegistry.IsReady)
         {
             return false;
         }
 
-        for (int playerNumber = 1; playerNumber <= expectedTestPlayerCount; playerNumber++)
+        for (int playerNumber = 1; playerNumber <= maximumTestPlayerCount; playerNumber++)
         {
             string userId = MultiplayerPlayModeTestContext.GetUserId(playerNumber);
+
+            if (!connectionRegistry.IsBingoUserConnected(userId))
+            {
+                continue;
+            }
+
+            connectedTestPlayerCount++;
             LobbyPlayerData playerData = lobby.Controller.GetPlayer(userId);
 
             if (playerData?.userData == null || playerData.userData.userTag == UserTag.Bot)

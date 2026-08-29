@@ -6786,6 +6786,17 @@ RectTransform:
   m_CorrespondingSourceObject: {fileID: 8581628577420195883, guid: 32a50b70e8bcecf4c8db11dc404fd36a, type: 3}
   m_PrefabInstance: {fileID: 499322768}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &2146000002 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 2540606888373903356, guid: 32a50b70e8bcecf4c8db11dc404fd36a, type: 3}
+  m_PrefabInstance: {fileID: 499322768}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3012afe2633b38e409965f2774bd8c09, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::BingoBoardController
 --- !u!1 &508089556
 GameObject:
   m_ObjectHideFlags: 0
@@ -10485,6 +10496,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1212900603}
+  - component: {fileID: 2146000001}
   - component: {fileID: 1212900608}
   - component: {fileID: 1212900607}
   - component: {fileID: 1212900606}
@@ -10518,6 +10530,20 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &2146000001
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1212900602}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b9e7b54c2fc84b30a4b775f19a5d3c12, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::GameBoardSectionController
+  boardController: {fileID: 2146000002}
+  bingoButton: {fileID: 156232015}
 --- !u!114 &1212900604
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -11807,6 +11833,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GameController
   headerController: {fileID: 1435931208}
+  boardSectionController: {fileID: 2146000001}
   playerListController: {fileID: 2077969041}
   gameInfoController: {fileID: 951137299}
   customPanelController: {fileID: 1522804293}

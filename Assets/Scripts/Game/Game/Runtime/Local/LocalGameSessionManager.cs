@@ -326,6 +326,45 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
         return Task.FromResult(GameSessionResult.Succeeded(GameSessionOperationType.Leave, gameSessionData));
     }
 
+    public bool TrySetPlayerMarkedCell(
+        string gameId,
+        UserData userData,
+        int cellIndex,
+        bool isMarked,
+        out GamePlayerMarkedCellChangedData updateData)
+    {
+        updateData = null;
+
+        if (!isReady || userData == null || !userData.HasUser)
+        {
+            return false;
+        }
+
+        GameSessionData gameSessionData = FindGame(gameId);
+        GamePlayerData playerData = gameSessionData?.GetPlayer(userData.userId);
+        LobbyBoardData boardData = playerData?.boardData;
+
+        if (playerData == null ||
+            playerData.userTag == UserTag.Bot ||
+            !playerData.isConnected ||
+            !playerData.canRejoin ||
+            gameSessionData.gameState == GameSessionState.Completed ||
+            boardData?.cellNumbers == null ||
+            cellIndex < 0 ||
+            cellIndex >= boardData.cellNumbers.Count ||
+            (boardData.usesFreeCell && cellIndex == 12 && !isMarked))
+        {
+            return false;
+        }
+
+        updateData = new GamePlayerMarkedCellChangedData(
+            gameSessionData.gameId,
+            playerData.userId,
+            cellIndex,
+            isMarked);
+        return true;
+    }
+
     public bool DeleteGame(string gameId)
     {
         GameSessionData gameSessionData = FindGame(gameId);

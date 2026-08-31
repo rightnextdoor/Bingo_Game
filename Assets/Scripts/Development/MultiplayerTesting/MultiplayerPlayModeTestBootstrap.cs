@@ -20,7 +20,9 @@ public class MultiplayerPlayModeTestBootstrap : MonoBehaviour
 
     private IEnumerator Start()
     {
-        if (!MultiplayerPlayModeTestContext.IsActive)
+        bool isNetworkGameSimulation = GameSimulationController.IsNetworkSimulationStartActive();
+
+        if (!MultiplayerPlayModeTestContext.IsActive && !isNetworkGameSimulation)
         {
             yield break;
         }
@@ -42,6 +44,12 @@ public class MultiplayerPlayModeTestBootstrap : MonoBehaviour
 
         if (!PrepareNetworkManagerForTesting(networkRoot))
         {
+            yield break;
+        }
+
+        if (isNetworkGameSimulation)
+        {
+            // The Game simulation lobby entry owns its direct connection and retry cycle.
             yield break;
         }
 

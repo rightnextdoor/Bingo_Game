@@ -1087,6 +1087,11 @@ public class LobbyController
             return true;
         }
 
+        if (lobby.isGameSimulation)
+        {
+            return false;
+        }
+
         if (lobby.playMode != MainMenuPlayMode.Online || timer == null || !timer.IsActive)
         {
             return false;

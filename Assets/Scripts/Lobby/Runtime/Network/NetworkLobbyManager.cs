@@ -141,6 +141,13 @@ public class NetworkLobbyManager : MonoBehaviour
             return BuildNetworkEntryResult(existingUserLobby);
         }
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (lobbySetupData.isGameSimulation)
+        {
+            return ProcessGameSimulationLobbyEntry(lobbySetupData);
+        }
+#endif
+
         switch (lobbySetupData.playMode)
         {
             case MainMenuPlayMode.Online:
@@ -161,6 +168,90 @@ public class NetworkLobbyManager : MonoBehaviour
                 return LobbyEntryResult.Failed(LobbyEntryFailureType.InvalidSetupData, "The network lobby mode is not valid.");
         }
     }
+
+    #endregion
+
+    #region Game Simulation Lobby Entry
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+
+    private LobbyEntryResult ProcessGameSimulationLobbyEntry(LobbySetupData lobbySetupData)
+    {
+        int simulationPlayerNumber = lobbySetupData.gameSimulationPlayerNumber;
+
+        if (simulationPlayerNumber < 1 || simulationPlayerNumber > 4)
+        {
+            return LobbyEntryResult.Failed(
+                LobbyEntryFailureType.InvalidSetupData,
+                "The Game simulation player number is invalid.");
+        }
+
+        if (simulationPlayerNumber != 1)
+        {
+            Lobby authoritySimulationLobby = FindOpenGameSimulationLobby();
+
+            if (authoritySimulationLobby == null)
+            {
+                return LobbyEntryResult.Failed(
+                    LobbyEntryFailureType.LobbyNotFound,
+                    "Player 1's Game simulation lobby is not ready yet.");
+            }
+
+            return AddPlayerToLobby(
+                authoritySimulationLobby,
+                lobbySetupData.userData,
+                false);
+        }
+
+        if (lobbySetupData.playMode == MainMenuPlayMode.Custom)
+        {
+            return ProcessCustomLobbyEntry(lobbySetupData);
+        }
+
+        if (lobbySetupData.playMode == MainMenuPlayMode.Online)
+        {
+            Lobby selectedLobby = FindOrCreateOnlineLobby(lobbySetupData);
+
+            if (selectedLobby == null)
+            {
+                return LobbyEntryResult.Failed(
+                    LobbyEntryFailureType.LobbyCreationFailed,
+                    "Player 1's Online Game simulation lobby could not be created.");
+            }
+
+            return AddPlayerToLobby(selectedLobby, lobbySetupData.userData, false);
+        }
+
+        return LobbyEntryResult.Failed(
+            LobbyEntryFailureType.InvalidSetupData,
+            "The network Game simulation lobby mode is not valid.");
+    }
+
+    private Lobby FindOpenGameSimulationLobby()
+    {
+        for (int i = 0; i < lobbies.Count; i++)
+        {
+            Lobby lobby = lobbies[i];
+
+            if (lobby == null ||
+                !lobby.isGameSimulation ||
+                (lobby.playMode != MainMenuPlayMode.Online &&
+                 lobby.playMode != MainMenuPlayMode.Custom) ||
+                lobby.lobbyState != LobbyState.Open ||
+                lobby.Controller == null ||
+                lobby.Controller.IsJoinLocked ||
+                lobby.Controller.IsFull)
+            {
+                continue;
+            }
+
+            return lobby;
+        }
+
+        return null;
+    }
+
+#endif
 
     #endregion
 
@@ -1837,7 +1928,9 @@ public class NetworkLobbyManager : MonoBehaviour
             ProcessPendingMemberPublications(lobby);
             ProcessPendingJoinTimeouts(lobby);
 
-            if (lobby.playMode == MainMenuPlayMode.Online && lobby.lobbyState == LobbyState.Open)
+            if (lobby.playMode == MainMenuPlayMode.Online &&
+                lobby.lobbyState == LobbyState.Open &&
+                !lobby.isGameSimulation)
             {
                 if (controller.IsOnlineFinalCountdownDue())
                 {
@@ -2427,12 +2520,11 @@ public class NetworkLobbyManager : MonoBehaviour
 
     public bool TryGetRunningSimulationTestPlayerState(
         string lobbyId,
+        IReadOnlyList<string> expectedUserIds,
         out int connectedTestPlayerCount,
         out int joinedTestPlayerCount,
         out int sceneReadyTestPlayerCount)
     {
-        const int maximumTestPlayerCount = 4;
-
         connectedTestPlayerCount = 0;
         joinedTestPlayerCount = 0;
         sceneReadyTestPlayerCount = 0;
@@ -2440,16 +2532,17 @@ public class NetworkLobbyManager : MonoBehaviour
         if (!TryGetStressLobby(lobbyId, out Lobby lobby) ||
             lobby.Controller == null ||
             connectionRegistry == null ||
-            !connectionRegistry.IsReady)
+            !connectionRegistry.IsReady ||
+            expectedUserIds == null)
         {
             return false;
         }
 
-        for (int playerNumber = 1; playerNumber <= maximumTestPlayerCount; playerNumber++)
+        for (int i = 0; i < expectedUserIds.Count; i++)
         {
-            string userId = MultiplayerPlayModeTestContext.GetUserId(playerNumber);
+            string userId = expectedUserIds[i];
 
-            if (!connectionRegistry.IsBingoUserConnected(userId))
+            if (string.IsNullOrWhiteSpace(userId) || !connectionRegistry.IsBingoUserConnected(userId))
             {
                 continue;
             }

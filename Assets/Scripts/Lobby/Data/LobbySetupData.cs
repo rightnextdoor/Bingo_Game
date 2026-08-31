@@ -6,6 +6,9 @@ public class LobbySetupData
 {
     public MainMenuPlayMode playMode = MainMenuPlayMode.None;
 
+    public bool isGameSimulation;
+    public int gameSimulationPlayerNumber;
+
     public UserData userData = new UserData();
 
     public SoloLobbySetupData soloSetupData = new SoloLobbySetupData();
@@ -15,6 +18,8 @@ public class LobbySetupData
     public LobbySetupData()
     {
         playMode = MainMenuPlayMode.None;
+        isGameSimulation = false;
+        gameSimulationPlayerNumber = 0;
 
         userData = new UserData();
 

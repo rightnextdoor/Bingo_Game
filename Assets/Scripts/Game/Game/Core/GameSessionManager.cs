@@ -20,6 +20,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
     private bool isLeavingGame;
     private bool isReportingGameSceneReady;
     private bool isGameSessionSyncPending;
+    private bool isGameSimulationCreationPending;
     private float nextGameSessionSyncTime;
     private int entryAttemptVersion;
     private Coroutine sceneEventSubscriptionRoutine;
@@ -123,6 +124,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
             HasEnteredGame ||
             isEnteringGame ||
             entryState == GameSessionEntryState.Failed ||
+            (isGameSimulationCreationPending && string.IsNullOrWhiteSpace(pendingLobbyId)) ||
             isGameSessionSyncPending ||
             Time.realtimeSinceStartup < nextGameSessionSyncTime)
         {
@@ -185,6 +187,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
 
             pendingGameId = string.Empty;
             pendingLobbyId = string.Empty;
+            isGameSimulationCreationPending = false;
             SetEntryState(GameSessionEntryState.Idle);
             GameCreationFailed?.Invoke(failureResult);
             return;
@@ -215,6 +218,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         isLeavingGame = false;
         isReportingGameSceneReady = false;
         isGameSessionSyncPending = false;
+        isGameSimulationCreationPending = false;
         SetEntryState(GameSessionEntryState.WaitingForService);
         return true;
     }
@@ -314,6 +318,36 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         }
     }
 
+    public void SetGameSimulationCreationPending(bool isPending)
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        isGameSimulationCreationPending = isPending;
+#endif
+    }
+
+    public bool PrepareForGameSimulationEntry(string lobbyId)
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (string.IsNullOrWhiteSpace(lobbyId))
+        {
+            return false;
+        }
+
+        PrepareForGameCreation(lobbyId, SessionRuntimeType.Network);
+
+        if (!string.Equals(pendingLobbyId, lobbyId, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        isGameSimulationCreationPending = true;
+        nextGameSessionSyncTime = 0f;
+        return true;
+#else
+        return false;
+#endif
+    }
+
     public void ClearCurrentGame(bool clearLastGameId)
     {
         entryAttemptVersion++;
@@ -325,6 +359,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         isLeavingGame = false;
         isReportingGameSceneReady = false;
         isGameSessionSyncPending = false;
+        isGameSimulationCreationPending = false;
         SetEntryState(GameSessionEntryState.Idle);
 
         if (clearLastGameId)
@@ -486,6 +521,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         pendingLobbyId = currentGameSession.lobbyId;
         isEnteringGame = false;
         isGameSessionSyncPending = false;
+        isGameSimulationCreationPending = false;
         SetEntryState(GameSessionEntryState.Completed);
         UserManager.instance?.SetLastGameId(currentGameSession.gameId);
         GameSessionUpdated?.Invoke(new GameSessionData(currentGameSession));
@@ -684,12 +720,22 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         {
             if (recoverMissingEntry)
             {
-                CompleteGameEntryFailure(result ?? GameSessionResult.Failed(
+                GameSessionResult failureResult = result ?? GameSessionResult.Failed(
                     GameSessionOperationType.Sync,
                     GameSessionFailureType.Unknown,
                     "The Game session manager did not return synchronization data.",
                     gameId,
-                    lobbyId));
+                    lobbyId);
+
+                if (isGameSimulationCreationPending && IsTransientGameSimulationSyncFailure(failureResult))
+                {
+                    lastEntryResult = null;
+                    isEnteringGame = false;
+                    SetEntryState(GameSessionEntryState.WaitingForService);
+                    return;
+                }
+
+                CompleteGameEntryFailure(failureResult);
             }
             else
             {
@@ -761,6 +807,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         lastEntryResult = failureResult;
         isEnteringGame = false;
         isGameSessionSyncPending = false;
+        isGameSimulationCreationPending = false;
         pendingLobbyId = failureResult?.lobbyId ?? string.Empty;
 
         if (ShouldClearLastGameId(failureResult?.failureType ?? GameSessionFailureType.Unknown))
@@ -825,6 +872,19 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         return failureType == GameSessionFailureType.GameNotFound ||
                failureType == GameSessionFailureType.PlayerNotFound ||
                failureType == GameSessionFailureType.PlayerNotEligible;
+    }
+
+    private bool IsTransientGameSimulationSyncFailure(GameSessionResult result)
+    {
+        if (result == null)
+        {
+            return false;
+        }
+
+        return result.failureType == GameSessionFailureType.GameNotFound ||
+               result.failureType == GameSessionFailureType.ServiceUnavailable ||
+               result.failureType == GameSessionFailureType.NetworkConnectionFailed ||
+               result.failureType == GameSessionFailureType.NetworkGameConnectionUnavailable;
     }
 
     private void BeginSceneEventSubscription()

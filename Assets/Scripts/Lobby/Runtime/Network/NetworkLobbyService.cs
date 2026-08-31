@@ -116,7 +116,9 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
         relayJoinCode = string.Empty;
         failureResult = null;
 
-        if (!IsCustomLobbySearch(lobbySetupData) || MultiplayerPlayModeTestContext.IsActive)
+        if (!IsCustomLobbySearch(lobbySetupData) ||
+            lobbySetupData.isGameSimulation ||
+            MultiplayerPlayModeTestContext.IsActive)
         {
             return true;
         }
@@ -269,6 +271,13 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
             return false;
         }
 
+        if (lobbySetupData.isGameSimulation)
+        {
+            return await EnsureDirectTestConnectionAsync(
+                lobbySetupData.userData.userId,
+                lobbySetupData.gameSimulationPlayerNumber == 1);
+        }
+
         if (MultiplayerPlayModeTestContext.IsActive)
         {
             return await EnsureMultiplayerPlayModeConnectionAsync(lobbySetupData.userData.userId);
@@ -357,6 +366,11 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
 
     private async Task<bool> EnsureMultiplayerPlayModeConnectionAsync(string userId)
     {
+        return await EnsureDirectTestConnectionAsync(userId, MultiplayerPlayModeTestContext.IsHost);
+    }
+
+    private async Task<bool> EnsureDirectTestConnectionAsync(string userId, bool shouldHost)
+    {
         if (HasUsableNetworkConnection())
         {
             return true;
@@ -384,7 +398,10 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
             }
         }
 
-        if (MultiplayerPlayModeTestContext.IsHost && networkBootstrap.IsAuthority && NetworkLobbyManager.instance != null && NetworkLobbyManager.instance.HasActiveLobbies)
+        if (shouldHost &&
+            networkBootstrap.IsAuthority &&
+            NetworkLobbyManager.instance != null &&
+            NetworkLobbyManager.instance.HasActiveLobbies)
         {
             return false;
         }
@@ -399,7 +416,7 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
             await Task.Yield();
         }
 
-        bool started = MultiplayerPlayModeTestContext.IsHost
+        bool started = shouldHost
             ? networkBootstrap.StartDirectHost(userId)
             : networkBootstrap.StartDirectClient(userId, MultiplayerPlayModeTestContext.DirectAddress);
 

@@ -155,6 +155,25 @@ public class LobbyManager : MonoBehaviour
         pendingLobbySetupData = null;
     }
 
+    public void CancelPendingLobbyEntry()
+    {
+        if (!isEnteringLobby)
+        {
+            return;
+        }
+
+        entryAttemptVersion++;
+        isEnteringLobby = false;
+        pendingLobbySetupData = null;
+        pendingNetworkLobbyViewData = null;
+        returnToMainSceneOnEntryFailure = false;
+
+        if (!lobbyClientState.HasLobby)
+        {
+            SetEntryState(LobbyEntryState.Idle);
+        }
+    }
+
     public void ResetForFreshApplicationStart()
     {
         entryAttemptVersion++;

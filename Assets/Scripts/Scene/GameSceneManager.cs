@@ -257,6 +257,14 @@ public class GameSceneManager : MonoBehaviour
 
         yield return WaitUntilSceneCanStart();
 
+        if (TryConsumeLoadingRedirect(out GameSceneType redirectSceneType))
+        {
+            isLoadingScene = false;
+            loadingRoutine = null;
+            LoadScene(redirectSceneType);
+            yield break;
+        }
+
         SceneReadyForFadeOut?.Invoke(currentSceneType);
 
         loader = CurrentLoader;
@@ -278,6 +286,11 @@ public class GameSceneManager : MonoBehaviour
 
         while (!CanStartScene())
         {
+            if (hasPendingLoadingRedirect)
+            {
+                yield break;
+            }
+
             yield return null;
         }
     }

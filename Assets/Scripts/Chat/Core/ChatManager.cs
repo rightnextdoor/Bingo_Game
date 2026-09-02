@@ -2296,7 +2296,9 @@ public class ChatManager : MonoBehaviour
         }
 
         ChatSettingsData chatSettings = chatSettingsManager.CurrentSettings;
-        isChatEnabled = chatSettings == null || chatSettings.chatEnabled;
+        isChatEnabled = vivoxChatService != null &&
+                        vivoxChatService.ConnectionsEnabled &&
+                        (chatSettings == null || chatSettings.chatEnabled);
         SetChatConnectionState(isChatEnabled ? ChatConnectionState.Connecting : ChatConnectionState.Disabled);
     }
 
@@ -2307,7 +2309,9 @@ public class ChatManager : MonoBehaviour
             return;
         }
 
-        bool requestedEnabled = chatSettings == null || chatSettings.chatEnabled;
+        bool requestedEnabled = vivoxChatService != null &&
+                                vivoxChatService.ConnectionsEnabled &&
+                                (chatSettings == null || chatSettings.chatEnabled);
 
         if (requestedEnabled == isChatEnabled)
         {

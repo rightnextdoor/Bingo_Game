@@ -98,6 +98,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0ba7219d1a534c247b2dabb8d5f8b466, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VivoxChatService
+  allowVivoxConnections: 0
 --- !u!114 &3931686448537915138
 MonoBehaviour:
   m_ObjectHideFlags: 0

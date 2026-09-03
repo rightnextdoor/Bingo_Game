@@ -27,6 +27,7 @@ public class MainMenuController : MonoBehaviour
     [SerializeField] private Button setupPlayButton;
 
     private MainMenuPlayMode selectedMode = MainMenuPlayMode.None;
+    private bool isStartingSelectedMode;
 
     private UserManager userManager;
     private PopupManager popupManager;
@@ -530,9 +531,14 @@ public class MainMenuController : MonoBehaviour
         return null;
     }
 
-    private void PlaySelectedMode()
+    private async void PlaySelectedMode()
     {
         CacheManagers();
+
+        if (isStartingSelectedMode)
+        {
+            return;
+        }
 
         if (selectedMode == MainMenuPlayMode.None)
         {
@@ -604,12 +610,32 @@ public class MainMenuController : MonoBehaviour
             return;
         }
 
-        lobbyManager.SetPendingLobbySetupData(
-            lobbySetupData);
+        isStartingSelectedMode = true;
 
-        gameSceneManager.LoadLobbyScene();
+        try
+        {
+            if (GameSessionManager.instance != null)
+            {
+                await GameSessionManager.instance.ClearPreviousSessionForFreshLobbyEntryAsync();
+            }
+            else
+            {
+                await lobbyManager.ClearPreviousLobbyMembershipAsync(userManager.CurrentUser);
+                userManager.ClearLastGameId();
+            }
 
-        lobbyManager.BeginPendingLobbyEntry();
+            lobbySetupData.startFreshEntry = true;
+            lobbyManager.SetPendingLobbySetupData(
+                lobbySetupData);
+
+            gameSceneManager.LoadLobbyScene();
+
+            lobbyManager.BeginPendingLobbyEntry();
+        }
+        finally
+        {
+            isStartingSelectedMode = false;
+        }
     }
 
     private void ScrollSettingsToBottom()

@@ -67,6 +67,30 @@ public class NetworkGameSessionManager : MonoBehaviour
         }
     }
 
+    private void Update()
+    {
+        if (!CanProcessAuthorityOperation())
+        {
+            return;
+        }
+
+        for (int i = 0; i < gameSessions.Count; i++)
+        {
+            GameSessionData gameSessionData = gameSessions[i];
+
+            if (gameSessionData == null ||
+                gameSessionData.gameState != GameSessionState.InProgress ||
+                gameSessionData.gamePlayController == null ||
+                !gameSessionData.gamePlayController.UpdateBallCallLoop())
+            {
+                continue;
+            }
+
+            gameSessionData.revision++;
+            BroadcastGameSessionUpdated(gameSessionData);
+        }
+    }
+
     public GameSessionResult CreateGame(GameSessionSetupData setupData)
     {
         if (!CanProcessAuthorityOperation())
@@ -295,6 +319,14 @@ public class NetworkGameSessionManager : MonoBehaviour
             BroadcastGamePlayerStateChanged(gameSessionData, playerData);
         }
 
+        if (gameSessionData.gamePlayController != null &&
+            gameSessionData.gamePlayController.TryStartFirstBallCountdown())
+        {
+            gameSessionData.gameState = GameSessionState.InProgress;
+            gameSessionData.revision++;
+            BroadcastGameSessionUpdated(gameSessionData);
+        }
+
         return GameSessionResult.Acknowledged(GameSessionOperationType.SceneReady, gameSessionData);
     }
 
@@ -349,6 +381,30 @@ public class NetworkGameSessionManager : MonoBehaviour
         BroadcastGamePlayerLeft(gameSessionData, userId);
 
         return GameSessionResult.Acknowledged(GameSessionOperationType.Leave, gameSessionData);
+    }
+
+    public bool RemovePlayerFromAnyGame(string userId)
+    {
+        if (!CanProcessAuthorityOperation())
+        {
+            return false;
+        }
+
+        GameSessionData gameSessionData = FindGameByPlayerId(userId);
+        GamePlayerData playerData = gameSessionData?.GetPlayer(userId);
+
+        if (playerData == null || playerData.userTag == UserTag.Bot)
+        {
+            return false;
+        }
+
+        playerData.isConnected = false;
+        playerData.isGameSceneReady = false;
+        playerData.canRejoin = false;
+        gameSessionData.RemovePlayer(userId);
+        gameSessionData.revision++;
+        BroadcastGamePlayerLeft(gameSessionData, userId);
+        return true;
     }
 
     public void ProcessAuthorityPlayerMarkedCell(
@@ -437,6 +493,28 @@ public class NetworkGameSessionManager : MonoBehaviour
             }
 
             NetworkGameSessionConnection.TrySendGameDeleted(clientId, gameSessionData.gameId);
+        }
+    }
+
+    private void BroadcastGameSessionUpdated(GameSessionData gameSessionData)
+    {
+        if (gameSessionData?.players == null ||
+            connectionRegistry == null || !connectionRegistry.IsReady)
+        {
+            return;
+        }
+
+        for (int i = 0; i < gameSessionData.players.Count; i++)
+        {
+            GamePlayerData playerData = gameSessionData.players[i];
+
+            if (playerData == null || playerData.userTag == UserTag.Bot ||
+                !connectionRegistry.TryGetClientId(playerData.userId, out ulong clientId))
+            {
+                continue;
+            }
+
+            NetworkGameSessionConnection.TrySendGameSessionUpdated(clientId, gameSessionData);
         }
     }
 
@@ -559,6 +637,26 @@ public class NetworkGameSessionManager : MonoBehaviour
             GameSessionData gameSessionData = gameSessions[i];
 
             if (gameSessionData != null && string.Equals(gameSessionData.lobbyId, lobbyId, StringComparison.Ordinal))
+            {
+                return gameSessionData;
+            }
+        }
+
+        return null;
+    }
+
+    private GameSessionData FindGameByPlayerId(string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return null;
+        }
+
+        for (int i = 0; i < gameSessions.Count; i++)
+        {
+            GameSessionData gameSessionData = gameSessions[i];
+
+            if (gameSessionData?.GetPlayer(userId) != null)
             {
                 return gameSessionData;
             }

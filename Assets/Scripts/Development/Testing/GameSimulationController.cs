@@ -124,10 +124,7 @@ public class GameSimulationController : MonoBehaviour
 
     private IEnumerator CreateLinkedLobbyAndGame()
     {
-        if (UsesNetworkSimulationRuntime())
-        {
-            GameSessionManager.instance.SetGameSimulationCreationPending(true);
-        }
+        GameSessionManager.instance.SetGameSimulationCreationPending(true);
 
         yield return EnterSimulatedLobby();
 
@@ -232,6 +229,7 @@ public class GameSimulationController : MonoBehaviour
         LobbySetupData setupData = new LobbySetupData
         {
             playMode = requestedPlayMode,
+            startFreshEntry = false,
             isGameSimulation = true,
             gameSimulationPlayerNumber = simulationPlayerNumber,
             userData = UserManager.instance.CurrentUser
@@ -472,7 +470,6 @@ public class GameSimulationController : MonoBehaviour
                     MultiplayerPlayModeTestContext.GetUserId(playerNumber));
             }
 
-            Debug.Log($"[GameSimulation] Waiting for {expectedUserIds.Count} active test player(s) before adding bots.");
             return expectedUserIds;
         }
 

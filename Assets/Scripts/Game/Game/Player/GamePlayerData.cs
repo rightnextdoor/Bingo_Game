@@ -13,6 +13,11 @@ public class GamePlayerData
     public bool isGameSceneReady;
     public bool canRejoin;
 
+    public GamePlayerStatus gameStatus;
+    public int currentMatchScore;
+    public bool isSubmitTimerActive;
+    public double submitTimerEndTime;
+
     public LobbyBoardData boardData;
 
     public bool HasValidPlayer =>
@@ -30,6 +35,10 @@ public class GamePlayerData
         isConnected = false;
         isGameSceneReady = false;
         canRejoin = true;
+        gameStatus = GamePlayerStatus.Eligible;
+        currentMatchScore = 0;
+        isSubmitTimerActive = false;
+        submitTimerEndTime = 0d;
         boardData = new LobbyBoardData();
     }
 
@@ -66,6 +75,10 @@ public class GamePlayerData
         isConnected = playerData.isConnected;
         isGameSceneReady = playerData.isGameSceneReady;
         canRejoin = playerData.canRejoin;
+        gameStatus = playerData.gameStatus;
+        currentMatchScore = playerData.currentMatchScore;
+        isSubmitTimerActive = playerData.isSubmitTimerActive;
+        submitTimerEndTime = playerData.submitTimerEndTime;
         boardData = new LobbyBoardData(playerData.boardData);
     }
 }

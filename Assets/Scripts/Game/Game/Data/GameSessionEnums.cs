@@ -5,6 +5,31 @@ public enum GameSessionState
     Completed
 }
 
+public enum GamePlayPhase
+{
+    WaitingForFirstPlayer,
+    FirstBallCountdown,
+    NextBallCountdown,
+    Ended
+}
+
+public enum GamePlayerStatus
+{
+    Eligible,
+    Won,
+    Lost
+}
+
+public enum GameEndReason
+{
+    None,
+    RuleCompleted,
+    BallPoolExhausted,
+    TimerExpired,
+    NoEligiblePlayers,
+    AuthorityEnded
+}
+
 public enum GameSessionOperationType
 {
     None,

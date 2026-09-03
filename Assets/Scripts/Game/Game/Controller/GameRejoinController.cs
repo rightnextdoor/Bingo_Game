@@ -8,6 +8,8 @@ public class GameRejoinController : MonoBehaviour
     [SerializeField] private Button yesButton;
     [SerializeField] private Button noButton;
 
+    private bool isDecliningGame;
+
     private void OnEnable()
     {
         if (yesButton != null)
@@ -56,10 +58,53 @@ public class GameRejoinController : MonoBehaviour
         GameSessionManager.instance.BeginPendingGameEntry();
     }
 
-    private void DeclineLastGame()
+    private async void DeclineLastGame()
     {
-        GameSessionManager.instance?.ClearCurrentGame(false);
-        UserManager.instance?.ClearLastGameId();
-        PopupManager.instance?.CloseActivePopup();
+        if (isDecliningGame)
+        {
+            return;
+        }
+
+        isDecliningGame = true;
+        SetButtonsInteractable(false);
+
+        try
+        {
+            UserData userData = UserManager.instance?.CurrentUser;
+
+            if (GameSessionManager.instance != null)
+            {
+                await GameSessionManager.instance.ClearPreviousSessionForFreshLobbyEntryAsync();
+            }
+            else
+            {
+                if (LobbyManager.instance != null && userData != null)
+                {
+                    await LobbyManager.instance.ClearPreviousLobbyMembershipAsync(userData);
+                }
+
+                UserManager.instance?.ClearLastGameId();
+            }
+
+            PopupManager.instance?.CloseActivePopup();
+        }
+        finally
+        {
+            isDecliningGame = false;
+            SetButtonsInteractable(true);
+        }
+    }
+
+    private void SetButtonsInteractable(bool isInteractable)
+    {
+        if (yesButton != null)
+        {
+            yesButton.interactable = isInteractable;
+        }
+
+        if (noButton != null)
+        {
+            noButton.interactable = isInteractable;
+        }
     }
 }

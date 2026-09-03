@@ -133,8 +133,25 @@ public class NetworkLobbyManager : MonoBehaviour
             return LobbyEntryResult.Failed(LobbyEntryFailureType.UserMissing, "The lobby user does not match the connected user.");
         }
 
-        Lobby existingUserLobby =
-            FindUserLobby(registeredUserId);
+        Lobby existingUserLobby = FindUserLobby(registeredUserId);
+
+        if (lobbySetupData.startFreshEntry)
+        {
+            NetworkGameSessionManager.instance?.RemovePlayerFromAnyGame(registeredUserId);
+
+            LobbyExitResult exitResult = RemovePlayerFromLobby(
+                registeredUserId,
+                LobbyPlayerExitReason.VoluntaryLeave);
+
+            if (exitResult == null || !exitResult.success)
+            {
+                return LobbyEntryResult.Failed(
+                    LobbyEntryFailureType.LobbyJoinFailed,
+                    exitResult?.failureMessage ?? "The previous network lobby could not be cleared.");
+            }
+
+            existingUserLobby = null;
+        }
 
         if (existingUserLobby != null)
         {

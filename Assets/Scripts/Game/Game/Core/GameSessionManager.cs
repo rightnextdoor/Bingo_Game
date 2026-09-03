@@ -72,6 +72,8 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
 
     private void OnEnable()
     {
+        LocalGameSessionManager.LocalGameSessionUpdated -= OnLocalGameSessionUpdated;
+        LocalGameSessionManager.LocalGameSessionUpdated += OnLocalGameSessionUpdated;
         NetworkGameSessionConnection.LocalGameCreationResultReceived -= ReceiveGameCreationResult;
         NetworkGameSessionConnection.LocalGameCreationResultReceived += ReceiveGameCreationResult;
         NetworkGameSessionConnection.LocalGameSessionUpdatedReceived -= OnNetworkGameSessionUpdated;
@@ -90,6 +92,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
 
     private void OnDisable()
     {
+        LocalGameSessionManager.LocalGameSessionUpdated -= OnLocalGameSessionUpdated;
         NetworkGameSessionConnection.LocalGameCreationResultReceived -= ReceiveGameCreationResult;
         NetworkGameSessionConnection.LocalGameSessionUpdatedReceived -= OnNetworkGameSessionUpdated;
         NetworkGameSessionConnection.LocalGamePlayerStateChangedReceived -= OnNetworkGamePlayerStateChanged;
@@ -101,6 +104,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
 
     private void OnDestroy()
     {
+        LocalGameSessionManager.LocalGameSessionUpdated -= OnLocalGameSessionUpdated;
         NetworkGameSessionConnection.LocalGameCreationResultReceived -= ReceiveGameCreationResult;
         NetworkGameSessionConnection.LocalGameSessionUpdatedReceived -= OnNetworkGameSessionUpdated;
         NetworkGameSessionConnection.LocalGamePlayerStateChangedReceived -= OnNetworkGamePlayerStateChanged;
@@ -377,6 +381,72 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         nextGameSessionSyncTime = 0f;
     }
 
+    public async Task ClearPreviousSessionForFreshLobbyEntryAsync()
+    {
+        if (isLeavingGame)
+        {
+            return;
+        }
+
+        UserData userData = UserManager.instance?.CurrentUser;
+
+        if (userData == null || !userData.HasUser)
+        {
+            ClearCurrentGame(true);
+            return;
+        }
+
+        entryAttemptVersion++;
+        isEnteringGame = false;
+        isGameSessionSyncPending = false;
+        isGameSimulationCreationPending = false;
+        isLeavingGame = true;
+
+        string gameId = CurrentGameId;
+
+        if (string.IsNullOrWhiteSpace(gameId))
+        {
+            gameId = userData.lastGameId;
+        }
+
+        if (!string.IsNullOrWhiteSpace(gameId))
+        {
+            SessionRuntimeType previousRuntimeType = ResolveRuntimeType(gameId);
+            IGameSessionService service = await WaitForGameServiceAsync(previousRuntimeType);
+
+            if (service != null)
+            {
+                try
+                {
+                    GameSessionResult result = await service.LeaveGameAsync(gameId, userData);
+
+                    if (result == null ||
+                        (!result.success && !IsAlreadyDetachedFailure(result.failureType)))
+                    {
+                        Debug.LogWarning($"[GameSessionManager] Previous Game cleanup could not be confirmed: {result?.failureMessage ?? "No result was returned."}");
+                    }
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogWarning($"[GameSessionManager] Previous Game cleanup failed: {exception.Message}");
+                }
+            }
+            else
+            {
+                Debug.LogWarning("[GameSessionManager] Previous Game cleanup was deferred because its service was unavailable.");
+            }
+        }
+
+        LobbyManager lobbyManager = LobbyManager.instance;
+
+        if (lobbyManager != null)
+        {
+            await lobbyManager.ClearPreviousLobbyMembershipAsync(userData);
+        }
+
+        ClearCurrentGame(true);
+    }
+
     public async void LeaveCurrentGame()
     {
         if (isLeavingGame)
@@ -562,6 +632,10 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         playerData.isConnected = updateData.isConnected;
         playerData.isGameSceneReady = updateData.isGameSceneReady;
         playerData.canRejoin = updateData.canRejoin;
+        playerData.gameStatus = updateData.gameStatus;
+        playerData.currentMatchScore = updateData.currentMatchScore;
+        playerData.isSubmitTimerActive = updateData.isSubmitTimerActive;
+        playerData.submitTimerEndTime = updateData.submitTimerEndTime;
         currentGameSession.revision = updateData.revision;
         GameSessionUpdated?.Invoke(new GameSessionData(currentGameSession));
     }
@@ -874,6 +948,13 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
                failureType == GameSessionFailureType.PlayerNotEligible;
     }
 
+    private bool IsAlreadyDetachedFailure(GameSessionFailureType failureType)
+    {
+        return failureType == GameSessionFailureType.GameNotFound ||
+               failureType == GameSessionFailureType.PlayerNotFound ||
+               failureType == GameSessionFailureType.PlayerNotEligible;
+    }
+
     private bool IsTransientGameSimulationSyncFailure(GameSessionResult result)
     {
         if (result == null)
@@ -1024,6 +1105,11 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
     }
 
     private void OnNetworkGameSessionUpdated(GameSessionData gameSessionData)
+    {
+        ApplyGameSessionUpdate(gameSessionData);
+    }
+
+    private void OnLocalGameSessionUpdated(GameSessionData gameSessionData)
     {
         ApplyGameSessionUpdate(gameSessionData);
     }

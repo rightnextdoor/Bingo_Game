@@ -454,6 +454,75 @@ public class LobbyManager : MonoBehaviour
 
     #region Lobby Exit
 
+    public async Task ClearPreviousLobbyMembershipAsync(UserData userData)
+    {
+        if (userData == null || !userData.HasUser)
+        {
+            return;
+        }
+
+        entryAttemptVersion++;
+        isEnteringLobby = false;
+        pendingLobbySetupData = null;
+        pendingNetworkLobbyViewData = null;
+
+        if (isLeavingLobby)
+        {
+            return;
+        }
+
+        isLeavingLobby = true;
+        string userId = userData.userId;
+        bool hadTrackedLobby = lobbyClientState.HasLobby;
+        SessionRuntimeType previousRuntimeType = runtimeType;
+        ILobbyService previousLobbyService = activeLobbyService ?? GetLobbyService(previousRuntimeType);
+
+        if (hadTrackedLobby && previousLobbyService != null && previousLobbyService.IsReady)
+        {
+            try
+            {
+                LobbyExitResult result = await previousLobbyService.LeaveLobbyAsync(userId);
+
+                if (result == null || !result.success)
+                {
+                    Debug.LogWarning($"[LobbyManager] Previous lobby cleanup could not be confirmed: {result?.failureMessage ?? "No result was returned."}");
+                }
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning($"[LobbyManager] Previous lobby cleanup failed: {exception.Message}");
+            }
+        }
+        else if (!hadTrackedLobby)
+        {
+            if (LocalLobbyManager.instance != null && LocalLobbyManager.instance.IsReady)
+            {
+                await LocalLobbyManager.instance.LeaveLobbyAsync(userId);
+            }
+
+            NetworkBootstrap networkBootstrap = NetworkBootstrap.instance;
+            NetworkLobbyService networkService = NetworkLobbyService.instance;
+
+            if (networkBootstrap != null && networkBootstrap.IsConnected &&
+                networkService != null && networkService.IsReady)
+            {
+                try
+                {
+                    await networkService.LeaveLobbyAsync(userId);
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogWarning($"[LobbyManager] Untracked network lobby cleanup failed: {exception.Message}");
+                }
+            }
+        }
+
+        ClearCurrentLobby();
+        isLeavingLobby = false;
+        returnToMainSceneOnEntryFailure = true;
+        SetEntryState(LobbyEntryState.Idle);
+    }
+
     public async void LeaveCurrentLobby()
     {
         await LeaveCurrentLobbyAsync(true);

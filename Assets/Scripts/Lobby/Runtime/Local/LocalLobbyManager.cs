@@ -126,6 +126,27 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
         UserData userData = lobbySetupData.userData;
         Lobby existingUserLobby = FindUserLobby(userData.userId);
 
+        if (lobbySetupData.startFreshEntry)
+        {
+            LocalGameSessionManager.instance?.RemovePlayerFromAnyGame(userData.userId);
+
+            if (existingUserLobby != null)
+            {
+                LobbyExitResult exitResult = existingUserLobby.Controller.RemovePlayer(
+                    userData.userId,
+                    LobbyPlayerExitReason.VoluntaryLeave);
+
+                if (exitResult == null || !exitResult.success)
+                {
+                    return LobbyEntryResult.Failed(
+                        LobbyEntryFailureType.LobbyJoinFailed,
+                        exitResult?.failureMessage ?? "The previous Solo lobby could not be cleared.");
+                }
+
+                existingUserLobby = null;
+            }
+        }
+
         if (existingUserLobby != null)
         {
             return LobbyEntryResult.SucceededLocal(existingUserLobby);

@@ -11,6 +11,7 @@ public class GameSessionData
     public SessionRuntimeType runtimeType;
     public MainMenuPlayMode playMode;
     public GameSessionState gameState;
+    public GamePlayController gamePlayController;
 
     public string lobbyName;
     public string roomCode;
@@ -29,13 +30,14 @@ public class GameSessionData
 
     public GameSessionData()
     {
-        dataVersion = 3;
+        dataVersion = 4;
         revision = 1;
         gameId = string.Empty;
         lobbyId = string.Empty;
         runtimeType = SessionRuntimeType.Local;
         playMode = MainMenuPlayMode.None;
         gameState = GameSessionState.Created;
+        gamePlayController = new GamePlayController();
         lobbyName = string.Empty;
         roomCode = string.Empty;
         hasPassword = false;
@@ -75,6 +77,14 @@ public class GameSessionData
         ballCountType = setupData.ballCountType;
         useFreeCell = setupData.useFreeCell;
 
+        GameSettings settings = GameSettings.instance;
+        gamePlayController.Initialize(
+            gameModeType,
+            ballCountType,
+            useFreeCell,
+            settings != null ? settings.FirstBallCountdownSeconds : GameSettings.DefaultFirstBallCountdownSeconds,
+            settings != null ? settings.NextBallCountdownSeconds : GameSettings.DefaultNextBallCountdownSeconds);
+
         if (setupData.players == null)
         {
             return;
@@ -100,6 +110,7 @@ public class GameSessionData
         runtimeType = gameSessionData.runtimeType;
         playMode = gameSessionData.playMode;
         gameState = gameSessionData.gameState;
+        gamePlayController = new GamePlayController(gameSessionData.gamePlayController);
         lobbyName = gameSessionData.lobbyName ?? string.Empty;
         roomCode = gameSessionData.roomCode ?? string.Empty;
         hasPassword = gameSessionData.hasPassword;
@@ -162,6 +173,10 @@ public class GamePlayerStateChangedData
     public bool isConnected;
     public bool isGameSceneReady;
     public bool canRejoin;
+    public GamePlayerStatus gameStatus;
+    public int currentMatchScore;
+    public bool isSubmitTimerActive;
+    public double submitTimerEndTime;
 
     public GamePlayerStateChangedData()
     {
@@ -185,6 +200,10 @@ public class GamePlayerStateChangedData
         isConnected = playerData.isConnected;
         isGameSceneReady = playerData.isGameSceneReady;
         canRejoin = playerData.canRejoin;
+        gameStatus = playerData.gameStatus;
+        currentMatchScore = playerData.currentMatchScore;
+        isSubmitTimerActive = playerData.isSubmitTimerActive;
+        submitTimerEndTime = playerData.submitTimerEndTime;
     }
 }
 

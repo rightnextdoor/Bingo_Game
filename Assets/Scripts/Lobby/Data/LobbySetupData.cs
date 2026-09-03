@@ -6,6 +6,7 @@ public class LobbySetupData
 {
     public MainMenuPlayMode playMode = MainMenuPlayMode.None;
 
+    public bool startFreshEntry;
     public bool isGameSimulation;
     public int gameSimulationPlayerNumber;
 
@@ -18,6 +19,7 @@ public class LobbySetupData
     public LobbySetupData()
     {
         playMode = MainMenuPlayMode.None;
+        startFreshEntry = false;
         isGameSimulation = false;
         gameSimulationPlayerNumber = 0;
 

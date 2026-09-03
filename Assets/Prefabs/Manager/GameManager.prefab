@@ -31,6 +31,7 @@ GameObject:
   - component: {fileID: 1122387465010203041}
   - component: {fileID: 1122387465010203042}
   - component: {fileID: 1122387465010203043}
+  - component: {fileID: 1122387465010203044}
   m_Layer: 0
   m_Name: GameManager
   m_TagString: Untagged
@@ -412,3 +413,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f4cad388a0cc4c1d9fd6ec0efb15165d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NetworkGameSessionService
+--- !u!114 &1122387465010203044
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8215340122209812844}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e84f9ca47b5149f9b759805116788bb9, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::GameSettings
+  firstBallCountdownSeconds: 10
+  nextBallCountdownSeconds: 10

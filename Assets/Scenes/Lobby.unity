@@ -11016,7 +11016,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 633853011194982010, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
       propertyPath: playMode
-      value: 3
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 1290380241951259866, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
       propertyPath: m_LocalPosition.x

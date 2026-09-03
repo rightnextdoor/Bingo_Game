@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using System.Collections.Generic;
 
 public interface IGameSessionService
 {
@@ -15,4 +16,11 @@ public interface IGameSessionService
         int cellIndex,
         bool isMarked,
         out GamePlayerMarkedCellChangedData updateData);
+    bool TrySubmitBingoCheck(
+        string gameId,
+        UserData userData,
+        LobbyBoardData boardData,
+        IReadOnlyList<int> markedCellIndices,
+        out GameBingoCheckResolvedData resolvedData);
+    bool TryCompleteBingoCheckAnimation(string gameId, UserData userData);
 }

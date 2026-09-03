@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -51,6 +52,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
     public event Action<GameSessionResult> GameEntryFailed;
     public event Action<GameSessionData> GameSessionUpdated;
     public event Action<GamePlayerMarkedCellChangedData> GamePlayerMarkedCellChanged;
+    public event Action<GameBingoCheckResolvedData> BingoCheckResolved;
     public event Action<string> GameDeleted;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -82,6 +84,8 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         NetworkGameSessionConnection.LocalGamePlayerStateChangedReceived += OnNetworkGamePlayerStateChanged;
         NetworkGameSessionConnection.LocalGamePlayerMarkedCellChangedReceived -= OnNetworkGamePlayerMarkedCellChanged;
         NetworkGameSessionConnection.LocalGamePlayerMarkedCellChangedReceived += OnNetworkGamePlayerMarkedCellChanged;
+        NetworkGameSessionConnection.LocalBingoCheckResolvedReceived -= OnNetworkBingoCheckResolved;
+        NetworkGameSessionConnection.LocalBingoCheckResolvedReceived += OnNetworkBingoCheckResolved;
         NetworkGameSessionConnection.LocalGamePlayerLeftReceived -= OnNetworkGamePlayerLeft;
         NetworkGameSessionConnection.LocalGamePlayerLeftReceived += OnNetworkGamePlayerLeft;
         NetworkGameSessionConnection.LocalGameDeletedReceived -= OnNetworkGameDeleted;
@@ -97,6 +101,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         NetworkGameSessionConnection.LocalGameSessionUpdatedReceived -= OnNetworkGameSessionUpdated;
         NetworkGameSessionConnection.LocalGamePlayerStateChangedReceived -= OnNetworkGamePlayerStateChanged;
         NetworkGameSessionConnection.LocalGamePlayerMarkedCellChangedReceived -= OnNetworkGamePlayerMarkedCellChanged;
+        NetworkGameSessionConnection.LocalBingoCheckResolvedReceived -= OnNetworkBingoCheckResolved;
         NetworkGameSessionConnection.LocalGamePlayerLeftReceived -= OnNetworkGamePlayerLeft;
         NetworkGameSessionConnection.LocalGameDeletedReceived -= OnNetworkGameDeleted;
         EndSceneEventSubscription();
@@ -109,6 +114,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         NetworkGameSessionConnection.LocalGameSessionUpdatedReceived -= OnNetworkGameSessionUpdated;
         NetworkGameSessionConnection.LocalGamePlayerStateChangedReceived -= OnNetworkGamePlayerStateChanged;
         NetworkGameSessionConnection.LocalGamePlayerMarkedCellChangedReceived -= OnNetworkGamePlayerMarkedCellChanged;
+        NetworkGameSessionConnection.LocalBingoCheckResolvedReceived -= OnNetworkBingoCheckResolved;
         NetworkGameSessionConnection.LocalGamePlayerLeftReceived -= OnNetworkGamePlayerLeft;
         NetworkGameSessionConnection.LocalGameDeletedReceived -= OnNetworkGameDeleted;
         EndSceneEventSubscription();
@@ -543,6 +549,62 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         }
 
         return true;
+    }
+
+    public bool SubmitCurrentPlayerBingoCheck(
+        LobbyBoardData boardData,
+        IReadOnlyList<int> markedCellIndices)
+    {
+        if (!HasEnteredGame || boardData == null)
+        {
+            return false;
+        }
+
+        UserData userData = UserManager.instance?.CurrentUser;
+        GamePlayerData playerData = GetCurrentPlayer();
+        IGameSessionService service = GetGameService(runtimeType);
+
+        if (userData == null ||
+            !userData.HasUser ||
+            playerData == null ||
+            playerData.gameStatus != GamePlayerStatus.Eligible ||
+            service == null ||
+            !service.IsReady ||
+            !service.TrySubmitBingoCheck(
+                currentGameSession.gameId,
+                userData,
+                boardData,
+                markedCellIndices,
+                out GameBingoCheckResolvedData resolvedData))
+        {
+            return false;
+        }
+
+        if (resolvedData != null)
+        {
+            BingoCheckResolved?.Invoke(resolvedData);
+        }
+
+        return true;
+    }
+
+    public bool CompleteCurrentPlayerBingoCheckAnimation()
+    {
+        if (!HasEnteredGame)
+        {
+            return false;
+        }
+
+        UserData userData = UserManager.instance?.CurrentUser;
+        IGameSessionService service = GetGameService(runtimeType);
+
+        return userData != null &&
+               userData.HasUser &&
+               service != null &&
+               service.IsReady &&
+               service.TryCompleteBingoCheckAnimation(
+                   currentGameSession.gameId,
+                   userData);
     }
 
     private bool TryApplySuccessfulResult(GameSessionResult result, out GameSessionResult failureResult)
@@ -1123,6 +1185,21 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         GamePlayerMarkedCellChangedData updateData)
     {
         ApplyGamePlayerMarkedCellChanged(updateData);
+    }
+
+    private void OnNetworkBingoCheckResolved(GameBingoCheckResolvedData resolvedData)
+    {
+        if (resolvedData == null ||
+            currentGameSession == null ||
+            !string.Equals(
+                resolvedData.gameId,
+                currentGameSession.gameId,
+                StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        BingoCheckResolved?.Invoke(resolvedData);
     }
 
     private void OnNetworkGamePlayerLeft(GamePlayerLeftData updateData)

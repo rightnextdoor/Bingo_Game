@@ -78,10 +78,7 @@ public class NetworkGameSessionManager : MonoBehaviour
         {
             GameSessionData gameSessionData = gameSessions[i];
 
-            if (gameSessionData == null ||
-                gameSessionData.gameState != GameSessionState.InProgress ||
-                gameSessionData.gamePlayController == null ||
-                !gameSessionData.gamePlayController.UpdateBallCallLoop())
+            if (!GameBingoCheckAuthority.UpdateSessionLoop(gameSessionData))
             {
                 continue;
             }
@@ -443,6 +440,74 @@ public class NetworkGameSessionManager : MonoBehaviour
                 userId,
                 cellIndex,
                 isMarked));
+    }
+
+    public GameBingoCheckResolvedData ProcessAuthorityBingoCheck(
+        ulong clientId,
+        string gameId,
+        GameBingoCheckRequestData requestData)
+    {
+        if (!CanProcessAuthorityOperation() ||
+            !connectionRegistry.TryGetBingoUserId(clientId, out string userId))
+        {
+            return GameBingoCheckResolvedData.Rejected(
+                gameId,
+                string.Empty,
+                0,
+                "The authoritative Game session manager could not resolve this player.");
+        }
+
+        GameSessionData gameSessionData = FindGame(gameId);
+
+        if (gameSessionData == null)
+        {
+            return GameBingoCheckResolvedData.Rejected(
+                gameId,
+                userId,
+                0,
+                "The network Game could not be found.");
+        }
+
+        GameBingoCheckResolvedData resolvedData =
+            GameBingoCheckAuthority.ProcessCheck(
+                gameSessionData,
+                userId,
+                requestData);
+
+        if (!resolvedData.wasAccepted)
+        {
+            return resolvedData;
+        }
+
+        gameSessionData.revision++;
+        resolvedData.revision = gameSessionData.revision;
+        resolvedData.matchCompleted = gameSessionData.gameState == GameSessionState.Completed;
+        BroadcastGameSessionUpdated(gameSessionData);
+        return resolvedData;
+    }
+
+    public bool ProcessAuthorityBingoCheckAnimationCompleted(
+        ulong clientId,
+        string gameId)
+    {
+        if (!CanProcessAuthorityOperation() ||
+            !connectionRegistry.TryGetBingoUserId(clientId, out string userId))
+        {
+            return false;
+        }
+
+        GameSessionData gameSessionData = FindGame(gameId);
+
+        if (!GameBingoCheckAuthority.CompleteBingoCheckAnimation(
+                gameSessionData,
+                userId))
+        {
+            return false;
+        }
+
+        gameSessionData.revision++;
+        BroadcastGameSessionUpdated(gameSessionData);
+        return true;
     }
 
     public bool DeleteGame(string gameId, bool notifyPlayers = true)

@@ -25,6 +25,7 @@ public class NetworkGameSessionConnection : NetworkBehaviour
     public static event Action<GameSessionData> LocalGameSessionUpdatedReceived;
     public static event Action<GamePlayerStateChangedData> LocalGamePlayerStateChangedReceived;
     public static event Action<GamePlayerMarkedCellChangedData> LocalGamePlayerMarkedCellChangedReceived;
+    public static event Action<GameBingoCheckResolvedData> LocalBingoCheckResolvedReceived;
     public static event Action<GamePlayerLeftData> LocalGamePlayerLeftReceived;
     public static event Action<string> LocalGameDeletedReceived;
 
@@ -36,6 +37,7 @@ public class NetworkGameSessionConnection : NetworkBehaviour
         LocalGameSessionUpdatedReceived = null;
         LocalGamePlayerStateChangedReceived = null;
         LocalGamePlayerMarkedCellChangedReceived = null;
+        LocalBingoCheckResolvedReceived = null;
         LocalGamePlayerLeftReceived = null;
         LocalGameDeletedReceived = null;
     }
@@ -299,6 +301,36 @@ public class NetworkGameSessionConnection : NetworkBehaviour
         return true;
     }
 
+    public bool RequestBingoCheck(
+        string gameId,
+        LobbyBoardData boardData,
+        IReadOnlyList<int> markedCellIndices)
+    {
+        if (!IsSpawned ||
+            !IsOwner ||
+            string.IsNullOrWhiteSpace(gameId) ||
+            boardData == null)
+        {
+            return false;
+        }
+
+        GameBingoCheckRequestData requestData =
+            new GameBingoCheckRequestData(boardData, markedCellIndices);
+        RequestBingoCheckRpc(gameId, JsonUtility.ToJson(requestData));
+        return true;
+    }
+
+    public bool RequestBingoCheckAnimationCompleted(string gameId)
+    {
+        if (!IsSpawned || !IsOwner || string.IsNullOrWhiteSpace(gameId))
+        {
+            return false;
+        }
+
+        RequestBingoCheckAnimationCompletedRpc(gameId);
+        return true;
+    }
+
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Owner)]
     private void RequestRejoinGameRpc(string requestId, string gameId, RpcParams rpcParams = default)
     {
@@ -452,6 +484,71 @@ public class NetworkGameSessionConnection : NetworkBehaviour
             gameId,
             cellIndex,
             isMarked);
+    }
+
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Owner)]
+    private void RequestBingoCheckRpc(
+        string gameId,
+        string requestJson,
+        RpcParams rpcParams = default)
+    {
+        ulong senderClientId = rpcParams.Receive.SenderClientId;
+        GameBingoCheckResolvedData resolvedData;
+
+        try
+        {
+            GameBingoCheckRequestData requestData =
+                JsonUtility.FromJson<GameBingoCheckRequestData>(requestJson);
+
+            resolvedData = NetworkGameSessionManager.instance != null &&
+                           NetworkGameSessionManager.instance.IsReady
+                ? NetworkGameSessionManager.instance.ProcessAuthorityBingoCheck(
+                    senderClientId,
+                    gameId,
+                    requestData)
+                : GameBingoCheckResolvedData.Rejected(
+                    gameId,
+                    string.Empty,
+                    0,
+                    "The authoritative network Game session manager is not ready.");
+        }
+        catch (Exception exception)
+        {
+            Debug.LogException(exception);
+            resolvedData = GameBingoCheckResolvedData.Rejected(
+                gameId,
+                string.Empty,
+                0,
+                "The Bingo check request could not be read by the authority.");
+        }
+
+        if (!TryGetServerConnection(
+                senderClientId,
+                out NetworkGameSessionConnection connection))
+        {
+            return;
+        }
+
+        string resultJson = JsonUtility.ToJson(resolvedData);
+        ScheduleAuthoritySend(
+            resolvedData?.gameId ?? gameId,
+            resultJson,
+            MultiplayerNetworkPriority.Critical,
+            MultiplayerNetworkWorkType.Event,
+            string.Empty,
+            () => TrySend(connection, () => connection.ReceiveBingoCheckResolvedRpc(
+                resultJson,
+                connection.RpcTarget.Single(senderClientId, RpcTargetUse.Temp))));
+    }
+
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Owner)]
+    private void RequestBingoCheckAnimationCompletedRpc(
+        string gameId,
+        RpcParams rpcParams = default)
+    {
+        NetworkGameSessionManager.instance?.ProcessAuthorityBingoCheckAnimationCompleted(
+            rpcParams.Receive.SenderClientId,
+            gameId);
     }
 
     public static bool TrySendGameCreationResult(ulong clientId, GameSessionResult result)
@@ -676,6 +773,27 @@ public class NetworkGameSessionConnection : NetworkBehaviour
             if (updateData != null)
             {
                 LocalGamePlayerMarkedCellChangedReceived?.Invoke(updateData);
+            }
+        }
+        catch (Exception exception)
+        {
+            Debug.LogException(exception);
+        }
+    }
+
+    [Rpc(SendTo.SpecifiedInParams)]
+    private void ReceiveBingoCheckResolvedRpc(
+        string resultJson,
+        RpcParams rpcParams = default)
+    {
+        try
+        {
+            GameBingoCheckResolvedData resolvedData =
+                JsonUtility.FromJson<GameBingoCheckResolvedData>(resultJson);
+
+            if (resolvedData != null)
+            {
+                LocalBingoCheckResolvedReceived?.Invoke(resolvedData);
             }
         }
         catch (Exception exception)

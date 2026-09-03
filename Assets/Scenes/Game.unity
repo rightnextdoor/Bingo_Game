@@ -10491,6 +10491,7 @@ GameObject:
   - component: {fileID: 1212900606}
   - component: {fileID: 1212900605}
   - component: {fileID: 1212900604}
+  - component: {fileID: 1249718314}
   m_Layer: 5
   m_Name: BoardSection
   m_TagString: Untagged
@@ -10860,6 +10861,23 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1226641029}
   m_CullTransparentMesh: 1
+--- !u!114 &1249718314
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1212900602}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fee62df935a43c64598eff2703c5a377, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoCheckAnimationController
+  boardController: {fileID: 2146000002}
+  cellCheckSeconds: 0.3
+  patternResultSeconds: 1
+  finalPatternSeconds: 2
+  failureColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!1 &1265577915
 GameObject:
   m_ObjectHideFlags: 0
@@ -11815,6 +11833,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GameController
   headerController: {fileID: 1435931208}
   boardSectionController: {fileID: 2146000001}
+  bingoCheckAnimationController: {fileID: 1249718314}
   playerListController: {fileID: 2077969041}
   gameInfoController: {fileID: 951137299}
   customPanelController: {fileID: 1522804293}
@@ -14212,7 +14231,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6207814632284159071, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
       propertyPath: playMode
-      value: 2
+      value: 3
       objectReference: {fileID: 0}
     - target: {fileID: 6207814632284159071, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
       propertyPath: roomSize

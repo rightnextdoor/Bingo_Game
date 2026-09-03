@@ -13,5 +13,8 @@ MonoBehaviour:
   m_Name: Blackout
   m_EditorClassIdentifier: Assembly-CSharp::BingoGameRuleData
   ruleType: 1
-  description: Cover every space on your bingo board. The player must complete the
-    full board to win.
+  description: Complete an enabled winning pattern and submit Bingo; the default
+    Blackout pattern requires every board space. A valid check starts a short tie
+    window, and every other eligible player who submits a valid Bingo during that
+    window also wins. An invalid Bingo submission makes that player lose. When the
+    match ends, every remaining eligible player loses.

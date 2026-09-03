@@ -1,128 +1,48 @@
 using System;
 using System.Collections.Generic;
-using UnityEngine;
 
-[DisallowMultipleComponent]
-public class BingoChecker : MonoBehaviour
+[Serializable]
+public class BingoChecker
 {
-    #region Fields
-
-    [SerializeField] private BingoPatternValidator validator;
-    [SerializeField] private BingoCheckAnimationController animationController;
-
+    private readonly BingoPatternValidator validator = new BingoPatternValidator();
     private readonly Dictionary<string, List<BingoCheckResult>> checkHistoryByPlayerId =
         new Dictionary<string, List<BingoCheckResult>>();
 
     private BingoCheckResult currentCheckResult;
-    private bool isChecking;
 
     public BingoCheckResult CurrentCheckResult => currentCheckResult;
-    public bool IsChecking => isChecking;
 
-    public event Action<BingoCheckResult> CheckCompleted;
-
-    #endregion
-
-    #region Check
-
-    public bool StartCheck(
+    public bool TryCheck(
         string playerId,
         LobbyBoardData boardData,
         IReadOnlyCollection<int> pressedCellIndices,
         IReadOnlyCollection<int> calledNumbers,
         IReadOnlyCollection<BingoPatternType> patternTypes)
     {
-        if (isChecking ||
-            validator == null ||
-            animationController == null ||
-            string.IsNullOrWhiteSpace(playerId) ||
-            boardData == null)
+        if (string.IsNullOrWhiteSpace(playerId) || boardData == null)
         {
             return false;
         }
 
         List<BingoCheckResult> checkHistory = GetOrCreateCheckHistory(playerId);
-
-        BingoCheckResult checkResult =
-            validator.Validate(
-                playerId,
-                boardData,
-                pressedCellIndices,
-                calledNumbers,
-                patternTypes,
-                checkHistory);
+        BingoCheckResult checkResult = validator.Validate(
+            playerId,
+            boardData,
+            pressedCellIndices,
+            calledNumbers,
+            patternTypes,
+            checkHistory);
 
         if (checkResult == null)
+        {
             return false;
+        }
 
         checkResult.checkNumber = checkHistory.Count + 1;
         checkHistory.Add(checkResult);
-
         currentCheckResult = checkResult;
-        isChecking = true;
-
-        PlayCheckAnimation(checkResult);
-
         return true;
     }
-
-    private void PlayCheckAnimation(BingoCheckResult checkResult)
-    {
-        animationController.PlayCheckAnimation(
-            checkResult,
-            CompleteCheckAnimation);
-    }
-
-    private void CompleteCheckAnimation()
-    {
-        if (!isChecking || currentCheckResult == null)
-            return;
-
-        BingoCheckResult completedResult = currentCheckResult;
-
-        currentCheckResult = null;
-        isChecking = false;
-
-        CheckCompleted?.Invoke(completedResult);
-    }
-
-    #endregion
-
-    #region Result Animations
-
-    public void ContinuePlaying(BingoCheckResult checkResult)
-    {
-        if (checkResult == null)
-            return;
-
-        animationController?.ContinuePlaying();
-    }
-
-    public void PlayPlayerWonAnimation(BingoCheckResult checkResult)
-    {
-        if (checkResult == null)
-            return;
-
-        List<BingoPatternCheckResult> winningPatterns =
-            GetWinningPatternsFromHistory(checkResult.playerId);
-
-        animationController?.PlayWinnerAnimation(winningPatterns);
-    }
-
-    public void PlayPlayerLostAnimation(BingoCheckResult checkResult)
-    {
-        if (checkResult == null)
-            return;
-
-        List<BingoPatternCheckResult> failedPatterns =
-            GetFailedPatterns(checkResult);
-
-        animationController?.PlayLoserAnimation(failedPatterns);
-    }
-
-    #endregion
-
-    #region Check History
 
     public IReadOnlyList<BingoCheckResult> GetCheckHistory(string playerId)
     {
@@ -137,19 +57,152 @@ public class BingoChecker : MonoBehaviour
 
     public void ClearCheckHistory(string playerId)
     {
-        if (string.IsNullOrWhiteSpace(playerId))
-            return;
-
-        checkHistoryByPlayerId.Remove(playerId);
+        if (!string.IsNullOrWhiteSpace(playerId))
+        {
+            checkHistoryByPlayerId.Remove(playerId);
+        }
     }
 
     public void ClearAllCheckHistory()
     {
         checkHistoryByPlayerId.Clear();
         currentCheckResult = null;
-        isChecking = false;
+    }
 
-        animationController?.StopAndClear();
+    public List<BingoPatternType> GetCheckedPatternTypes(string playerId)
+    {
+        List<BingoPatternType> checkedPatternTypes = new List<BingoPatternType>();
+        IReadOnlyList<BingoCheckResult> checkHistory = GetCheckHistory(playerId);
+
+        for (int checkIndex = 0; checkIndex < checkHistory.Count; checkIndex++)
+        {
+            BingoCheckResult checkResult = checkHistory[checkIndex];
+
+            if (checkResult?.patterns == null)
+            {
+                continue;
+            }
+
+            for (int patternIndex = 0; patternIndex < checkResult.patterns.Count; patternIndex++)
+            {
+                BingoPatternCheckResult patternResult = checkResult.patterns[patternIndex];
+
+                if (patternResult != null && !checkedPatternTypes.Contains(patternResult.patternType))
+                {
+                    checkedPatternTypes.Add(patternResult.patternType);
+                }
+            }
+        }
+
+        return checkedPatternTypes;
+    }
+
+    public List<BingoPatternType> GetAvailablePatternTypes(
+        string playerId,
+        IReadOnlyCollection<BingoPatternType> configuredPatternTypes)
+    {
+        List<BingoPatternType> availablePatternTypes = new List<BingoPatternType>();
+
+        if (configuredPatternTypes == null)
+        {
+            return availablePatternTypes;
+        }
+
+        IReadOnlyList<BingoCheckResult> checkHistory = GetCheckHistory(playerId);
+
+        foreach (BingoPatternType patternType in configuredPatternTypes)
+        {
+            if (!availablePatternTypes.Contains(patternType) &&
+                !IsPatternExhausted(checkHistory, patternType))
+            {
+                availablePatternTypes.Add(patternType);
+            }
+        }
+
+        return availablePatternTypes;
+    }
+
+    public void AddCheckedPatterns(
+        string playerId,
+        IReadOnlyCollection<BingoPatternCheckResult> patternResults)
+    {
+        if (string.IsNullOrWhiteSpace(playerId) || patternResults == null)
+        {
+            return;
+        }
+
+        BingoCheckResult checkResult = new BingoCheckResult
+        {
+            playerId = playerId
+        };
+
+        foreach (BingoPatternCheckResult patternResult in patternResults)
+        {
+            if (patternResult != null)
+            {
+                checkResult.patterns.Add(patternResult);
+            }
+        }
+
+        if (checkResult.patterns.Count == 0)
+        {
+            return;
+        }
+
+        List<BingoCheckResult> checkHistory = GetOrCreateCheckHistory(playerId);
+        checkResult.checkNumber = checkHistory.Count + 1;
+        checkHistory.Add(checkResult);
+        currentCheckResult = checkResult;
+    }
+
+    public List<BingoPatternCheckResult> GetWinningPatternsFromHistory(string playerId)
+    {
+        List<BingoPatternCheckResult> winningPatterns = new List<BingoPatternCheckResult>();
+        IReadOnlyList<BingoCheckResult> checkHistory = GetCheckHistory(playerId);
+
+        for (int checkIndex = 0; checkIndex < checkHistory.Count; checkIndex++)
+        {
+            BingoCheckResult checkResult = checkHistory[checkIndex];
+
+            if (checkResult?.patterns == null)
+            {
+                continue;
+            }
+
+            for (int patternIndex = 0; patternIndex < checkResult.patterns.Count; patternIndex++)
+            {
+                BingoPatternCheckResult patternResult = checkResult.patterns[patternIndex];
+
+                if (patternResult != null && patternResult.isWinningPattern)
+                {
+                    winningPatterns.Add(patternResult);
+                }
+            }
+        }
+
+        return winningPatterns;
+    }
+
+    public List<BingoPatternCheckResult> GetFailedPatterns(BingoCheckResult checkResult)
+    {
+        List<BingoPatternCheckResult> failedPatterns = new List<BingoPatternCheckResult>();
+
+        if (checkResult?.patterns == null)
+        {
+            return failedPatterns;
+        }
+
+        for (int i = 0; i < checkResult.patterns.Count; i++)
+        {
+            BingoPatternCheckResult patternResult = checkResult.patterns[i];
+
+            if (patternResult != null && !patternResult.isWinningPattern)
+            {
+                failedPatterns.Add(patternResult);
+            }
+        }
+
+        return failedPatterns;
     }
 
     private List<BingoCheckResult> GetOrCreateCheckHistory(string playerId)
@@ -163,52 +216,62 @@ public class BingoChecker : MonoBehaviour
         return checkHistory;
     }
 
-    #endregion
-
-    #region Pattern History
-
-    private List<BingoPatternCheckResult> GetWinningPatternsFromHistory(string playerId)
+    private bool IsPatternExhausted(
+        IReadOnlyList<BingoCheckResult> checkHistory,
+        BingoPatternType patternType)
     {
-        List<BingoPatternCheckResult> winningPatterns = new List<BingoPatternCheckResult>();
+        if (checkHistory == null)
+        {
+            return false;
+        }
 
-        IReadOnlyList<BingoCheckResult> checkHistory = GetCheckHistory(playerId);
+        if (patternType == BingoPatternType.SingleLine)
+        {
+            HashSet<BingoLineType> checkedLines = new HashSet<BingoLineType>();
+
+            for (int checkIndex = 0; checkIndex < checkHistory.Count; checkIndex++)
+            {
+                BingoCheckResult checkResult = checkHistory[checkIndex];
+
+                if (checkResult?.patterns == null)
+                {
+                    continue;
+                }
+
+                for (int patternIndex = 0; patternIndex < checkResult.patterns.Count; patternIndex++)
+                {
+                    BingoPatternCheckResult patternResult = checkResult.patterns[patternIndex];
+
+                    if (patternResult != null &&
+                        patternResult.patternType == BingoPatternType.SingleLine &&
+                        patternResult.primaryLine != BingoLineType.None)
+                    {
+                        checkedLines.Add(patternResult.primaryLine);
+                    }
+                }
+            }
+
+            return checkedLines.Count >= 10;
+        }
 
         for (int checkIndex = 0; checkIndex < checkHistory.Count; checkIndex++)
         {
             BingoCheckResult checkResult = checkHistory[checkIndex];
 
             if (checkResult?.patterns == null)
+            {
                 continue;
+            }
 
             for (int patternIndex = 0; patternIndex < checkResult.patterns.Count; patternIndex++)
             {
-                BingoPatternCheckResult patternResult = checkResult.patterns[patternIndex];
-
-                if (patternResult != null && patternResult.isWinningPattern)
-                    winningPatterns.Add(patternResult);
+                if (checkResult.patterns[patternIndex]?.patternType == patternType)
+                {
+                    return true;
+                }
             }
         }
 
-        return winningPatterns;
+        return false;
     }
-
-    private List<BingoPatternCheckResult> GetFailedPatterns(BingoCheckResult checkResult)
-    {
-        List<BingoPatternCheckResult> failedPatterns = new List<BingoPatternCheckResult>();
-
-        if (checkResult?.patterns == null)
-            return failedPatterns;
-
-        for (int i = 0; i < checkResult.patterns.Count; i++)
-        {
-            BingoPatternCheckResult patternResult = checkResult.patterns[i];
-
-            if (patternResult != null && !patternResult.isWinningPattern)
-                failedPatterns.Add(patternResult);
-        }
-
-        return failedPatterns;
-    }
-
-    #endregion
 }

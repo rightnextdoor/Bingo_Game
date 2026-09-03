@@ -427,4 +427,5 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GameSettings
   firstBallCountdownSeconds: 10
   nextBallCountdownSeconds: 10
+  terminalCheckWindowSeconds: 2
   ballSlideDurationSeconds: 1

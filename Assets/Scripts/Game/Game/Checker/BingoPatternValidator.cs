@@ -123,10 +123,32 @@ public class BingoCheckResult
 
         return winningPatterns;
     }
+
+    public List<BingoPatternCheckResult> GetFailedPatterns()
+    {
+        List<BingoPatternCheckResult> failedPatterns =
+            new List<BingoPatternCheckResult>();
+
+        if (patterns == null)
+        {
+            return failedPatterns;
+        }
+
+        for (int i = 0; i < patterns.Count; i++)
+        {
+            BingoPatternCheckResult patternResult = patterns[i];
+
+            if (patternResult != null && !patternResult.isWinningPattern)
+            {
+                failedPatterns.Add(patternResult);
+            }
+        }
+
+        return failedPatterns;
+    }
 }
 
-[DisallowMultipleComponent]
-public class BingoPatternValidator : MonoBehaviour
+public class BingoPatternValidator
 {
     #region Fields
 
@@ -299,6 +321,16 @@ public class BingoPatternValidator : MonoBehaviour
                         checkHistory);
                     break;
             }
+        }
+
+        if (!result.HasCheckedPatterns)
+        {
+            AddFailedSubmissionResult(
+                result,
+                boardData,
+                pressedCells,
+                calledNumberSet,
+                configuredPatterns);
         }
 
         return result;
@@ -532,6 +564,62 @@ public class BingoPatternValidator : MonoBehaviour
     #endregion
 
     #region Pattern Result
+
+    private void AddFailedSubmissionResult(
+        BingoCheckResult result,
+        LobbyBoardData boardData,
+        HashSet<int> pressedCells,
+        HashSet<int> calledNumbers,
+        IReadOnlyCollection<BingoPatternType> configuredPatterns)
+    {
+        if (result == null || boardData?.cellNumbers == null)
+        {
+            return;
+        }
+
+        BingoPatternType patternType = BingoPatternType.SingleLine;
+
+        foreach (BingoPatternType configuredPattern in configuredPatterns)
+        {
+            patternType = configuredPattern;
+            break;
+        }
+
+        BingoPatternCheckResult failedResult =
+            new BingoPatternCheckResult(
+                patternType,
+                BingoLineType.None,
+                BingoLineType.None)
+            {
+                isWinningPattern = false
+            };
+
+        List<int> sortedPressedCells = new List<int>(pressedCells);
+        sortedPressedCells.Sort();
+
+        for (int i = 0; i < sortedPressedCells.Count; i++)
+        {
+            int cellIndex = sortedPressedCells[i];
+
+            if (cellIndex < 0 || cellIndex >= boardData.cellNumbers.Count)
+            {
+                continue;
+            }
+
+            int number = boardData.cellNumbers[cellIndex];
+            bool isFree = boardData.usesFreeCell && cellIndex == FreeCellIndex;
+
+            failedResult.cells.Add(
+                new BingoCellCheckResult(
+                    cellIndex,
+                    number,
+                    isFree,
+                    true,
+                    isFree || calledNumbers.Contains(number)));
+        }
+
+        result.patterns.Add(failedResult);
+    }
 
     private BingoPatternCheckResult BuildPatternResult(
         BingoPatternType patternType,

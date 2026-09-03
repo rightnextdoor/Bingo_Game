@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -215,6 +216,52 @@ public class NetworkGameSessionService : MonoBehaviour, IGameSessionService
 
         return connection != null &&
                connection.RequestPlayerMarkedCell(gameId, cellIndex, isMarked);
+    }
+
+    public bool TrySubmitBingoCheck(
+        string gameId,
+        UserData userData,
+        LobbyBoardData boardData,
+        IReadOnlyList<int> markedCellIndices,
+        out GameBingoCheckResolvedData resolvedData)
+    {
+        resolvedData = null;
+
+        if (!isReady ||
+            networkBootstrap == null ||
+            !networkBootstrap.IsConnected ||
+            userData == null ||
+            !userData.HasUser ||
+            string.IsNullOrWhiteSpace(gameId) ||
+            boardData == null)
+        {
+            return false;
+        }
+
+        NetworkGameSessionConnection connection =
+            NetworkGameSessionConnection.GetLocalConnection();
+
+        return connection != null &&
+               connection.RequestBingoCheck(gameId, boardData, markedCellIndices);
+    }
+
+    public bool TryCompleteBingoCheckAnimation(string gameId, UserData userData)
+    {
+        if (!isReady ||
+            networkBootstrap == null ||
+            !networkBootstrap.IsConnected ||
+            userData == null ||
+            !userData.HasUser ||
+            string.IsNullOrWhiteSpace(gameId))
+        {
+            return false;
+        }
+
+        NetworkGameSessionConnection connection =
+            NetworkGameSessionConnection.GetLocalConnection();
+
+        return connection != null &&
+               connection.RequestBingoCheckAnimationCompleted(gameId);
     }
 
     private async Task<NetworkGameSessionConnection> WaitForLocalGameConnectionAsync()

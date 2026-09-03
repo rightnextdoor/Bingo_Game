@@ -149,15 +149,29 @@ public class BingoCheckAnimationController : MonoBehaviour
         {
             BingoPatternCheckResult patternResult = patterns[0];
 
-            Color color =
-                usePatternColors
-                    ? GetPatternColor(patternResult.patternType)
-                    : failureColor;
+            while (true)
+            {
+                boardController?.ClearCheckHighlights();
 
-            ShowPattern(patternResult, color);
+                Color color =
+                    usePatternColors
+                        ? GetPatternColor(patternResult.patternType)
+                        : failureColor;
 
-            animationRoutine = null;
-            yield break;
+                ShowPattern(patternResult, color);
+
+                if (finalPatternSeconds > 0f)
+                    yield return new WaitForSecondsRealtime(finalPatternSeconds);
+                else
+                    yield return null;
+
+                boardController?.ClearCheckHighlights();
+
+                if (finalPatternSeconds > 0f)
+                    yield return new WaitForSecondsRealtime(finalPatternSeconds);
+                else
+                    yield return null;
+            }
         }
 
         while (true)

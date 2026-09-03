@@ -11,6 +11,7 @@ public class GameController : MonoBehaviour
     [Header("Sections")]
     [SerializeField] private GameHeaderController headerController;
     [SerializeField] private GameBoardSectionController boardSectionController;
+    [SerializeField] private BingoCheckAnimationController bingoCheckAnimationController;
     [SerializeField] private LobbyPlayerListController playerListController;
     [SerializeField] private GameInfoController gameInfoController;
     [SerializeField] private LobbyCustomPanelController customPanelController;
@@ -22,8 +23,12 @@ public class GameController : MonoBehaviour
     private readonly List<PlayerListPlayerData> visiblePlayers = new List<PlayerListPlayerData>();
     private readonly Dictionary<string, HashSet<int>> markedCellsByUserId =
         new Dictionary<string, HashSet<int>>(StringComparer.Ordinal);
+    private readonly BingoBoardPatternTracker boardPatternTracker =
+        new BingoBoardPatternTracker();
     private GameBallDisplayController ballDisplayController;
     private Coroutine bindRoutine;
+    private string trackedPatternGameId = string.Empty;
+    private bool isBingoCheckPending;
 
     #endregion
 
@@ -37,6 +42,18 @@ public class GameController : MonoBehaviour
         {
             ballDisplayController =
                 transform.root.GetComponentInChildren<GameBallDisplayController>(true);
+        }
+
+        if (bingoCheckAnimationController == null)
+        {
+            bingoCheckAnimationController =
+                GetComponentInChildren<BingoCheckAnimationController>(true);
+        }
+
+        if (bingoCheckAnimationController == null && transform.root != null)
+        {
+            bingoCheckAnimationController =
+                transform.root.GetComponentInChildren<BingoCheckAnimationController>(true);
         }
     }
 
@@ -58,6 +75,8 @@ public class GameController : MonoBehaviour
         UnsubscribeFromHeader();
         UnsubscribeFromBoardSection();
         UnsubscribeFromGameSessionManager();
+        bingoCheckAnimationController?.StopAndClear();
+        isBingoCheckPending = false;
     }
 
     #endregion
@@ -83,6 +102,7 @@ public class GameController : MonoBehaviour
 
         headerController?.DisplayGameInfo(gameSessionData, gameName);
         ballDisplayController?.DisplayGameInfo(gameSessionData);
+        EnsureBoardPatternTracker(gameSessionData);
         DisplayPlayerBoard(gameSessionData);
         DisplayPlayerList(gameSessionData);
         DisplayGameModeInfo(gameSessionData, gameModeData, gameName, gameModeManager);
@@ -106,7 +126,7 @@ public class GameController : MonoBehaviour
 
         if (gameSessionData?.players != null)
         {
-            AddVisibleHost(gameSessionData.players, localPlayerIsHost);
+            AddVisibleHost(gameSessionData.players, gameSessionData, localPlayerIsHost);
 
             for (int i = 0; i < gameSessionData.players.Count; i++)
             {
@@ -117,14 +137,17 @@ public class GameController : MonoBehaviour
                     continue;
                 }
 
-                AddVisiblePlayer(playerData, localPlayerIsHost);
+                AddVisiblePlayer(playerData, gameSessionData, localPlayerIsHost);
             }
         }
 
         playerListController?.DisplayPlayers(visiblePlayers, visiblePlayers.Count);
     }
 
-    private void AddVisibleHost(IReadOnlyList<GamePlayerData> players, bool localPlayerIsHost)
+    private void AddVisibleHost(
+        IReadOnlyList<GamePlayerData> players,
+        GameSessionData gameSessionData,
+        bool localPlayerIsHost)
     {
         for (int i = 0; i < players.Count; i++)
         {
@@ -132,13 +155,16 @@ public class GameController : MonoBehaviour
 
             if (playerData != null && playerData.isLobbyHost)
             {
-                AddVisiblePlayer(playerData, localPlayerIsHost);
+                AddVisiblePlayer(playerData, gameSessionData, localPlayerIsHost);
                 return;
             }
         }
     }
 
-    private void AddVisiblePlayer(GamePlayerData gamePlayerData, bool localPlayerIsHost)
+    private void AddVisiblePlayer(
+        GamePlayerData gamePlayerData,
+        GameSessionData gameSessionData,
+        bool localPlayerIsHost)
     {
         if (gamePlayerData == null || !gamePlayerData.HasValidPlayer || !gamePlayerData.isGameSceneReady)
         {
@@ -155,6 +181,9 @@ public class GameController : MonoBehaviour
             isReady = true,
             boardData = new LobbyBoardData(gamePlayerData.boardData),
             markedCellIndices = GetMarkedCellSnapshot(gamePlayerData.userId),
+            gameplayStatusText = ResolveGameplayStatusText(
+                gamePlayerData,
+                gameSessionData),
             canKick = false,
             showBotIcon = localPlayerIsHost && gamePlayerData.userTag == UserTag.Bot,
             showReadyIcon = false
@@ -214,6 +243,9 @@ public class GameController : MonoBehaviour
     {
         visiblePlayers.Clear();
         markedCellsByUserId.Clear();
+        boardPatternTracker.Clear();
+        trackedPatternGameId = string.Empty;
+        isBingoCheckPending = false;
         headerController?.ClearHeader();
         boardSectionController?.ClearBoard();
         boardSectionController?.SetBoardInteractable(false);
@@ -247,8 +279,17 @@ public class GameController : MonoBehaviour
             boardSectionController.ClearBoard();
         }
 
-        boardSectionController.SetBoardInteractable(boardDisplayed);
-        boardSectionController.SetBingoInteractable(boardDisplayed);
+        bool playerCanUseBoard =
+            boardDisplayed &&
+            localPlayer.gameStatus == GamePlayerStatus.Eligible &&
+            gameSessionData.gameState != GameSessionState.Completed;
+        bool playerCanSubmitBingo =
+            playerCanUseBoard &&
+            !isBingoCheckPending &&
+            gameSessionData.gamePlayController?.CanAcceptBingoChecks == true;
+
+        boardSectionController.SetBoardInteractable(playerCanUseBoard);
+        boardSectionController.SetBingoInteractable(playerCanSubmitBingo);
     }
 
     private void SubscribeToBoardSection()
@@ -294,39 +335,28 @@ public class GameController : MonoBehaviour
             return;
         }
 
+        if (isBingoCheckPending)
+        {
+            return;
+        }
+
         List<int> sortedCellIndices = markedCellIndices != null
             ? new List<int>(markedCellIndices)
             : new List<int>();
-
         sortedCellIndices.Sort();
 
-        List<string> selectedCells = new List<string>();
-        const string columnLetters = "BINGO";
+        isBingoCheckPending = true;
+        boardSectionController?.SetBingoInteractable(false);
 
-        for (int i = 0; i < sortedCellIndices.Count; i++)
+        if (GameSessionManager.instance == null ||
+            !GameSessionManager.instance.SubmitCurrentPlayerBingoCheck(
+                new LobbyBoardData(boardData),
+                sortedCellIndices))
         {
-            int cellIndex = sortedCellIndices[i];
-
-            if (cellIndex < 0 || cellIndex >= boardData.cellNumbers.Count)
-            {
-                continue;
-            }
-
-            if (boardData.usesFreeCell && cellIndex == 12)
-            {
-                selectedCells.Add("FREE");
-                continue;
-            }
-
-            int columnIndex = cellIndex % columnLetters.Length;
-            selectedCells.Add($"{columnLetters[columnIndex]}{boardData.cellNumbers[cellIndex]}");
+            isBingoCheckPending = false;
+            DisplayPlayerBoard(GameSessionManager.instance?.CurrentGameSession);
+            Debug.LogWarning("[GameController] The Bingo check request could not be sent.");
         }
-
-        string selectedCellText = selectedCells.Count > 0
-            ? string.Join(", ", selectedCells)
-            : "None";
-
-        Debug.Log($"[GameController] Bingo pressed. Selected cells: {selectedCellText}");
     }
 
     #endregion
@@ -351,6 +381,9 @@ public class GameController : MonoBehaviour
 
         gameSessionManager.GamePlayerMarkedCellChanged -= OnGamePlayerMarkedCellChanged;
         gameSessionManager.GamePlayerMarkedCellChanged += OnGamePlayerMarkedCellChanged;
+
+        gameSessionManager.BingoCheckResolved -= OnBingoCheckResolved;
+        gameSessionManager.BingoCheckResolved += OnBingoCheckResolved;
 
         DisplayGameInfo(gameSessionManager.CurrentGameSession);
         bindRoutine = null;
@@ -405,12 +438,137 @@ public class GameController : MonoBehaviour
         return snapshot;
     }
 
+    private void OnBingoCheckResolved(GameBingoCheckResolvedData resolvedData)
+    {
+        string localUserId = UserManager.instance?.UserId;
+
+        if (resolvedData == null ||
+            string.IsNullOrWhiteSpace(localUserId) ||
+            (!string.IsNullOrWhiteSpace(resolvedData.userId) &&
+             !string.Equals(resolvedData.userId, localUserId, StringComparison.Ordinal)))
+        {
+            return;
+        }
+
+        isBingoCheckPending = false;
+
+        if (!resolvedData.wasAccepted)
+        {
+            DisplayPlayerBoard(GameSessionManager.instance?.CurrentGameSession);
+            Debug.LogWarning(
+                $"[GameController] Bingo check rejected: {resolvedData.failureMessage}");
+            return;
+        }
+
+        boardPatternTracker.ApplyAvailablePatterns(
+            resolvedData.availablePatternTypes);
+        DisplayPlayerBoard(GameSessionManager.instance?.CurrentGameSession);
+
+        if (resolvedData.playerStatus != GamePlayerStatus.Eligible)
+        {
+            boardSectionController?.SetBoardInteractable(false);
+            boardSectionController?.SetBingoInteractable(false);
+        }
+
+        if (resolvedData.checkResult == null || bingoCheckAnimationController == null)
+        {
+            NotifyBingoCheckAnimationCompleted();
+            return;
+        }
+
+        BingoCheckResult checkResult = resolvedData.checkResult;
+        GamePlayerStatus playerStatus = resolvedData.playerStatus;
+        bingoCheckAnimationController.PlayCheckAnimation(
+            checkResult,
+            () => PlayFinalManualCheckAnimation(checkResult, playerStatus));
+    }
+
+    private void PlayFinalManualCheckAnimation(
+        BingoCheckResult checkResult,
+        GamePlayerStatus playerStatus)
+    {
+        if (checkResult == null || bingoCheckAnimationController == null)
+        {
+            NotifyBingoCheckAnimationCompleted();
+            return;
+        }
+
+        switch (playerStatus)
+        {
+            case GamePlayerStatus.Won:
+                bingoCheckAnimationController.PlayWinnerAnimation(
+                    checkResult.GetWinningPatterns());
+                break;
+
+            case GamePlayerStatus.Lost:
+                bingoCheckAnimationController.PlayLoserAnimation(
+                    checkResult.GetFailedPatterns());
+                break;
+        }
+
+        NotifyBingoCheckAnimationCompleted();
+    }
+
+    private void NotifyBingoCheckAnimationCompleted()
+    {
+        if (GameSessionManager.instance == null ||
+            !GameSessionManager.instance.CompleteCurrentPlayerBingoCheckAnimation())
+        {
+            Debug.LogWarning(
+                "[GameController] The completed Bingo check animation could not be sent to the Game authority.");
+        }
+    }
+
+    private void EnsureBoardPatternTracker(GameSessionData gameSessionData)
+    {
+        if (gameSessionData == null || string.IsNullOrWhiteSpace(gameSessionData.gameId))
+        {
+            boardPatternTracker.Clear();
+            trackedPatternGameId = string.Empty;
+            return;
+        }
+
+        if (string.Equals(
+                trackedPatternGameId,
+                gameSessionData.gameId,
+                StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        trackedPatternGameId = gameSessionData.gameId;
+        boardPatternTracker.Setup(gameSessionData.patternTypes);
+    }
+
+    private static string ResolveGameplayStatusText(
+        GamePlayerData playerData,
+        GameSessionData gameSessionData)
+    {
+        if (playerData == null || playerData.gameStatus == GamePlayerStatus.Eligible)
+        {
+            return string.Empty;
+        }
+
+        if (playerData.gameStatus == GamePlayerStatus.Won)
+        {
+            return "WON";
+        }
+
+        bool isDeath =
+            gameSessionData?.gameModeType == BingoGameModeType.Death ||
+            (gameSessionData?.hasRule == true &&
+             gameSessionData.ruleType == BingoRuleType.Elimination);
+
+        return isDeath ? "OUT" : "LOST";
+    }
+
     private void UnsubscribeFromGameSessionManager()
     {
         if (GameSessionManager.instance != null)
         {
             GameSessionManager.instance.GameSessionUpdated -= OnGameSessionUpdated;
             GameSessionManager.instance.GamePlayerMarkedCellChanged -= OnGamePlayerMarkedCellChanged;
+            GameSessionManager.instance.BingoCheckResolved -= OnBingoCheckResolved;
         }
     }
 

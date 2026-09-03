@@ -30,7 +30,7 @@ public class GameSessionData
 
     public GameSessionData()
     {
-        dataVersion = 4;
+        dataVersion = 5;
         revision = 1;
         gameId = string.Empty;
         lobbyId = string.Empty;
@@ -83,7 +83,9 @@ public class GameSessionData
             ballCountType,
             useFreeCell,
             settings != null ? settings.FirstBallCountdownSeconds : GameSettings.DefaultFirstBallCountdownSeconds,
-            settings != null ? settings.NextBallCountdownSeconds : GameSettings.DefaultNextBallCountdownSeconds);
+            settings != null ? settings.NextBallCountdownSeconds : GameSettings.DefaultNextBallCountdownSeconds,
+            hasRule,
+            ruleType);
 
         if (setupData.players == null)
         {
@@ -160,6 +162,51 @@ public class GameSessionData
     {
         GamePlayerData playerData = GetPlayer(userId);
         return playerData != null && players.Remove(playerData);
+    }
+
+    public int GetPlayerCountWithStatus(GamePlayerStatus status)
+    {
+        if (players == null)
+        {
+            return 0;
+        }
+
+        int count = 0;
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            if (players[i] != null && players[i].gameStatus == status)
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    public bool FinalizeEligiblePlayers(GamePlayerStatus finalStatus)
+    {
+        if (players == null || finalStatus == GamePlayerStatus.Eligible)
+        {
+            return false;
+        }
+
+        bool changed = false;
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            GamePlayerData playerData = players[i];
+
+            if (playerData == null || playerData.gameStatus != GamePlayerStatus.Eligible)
+            {
+                continue;
+            }
+
+            playerData.gameStatus = finalStatus;
+            changed = true;
+        }
+
+        return changed;
     }
 }
 
@@ -263,5 +310,70 @@ public class GamePlayerMarkedCellChangedData
         this.userId = userId ?? string.Empty;
         this.cellIndex = cellIndex;
         this.isMarked = isMarked;
+    }
+}
+
+[Serializable]
+public class GameBingoCheckRequestData
+{
+    public LobbyBoardData boardData;
+    public List<int> markedCellIndices;
+
+    public GameBingoCheckRequestData()
+    {
+        boardData = new LobbyBoardData();
+        markedCellIndices = new List<int>();
+    }
+
+    public GameBingoCheckRequestData(
+        LobbyBoardData boardData,
+        IReadOnlyCollection<int> markedCellIndices) : this()
+    {
+        this.boardData = new LobbyBoardData(boardData);
+
+        if (markedCellIndices != null)
+        {
+            this.markedCellIndices.AddRange(markedCellIndices);
+            this.markedCellIndices.Sort();
+        }
+    }
+}
+
+[Serializable]
+public class GameBingoCheckResolvedData
+{
+    public string gameId;
+    public string userId;
+    public long revision;
+    public bool wasAccepted;
+    public string failureMessage;
+    public BingoCheckResult checkResult;
+    public GamePlayerStatus playerStatus;
+    public bool matchCompleted;
+    public List<BingoPatternType> availablePatternTypes;
+
+    public GameBingoCheckResolvedData()
+    {
+        gameId = string.Empty;
+        userId = string.Empty;
+        failureMessage = string.Empty;
+        playerStatus = GamePlayerStatus.Eligible;
+        availablePatternTypes = new List<BingoPatternType>();
+    }
+
+    public static GameBingoCheckResolvedData Rejected(
+        string gameId,
+        string userId,
+        long revision,
+        string failureMessage)
+    {
+        return new GameBingoCheckResolvedData
+        {
+            gameId = gameId ?? string.Empty,
+            userId = userId ?? string.Empty,
+            revision = revision,
+            wasAccepted = false,
+            failureMessage = failureMessage ?? string.Empty
+        };
     }
 }

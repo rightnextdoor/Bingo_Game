@@ -22,6 +22,7 @@ public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
     [SerializeField] private LobbyPlayerBoardPreviewController boardPreviewController;
 
     [Header("Status")]
+    [SerializeField] private TMP_Text gameplayStatusText;
     [SerializeField] private Image botIconImage;
     [SerializeField] private Image readyCheckmarkImage;
 
@@ -86,6 +87,7 @@ public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
 
         SetStatusIcon(botIconImage, UIIconType.Bot, playerData.showBotIcon);
         SetStatusIcon(readyCheckmarkImage, UIIconType.LobbyCheckmark, playerData.showReadyIcon && playerData.isReady);
+        SetGameplayStatus(playerData.gameplayStatusText);
 
         SetKickButtonState(playerData.canKick);
         SetHighlighted(isHighlighted);
@@ -115,6 +117,7 @@ public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
 
         SetImageActive(botIconImage, false);
         SetImageActive(readyCheckmarkImage, false);
+        SetGameplayStatus(string.Empty);
 
         SetKickButtonState(false);
         SetHighlighted(false);
@@ -169,6 +172,20 @@ public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
     #endregion
 
     #region Status
+
+    private void SetGameplayStatus(string statusText)
+    {
+        if (gameplayStatusText == null)
+        {
+            return;
+        }
+
+        bool hasStatus = !string.IsNullOrWhiteSpace(statusText);
+        gameplayStatusText.text = hasStatus
+            ? statusText.Trim().ToUpperInvariant()
+            : string.Empty;
+        gameplayStatusText.gameObject.SetActive(hasStatus);
+    }
 
     private void SetStatusIcon(Image iconImage, UIIconType iconType, bool isVisible)
     {

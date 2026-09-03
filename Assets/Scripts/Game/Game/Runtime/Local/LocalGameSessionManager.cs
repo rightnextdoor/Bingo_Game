@@ -67,10 +67,7 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
         {
             GameSessionData gameSessionData = gameSessions[i];
 
-            if (gameSessionData == null ||
-                gameSessionData.gameState != GameSessionState.InProgress ||
-                gameSessionData.gamePlayController == null ||
-                !gameSessionData.gamePlayController.UpdateBallCallLoop())
+            if (!GameBingoCheckAuthority.UpdateSessionLoop(gameSessionData))
             {
                 continue;
             }
@@ -423,6 +420,77 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
             cellIndex,
             isMarked);
         return true;
+    }
+
+    public bool TrySubmitBingoCheck(
+        string gameId,
+        UserData userData,
+        LobbyBoardData boardData,
+        IReadOnlyList<int> markedCellIndices,
+        out GameBingoCheckResolvedData resolvedData)
+    {
+        resolvedData = null;
+
+        if (!isReady || userData == null || !userData.HasUser)
+        {
+            return false;
+        }
+
+        GameSessionData gameSessionData = FindGame(gameId);
+
+        if (gameSessionData == null)
+        {
+            resolvedData = GameBingoCheckResolvedData.Rejected(
+                gameId,
+                userData.userId,
+                0,
+                "The local Game could not be found.");
+            return true;
+        }
+
+        resolvedData = GameBingoCheckAuthority.ProcessCheck(
+            gameSessionData,
+            userData.userId,
+            new GameBingoCheckRequestData(boardData, markedCellIndices));
+
+        if (!resolvedData.wasAccepted)
+        {
+            return true;
+        }
+
+        gameSessionData.revision++;
+        resolvedData.revision = gameSessionData.revision;
+        resolvedData.matchCompleted = gameSessionData.gameState == GameSessionState.Completed;
+        LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData));
+        return true;
+    }
+
+    public bool TryCompleteBingoCheckAnimation(string gameId, UserData userData)
+    {
+        if (!isReady || userData == null || !userData.HasUser)
+        {
+            return false;
+        }
+
+        GameSessionData gameSessionData = FindGame(gameId);
+        GamePlayerData playerData = gameSessionData?.GetPlayer(userData.userId);
+
+        if (gameSessionData == null ||
+            playerData == null)
+        {
+            return false;
+        }
+
+        if (GameBingoCheckAuthority.CompleteBingoCheckAnimation(
+                gameSessionData,
+                userData.userId))
+        {
+            gameSessionData.revision++;
+            LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData));
+            return true;
+        }
+
+        return false;
     }
 
     public bool DeleteGame(string gameId)

@@ -22,11 +22,23 @@ public class GameController : MonoBehaviour
     private readonly List<PlayerListPlayerData> visiblePlayers = new List<PlayerListPlayerData>();
     private readonly Dictionary<string, HashSet<int>> markedCellsByUserId =
         new Dictionary<string, HashSet<int>>(StringComparer.Ordinal);
+    private GameBallDisplayController ballDisplayController;
     private Coroutine bindRoutine;
 
     #endregion
 
     #region Unity Lifecycle
+
+    private void Awake()
+    {
+        ballDisplayController = GetComponentInChildren<GameBallDisplayController>(true);
+
+        if (ballDisplayController == null && transform.root != null)
+        {
+            ballDisplayController =
+                transform.root.GetComponentInChildren<GameBallDisplayController>(true);
+        }
+    }
 
     private void OnEnable()
     {
@@ -70,6 +82,7 @@ public class GameController : MonoBehaviour
             : gameSessionData.gameModeType.ToString();
 
         headerController?.DisplayGameInfo(gameSessionData, gameName);
+        ballDisplayController?.DisplayGameInfo(gameSessionData);
         DisplayPlayerBoard(gameSessionData);
         DisplayPlayerList(gameSessionData);
         DisplayGameModeInfo(gameSessionData, gameModeData, gameName, gameModeManager);
@@ -208,6 +221,7 @@ public class GameController : MonoBehaviour
         playerListController?.DisplayPlayers(visiblePlayers, 0);
         gameInfoController?.ClearInfo();
         customPanelController?.DisplayLobbyInfo(null);
+        ballDisplayController?.ClearDisplay();
     }
 
     #endregion

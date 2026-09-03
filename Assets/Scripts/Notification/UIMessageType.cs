@@ -7,4 +7,5 @@ public enum UIMessageType
     NotEnoughPlayers,
     GameAboutToStart,
     ChatHelp,
+    BallCalled,
 }

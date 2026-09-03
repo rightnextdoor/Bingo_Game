@@ -294,9 +294,6 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
         {
             if (lobbyController != null)
             {
-                lobbyController.FinalCountdownStarted -= OnLocalFinalCountdownStarted;
-                lobbyController.FinalCountdownStarted += OnLocalFinalCountdownStarted;
-
                 lobbyController.RefreshViews();
             }
 
@@ -312,9 +309,6 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
             return;
         }
 
-        lobbyController.FinalCountdownStarted -= OnLocalFinalCountdownStarted;
-        lobbyController.FinalCountdownStarted += OnLocalFinalCountdownStarted;
-
         lobbyController.BindView(this);
     }
 
@@ -325,17 +319,10 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
             return;
         }
 
-        lobbyController.FinalCountdownStarted -= OnLocalFinalCountdownStarted;
         lobbyController.UnbindView(this);
 
         lobbyController = null;
     }
-
-    private void OnLocalFinalCountdownStarted(LobbyController controller)
-    {
-        NotificationService.instance?.SendLocal(UIMessageType.GameAboutToStart);
-    }
-
 
     private void SaveCurrentHostLobbySettings(LobbyManager lobbyManager)
     {

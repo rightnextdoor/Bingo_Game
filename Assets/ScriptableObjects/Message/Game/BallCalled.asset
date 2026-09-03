@@ -10,17 +10,23 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 6b33075be95cdb746abd148dfc70db25, type: 3}
-  m_Name: GameStart
+  m_Name: BallCalled
   m_EditorClassIdentifier: Assembly-CSharp::UIMessageData
-  messageType: 5
-  messageText: 
-  imageMode: 0
+  messageType: 7
+  messageText: 'Ball Called: {letter} {number}'
+  imageMode: 2
   customImage: {fileID: 0}
   fontAsset: {fileID: 0}
   fontSize: 40
-  textColor: {r: 0.94509804, g: 0.9529412, b: 0.9607843, a: 1}
+  textColor: {r: 0, g: 0, b: 0, a: 1}
   numberColor: {r: 0.078431375, g: 0.078431375, b: 0.078431375, a: 1}
-  backgroundColor: {r: 0.22745098, g: 0.25882354, b: 0.3137255, a: 1}
+  backgroundColor: {r: 0.96226406, g: 0.96226406, b: 0.96226406, a: 0.14117648}
   displaySeconds: 3
   fadeOutSeconds: 0.35
+  tooltipOpenDelay: 0
+  tooltipMinimumWidth: 120
+  tooltipMaximumWidth: 360
+  tooltipMinimumHeight: 44
+  tooltipMaximumHeight: 220
+  tooltipGrowthDirection: 0
   tooltipOffset: {x: 18, y: -18}

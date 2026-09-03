@@ -11,6 +11,7 @@ public class GamePlayController
     [SerializeField] private BingoGameModeType gameModeType;
     [SerializeField] private BingoBallCountType ballCountType;
     [SerializeField] private bool useFreeCell;
+    [SerializeField] private GameBallController ballController = new GameBallController();
 
     [Header("Timers")]
     [SerializeField] private GamePlayTimer ballTimer = new GamePlayTimer();
@@ -25,6 +26,7 @@ public class GamePlayController
     public BingoGameModeType GameModeType => gameModeType;
     public BingoBallCountType BallCountType => ballCountType;
     public bool UseFreeCell => useFreeCell;
+    public GameBallController BallController => ballController;
     public GamePlayTimer BallTimer => ballTimer;
     public GamePlayTimer RiskTimer => riskTimer;
     public int BallCallRequestCount => ballCallRequestCount;
@@ -58,6 +60,7 @@ public class GamePlayController
         gameModeType = controller.gameModeType;
         ballCountType = controller.ballCountType;
         useFreeCell = controller.useFreeCell;
+        ballController = new GameBallController(controller.ballController);
         ballTimer = new GamePlayTimer(controller.ballTimer);
         riskTimer = new GamePlayTimer(controller.riskTimer);
         firstBallCountdownSeconds = controller.firstBallCountdownSeconds;
@@ -80,6 +83,9 @@ public class GamePlayController
         phase = GamePlayPhase.WaitingForFirstPlayer;
         endReason = GameEndReason.None;
         ballCallRequestCount = 0;
+
+        ballController ??= new GameBallController();
+        ballController.Setup(ballCountType);
 
         ballTimer ??= new GamePlayTimer();
         riskTimer ??= new GamePlayTimer();
@@ -125,8 +131,20 @@ public class GamePlayController
             return false;
         }
 
+        ballController ??= new GameBallController();
+
+        if (!ballController.IsInitialized || ballController.BallCountType != ballCountType)
+        {
+            ballController.Setup(ballCountType);
+        }
+
+        if (!ballController.TryGetNextNumber(out int calledNumber))
+        {
+            EndGame(GameEndReason.BallPoolExhausted);
+            return false;
+        }
+
         ballCallRequestCount++;
-        Debug.Log($"[GamePlayController] Ball call {ballCallRequestCount}.");
         return true;
     }
 
@@ -141,6 +159,7 @@ public class GamePlayController
         endReason = reason;
         ballTimer?.Stop();
         riskTimer?.Stop();
+        Debug.Log("[GamePlayController] Game is over.");
         return true;
     }
 }

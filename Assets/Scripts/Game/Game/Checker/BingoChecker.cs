@@ -39,9 +39,43 @@ public class BingoChecker
         }
 
         checkResult.checkNumber = checkHistory.Count + 1;
+        ApplyCurrentCheckScores(checkResult);
         checkHistory.Add(checkResult);
         currentCheckResult = checkResult;
         return true;
+    }
+
+    private static void ApplyCurrentCheckScores(BingoCheckResult checkResult)
+    {
+        checkResult.currentCheckPatternPoints = 0;
+
+        if (checkResult.patterns == null || GameScoreManager.instance == null)
+        {
+            return;
+        }
+
+        long currentCheckPoints = 0;
+
+        for (int i = 0; i < checkResult.patterns.Count; i++)
+        {
+            BingoPatternCheckResult patternResult = checkResult.patterns[i];
+
+            if (patternResult == null || !patternResult.isWinningPattern)
+            {
+                continue;
+            }
+
+            patternResult.scorePoints = GameScoreManager.instance.GetPatternPoints(
+                patternResult.patternType);
+            currentCheckPoints += patternResult.scorePoints;
+        }
+
+        int maximumScore = GameSettings.instance != null
+            ? GameSettings.instance.MaximumScore
+            : UserStats.DefaultMaximumScore;
+        checkResult.currentCheckPatternPoints = currentCheckPoints >= maximumScore
+            ? maximumScore
+            : (int)currentCheckPoints;
     }
 
     public IReadOnlyList<BingoCheckResult> GetCheckHistory(string playerId)

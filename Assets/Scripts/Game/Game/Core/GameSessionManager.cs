@@ -28,6 +28,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
     private GameSceneManager gameSceneManager;
     private bool isSubscribedToGameSceneManager;
     private bool isSceneReadyCheckRegistered;
+    private readonly HashSet<string> appliedFinalScoreKeys = new();
 
     public string CurrentGameId => currentGameSession?.gameId ?? string.Empty;
     public string CurrentLobbyId => currentGameSession?.lobbyId ?? pendingLobbyId;
@@ -383,6 +384,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
     public void ResetForFreshApplicationStart()
     {
         ClearCurrentGame(false);
+        appliedFinalScoreKeys.Clear();
         runtimeType = SessionRuntimeType.Local;
         nextGameSessionSyncTime = 0f;
     }
@@ -656,6 +658,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         isGameSimulationCreationPending = false;
         SetEntryState(GameSessionEntryState.Completed);
         UserManager.instance?.SetLastGameId(currentGameSession.gameId);
+        ApplyFinalizedScoreForCurrentNetworkUser();
         GameSessionUpdated?.Invoke(new GameSessionData(currentGameSession));
         return true;
     }
@@ -696,9 +699,13 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         playerData.canRejoin = updateData.canRejoin;
         playerData.gameStatus = updateData.gameStatus;
         playerData.currentMatchScore = updateData.currentMatchScore;
+        playerData.areStatisticsFinalized = updateData.areStatisticsFinalized;
+        playerData.finalizedScoreDelta = updateData.finalizedScoreDelta;
+        playerData.isScorePersisted = updateData.isScorePersisted;
         playerData.isSubmitTimerActive = updateData.isSubmitTimerActive;
         playerData.submitTimerEndTime = updateData.submitTimerEndTime;
         currentGameSession.revision = updateData.revision;
+        ApplyFinalizedScoreForCurrentNetworkUser();
         GameSessionUpdated?.Invoke(new GameSessionData(currentGameSession));
     }
 
@@ -779,7 +786,45 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
 
         currentGameSession = new GameSessionData(gameSessionData);
         pendingLobbyId = currentGameSession.lobbyId;
+        ApplyFinalizedScoreForCurrentNetworkUser();
         GameSessionUpdated?.Invoke(new GameSessionData(currentGameSession));
+    }
+
+    private void ApplyFinalizedScoreForCurrentNetworkUser()
+    {
+        if (currentGameSession == null ||
+            currentGameSession.runtimeType != SessionRuntimeType.Network ||
+            MultiplayerPlayModeTestContext.IsActive ||
+            UserManager.instance == null)
+        {
+            return;
+        }
+
+        string userId = UserManager.instance.UserId;
+        GamePlayerData playerData = currentGameSession.GetPlayer(userId);
+
+        if (playerData == null ||
+            playerData.userTag != UserTag.Player ||
+            !playerData.areStatisticsFinalized)
+        {
+            return;
+        }
+
+        string scoreKey = $"{currentGameSession.gameId}:{userId}";
+
+        if (appliedFinalScoreKeys.Contains(scoreKey))
+        {
+            return;
+        }
+
+        if (UserManager.instance.ApplyGameScore(
+                userId,
+                GameScoreAuthority.ResolveScorePlayMode(currentGameSession.playMode),
+                GameScoreAuthority.ResolveScoreGameMode(currentGameSession),
+                playerData.finalizedScoreDelta))
+        {
+            appliedFinalScoreKeys.Add(scoreKey);
+        }
     }
 
     private async void RequestGameSessionSync(bool recoverMissingEntry)

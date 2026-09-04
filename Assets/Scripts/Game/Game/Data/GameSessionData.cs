@@ -26,11 +26,15 @@ public class GameSessionData
     public BingoBallCountType ballCountType;
     public bool useFreeCell;
 
+    public bool hasCachedScoreValues;
+    public int cachedLossPoints;
+    public int cachedDeathWinPoints;
+
     public List<GamePlayerData> players;
 
     public GameSessionData()
     {
-        dataVersion = 5;
+        dataVersion = 6;
         revision = 1;
         gameId = string.Empty;
         lobbyId = string.Empty;
@@ -49,6 +53,9 @@ public class GameSessionData
         usesDefaultPatterns = true;
         ballCountType = BingoBallCountType.Ball75;
         useFreeCell = true;
+        hasCachedScoreValues = false;
+        cachedLossPoints = 0;
+        cachedDeathWinPoints = 0;
         players = new List<GamePlayerData>();
     }
 
@@ -76,6 +83,7 @@ public class GameSessionData
         usesDefaultPatterns = setupData.usesDefaultPatterns;
         ballCountType = setupData.ballCountType;
         useFreeCell = setupData.useFreeCell;
+        EnsureScoreValuesCached();
 
         GameSettings settings = GameSettings.instance;
         gamePlayController.Initialize(
@@ -126,6 +134,9 @@ public class GameSessionData
         usesDefaultPatterns = gameSessionData.usesDefaultPatterns;
         ballCountType = gameSessionData.ballCountType;
         useFreeCell = gameSessionData.useFreeCell;
+        hasCachedScoreValues = gameSessionData.hasCachedScoreValues;
+        cachedLossPoints = gameSessionData.cachedLossPoints;
+        cachedDeathWinPoints = gameSessionData.cachedDeathWinPoints;
 
         if (gameSessionData.players == null)
         {
@@ -184,30 +195,20 @@ public class GameSessionData
         return count;
     }
 
-    public bool FinalizeEligiblePlayers(GamePlayerStatus finalStatus)
+    public void EnsureScoreValuesCached()
     {
-        if (players == null || finalStatus == GamePlayerStatus.Eligible)
+        if (hasCachedScoreValues ||
+            GameScoreManager.instance == null ||
+            !GameScoreManager.instance.IsReady)
         {
-            return false;
+            return;
         }
 
-        bool changed = false;
-
-        for (int i = 0; i < players.Count; i++)
-        {
-            GamePlayerData playerData = players[i];
-
-            if (playerData == null || playerData.gameStatus != GamePlayerStatus.Eligible)
-            {
-                continue;
-            }
-
-            playerData.gameStatus = finalStatus;
-            changed = true;
-        }
-
-        return changed;
+        cachedLossPoints = GameScoreManager.instance.GetLossPoints();
+        cachedDeathWinPoints = GameScoreManager.instance.GetDeathWinPoints();
+        hasCachedScoreValues = true;
     }
+
 }
 
 [Serializable]
@@ -222,6 +223,9 @@ public class GamePlayerStateChangedData
     public bool canRejoin;
     public GamePlayerStatus gameStatus;
     public int currentMatchScore;
+    public bool areStatisticsFinalized;
+    public int finalizedScoreDelta;
+    public bool isScorePersisted;
     public bool isSubmitTimerActive;
     public double submitTimerEndTime;
 
@@ -249,6 +253,9 @@ public class GamePlayerStateChangedData
         canRejoin = playerData.canRejoin;
         gameStatus = playerData.gameStatus;
         currentMatchScore = playerData.currentMatchScore;
+        areStatisticsFinalized = playerData.areStatisticsFinalized;
+        finalizedScoreDelta = playerData.finalizedScoreDelta;
+        isScorePersisted = playerData.isScorePersisted;
         isSubmitTimerActive = playerData.isSubmitTimerActive;
         submitTimerEndTime = playerData.submitTimerEndTime;
     }
@@ -349,6 +356,8 @@ public class GameBingoCheckResolvedData
     public string failureMessage;
     public BingoCheckResult checkResult;
     public GamePlayerStatus playerStatus;
+    public int currentCheckScore;
+    public int currentMatchScore;
     public bool matchCompleted;
     public List<BingoPatternType> availablePatternTypes;
 

@@ -18,7 +18,8 @@ public static class GameBingoCheckAuthority
         if (playController.Phase == GamePlayPhase.Ended &&
             gameSessionData.gameState != GameSessionState.Completed)
         {
-            gameSessionData.FinalizeEligiblePlayers(
+            GameScoreAuthority.FinalizeEligiblePlayers(
+                gameSessionData,
                 playController.ResolveEligiblePlayerAtMatchEnd());
             gameSessionData.gameState = GameSessionState.Completed;
             changed = true;
@@ -105,7 +106,11 @@ public static class GameBingoCheckAuthority
                 "The Bingo checker or active rule could not process this request.");
         }
 
-        playerData.gameStatus = ruleDecision.playerStatus;
+        int currentCheckScore = GameScoreAuthority.ApplyCheckResult(
+            gameSessionData,
+            playerData,
+            checkResult,
+            ruleDecision);
 
         if (playerData.gameStatus == GamePlayerStatus.Lost &&
             gameSessionData.GetPlayerCountWithStatus(GamePlayerStatus.Eligible) == 0)
@@ -115,7 +120,8 @@ public static class GameBingoCheckAuthority
 
         if (playController.Phase == GamePlayPhase.Ended)
         {
-            gameSessionData.FinalizeEligiblePlayers(
+            GameScoreAuthority.FinalizeEligiblePlayers(
+                gameSessionData,
                 playController.ResolveEligiblePlayerAtMatchEnd());
             gameSessionData.gameState = GameSessionState.Completed;
         }
@@ -128,6 +134,8 @@ public static class GameBingoCheckAuthority
             wasAccepted = true,
             checkResult = checkResult,
             playerStatus = playerData.gameStatus,
+            currentCheckScore = currentCheckScore,
+            currentMatchScore = playerData.currentMatchScore,
             matchCompleted = gameSessionData.gameState == GameSessionState.Completed,
             availablePatternTypes = playController.GetAvailablePatternTypes(
                 userId,
@@ -157,7 +165,8 @@ public static class GameBingoCheckAuthority
         if (gameSessionData.gamePlayController.Phase == GamePlayPhase.Ended &&
             gameSessionData.gameState != GameSessionState.Completed)
         {
-            gameSessionData.FinalizeEligiblePlayers(
+            GameScoreAuthority.FinalizeEligiblePlayers(
+                gameSessionData,
                 gameSessionData.gamePlayController.ResolveEligiblePlayerAtMatchEnd());
             gameSessionData.gameState = GameSessionState.Completed;
         }

@@ -15,6 +15,9 @@ public class GamePlayerData
 
     public GamePlayerStatus gameStatus;
     public int currentMatchScore;
+    public bool areStatisticsFinalized;
+    public int finalizedScoreDelta;
+    public bool isScorePersisted;
     public bool isSubmitTimerActive;
     public double submitTimerEndTime;
 
@@ -37,6 +40,9 @@ public class GamePlayerData
         canRejoin = true;
         gameStatus = GamePlayerStatus.Eligible;
         currentMatchScore = 0;
+        areStatisticsFinalized = false;
+        finalizedScoreDelta = 0;
+        isScorePersisted = false;
         isSubmitTimerActive = false;
         submitTimerEndTime = 0d;
         boardData = new LobbyBoardData();
@@ -77,6 +83,9 @@ public class GamePlayerData
         canRejoin = playerData.canRejoin;
         gameStatus = playerData.gameStatus;
         currentMatchScore = playerData.currentMatchScore;
+        areStatisticsFinalized = playerData.areStatisticsFinalized;
+        finalizedScoreDelta = playerData.finalizedScoreDelta;
+        isScorePersisted = playerData.isScorePersisted;
         isSubmitTimerActive = playerData.isSubmitTimerActive;
         submitTimerEndTime = playerData.submitTimerEndTime;
         boardData = new LobbyBoardData(playerData.boardData);

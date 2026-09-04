@@ -534,7 +534,7 @@ public class LeaderboardListController : MonoBehaviour
                 return GetPlayerNameWithShortId(rankedUserData.userData, cellSetup.maxTextCharacters);
 
             case LeaderboardRowCellValueType.Score:
-                return GetUserScore(rankedUserData.userData, cellSetup.maxNumberDigits).ToString("N0");
+                return GetUserScore(rankedUserData, cellSetup.maxNumberDigits).ToString("N0");
 
             default:
                 return string.Empty;
@@ -595,19 +595,19 @@ public class LeaderboardListController : MonoBehaviour
         return userId.Substring(0, 4);
     }
 
-    private int GetUserScore(UserData userData, int maxNumberDigits)
+    private int GetUserScore(LeaderboardUserRankData rankedUserData, int maxNumberDigits)
     {
-        if (userData == null || userData.stats == null)
+        if (rankedUserData == null)
         {
             return 0;
         }
 
         if (maxNumberDigits <= 0)
         {
-            return userData.stats.points;
+            return rankedUserData.score;
         }
 
-        return Mathf.Clamp(userData.stats.points, 0, GetMaxNumberFromDigits(maxNumberDigits));
+        return Mathf.Clamp(rankedUserData.score, 0, GetMaxNumberFromDigits(maxNumberDigits));
     }
 
     private string TrimTextToMaxCharacters(string textValue, int maxCharacters)

@@ -6,15 +6,19 @@ using UnityEngine;
 public class LeaderboardFilterController : MonoBehaviour
 {
     [Header("Dropdowns")]
+    [SerializeField] private TMP_Dropdown scorePlayModeDropdown;
     [SerializeField] private TMP_Dropdown gameModeDropdown;
     [SerializeField] private TMP_Dropdown pageSizeDropdown;
 
+    public event Action<ScorePlayMode> ScorePlayModeChanged;
     public event Action<LeaderboardModeFilter> GameModeChanged;
     public event Action<int> PageSizeChanged;
 
+    private readonly List<ScorePlayMode> scorePlayModeOptions = new();
     private readonly List<LeaderboardModeFilter> gameModeOptions = new();
     private readonly List<LeaderboardPageSizeType> pageSizeOptions = new();
 
+    private ScorePlayMode selectedScorePlayMode = ScorePlayMode.Solo;
     private LeaderboardModeFilter selectedGameMode = LeaderboardModeFilter.CreateOverall();
     private LeaderboardPageSizeType selectedPageSize = LeaderboardPageSizeType.Show10;
 
@@ -25,6 +29,11 @@ public class LeaderboardFilterController : MonoBehaviour
 
     private void OnEnable()
     {
+        if (scorePlayModeDropdown != null)
+        {
+            scorePlayModeDropdown.onValueChanged.AddListener(OnScorePlayModeDropdownValueChanged);
+        }
+
         if (gameModeDropdown != null)
         {
             gameModeDropdown.onValueChanged.AddListener(OnGameModeDropdownValueChanged);
@@ -38,6 +47,11 @@ public class LeaderboardFilterController : MonoBehaviour
 
     private void OnDisable()
     {
+        if (scorePlayModeDropdown != null)
+        {
+            scorePlayModeDropdown.onValueChanged.RemoveListener(OnScorePlayModeDropdownValueChanged);
+        }
+
         if (gameModeDropdown != null)
         {
             gameModeDropdown.onValueChanged.RemoveListener(OnGameModeDropdownValueChanged);
@@ -47,6 +61,11 @@ public class LeaderboardFilterController : MonoBehaviour
         {
             pageSizeDropdown.onValueChanged.RemoveListener(OnPageSizeDropdownValueChanged);
         }
+    }
+
+    public ScorePlayMode GetSelectedScorePlayMode()
+    {
+        return selectedScorePlayMode;
     }
 
     public LeaderboardModeFilter GetSelectedGameMode()
@@ -64,6 +83,28 @@ public class LeaderboardFilterController : MonoBehaviour
         return GetPageSizeValue(selectedPageSize);
     }
 
+    public void SetScorePlayMode(ScorePlayMode scorePlayMode)
+    {
+        selectedScorePlayMode = scorePlayMode;
+
+        if (scorePlayModeDropdown == null)
+        {
+            return;
+        }
+
+        int index = scorePlayModeOptions.IndexOf(scorePlayMode);
+
+        if (index < 0)
+        {
+            index = 0;
+            selectedScorePlayMode = scorePlayModeOptions.Count > 0
+                ? scorePlayModeOptions[index]
+                : ScorePlayMode.Solo;
+        }
+
+        scorePlayModeDropdown.SetValueWithoutNotify(index);
+        scorePlayModeDropdown.RefreshShownValue();
+    }
 
     public void SetGameMode(LeaderboardModeFilter gameMode)
     {
@@ -79,7 +120,9 @@ public class LeaderboardFilterController : MonoBehaviour
         if (index < 0)
         {
             index = 0;
-            selectedGameMode = gameModeOptions.Count > 0 ? gameModeOptions[index] : LeaderboardModeFilter.CreateOverall();
+            selectedGameMode = gameModeOptions.Count > 0
+                ? gameModeOptions[index]
+                : LeaderboardModeFilter.CreateOverall();
         }
 
         gameModeDropdown.SetValueWithoutNotify(index);
@@ -100,7 +143,9 @@ public class LeaderboardFilterController : MonoBehaviour
         if (index < 0)
         {
             index = 0;
-            selectedPageSize = pageSizeOptions.Count > 0 ? pageSizeOptions[index] : LeaderboardPageSizeType.Show10;
+            selectedPageSize = pageSizeOptions.Count > 0
+                ? pageSizeOptions[index]
+                : LeaderboardPageSizeType.Show10;
         }
 
         pageSizeDropdown.SetValueWithoutNotify(index);
@@ -109,27 +154,36 @@ public class LeaderboardFilterController : MonoBehaviour
 
     private void BuildDropdownOptions()
     {
+        BuildScorePlayModeOptions();
         BuildGameModeOptions();
         BuildPageSizeOptions();
 
+        BuildScorePlayModeDropdown();
         BuildGameModeDropdown();
         BuildPageSizeDropdown();
+    }
+
+    private void BuildScorePlayModeOptions()
+    {
+        scorePlayModeOptions.Clear();
+
+        foreach (ScorePlayMode scorePlayMode in Enum.GetValues(typeof(ScorePlayMode)))
+        {
+            scorePlayModeOptions.Add(scorePlayMode);
+        }
     }
 
     private void BuildGameModeOptions()
     {
         gameModeOptions.Clear();
-
         gameModeOptions.Add(LeaderboardModeFilter.CreateOverall());
 
         foreach (BingoGameModeType gameMode in Enum.GetValues(typeof(BingoGameModeType)))
         {
-            if (gameMode == BingoGameModeType.Custom)
+            if (UserStats.IsScoredGameMode(gameMode))
             {
-                continue;
+                gameModeOptions.Add(LeaderboardModeFilter.CreateGameMode(gameMode));
             }
-
-            gameModeOptions.Add(LeaderboardModeFilter.CreateGameMode(gameMode));
         }
     }
 
@@ -143,6 +197,25 @@ public class LeaderboardFilterController : MonoBehaviour
         }
     }
 
+    private void BuildScorePlayModeDropdown()
+    {
+        if (scorePlayModeDropdown == null)
+        {
+            return;
+        }
+
+        scorePlayModeDropdown.ClearOptions();
+        List<string> optionLabels = new();
+
+        for (int i = 0; i < scorePlayModeOptions.Count; i++)
+        {
+            optionLabels.Add(scorePlayModeOptions[i].ToString());
+        }
+
+        scorePlayModeDropdown.AddOptions(optionLabels);
+        SetScorePlayMode(selectedScorePlayMode);
+    }
+
     private void BuildGameModeDropdown()
     {
         if (gameModeDropdown == null)
@@ -151,7 +224,6 @@ public class LeaderboardFilterController : MonoBehaviour
         }
 
         gameModeDropdown.ClearOptions();
-
         List<string> optionLabels = new();
 
         for (int i = 0; i < gameModeOptions.Count; i++)
@@ -171,7 +243,6 @@ public class LeaderboardFilterController : MonoBehaviour
         }
 
         pageSizeDropdown.ClearOptions();
-
         List<string> optionLabels = new();
 
         for (int i = 0; i < pageSizeOptions.Count; i++)
@@ -181,6 +252,20 @@ public class LeaderboardFilterController : MonoBehaviour
 
         pageSizeDropdown.AddOptions(optionLabels);
         SetPageSize(selectedPageSize);
+    }
+
+    private void OnScorePlayModeDropdownValueChanged(int index)
+    {
+        if (scorePlayModeOptions.Count == 0)
+        {
+            selectedScorePlayMode = ScorePlayMode.Solo;
+            ScorePlayModeChanged?.Invoke(selectedScorePlayMode);
+            return;
+        }
+
+        index = Mathf.Clamp(index, 0, scorePlayModeOptions.Count - 1);
+        selectedScorePlayMode = scorePlayModeOptions[index];
+        ScorePlayModeChanged?.Invoke(selectedScorePlayMode);
     }
 
     private void OnGameModeDropdownValueChanged(int index)
@@ -193,9 +278,7 @@ public class LeaderboardFilterController : MonoBehaviour
         }
 
         index = Mathf.Clamp(index, 0, gameModeOptions.Count - 1);
-
         selectedGameMode = gameModeOptions[index];
-
         GameModeChanged?.Invoke(selectedGameMode);
     }
 
@@ -209,20 +292,13 @@ public class LeaderboardFilterController : MonoBehaviour
         }
 
         index = Mathf.Clamp(index, 0, pageSizeOptions.Count - 1);
-
         selectedPageSize = pageSizeOptions[index];
-
         PageSizeChanged?.Invoke(GetSelectedPageSize());
     }
 
     private string GetGameModeLabel(LeaderboardModeFilter gameMode)
     {
-        if (gameMode.IsOverall)
-        {
-            return "Overall";
-        }
-
-        return gameMode.gameModeType.ToString();
+        return gameMode.IsOverall ? "Overall" : gameMode.gameModeType.ToString();
     }
 
     private string GetPageSizeLabel(LeaderboardPageSizeType pageSize)
@@ -234,9 +310,6 @@ public class LeaderboardFilterController : MonoBehaviour
     {
         switch (pageSize)
         {
-            case LeaderboardPageSizeType.Show10:
-                return 10;
-
             case LeaderboardPageSizeType.Show25:
                 return 25;
 

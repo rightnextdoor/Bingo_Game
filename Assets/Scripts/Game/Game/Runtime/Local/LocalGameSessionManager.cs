@@ -72,6 +72,7 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
                 continue;
             }
 
+            GameScoreAuthority.PersistFinalizedLocalScores(gameSessionData);
             gameSessionData.revision++;
             LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData));
         }
@@ -458,6 +459,7 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
             return true;
         }
 
+        GameScoreAuthority.PersistFinalizedLocalScores(gameSessionData);
         gameSessionData.revision++;
         resolvedData.revision = gameSessionData.revision;
         resolvedData.matchCompleted = gameSessionData.gameState == GameSessionState.Completed;
@@ -485,6 +487,7 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
                 gameSessionData,
                 userData.userId))
         {
+            GameScoreAuthority.PersistFinalizedLocalScores(gameSessionData);
             gameSessionData.revision++;
             LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData));
             return true;

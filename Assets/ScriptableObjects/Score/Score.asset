@@ -1,0 +1,35 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 78f246f39e284d70905c5fc73efc250a, type: 3}
+  m_Name: Score
+  m_EditorClassIdentifier: Assembly-CSharp::BingoScoreData
+  scoreEntries:
+  - scoreType: 0
+    points: 30
+  - scoreType: 1
+    points: 35
+  - scoreType: 2
+    points: 40
+  - scoreType: 3
+    points: 45
+  - scoreType: 4
+    points: 50
+  - scoreType: 5
+    points: 55
+  - scoreType: 6
+    points: 60
+  - scoreType: 7
+    points: 65
+  - scoreType: 8
+    points: 50
+  - scoreType: 8
+    points: 200

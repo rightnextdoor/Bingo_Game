@@ -59,5 +59,6 @@ public class BotUserEntry
         }
 
         defaultStats ??= new UserStats();
+        defaultStats.RepairData();
     }
 }

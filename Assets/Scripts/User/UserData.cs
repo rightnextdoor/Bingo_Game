@@ -63,6 +63,8 @@ public class UserData
             stats = new UserStats();
         }
 
+        stats.RepairData();
+
         if (!string.IsNullOrWhiteSpace(playerName) && string.IsNullOrWhiteSpace(userId))
         {
             userId = Guid.NewGuid().ToString("N");

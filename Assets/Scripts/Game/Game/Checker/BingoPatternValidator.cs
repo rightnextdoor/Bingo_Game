@@ -51,6 +51,7 @@ public class BingoPatternCheckResult
     public BingoLineType secondaryLine = BingoLineType.None;
     public List<BingoCellCheckResult> cells = new List<BingoCellCheckResult>();
     public bool isWinningPattern;
+    public int scorePoints;
 
     public BingoPatternCheckResult(
         BingoPatternType patternType,
@@ -68,6 +69,7 @@ public class BingoCheckResult
 {
     public string playerId = string.Empty;
     public int checkNumber;
+    public int currentCheckPatternPoints;
     public List<BingoPatternCheckResult> patterns = new List<BingoPatternCheckResult>();
 
     public bool HasCheckedPatterns => patterns != null && patterns.Count > 0;

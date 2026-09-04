@@ -16,9 +16,15 @@ public class GameSettings : MonoBehaviour
     [Header("Ball Display")]
     [SerializeField, Min(0f)] private float ballSlideDurationSeconds = DefaultBallSlideDurationSeconds;
 
+    [Header("Score Limits")]
+    [SerializeField, Min(0)] private int minimumScore = UserStats.DefaultMinimumScore;
+    [SerializeField, Min(0)] private int maximumScore = UserStats.DefaultMaximumScore;
+
     public float FirstBallCountdownSeconds => Mathf.Max(0f, firstBallCountdownSeconds);
     public float NextBallCountdownSeconds => Mathf.Max(0f, nextBallCountdownSeconds);
     public float BallSlideDurationSeconds => Mathf.Max(0f, ballSlideDurationSeconds);
+    public int MinimumScore => Mathf.Max(0, minimumScore);
+    public int MaximumScore => Mathf.Max(MinimumScore, maximumScore);
 
     private void Awake()
     {

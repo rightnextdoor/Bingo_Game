@@ -441,22 +441,52 @@ public class UserManager : MonoBehaviour, ISceneReadyCheck
         UserChanged?.Invoke();
     }
 
-    public void AddPoints(int amount)
+    public bool ApplyGameScore(
+        string userId,
+        ScorePlayMode playMode,
+        BingoGameModeType gameModeType,
+        int scoreDelta)
     {
-        CurrentUser.stats.AddPoints(amount);
+        if (string.IsNullOrWhiteSpace(userId) || !UserStats.IsScoredGameMode(gameModeType))
+        {
+            return false;
+        }
 
-        AddOrUpdateCurrentUser();
+        bool isCurrentUser = string.Equals(
+            CurrentUser.userId,
+            userId,
+            StringComparison.Ordinal);
+        UserData userData = isCurrentUser ? CurrentUser : GetUser(userId);
 
-        UserChanged?.Invoke();
-    }
+        if (userData == null)
+        {
+            return false;
+        }
 
-    public void RemovePoints(int amount)
-    {
-        CurrentUser.stats.RemovePoints(amount);
+        userData.RepairData();
 
-        AddOrUpdateCurrentUser();
+        if (scoreDelta >= 0)
+        {
+            userData.stats.AddPoints(playMode, gameModeType, scoreDelta);
+        }
+        else
+        {
+            userData.stats.RemovePoints(playMode, gameModeType, -(long)scoreDelta > int.MaxValue
+                ? int.MaxValue
+                : -scoreDelta);
+        }
 
-        UserChanged?.Invoke();
+        if (isCurrentUser)
+        {
+            AddOrUpdateCurrentUser();
+            UserChanged?.Invoke();
+        }
+        else
+        {
+            AddOrUpdateUser(userData);
+        }
+
+        return true;
     }
 
     #endregion

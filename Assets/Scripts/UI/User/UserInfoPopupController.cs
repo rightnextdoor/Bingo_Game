@@ -333,15 +333,41 @@ public class UserInfoPopupController : MonoBehaviour
             return "No stats yet";
         }
 
-        string rowOne = BuildStatsRow("Points", stats.points.ToString(), "Games Played", stats.gamesPlayed.ToString());
-        string rowTwo = BuildStatsRow("Wins", stats.wins.ToString(), "Losses", stats.losses.ToString());
-        string rowThree = BuildStatsRow("Win Rate", $"{stats.WinRatePercent}%", "Bingos Called", stats.bingosCalled.ToString());
+        string header = BuildStatsRow("Solo", string.Empty, "Online", string.Empty);
+        string overall = BuildStatsRow(
+            "Overall",
+            stats.GetOverallPoints(ScorePlayMode.Solo).ToString("N0"),
+            "Overall",
+            stats.GetOverallPoints(ScorePlayMode.Online).ToString("N0"));
+        string traditional = BuildStatsRow(
+            "Traditional",
+            stats.GetPoints(ScorePlayMode.Solo, BingoGameModeType.Traditional).ToString("N0"),
+            "Traditional",
+            stats.GetPoints(ScorePlayMode.Online, BingoGameModeType.Traditional).ToString("N0"));
+        string blackout = BuildStatsRow(
+            "Blackout",
+            stats.GetPoints(ScorePlayMode.Solo, BingoGameModeType.Blackout).ToString("N0"),
+            "Blackout",
+            stats.GetPoints(ScorePlayMode.Online, BingoGameModeType.Blackout).ToString("N0"));
+        string risk = BuildStatsRow(
+            "Risk",
+            stats.GetPoints(ScorePlayMode.Solo, BingoGameModeType.Risk).ToString("N0"),
+            "Risk",
+            stats.GetPoints(ScorePlayMode.Online, BingoGameModeType.Risk).ToString("N0"));
+        string death = BuildStatsRow(
+            "Death",
+            stats.GetPoints(ScorePlayMode.Solo, BingoGameModeType.Death).ToString("N0"),
+            "Death",
+            stats.GetPoints(ScorePlayMode.Online, BingoGameModeType.Death).ToString("N0"));
 
         return
             "<mspace=0.58em>" +
-            rowOne + "\n" +
-            rowTwo + "\n" +
-            rowThree +
+            header + "\n" +
+            overall + "\n" +
+            traditional + "\n" +
+            blackout + "\n" +
+            risk + "\n" +
+            death +
             "</mspace>";
     }
 

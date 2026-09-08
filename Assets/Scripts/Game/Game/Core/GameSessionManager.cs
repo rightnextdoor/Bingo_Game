@@ -361,6 +361,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
 
     public void ClearCurrentGame(bool clearLastGameId)
     {
+        SessionPauseManager.SetGameplayPaused(false);
         entryAttemptVersion++;
         isEnteringGame = false;
         pendingGameId = string.Empty;
@@ -379,6 +380,17 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         }
 
         GameSessionUpdated?.Invoke(null);
+    }
+
+    public bool SetCurrentGamePaused(bool paused)
+    {
+        if (!HasEnteredGame || currentGameSession.playMode != MainMenuPlayMode.Solo)
+        {
+            return false;
+        }
+
+        SessionPauseManager.SetGameplayPaused(paused);
+        return true;
     }
 
     public void ResetForFreshApplicationStart()
@@ -523,7 +535,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
 
     public bool SetCurrentPlayerMarkedCell(int cellIndex, bool isMarked)
     {
-        if (!HasEnteredGame)
+        if (!HasEnteredGame || SessionPauseManager.IsPaused)
         {
             return false;
         }
@@ -557,7 +569,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         LobbyBoardData boardData,
         IReadOnlyList<int> markedCellIndices)
     {
-        if (!HasEnteredGame || boardData == null)
+        if (!HasEnteredGame || boardData == null || SessionPauseManager.IsPaused)
         {
             return false;
         }
@@ -592,7 +604,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
 
     public bool CompleteCurrentPlayerBingoCheckAnimation()
     {
-        if (!HasEnteredGame)
+        if (!HasEnteredGame || SessionPauseManager.IsPaused)
         {
             return false;
         }
@@ -611,7 +623,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
 
     public bool ResolveCurrentPlayerRiskDecision(bool endPlayerGame)
     {
-        if (!HasEnteredGame)
+        if (!HasEnteredGame || SessionPauseManager.IsPaused)
         {
             return false;
         }

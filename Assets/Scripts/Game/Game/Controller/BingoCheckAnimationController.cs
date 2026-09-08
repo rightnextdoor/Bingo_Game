@@ -59,7 +59,7 @@ public class BingoCheckAnimationController : MonoBehaviour
                 ShowPattern(patternResult, finalColor);
 
                 if (patternResultSeconds > 0f)
-                    yield return new WaitForSecondsRealtime(patternResultSeconds);
+                    yield return SessionPauseManager.WaitForSeconds(patternResultSeconds);
 
                 if (HasNextPattern(checkResult.patterns, patternIndex))
                     boardController?.ClearCheckHighlights();
@@ -87,7 +87,7 @@ public class BingoCheckAnimationController : MonoBehaviour
             boardController?.ShowCheckHighlight(cellResult.cellIndex, cellColor);
 
             if (cellCheckSeconds > 0f)
-                yield return new WaitForSecondsRealtime(cellCheckSeconds);
+                yield return SessionPauseManager.WaitForSeconds(cellCheckSeconds);
 
             boardController?.ClearCheckHighlight(cellResult.cellIndex);
         }
@@ -161,14 +161,14 @@ public class BingoCheckAnimationController : MonoBehaviour
                 ShowPattern(patternResult, color);
 
                 if (finalPatternSeconds > 0f)
-                    yield return new WaitForSecondsRealtime(finalPatternSeconds);
+                    yield return SessionPauseManager.WaitForSeconds(finalPatternSeconds);
                 else
                     yield return null;
 
                 boardController?.ClearCheckHighlights();
 
                 if (finalPatternSeconds > 0f)
-                    yield return new WaitForSecondsRealtime(finalPatternSeconds);
+                    yield return SessionPauseManager.WaitForSeconds(finalPatternSeconds);
                 else
                     yield return null;
             }
@@ -190,7 +190,7 @@ public class BingoCheckAnimationController : MonoBehaviour
                 ShowPattern(patternResult, color);
 
                 if (finalPatternSeconds > 0f)
-                    yield return new WaitForSecondsRealtime(finalPatternSeconds);
+                    yield return SessionPauseManager.WaitForSeconds(finalPatternSeconds);
                 else
                     yield return null;
             }

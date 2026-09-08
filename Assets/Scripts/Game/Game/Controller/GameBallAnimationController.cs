@@ -212,11 +212,14 @@ public class GameBallAnimationController : MonoBehaviour
             yield break;
         }
 
+        double animationStartTime = SessionPauseManager.GetCurrentTime();
         float elapsed = 0f;
 
         while (elapsed < duration)
         {
-            elapsed += Time.unscaledDeltaTime;
+            elapsed = Mathf.Max(
+                0f,
+                (float)(SessionPauseManager.GetCurrentTime() - animationStartTime));
 
             float normalizedTime = Mathf.Clamp01(elapsed / duration);
             float curvedTime = movementCurve != null

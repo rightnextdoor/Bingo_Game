@@ -50,6 +50,8 @@ public class GameRuleController
             !checkResult.HasFailedPattern;
 
         bool isRisk = activeRuleType == BingoRuleType.Risk;
+        bool awardedRiskPoints =
+            isRisk && checkResult.currentCheckPatternPoints > 0;
 
         decision = new GameRuleCheckDecision
         {
@@ -59,7 +61,7 @@ public class GameRuleController
                     ? GamePlayerStatus.Won
                     : GamePlayerStatus.Lost,
             waitsForWinningCheckAnimation = isValidWin && !isRisk,
-            requiresRiskDecision = isValidWin && isRisk
+            requiresRiskDecision = isValidWin && awardedRiskPoints
         };
 
         return true;

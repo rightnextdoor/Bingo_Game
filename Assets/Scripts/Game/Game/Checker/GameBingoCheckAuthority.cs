@@ -7,7 +7,8 @@ public static class GameBingoCheckAuthority
     {
         if (gameSessionData == null ||
             gameSessionData.gameState != GameSessionState.InProgress ||
-            gameSessionData.gamePlayController == null)
+            gameSessionData.gamePlayController == null ||
+            SessionPauseManager.IsPaused)
         {
             return false;
         }
@@ -53,6 +54,15 @@ public static class GameBingoCheckAuthority
                 userId,
                 revision,
                 "The Bingo check request was incomplete.");
+        }
+
+        if (SessionPauseManager.IsPaused)
+        {
+            return GameBingoCheckResolvedData.Rejected(
+                gameId,
+                userId,
+                revision,
+                "The game is paused.");
         }
 
         GamePlayerData playerData = gameSessionData.GetPlayer(userId);

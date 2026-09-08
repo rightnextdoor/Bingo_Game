@@ -18,16 +18,12 @@ public class BingoGameModeData : ScriptableObject
     [SerializeField] private BingoPatternData defaultPattern;
     [SerializeField] private List<BingoPatternData> specialPatterns = new List<BingoPatternData>();
 
-    [Header("Winners")]
-    [SerializeField] private bool supportsMultipleWinners;
-
     public string GameName => gameName;
     public BingoGameModeType GameModeType => gameModeType;
     public string Description => description;
     public BingoGameRuleData RuleData => ruleData;
     public BingoPatternData DefaultPattern => defaultPattern;
     public IReadOnlyList<BingoPatternData> SpecialPatterns => specialPatterns;
-    public bool SupportsMultipleWinners => supportsMultipleWinners;
 
     public List<BingoPatternData> GetAllPatterns()
     {

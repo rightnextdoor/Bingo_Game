@@ -70,6 +70,8 @@ public class GameController : MonoBehaviour
 
     private void OnEnable()
     {
+        SessionPauseManager.PauseChanged -= OnSessionPauseChanged;
+        SessionPauseManager.PauseChanged += OnSessionPauseChanged;
         SubscribeToHeader();
         SubscribeToBoardSection();
         SubscribeToRiskDecisionPopup();
@@ -88,6 +90,7 @@ public class GameController : MonoBehaviour
         UnsubscribeFromBoardSection();
         UnsubscribeFromRiskDecisionPopup();
         UnsubscribeFromGameSessionManager();
+        SessionPauseManager.PauseChanged -= OnSessionPauseChanged;
         bingoCheckAnimationController?.StopAndClear();
         isBingoCheckPending = false;
     }
@@ -318,6 +321,7 @@ public class GameController : MonoBehaviour
 
         bool playerCanUseBoard =
             boardDisplayed &&
+            !SessionPauseManager.IsPaused &&
             localPlayer.gameStatus == GamePlayerStatus.Eligible &&
             !localPlayer.isRiskDecisionPending &&
             gameSessionData.gameState != GameSessionState.Completed;
@@ -355,6 +359,12 @@ public class GameController : MonoBehaviour
 
     private void OnBoardMarkedCellChanged(int cellIndex, bool isMarked)
     {
+        if (SessionPauseManager.IsPaused)
+        {
+            DisplayPlayerBoard(GameSessionManager.instance?.CurrentGameSession);
+            return;
+        }
+
         if (GameSessionManager.instance == null ||
             !GameSessionManager.instance.SetCurrentPlayerMarkedCell(cellIndex, isMarked))
         {
@@ -367,6 +377,11 @@ public class GameController : MonoBehaviour
         LobbyBoardData boardData,
         IReadOnlyList<int> markedCellIndices)
     {
+        if (SessionPauseManager.IsPaused)
+        {
+            return;
+        }
+
         if (boardData?.cellNumbers == null)
         {
             Debug.LogWarning("[GameController] Bingo was pressed, but the board data was unavailable.");
@@ -563,6 +578,13 @@ public class GameController : MonoBehaviour
                 OpenRiskDecisionPopup();
             }
 
+            return;
+        }
+
+        if (playerStatus == GamePlayerStatus.Eligible)
+        {
+            bingoCheckAnimationController.ContinuePlaying();
+            NotifyBingoCheckAnimationCompleted();
             return;
         }
 
@@ -767,6 +789,11 @@ public class GameController : MonoBehaviour
 
     private void UpdateRiskTimeNotifications()
     {
+        if (SessionPauseManager.IsPaused)
+        {
+            return;
+        }
+
         if (!RiskGameplayAuthority.IsRiskGame(displayedGameSession))
         {
             previousRiskRemainingSeconds = -1;
@@ -812,6 +839,11 @@ public class GameController : MonoBehaviour
         }
 
         previousRiskRemainingSeconds = currentSeconds;
+    }
+
+    private void OnSessionPauseChanged(bool isPaused)
+    {
+        DisplayPlayerBoard(GameSessionManager.instance?.CurrentGameSession);
     }
 
     #endregion

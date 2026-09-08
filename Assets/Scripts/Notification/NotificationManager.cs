@@ -7,6 +7,10 @@ using UnityEngine.UI;
 [DisallowMultipleComponent]
 public class NotificationManager : MonoBehaviour
 {
+    private const int MaximumVisibleLines = 3;
+    private const int MinimumReadableFontSize = 12;
+    private const float SizeFitTolerance = 0.5f;
+
     public static NotificationManager instance;
 
     #region Data
@@ -32,10 +36,6 @@ public class NotificationManager : MonoBehaviour
     [SerializeField] private Image notificationBackground;
     [SerializeField] private TMP_Text notificationText;
     private Sprite defaultBackgroundImage;
-
-    [Header("Notification Size")]
-    [SerializeField, Min(1f)] private float maximumWidth = 850f;
-    [SerializeField, Min(1)] private int minimumFontSize = 24;
 
     [Header("Queue Timing")]
     [SerializeField] private float delayBetweenMessages = 0.35f;
@@ -128,7 +128,7 @@ public class NotificationManager : MonoBehaviour
 
             if (notificationQueue.Count > 0 && delayBetweenMessages > 0f)
             {
-                yield return new WaitForSecondsRealtime(delayBetweenMessages);
+                yield return SessionPauseManager.WaitForSeconds(delayBetweenMessages);
             }
         }
 
@@ -159,7 +159,7 @@ public class NotificationManager : MonoBehaviour
 
         if (displaySeconds > 0f)
         {
-            yield return new WaitForSecondsRealtime(displaySeconds);
+            yield return SessionPauseManager.WaitForSeconds(displaySeconds);
         }
 
         if (fadeOutSeconds > 0f)
@@ -212,52 +212,65 @@ public class NotificationManager : MonoBehaviour
             return;
         }
 
+        Canvas.ForceUpdateCanvases();
+        LayoutRebuilder.ForceRebuildLayoutImmediate(notificationAreaRect);
+
         RectTransform textRect = notificationText.rectTransform;
+        float availableWidth = Mathf.Max(
+            1f,
+            Mathf.Min(Mathf.Abs(notificationAreaRect.rect.width), Mathf.Abs(textRect.rect.width)));
+        float availableHeight = Mathf.Max(
+            1f,
+            Mathf.Min(Mathf.Abs(notificationAreaRect.rect.height), Mathf.Abs(textRect.rect.height)));
 
-        float leftPadding = textRect.offsetMin.x;
-        float rightPadding = -textRect.offsetMax.x;
-        float horizontalPadding = leftPadding + rightPadding;
+        int startingFontSize = Mathf.Max(1, requestedFontSize);
+        int smallestFontSize = Mathf.Min(startingFontSize, MinimumReadableFontSize);
 
-        float maxTextWidth = Mathf.Max(1f, maximumWidth - horizontalPadding);
+        PrepareTextForMeasurement(startingFontSize, TextWrappingModes.NoWrap);
 
-        int startingFontSize = Mathf.Max(minimumFontSize, requestedFontSize);
-        int resolvedFontSize = startingFontSize;
+        Vector2 oneLineSize = notificationText.GetPreferredValues(message, 0f, 0f);
 
-        notificationText.textWrappingMode = TextWrappingModes.NoWrap;
-
-        while (resolvedFontSize > minimumFontSize)
+        if (FitsInside(oneLineSize, availableWidth, availableHeight))
         {
-            notificationText.fontSize = resolvedFontSize;
-
-            Vector2 preferredSize = notificationText.GetPreferredValues(message, 0f, 0f);
-
-            if (preferredSize.x <= maxTextWidth)
-            {
-                break;
-            }
-
-            resolvedFontSize--;
-        }
-
-        notificationText.fontSize = resolvedFontSize;
-
-        Vector2 finalPreferredSize = notificationText.GetPreferredValues(message, 0f, 0f);
-
-        if (finalPreferredSize.x <= maxTextWidth)
-        {
-            float notificationWidth = finalPreferredSize.x + horizontalPadding;
-
-            notificationAreaRect.SetSizeWithCurrentAnchors(
-                RectTransform.Axis.Horizontal,
-                Mathf.Min(notificationWidth, maximumWidth));
-
-            notificationText.textWrappingMode = TextWrappingModes.NoWrap;
+            notificationText.maxVisibleLines = 1;
+            notificationText.overflowMode = TextOverflowModes.Ellipsis;
             return;
         }
 
-        notificationAreaRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, maximumWidth);
-        notificationText.fontSize = minimumFontSize;
-        notificationText.textWrappingMode = TextWrappingModes.Normal;
+        for (int fontSize = startingFontSize; fontSize >= smallestFontSize; fontSize--)
+        {
+            PrepareTextForMeasurement(fontSize, TextWrappingModes.Normal);
+            notificationText.ForceMeshUpdate(true, true);
+
+            Vector2 wrappedSize = notificationText.GetPreferredValues(message, availableWidth, 0f);
+            int lineCount = notificationText.textInfo.lineCount;
+
+            if (lineCount <= MaximumVisibleLines &&
+                wrappedSize.y <= availableHeight + SizeFitTolerance)
+            {
+                notificationText.maxVisibleLines = MaximumVisibleLines;
+                notificationText.overflowMode = TextOverflowModes.Ellipsis;
+                return;
+            }
+        }
+
+        PrepareTextForMeasurement(smallestFontSize, TextWrappingModes.Normal);
+        notificationText.maxVisibleLines = MaximumVisibleLines;
+        notificationText.overflowMode = TextOverflowModes.Ellipsis;
+    }
+
+    private void PrepareTextForMeasurement(int fontSize, TextWrappingModes wrappingMode)
+    {
+        notificationText.fontSize = fontSize;
+        notificationText.textWrappingMode = wrappingMode;
+        notificationText.maxVisibleLines = int.MaxValue;
+        notificationText.overflowMode = TextOverflowModes.Overflow;
+    }
+
+    private static bool FitsInside(Vector2 preferredSize, float availableWidth, float availableHeight)
+    {
+        return preferredSize.x <= availableWidth + SizeFitTolerance &&
+               preferredSize.y <= availableHeight + SizeFitTolerance;
     }
 
     private void ApplyBackgroundImage(TooltipImageMode imageMode, Sprite customImage)
@@ -289,11 +302,14 @@ public class NotificationManager : MonoBehaviour
 
     private IEnumerator FadeOutNotification(float fadeOutSeconds)
     {
+        double fadeStartTime = SessionPauseManager.GetCurrentTime();
         float elapsed = 0f;
 
         while (elapsed < fadeOutSeconds)
         {
-            elapsed += Time.unscaledDeltaTime;
+            elapsed = Mathf.Max(
+                0f,
+                (float)(SessionPauseManager.GetCurrentTime() - fadeStartTime));
 
             float progress = Mathf.Clamp01(elapsed / fadeOutSeconds);
             float alpha = Mathf.Lerp(1f, 0f, progress);

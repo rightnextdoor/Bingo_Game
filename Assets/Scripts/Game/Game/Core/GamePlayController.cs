@@ -53,6 +53,7 @@ public class GamePlayController
         phase == GamePlayPhase.FirstBallCountdown ||
         phase == GamePlayPhase.NextBallCountdown;
     public bool CanAcceptBingoChecks =>
+        !SessionPauseManager.IsPaused &&
         ruleController != null &&
         ruleController.IsSupported &&
         IsRunning &&
@@ -159,7 +160,8 @@ public class GamePlayController
 
     public bool TryStartFirstBallCountdown()
     {
-        if (phase != GamePlayPhase.WaitingForFirstPlayer)
+        if (SessionPauseManager.IsPaused ||
+            phase != GamePlayPhase.WaitingForFirstPlayer)
         {
             return false;
         }
@@ -177,7 +179,8 @@ public class GamePlayController
 
     public bool UpdateRiskTimer()
     {
-        if (!IsRiskRule ||
+        if (SessionPauseManager.IsPaused ||
+            !IsRiskRule ||
             phase == GamePlayPhase.Ended ||
             riskTimer == null ||
             !riskTimer.HasExpired())
@@ -202,7 +205,8 @@ public class GamePlayController
 
     public bool UpdateBallCallLoop()
     {
-        if (!IsRunning ||
+        if (SessionPauseManager.IsPaused ||
+            !IsRunning ||
             isBallPoolExhaustedAwaitingChecks ||
             ballTimer == null ||
             !ballTimer.HasExpired())
@@ -229,7 +233,7 @@ public class GamePlayController
 
     public bool CallNextBall()
     {
-        if (!IsRunning)
+        if (SessionPauseManager.IsPaused || !IsRunning)
         {
             return false;
         }

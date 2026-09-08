@@ -23,4 +23,8 @@ public interface IGameSessionService
         IReadOnlyList<int> markedCellIndices,
         out GameBingoCheckResolvedData resolvedData);
     bool TryCompleteBingoCheckAnimation(string gameId, UserData userData);
+    bool TryResolveRiskDecision(
+        string gameId,
+        UserData userData,
+        bool endPlayerGame);
 }

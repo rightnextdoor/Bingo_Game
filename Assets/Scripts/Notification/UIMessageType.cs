@@ -8,4 +8,7 @@ public enum UIMessageType
     GameAboutToStart,
     ChatHelp,
     BallCalled,
+    RiskTimeRemaining,
+    RiskPatternAvailable,
+    RiskPatternSubmittedLate,
 }

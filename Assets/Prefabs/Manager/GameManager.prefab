@@ -342,6 +342,9 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 0bc73dc7f3109bc41af89f03d9dc1393, type: 2}
   - {fileID: 11400000, guid: 0a27d4a2cc584594ea9079c855aa8666, type: 2}
   - {fileID: 11400000, guid: af8b6cd0ce75a794e8038385fc85545d, type: 2}
+  - {fileID: 11400000, guid: f5e4e302a412f254c91274046802e2d8, type: 2}
+  - {fileID: 11400000, guid: ebcd16614166d0e44a50626dad98de77, type: 2}
+  - {fileID: 11400000, guid: 81cacf046cd4dbf439155e7283da9cbf, type: 2}
 --- !u!114 &2222644560770358961
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -442,5 +445,6 @@ MonoBehaviour:
   firstBallCountdownSeconds: 10
   nextBallCountdownSeconds: 10
   ballSlideDurationSeconds: 1
+  riskMatchDurationMinutes: 5
   minimumScore: 0
   maximumScore: 9000000

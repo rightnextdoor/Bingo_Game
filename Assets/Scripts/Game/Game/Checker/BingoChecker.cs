@@ -17,7 +17,8 @@ public class BingoChecker
         LobbyBoardData boardData,
         IReadOnlyCollection<int> pressedCellIndices,
         IReadOnlyCollection<int> calledNumbers,
-        IReadOnlyCollection<BingoPatternType> patternTypes)
+        IReadOnlyCollection<BingoPatternType> patternTypes,
+        IReadOnlyList<BingoPatternIdentity> latePatterns)
     {
         if (string.IsNullOrWhiteSpace(playerId) || boardData == null)
         {
@@ -39,13 +40,15 @@ public class BingoChecker
         }
 
         checkResult.checkNumber = checkHistory.Count + 1;
-        ApplyCurrentCheckScores(checkResult);
+        ApplyCurrentCheckScores(checkResult, latePatterns);
         checkHistory.Add(checkResult);
         currentCheckResult = checkResult;
         return true;
     }
 
-    private static void ApplyCurrentCheckScores(BingoCheckResult checkResult)
+    private static void ApplyCurrentCheckScores(
+        BingoCheckResult checkResult,
+        IReadOnlyList<BingoPatternIdentity> latePatterns)
     {
         checkResult.currentCheckPatternPoints = 0;
 
@@ -65,8 +68,12 @@ public class BingoChecker
                 continue;
             }
 
-            patternResult.scorePoints = GameScoreManager.instance.GetPatternPoints(
-                patternResult.patternType);
+            BingoPatternIdentity identity = BingoPatternIdentity.FromResult(patternResult);
+            patternResult.wasSubmittedLate =
+                BingoPatternIdentityList.Contains(latePatterns, identity);
+            patternResult.scorePoints = patternResult.wasSubmittedLate
+                ? 0
+                : GameScoreManager.instance.GetPatternPoints(patternResult.patternType);
             currentCheckPoints += patternResult.scorePoints;
         }
 
@@ -76,6 +83,63 @@ public class BingoChecker
         checkResult.currentCheckPatternPoints = currentCheckPoints >= maximumScore
             ? maximumScore
             : (int)currentCheckPoints;
+    }
+
+    public List<BingoPatternCheckResult> GetCompletedAvailablePatterns(
+        string playerId,
+        LobbyBoardData boardData,
+        IReadOnlyCollection<int> calledNumbers,
+        IReadOnlyCollection<BingoPatternType> configuredPatternTypes)
+    {
+        List<BingoPatternCheckResult> completedPatterns =
+            new List<BingoPatternCheckResult>();
+
+        if (string.IsNullOrWhiteSpace(playerId) ||
+            boardData?.cellNumbers == null ||
+            configuredPatternTypes == null)
+        {
+            return completedPatterns;
+        }
+
+        HashSet<int> calledNumberSet = calledNumbers != null
+            ? new HashSet<int>(calledNumbers)
+            : new HashSet<int>();
+        List<int> callableCellIndices = new List<int>();
+
+        for (int i = 0; i < boardData.cellNumbers.Count; i++)
+        {
+            bool isFreeCell = boardData.usesFreeCell && i == 12;
+
+            if (isFreeCell || calledNumberSet.Contains(boardData.cellNumbers[i]))
+            {
+                callableCellIndices.Add(i);
+            }
+        }
+
+        BingoCheckResult result = validator.Validate(
+            playerId,
+            boardData,
+            callableCellIndices,
+            calledNumbers,
+            configuredPatternTypes,
+            GetCheckHistory(playerId));
+
+        if (result?.patterns == null)
+        {
+            return completedPatterns;
+        }
+
+        for (int i = 0; i < result.patterns.Count; i++)
+        {
+            BingoPatternCheckResult patternResult = result.patterns[i];
+
+            if (patternResult?.isWinningPattern == true)
+            {
+                completedPatterns.Add(patternResult);
+            }
+        }
+
+        return completedPatterns;
     }
 
     public IReadOnlyList<BingoCheckResult> GetCheckHistory(string playerId)

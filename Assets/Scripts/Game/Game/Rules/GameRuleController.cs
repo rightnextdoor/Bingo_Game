@@ -5,6 +5,7 @@ public class GameRuleCheckDecision
 {
     public GamePlayerStatus playerStatus = GamePlayerStatus.Eligible;
     public bool waitsForWinningCheckAnimation;
+    public bool requiresRiskDecision;
 
     public bool IsFinalForPlayer => playerStatus != GamePlayerStatus.Eligible;
 }
@@ -28,7 +29,8 @@ public class GameRuleController
             : ResolveDefaultRule(gameModeType);
 
         isSupported = activeRuleType == BingoRuleType.Traditional ||
-                      activeRuleType == BingoRuleType.Blackout;
+                      activeRuleType == BingoRuleType.Blackout ||
+                      activeRuleType == BingoRuleType.Risk;
     }
 
     public bool TryResolveCheck(
@@ -47,12 +49,17 @@ public class GameRuleController
             checkResult.HasWinningPattern &&
             !checkResult.HasFailedPattern;
 
+        bool isRisk = activeRuleType == BingoRuleType.Risk;
+
         decision = new GameRuleCheckDecision
         {
-            playerStatus = isValidWin
-                ? GamePlayerStatus.Won
-                : GamePlayerStatus.Lost,
-            waitsForWinningCheckAnimation = isValidWin
+            playerStatus = isValidWin && isRisk
+                ? GamePlayerStatus.Eligible
+                : isValidWin
+                    ? GamePlayerStatus.Won
+                    : GamePlayerStatus.Lost,
+            waitsForWinningCheckAnimation = isValidWin && !isRisk,
+            requiresRiskDecision = isValidWin && isRisk
         };
 
         return true;
@@ -64,6 +71,7 @@ public class GameRuleController
         {
             case BingoRuleType.Traditional:
             case BingoRuleType.Blackout:
+            case BingoRuleType.Risk:
                 return GamePlayerStatus.Lost;
 
             default:

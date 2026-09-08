@@ -52,6 +52,7 @@ public class BingoPatternCheckResult
     public List<BingoCellCheckResult> cells = new List<BingoCellCheckResult>();
     public bool isWinningPattern;
     public int scorePoints;
+    public bool wasSubmittedLate;
 
     public BingoPatternCheckResult(
         BingoPatternType patternType,
@@ -71,6 +72,29 @@ public class BingoCheckResult
     public int checkNumber;
     public int currentCheckPatternPoints;
     public List<BingoPatternCheckResult> patterns = new List<BingoPatternCheckResult>();
+
+    public int LatePatternCount
+    {
+        get
+        {
+            if (patterns == null)
+            {
+                return 0;
+            }
+
+            int count = 0;
+
+            for (int i = 0; i < patterns.Count; i++)
+            {
+                if (patterns[i]?.wasSubmittedLate == true)
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+    }
 
     public bool HasCheckedPatterns => patterns != null && patterns.Count > 0;
 

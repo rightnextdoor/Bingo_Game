@@ -510,6 +510,32 @@ public class NetworkGameSessionManager : MonoBehaviour
         return true;
     }
 
+    public bool ProcessAuthorityRiskDecision(
+        ulong clientId,
+        string gameId,
+        bool endPlayerGame)
+    {
+        if (!CanProcessAuthorityOperation() ||
+            !connectionRegistry.TryGetBingoUserId(clientId, out string userId))
+        {
+            return false;
+        }
+
+        GameSessionData gameSessionData = FindGame(gameId);
+
+        if (!GameBingoCheckAuthority.ResolveRiskDecision(
+                gameSessionData,
+                userId,
+                endPlayerGame))
+        {
+            return false;
+        }
+
+        gameSessionData.revision++;
+        BroadcastGameSessionUpdated(gameSessionData);
+        return true;
+    }
+
     public bool DeleteGame(string gameId, bool notifyPlayers = true)
     {
         GameSessionData gameSessionData = FindGame(gameId);

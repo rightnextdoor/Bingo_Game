@@ -98,6 +98,13 @@ public static class GameScoreAuthority
 
         playerData.areStatisticsFinalized = true;
         playerData.isScorePersisted = false;
+        playerData.isSubmitTimerActive = false;
+        playerData.submitTimerEndTime = 0d;
+        playerData.isRiskDecisionPending = false;
+        playerData.queuedRiskPatterns?.Clear();
+        playerData.activeRiskSubmitPatterns?.Clear();
+        playerData.lateRiskPatterns?.Clear();
+        playerData.pendingRiskCheckPatterns?.Clear();
         return true;
     }
 

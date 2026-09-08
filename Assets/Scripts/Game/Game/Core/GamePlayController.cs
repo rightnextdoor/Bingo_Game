@@ -5,6 +5,8 @@ using UnityEngine;
 [Serializable]
 public class GamePlayController
 {
+    public const float RiskSubmitCutoffSeconds = 2f;
+
     [SerializeField] private GamePlayPhase phase;
     [SerializeField] private GameEndReason endReason;
 
@@ -22,11 +24,13 @@ public class GamePlayController
     [SerializeField] private GamePlayTimer riskTimer = new GamePlayTimer();
     [SerializeField] private float firstBallCountdownSeconds;
     [SerializeField] private float nextBallCountdownSeconds;
+    [SerializeField] private float riskMatchDurationSeconds;
 
     [SerializeField] private int ballCallRequestCount;
     [SerializeField] private string matchEndingCheckPlayerId = string.Empty;
     [SerializeField] private List<string> pendingCheckAnimationPlayerIds = new List<string>();
     [SerializeField] private bool isBallPoolExhaustedAwaitingChecks;
+    [SerializeField] private bool isRiskTimerExpiredAwaitingChecks;
 
     [NonSerialized] private BingoChecker bingoChecker = new BingoChecker();
 
@@ -43,6 +47,8 @@ public class GamePlayController
     public bool HasPendingCheckAnimations => pendingCheckAnimationPlayerIds != null &&
                                              pendingCheckAnimationPlayerIds.Count > 0;
     public bool IsBallPoolExhaustedAwaitingChecks => isBallPoolExhaustedAwaitingChecks;
+    public float NextBallCountdownSeconds => nextBallCountdownSeconds;
+    public bool IsRiskRule => ruleController?.ActiveRuleType == BingoRuleType.Risk;
     public bool IsRunning =>
         phase == GamePlayPhase.FirstBallCountdown ||
         phase == GamePlayPhase.NextBallCountdown;
@@ -50,7 +56,8 @@ public class GamePlayController
         ruleController != null &&
         ruleController.IsSupported &&
         IsRunning &&
-        !isBallPoolExhaustedAwaitingChecks;
+        !isBallPoolExhaustedAwaitingChecks &&
+        !isRiskTimerExpiredAwaitingChecks;
 
     public GamePlayController()
     {
@@ -91,6 +98,7 @@ public class GamePlayController
         riskTimer = new GamePlayTimer(controller.riskTimer);
         firstBallCountdownSeconds = controller.firstBallCountdownSeconds;
         nextBallCountdownSeconds = controller.nextBallCountdownSeconds;
+        riskMatchDurationSeconds = controller.riskMatchDurationSeconds;
         ballCallRequestCount = controller.ballCallRequestCount;
         matchEndingCheckPlayerId = controller.matchEndingCheckPlayerId ?? string.Empty;
         pendingCheckAnimationPlayerIds = controller.pendingCheckAnimationPlayerIds != null
@@ -98,6 +106,8 @@ public class GamePlayController
             : new List<string>();
         isBallPoolExhaustedAwaitingChecks =
             controller.isBallPoolExhaustedAwaitingChecks;
+        isRiskTimerExpiredAwaitingChecks =
+            controller.isRiskTimerExpiredAwaitingChecks;
 
         ruleController = new GameRuleController();
         ruleController.Setup(gameModeType, hasRule, ruleType);
@@ -120,6 +130,9 @@ public class GamePlayController
         ruleType = requestedRuleType;
         firstBallCountdownSeconds = Mathf.Max(0f, requestedFirstBallCountdownSeconds);
         nextBallCountdownSeconds = Mathf.Max(0f, requestedNextBallCountdownSeconds);
+        riskMatchDurationSeconds = GameSettings.instance != null
+            ? GameSettings.instance.RiskMatchDurationSeconds
+            : GameSettings.DefaultRiskMatchDurationSeconds;
         phase = GamePlayPhase.WaitingForFirstPlayer;
         endReason = GameEndReason.None;
         ballCallRequestCount = 0;
@@ -127,6 +140,7 @@ public class GamePlayController
         pendingCheckAnimationPlayerIds ??= new List<string>();
         pendingCheckAnimationPlayerIds.Clear();
         isBallPoolExhaustedAwaitingChecks = false;
+        isRiskTimerExpiredAwaitingChecks = false;
 
         ballController ??= new GameBallController();
         ballController.Setup(ballCountType);
@@ -152,6 +166,37 @@ public class GamePlayController
 
         phase = GamePlayPhase.FirstBallCountdown;
         ballTimer.Start(firstBallCountdownSeconds);
+
+        if (IsRiskRule)
+        {
+            riskTimer.Start(riskMatchDurationSeconds);
+        }
+
+        return true;
+    }
+
+    public bool UpdateRiskTimer()
+    {
+        if (!IsRiskRule ||
+            phase == GamePlayPhase.Ended ||
+            riskTimer == null ||
+            !riskTimer.HasExpired())
+        {
+            return false;
+        }
+
+        if (HasPendingCheckAnimations)
+        {
+            if (isRiskTimerExpiredAwaitingChecks)
+            {
+                return false;
+            }
+
+            isRiskTimerExpiredAwaitingChecks = true;
+            return true;
+        }
+
+        EndGame(GameEndReason.TimerExpired);
         return true;
     }
 
@@ -225,7 +270,8 @@ public class GamePlayController
 
         if (!CanAcceptBingoChecks ||
             string.IsNullOrWhiteSpace(playerId) ||
-            boardData == null)
+            boardData == null ||
+            HasPendingCheckAnimation(playerId))
         {
             return false;
         }
@@ -237,7 +283,8 @@ public class GamePlayController
                 boardData,
                 pressedCellIndices,
                 ballController?.CalledNumbers,
-                configuredPatternTypes))
+                configuredPatternTypes,
+                null))
         {
             return false;
         }
@@ -285,6 +332,12 @@ public class GamePlayController
         if (isBallPoolExhaustedAwaitingChecks && !HasPendingCheckAnimations)
         {
             EndGame(GameEndReason.BallPoolExhausted);
+            return true;
+        }
+
+        if (isRiskTimerExpiredAwaitingChecks && !HasPendingCheckAnimations)
+        {
+            EndGame(GameEndReason.TimerExpired);
         }
 
         return true;
@@ -310,6 +363,71 @@ public class GamePlayController
         return !string.IsNullOrWhiteSpace(playerId) &&
                pendingCheckAnimationPlayerIds != null &&
                pendingCheckAnimationPlayerIds.Remove(playerId);
+    }
+
+    public bool HasPendingCheckAnimation(string playerId)
+    {
+        return !string.IsNullOrWhiteSpace(playerId) &&
+               pendingCheckAnimationPlayerIds != null &&
+               pendingCheckAnimationPlayerIds.Contains(playerId);
+    }
+
+    public List<BingoPatternCheckResult> GetCompletedAvailablePatterns(
+        string playerId,
+        LobbyBoardData boardData,
+        IReadOnlyCollection<BingoPatternType> configuredPatternTypes)
+    {
+        bingoChecker ??= new BingoChecker();
+        return bingoChecker.GetCompletedAvailablePatterns(
+            playerId,
+            boardData,
+            ballController?.CalledNumbers,
+            configuredPatternTypes);
+    }
+
+    public bool TryCheckRiskBingo(
+        string playerId,
+        LobbyBoardData boardData,
+        IReadOnlyCollection<int> pressedCellIndices,
+        IReadOnlyCollection<BingoPatternType> configuredPatternTypes,
+        IReadOnlyList<BingoPatternIdentity> latePatterns,
+        out BingoCheckResult checkResult,
+        out GameRuleCheckDecision ruleDecision)
+    {
+        checkResult = null;
+        ruleDecision = null;
+
+        if (!CanAcceptBingoChecks ||
+            !IsRiskRule ||
+            string.IsNullOrWhiteSpace(playerId) ||
+            boardData == null ||
+            HasPendingCheckAnimation(playerId))
+        {
+            return false;
+        }
+
+        bingoChecker ??= new BingoChecker();
+
+        if (!bingoChecker.TryCheck(
+                playerId,
+                boardData,
+                pressedCellIndices,
+                ballController?.CalledNumbers,
+                configuredPatternTypes,
+                latePatterns))
+        {
+            return false;
+        }
+
+        checkResult = bingoChecker.CurrentCheckResult;
+
+        if (!ruleController.TryResolveCheck(checkResult, out ruleDecision))
+        {
+            return false;
+        }
+
+        AddPendingCheckAnimation(playerId);
+        return true;
     }
 
     public List<BingoPatternType> GetAvailablePatternTypes(
@@ -351,6 +469,7 @@ public class GamePlayController
         phase = GamePlayPhase.Ended;
         endReason = reason;
         isBallPoolExhaustedAwaitingChecks = false;
+        isRiskTimerExpiredAwaitingChecks = false;
         ballTimer?.Stop();
         riskTimer?.Stop();
         Debug.Log("[GamePlayController] Game is over.");

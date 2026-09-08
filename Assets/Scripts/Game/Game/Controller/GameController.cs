@@ -15,6 +15,7 @@ public class GameController : MonoBehaviour
     [SerializeField] private LobbyPlayerListController playerListController;
     [SerializeField] private GameInfoController gameInfoController;
     [SerializeField] private LobbyCustomPanelController customPanelController;
+    [SerializeField] private RiskDecisionPopupController riskDecisionPopupController;
 
     #endregion
 
@@ -29,6 +30,10 @@ public class GameController : MonoBehaviour
     private Coroutine bindRoutine;
     private string trackedPatternGameId = string.Empty;
     private bool isBingoCheckPending;
+    private GameSessionData displayedGameSession;
+    private string riskNotificationGameId = string.Empty;
+    private int previousRiskRemainingSeconds = -1;
+    private double lastRiskSubmitNotificationEndTime;
 
     #endregion
 
@@ -55,12 +60,19 @@ public class GameController : MonoBehaviour
             bingoCheckAnimationController =
                 transform.root.GetComponentInChildren<BingoCheckAnimationController>(true);
         }
+
+        if (riskDecisionPopupController == null && transform.root != null)
+        {
+            riskDecisionPopupController =
+                transform.root.GetComponentInChildren<RiskDecisionPopupController>(true);
+        }
     }
 
     private void OnEnable()
     {
         SubscribeToHeader();
         SubscribeToBoardSection();
+        SubscribeToRiskDecisionPopup();
         bindRoutine = StartCoroutine(BindWhenGameIsReady());
     }
 
@@ -74,9 +86,15 @@ public class GameController : MonoBehaviour
 
         UnsubscribeFromHeader();
         UnsubscribeFromBoardSection();
+        UnsubscribeFromRiskDecisionPopup();
         UnsubscribeFromGameSessionManager();
         bingoCheckAnimationController?.StopAndClear();
         isBingoCheckPending = false;
+    }
+
+    private void Update()
+    {
+        UpdateRiskTimeNotifications();
     }
 
     #endregion
@@ -89,6 +107,18 @@ public class GameController : MonoBehaviour
         {
             ClearDisplay();
             return;
+        }
+
+        bool isNewGame = !string.Equals(
+            riskNotificationGameId,
+            gameSessionData.gameId,
+            StringComparison.Ordinal);
+
+        displayedGameSession = new GameSessionData(gameSessionData);
+
+        if (isNewGame)
+        {
+            ResetRiskNotificationTracking(gameSessionData);
         }
 
         GameModeManager gameModeManager = GameModeManager.instance;
@@ -107,6 +137,8 @@ public class GameController : MonoBehaviour
         DisplayPlayerList(gameSessionData);
         DisplayGameModeInfo(gameSessionData, gameModeData, gameName, gameModeManager);
         DisplayCustomLobbyInfo(gameSessionData);
+        ShowRiskSubmitNotificationIfNeeded(gameSessionData);
+        CloseRiskDecisionPopupIfResolved(gameSessionData);
     }
 
     public void SetTimerSeconds(float remainingSeconds)
@@ -221,7 +253,8 @@ public class GameController : MonoBehaviour
             gameSessionData.ballCountType,
             gameSessionData.hasRule,
             ruleDescription,
-            gameSessionData.patternTypes);
+            gameSessionData.patternTypes,
+            true);
     }
 
     private void DisplayCustomLobbyInfo(GameSessionData gameSessionData)
@@ -246,6 +279,10 @@ public class GameController : MonoBehaviour
         boardPatternTracker.Clear();
         trackedPatternGameId = string.Empty;
         isBingoCheckPending = false;
+        displayedGameSession = null;
+        riskNotificationGameId = string.Empty;
+        previousRiskRemainingSeconds = -1;
+        lastRiskSubmitNotificationEndTime = 0d;
         headerController?.ClearHeader();
         boardSectionController?.ClearBoard();
         boardSectionController?.SetBoardInteractable(false);
@@ -282,6 +319,7 @@ public class GameController : MonoBehaviour
         bool playerCanUseBoard =
             boardDisplayed &&
             localPlayer.gameStatus == GamePlayerStatus.Eligible &&
+            !localPlayer.isRiskDecisionPending &&
             gameSessionData.gameState != GameSessionState.Completed;
         bool playerCanSubmitBingo =
             playerCanUseBoard &&
@@ -478,18 +516,53 @@ public class GameController : MonoBehaviour
 
         BingoCheckResult checkResult = resolvedData.checkResult;
         GamePlayerStatus playerStatus = resolvedData.playerStatus;
+        bool requiresRiskDecision = resolvedData.requiresRiskDecision;
+        int latePatternCount = resolvedData.latePatternCount;
         bingoCheckAnimationController.PlayCheckAnimation(
             checkResult,
-            () => PlayFinalManualCheckAnimation(checkResult, playerStatus));
+            () => PlayFinalManualCheckAnimation(
+                checkResult,
+                playerStatus,
+                requiresRiskDecision,
+                latePatternCount));
     }
 
     private void PlayFinalManualCheckAnimation(
         BingoCheckResult checkResult,
-        GamePlayerStatus playerStatus)
+        GamePlayerStatus playerStatus,
+        bool requiresRiskDecision,
+        int latePatternCount)
     {
         if (checkResult == null || bingoCheckAnimationController == null)
         {
             NotifyBingoCheckAnimationCompleted();
+            return;
+        }
+
+        if (latePatternCount > 0 && !checkResult.HasFailedPattern)
+        {
+            NotificationService.instance?.SendLocal(
+                UIMessageType.RiskPatternSubmittedLate,
+                "One or more Bingo patterns were submitted too late. No points were awarded for those patterns.");
+        }
+
+        if (requiresRiskDecision)
+        {
+            bingoCheckAnimationController.PlayWinnerAnimation(
+                checkResult.GetWinningPatterns());
+            NotifyBingoCheckAnimationCompleted();
+
+            GameSessionData currentSession =
+                GameSessionManager.instance?.CurrentGameSession;
+            GamePlayerData localPlayer =
+                currentSession?.GetPlayer(UserManager.instance?.UserId);
+
+            if (currentSession?.gameState == GameSessionState.InProgress &&
+                localPlayer?.isRiskDecisionPending == true)
+            {
+                OpenRiskDecisionPopup();
+            }
+
             return;
         }
 
@@ -544,7 +617,27 @@ public class GameController : MonoBehaviour
         GamePlayerData playerData,
         GameSessionData gameSessionData)
     {
-        if (playerData == null || playerData.gameStatus == GamePlayerStatus.Eligible)
+        if (playerData == null)
+        {
+            return string.Empty;
+        }
+
+        bool isRisk =
+            gameSessionData?.gameModeType == BingoGameModeType.Risk ||
+            (gameSessionData?.hasRule == true &&
+             gameSessionData.ruleType == BingoRuleType.Risk);
+
+        if (isRisk)
+        {
+            return playerData.gameStatus switch
+            {
+                GamePlayerStatus.Won => $"WON - SCORE: {playerData.currentMatchScore}",
+                GamePlayerStatus.Lost => $"LOST - SCORE: {playerData.currentMatchScore}",
+                _ => $"SCORE: {playerData.currentMatchScore}"
+            };
+        }
+
+        if (playerData.gameStatus == GamePlayerStatus.Eligible)
         {
             return string.Empty;
         }
@@ -570,6 +663,155 @@ public class GameController : MonoBehaviour
             GameSessionManager.instance.GamePlayerMarkedCellChanged -= OnGamePlayerMarkedCellChanged;
             GameSessionManager.instance.BingoCheckResolved -= OnBingoCheckResolved;
         }
+    }
+
+    #endregion
+
+    #region Risk
+
+    private void SubscribeToRiskDecisionPopup()
+    {
+        if (riskDecisionPopupController == null)
+        {
+            return;
+        }
+
+        riskDecisionPopupController.DecisionSubmitted -= OnRiskDecisionSubmitted;
+        riskDecisionPopupController.DecisionSubmitted += OnRiskDecisionSubmitted;
+    }
+
+    private void UnsubscribeFromRiskDecisionPopup()
+    {
+        if (riskDecisionPopupController != null)
+        {
+            riskDecisionPopupController.DecisionSubmitted -= OnRiskDecisionSubmitted;
+        }
+    }
+
+    private void OnRiskDecisionSubmitted(bool endPlayerGame)
+    {
+        if (!endPlayerGame)
+        {
+            bingoCheckAnimationController?.ContinuePlaying();
+        }
+
+        DisplayPlayerBoard(GameSessionManager.instance?.CurrentGameSession);
+    }
+
+    private void OpenRiskDecisionPopup()
+    {
+        if (PopupManager.instance == null)
+        {
+            Debug.LogWarning(
+                "[GameController] Risk decision popup could not open because PopupManager was not found.");
+            return;
+        }
+
+        PopupManager.instance.OpenRiskDecisionPopup();
+    }
+
+    private void CloseRiskDecisionPopupIfResolved(GameSessionData gameSessionData)
+    {
+        if (PopupManager.instance?.ActivePopupId != PopupId.RiskDecision)
+        {
+            return;
+        }
+
+        GamePlayerData localPlayer =
+            gameSessionData?.GetPlayer(UserManager.instance?.UserId);
+
+        if (localPlayer == null ||
+            !localPlayer.isRiskDecisionPending ||
+            gameSessionData.gameState == GameSessionState.Completed)
+        {
+            PopupManager.instance.CloseActivePopup();
+        }
+    }
+
+    private void ResetRiskNotificationTracking(GameSessionData gameSessionData)
+    {
+        riskNotificationGameId = gameSessionData?.gameId ?? string.Empty;
+        lastRiskSubmitNotificationEndTime = 0d;
+
+        GamePlayTimer riskTimer = gameSessionData?.gamePlayController?.RiskTimer;
+        previousRiskRemainingSeconds = riskTimer?.IsActive == true
+            ? Mathf.Max(0, Mathf.CeilToInt(riskTimer.GetRemainingSeconds()))
+            : -1;
+    }
+
+    private void ShowRiskSubmitNotificationIfNeeded(GameSessionData gameSessionData)
+    {
+        if (!RiskGameplayAuthority.IsRiskGame(gameSessionData))
+        {
+            return;
+        }
+
+        GamePlayerData localPlayer =
+            gameSessionData.GetPlayer(UserManager.instance?.UserId);
+
+        if (localPlayer == null ||
+            !localPlayer.isSubmitTimerActive ||
+            localPlayer.submitTimerEndTime <= GamePlayTimer.GetCurrentTime() ||
+            Math.Abs(
+                localPlayer.submitTimerEndTime -
+                lastRiskSubmitNotificationEndTime) < 0.01d)
+        {
+            return;
+        }
+
+        lastRiskSubmitNotificationEndTime = localPlayer.submitTimerEndTime;
+        NotificationService.instance?.SendLocal(
+            UIMessageType.RiskPatternAvailable,
+            "You have a Bingo pattern. Submit it before time runs out or it will not award points.");
+    }
+
+    private void UpdateRiskTimeNotifications()
+    {
+        if (!RiskGameplayAuthority.IsRiskGame(displayedGameSession))
+        {
+            previousRiskRemainingSeconds = -1;
+            return;
+        }
+
+        GamePlayTimer riskTimer = displayedGameSession.gamePlayController?.RiskTimer;
+
+        if (riskTimer?.IsActive != true)
+        {
+            return;
+        }
+
+        int currentSeconds = Mathf.Max(
+            0,
+            Mathf.CeilToInt(riskTimer.GetRemainingSeconds()));
+
+        if (previousRiskRemainingSeconds < 0)
+        {
+            previousRiskRemainingSeconds = currentSeconds;
+            return;
+        }
+
+        for (int crossedSecond = previousRiskRemainingSeconds - 1;
+             crossedSecond >= currentSeconds;
+             crossedSecond--)
+        {
+            if (crossedSecond <= 0 ||
+                (crossedSecond != 30 &&
+                 crossedSecond != 10 &&
+                 crossedSecond % 60 != 0))
+            {
+                continue;
+            }
+
+            string message = crossedSecond >= 60
+                ? $"Risk game time: {crossedSecond / 60} minute{(crossedSecond == 60 ? string.Empty : "s")} remaining."
+                : $"Risk game time: {crossedSecond} seconds remaining.";
+
+            NotificationService.instance?.SendLocal(
+                UIMessageType.RiskTimeRemaining,
+                message);
+        }
+
+        previousRiskRemainingSeconds = currentSeconds;
     }
 
     #endregion

@@ -211,12 +211,16 @@ public class GameHeaderController : MonoBehaviour
             return;
         }
 
-        if (isRiskUiActive)
+        if (isRisk)
         {
-            string statusSuffix = localPlayer.gameStatus == GamePlayerStatus.Eligible
-                ? string.Empty
-                : $" - {localPlayer.gameStatus.ToString().ToUpperInvariant()}";
-            SetText(localScoreStatusText, $"Score: {localPlayer.currentMatchScore}{statusSuffix}");
+            string riskScoreText = localPlayer.gameStatus switch
+            {
+                GamePlayerStatus.Won => $"Won - Score: {localPlayer.currentMatchScore}",
+                GamePlayerStatus.Lost => $"Lost - Score: {localPlayer.currentMatchScore}",
+                _ => $"Score: {localPlayer.currentMatchScore}"
+            };
+
+            SetText(localScoreStatusText, riskScoreText);
             return;
         }
 

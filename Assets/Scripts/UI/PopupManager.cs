@@ -13,7 +13,8 @@ public enum PopupId
     HostSettings,
     ChatSettings,
     ChatReport,
-    GameRejoin
+    GameRejoin,
+    RiskDecision
 }
 
 [Serializable]
@@ -143,6 +144,11 @@ public class PopupManager : MonoBehaviour
     public void OpenGameRejoinPopup()
     {
         OpenPopup(PopupId.GameRejoin);
+    }
+
+    public void OpenRiskDecisionPopup()
+    {
+        OpenPopup(PopupId.RiskDecision);
     }
 
     public void OpenAfterUserCreatedPopup()

@@ -13,6 +13,7 @@ public class MainMenuPatternInfoItem : MonoBehaviour,
     [SerializeField] private Image backgroundImage;
     [SerializeField] private GameObject highlightObject;
     [SerializeField] private TMP_Text patternNameText;
+    [SerializeField] private TMP_Text patternScoreText;
 
     [Header("Tooltip Theme")]
     [SerializeField] private UIThemeBackgroundType tooltipBackgroundType = UIThemeBackgroundType.PatternTooltip;
@@ -45,7 +46,7 @@ public class MainMenuPatternInfoItem : MonoBehaviour,
 
     #region Setup
 
-    public void Setup(BingoPatternType newPatternType)
+    public void Setup(BingoPatternType newPatternType, bool showPatternScore = false)
     {
         CacheReferences();
 
@@ -62,7 +63,34 @@ public class MainMenuPatternInfoItem : MonoBehaviour,
             backgroundImage.raycastTarget = true;
         }
 
+        SetPatternScore(showPatternScore);
+
         SetHighlighted(false);
+    }
+
+    private void SetPatternScore(bool showPatternScore)
+    {
+        if (patternScoreText == null)
+        {
+            return;
+        }
+
+        bool canShowScore = showPatternScore &&
+                            GameScoreManager.instance != null &&
+                            GameScoreManager.instance.IsReady;
+
+        patternScoreText.gameObject.SetActive(canShowScore);
+
+        if (canShowScore)
+        {
+            int points = GameScoreManager.instance.GetPatternPoints(patternType);
+            patternScoreText.text = $"{points:N0} Points";
+            patternScoreText.raycastTarget = false;
+        }
+        else
+        {
+            patternScoreText.text = string.Empty;
+        }
     }
 
     #endregion

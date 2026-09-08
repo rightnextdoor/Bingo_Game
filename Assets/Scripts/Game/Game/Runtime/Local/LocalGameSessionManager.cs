@@ -496,6 +496,32 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
         return false;
     }
 
+    public bool TryResolveRiskDecision(
+        string gameId,
+        UserData userData,
+        bool endPlayerGame)
+    {
+        if (!isReady || userData == null || !userData.HasUser)
+        {
+            return false;
+        }
+
+        GameSessionData gameSessionData = FindGame(gameId);
+
+        if (!GameBingoCheckAuthority.ResolveRiskDecision(
+                gameSessionData,
+                userData.userId,
+                endPlayerGame))
+        {
+            return false;
+        }
+
+        GameScoreAuthority.PersistFinalizedLocalScores(gameSessionData);
+        gameSessionData.revision++;
+        LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData));
+        return true;
+    }
+
     public bool DeleteGame(string gameId)
     {
         GameSessionData gameSessionData = FindGame(gameId);

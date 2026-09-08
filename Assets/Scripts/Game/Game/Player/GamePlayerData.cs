@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 [Serializable]
 public class GamePlayerData
@@ -20,6 +21,11 @@ public class GamePlayerData
     public bool isScorePersisted;
     public bool isSubmitTimerActive;
     public double submitTimerEndTime;
+    public bool isRiskDecisionPending;
+    public List<BingoPatternIdentity> queuedRiskPatterns;
+    public List<BingoPatternIdentity> activeRiskSubmitPatterns;
+    public List<BingoPatternIdentity> lateRiskPatterns;
+    public List<BingoPatternIdentity> pendingRiskCheckPatterns;
 
     public LobbyBoardData boardData;
 
@@ -45,6 +51,11 @@ public class GamePlayerData
         isScorePersisted = false;
         isSubmitTimerActive = false;
         submitTimerEndTime = 0d;
+        isRiskDecisionPending = false;
+        queuedRiskPatterns = new List<BingoPatternIdentity>();
+        activeRiskSubmitPatterns = new List<BingoPatternIdentity>();
+        lateRiskPatterns = new List<BingoPatternIdentity>();
+        pendingRiskCheckPatterns = new List<BingoPatternIdentity>();
         boardData = new LobbyBoardData();
     }
 
@@ -88,6 +99,11 @@ public class GamePlayerData
         isScorePersisted = playerData.isScorePersisted;
         isSubmitTimerActive = playerData.isSubmitTimerActive;
         submitTimerEndTime = playerData.submitTimerEndTime;
+        isRiskDecisionPending = playerData.isRiskDecisionPending;
+        queuedRiskPatterns = BingoPatternIdentityList.Clone(playerData.queuedRiskPatterns);
+        activeRiskSubmitPatterns = BingoPatternIdentityList.Clone(playerData.activeRiskSubmitPatterns);
+        lateRiskPatterns = BingoPatternIdentityList.Clone(playerData.lateRiskPatterns);
+        pendingRiskCheckPatterns = BingoPatternIdentityList.Clone(playerData.pendingRiskCheckPatterns);
         boardData = new LobbyBoardData(playerData.boardData);
     }
 }

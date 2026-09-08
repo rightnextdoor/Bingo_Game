@@ -13,6 +13,9 @@ MonoBehaviour:
   m_Name: Risk
   m_EditorClassIdentifier: Assembly-CSharp::BingoGameRuleData
   ruleType: 2
-  description: Complete patterns to stay in the game and decide whether to stop or
-    keep playing. Continuing can lead to better results, but if another player stops
-    first, remaining players may lose their chance to score.
+  description: Complete and submit marked Bingo patterns to earn points. A completed
+    pattern that is not submitted during its timed opportunity can still be checked
+    later, but it awards no points. After a successful check, choose Keep Playing
+    to risk your temporary score for more points or End My Game to secure it. A bad
+    check, the Risk timer ending, or the ball pool ending while you are still playing
+    causes a loss and discards your temporary score.

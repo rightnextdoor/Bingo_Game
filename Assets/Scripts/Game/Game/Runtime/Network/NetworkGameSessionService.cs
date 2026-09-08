@@ -264,6 +264,28 @@ public class NetworkGameSessionService : MonoBehaviour, IGameSessionService
                connection.RequestBingoCheckAnimationCompleted(gameId);
     }
 
+    public bool TryResolveRiskDecision(
+        string gameId,
+        UserData userData,
+        bool endPlayerGame)
+    {
+        if (!isReady ||
+            networkBootstrap == null ||
+            !networkBootstrap.IsConnected ||
+            userData == null ||
+            !userData.HasUser ||
+            string.IsNullOrWhiteSpace(gameId))
+        {
+            return false;
+        }
+
+        NetworkGameSessionConnection connection =
+            NetworkGameSessionConnection.GetLocalConnection();
+
+        return connection != null &&
+               connection.RequestRiskDecision(gameId, endPlayerGame);
+    }
+
     private async Task<NetworkGameSessionConnection> WaitForLocalGameConnectionAsync()
     {
         float timeoutTime = Time.realtimeSinceStartup + GameConnectionTimeoutSeconds;

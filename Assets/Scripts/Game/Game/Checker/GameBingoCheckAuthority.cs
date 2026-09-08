@@ -13,11 +13,19 @@ public static class GameBingoCheckAuthority
         }
 
         GamePlayController playController = gameSessionData.gamePlayController;
-        bool changed = playController.UpdateBallCallLoop();
+        bool changed = playController.UpdateRiskTimer();
+
+        if (playController.Phase != GamePlayPhase.Ended)
+        {
+            changed |= RiskGameplayAuthority.UpdatePatternWindows(gameSessionData);
+            changed |= playController.UpdateBallCallLoop();
+            changed |= RiskGameplayAuthority.UpdatePatternWindows(gameSessionData);
+        }
 
         if (playController.Phase == GamePlayPhase.Ended &&
             gameSessionData.gameState != GameSessionState.Completed)
         {
+            RiskGameplayAuthority.ClearAllPlayerTiming(gameSessionData);
             GameScoreAuthority.FinalizeEligiblePlayers(
                 gameSessionData,
                 playController.ResolveEligiblePlayerAtMatchEnd());
@@ -71,7 +79,9 @@ public static class GameBingoCheckAuthority
 
         if (!playerData.isConnected ||
             !playerData.canRejoin ||
-            playerData.gameStatus != GamePlayerStatus.Eligible)
+            playerData.gameStatus != GamePlayerStatus.Eligible ||
+            playerData.isRiskDecisionPending ||
+            gameSessionData.gamePlayController.HasPendingCheckAnimation(userId))
         {
             return GameBingoCheckResolvedData.Rejected(
                 gameId,
@@ -91,19 +101,38 @@ public static class GameBingoCheckAuthority
 
         GamePlayController playController = gameSessionData.gamePlayController;
 
-        if (!playController.TryCheckBingo(
+        bool checkStarted = playController.IsRiskRule
+            ? playController.TryCheckRiskBingo(
                 userId,
                 playerData.boardData,
                 requestData.markedCellIndices,
                 gameSessionData.patternTypes,
+                playerData.lateRiskPatterns,
                 out BingoCheckResult checkResult,
-                out GameRuleCheckDecision ruleDecision))
+                out GameRuleCheckDecision ruleDecision)
+            : playController.TryCheckBingo(
+                userId,
+                playerData.boardData,
+                requestData.markedCellIndices,
+                gameSessionData.patternTypes,
+                out checkResult,
+                out ruleDecision);
+
+        if (!checkStarted)
         {
             return GameBingoCheckResolvedData.Rejected(
                 gameId,
                 userId,
                 revision,
                 "The Bingo checker or active rule could not process this request.");
+        }
+
+        if (playController.IsRiskRule)
+        {
+            RiskGameplayAuthority.PrepareCheckResult(
+                playerData,
+                checkResult,
+                ruleDecision);
         }
 
         int currentCheckScore = GameScoreAuthority.ApplyCheckResult(
@@ -137,6 +166,8 @@ public static class GameBingoCheckAuthority
             currentCheckScore = currentCheckScore,
             currentMatchScore = playerData.currentMatchScore,
             matchCompleted = gameSessionData.gameState == GameSessionState.Completed,
+            requiresRiskDecision = ruleDecision.requiresRiskDecision,
+            latePatternCount = checkResult?.LatePatternCount ?? 0,
             availablePatternTypes = playController.GetAvailablePatternTypes(
                 userId,
                 gameSessionData.patternTypes)
@@ -162,6 +193,8 @@ public static class GameBingoCheckAuthority
             return false;
         }
 
+        RiskGameplayAuthority.CompletePendingCheck(gameSessionData, playerData);
+
         if (gameSessionData.gamePlayController.Phase == GamePlayPhase.Ended &&
             gameSessionData.gameState != GameSessionState.Completed)
         {
@@ -172,6 +205,17 @@ public static class GameBingoCheckAuthority
         }
 
         return true;
+    }
+
+    public static bool ResolveRiskDecision(
+        GameSessionData gameSessionData,
+        string userId,
+        bool endPlayerGame)
+    {
+        return RiskGameplayAuthority.ResolveDecision(
+            gameSessionData,
+            userId,
+            endPlayerGame);
     }
 
     private static bool BoardsMatch(LobbyBoardData authoritativeBoard, LobbyBoardData submittedBoard)

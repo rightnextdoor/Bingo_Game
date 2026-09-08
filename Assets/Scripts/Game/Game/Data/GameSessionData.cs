@@ -30,11 +30,14 @@ public class GameSessionData
     public int cachedLossPoints;
     public int cachedDeathWinPoints;
 
+    public int lastRiskPatternScanBallCallCount;
+    public int lastRiskSubmitCutoffBallCallCount;
+
     public List<GamePlayerData> players;
 
     public GameSessionData()
     {
-        dataVersion = 6;
+        dataVersion = 7;
         revision = 1;
         gameId = string.Empty;
         lobbyId = string.Empty;
@@ -56,6 +59,8 @@ public class GameSessionData
         hasCachedScoreValues = false;
         cachedLossPoints = 0;
         cachedDeathWinPoints = 0;
+        lastRiskPatternScanBallCallCount = 0;
+        lastRiskSubmitCutoffBallCallCount = 0;
         players = new List<GamePlayerData>();
     }
 
@@ -137,6 +142,8 @@ public class GameSessionData
         hasCachedScoreValues = gameSessionData.hasCachedScoreValues;
         cachedLossPoints = gameSessionData.cachedLossPoints;
         cachedDeathWinPoints = gameSessionData.cachedDeathWinPoints;
+        lastRiskPatternScanBallCallCount = gameSessionData.lastRiskPatternScanBallCallCount;
+        lastRiskSubmitCutoffBallCallCount = gameSessionData.lastRiskSubmitCutoffBallCallCount;
 
         if (gameSessionData.players == null)
         {
@@ -228,6 +235,11 @@ public class GamePlayerStateChangedData
     public bool isScorePersisted;
     public bool isSubmitTimerActive;
     public double submitTimerEndTime;
+    public bool isRiskDecisionPending;
+    public List<BingoPatternIdentity> queuedRiskPatterns;
+    public List<BingoPatternIdentity> activeRiskSubmitPatterns;
+    public List<BingoPatternIdentity> lateRiskPatterns;
+    public List<BingoPatternIdentity> pendingRiskCheckPatterns;
 
     public GamePlayerStateChangedData()
     {
@@ -235,6 +247,10 @@ public class GamePlayerStateChangedData
         lobbyId = string.Empty;
         revision = 0;
         userId = string.Empty;
+        queuedRiskPatterns = new List<BingoPatternIdentity>();
+        activeRiskSubmitPatterns = new List<BingoPatternIdentity>();
+        lateRiskPatterns = new List<BingoPatternIdentity>();
+        pendingRiskCheckPatterns = new List<BingoPatternIdentity>();
     }
 
     public GamePlayerStateChangedData(GameSessionData gameSessionData, GamePlayerData playerData) : this()
@@ -258,6 +274,11 @@ public class GamePlayerStateChangedData
         isScorePersisted = playerData.isScorePersisted;
         isSubmitTimerActive = playerData.isSubmitTimerActive;
         submitTimerEndTime = playerData.submitTimerEndTime;
+        isRiskDecisionPending = playerData.isRiskDecisionPending;
+        queuedRiskPatterns = BingoPatternIdentityList.Clone(playerData.queuedRiskPatterns);
+        activeRiskSubmitPatterns = BingoPatternIdentityList.Clone(playerData.activeRiskSubmitPatterns);
+        lateRiskPatterns = BingoPatternIdentityList.Clone(playerData.lateRiskPatterns);
+        pendingRiskCheckPatterns = BingoPatternIdentityList.Clone(playerData.pendingRiskCheckPatterns);
     }
 }
 
@@ -359,6 +380,8 @@ public class GameBingoCheckResolvedData
     public int currentCheckScore;
     public int currentMatchScore;
     public bool matchCompleted;
+    public bool requiresRiskDecision;
+    public int latePatternCount;
     public List<BingoPatternType> availablePatternTypes;
 
     public GameBingoCheckResolvedData()

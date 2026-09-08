@@ -331,6 +331,17 @@ public class NetworkGameSessionConnection : NetworkBehaviour
         return true;
     }
 
+    public bool RequestRiskDecision(string gameId, bool endPlayerGame)
+    {
+        if (!IsSpawned || !IsOwner || string.IsNullOrWhiteSpace(gameId))
+        {
+            return false;
+        }
+
+        RequestRiskDecisionRpc(gameId, endPlayerGame);
+        return true;
+    }
+
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Owner)]
     private void RequestRejoinGameRpc(string requestId, string gameId, RpcParams rpcParams = default)
     {
@@ -549,6 +560,18 @@ public class NetworkGameSessionConnection : NetworkBehaviour
         NetworkGameSessionManager.instance?.ProcessAuthorityBingoCheckAnimationCompleted(
             rpcParams.Receive.SenderClientId,
             gameId);
+    }
+
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Owner)]
+    private void RequestRiskDecisionRpc(
+        string gameId,
+        bool endPlayerGame,
+        RpcParams rpcParams = default)
+    {
+        NetworkGameSessionManager.instance?.ProcessAuthorityRiskDecision(
+            rpcParams.Receive.SenderClientId,
+            gameId,
+            endPlayerGame);
     }
 
     public static bool TrySendGameCreationResult(ulong clientId, GameSessionResult result)

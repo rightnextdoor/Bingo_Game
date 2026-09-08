@@ -14,9 +14,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BingoGameModeData
   gameName: Push Your Luck Bingo
   gameModeType: 2
-  description: Complete patterns and decide whether to stop or keep playing. Stopping
-    can secure your result, but continuing gives you a chance to reach harder patterns
-    before another player ends the game.
+  description: Complete and submit patterns to build a temporary score, then decide
+    whether to secure it or keep playing for more. Waiting too long makes completed
+    patterns worth no points, and continuing risks losing the temporary score when
+    time or balls run out.
   ruleData: {fileID: 11400000, guid: ffd4f52ae14b2c2458aed6c0bb21213d, type: 2}
   defaultPattern: {fileID: 11400000, guid: 080b0d25fb7b5e74a8311b66676ef0e5, type: 2}
   specialPatterns:

@@ -609,6 +609,30 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
                    userData);
     }
 
+    public bool ResolveCurrentPlayerRiskDecision(bool endPlayerGame)
+    {
+        if (!HasEnteredGame)
+        {
+            return false;
+        }
+
+        UserData userData = UserManager.instance?.CurrentUser;
+        GamePlayerData playerData = GetCurrentPlayer();
+        IGameSessionService service = GetGameService(runtimeType);
+
+        return userData != null &&
+               userData.HasUser &&
+               playerData != null &&
+               playerData.gameStatus == GamePlayerStatus.Eligible &&
+               playerData.isRiskDecisionPending &&
+               service != null &&
+               service.IsReady &&
+               service.TryResolveRiskDecision(
+                   currentGameSession.gameId,
+                   userData,
+                   endPlayerGame);
+    }
+
     private bool TryApplySuccessfulResult(GameSessionResult result, out GameSessionResult failureResult)
     {
         failureResult = null;
@@ -704,6 +728,11 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         playerData.isScorePersisted = updateData.isScorePersisted;
         playerData.isSubmitTimerActive = updateData.isSubmitTimerActive;
         playerData.submitTimerEndTime = updateData.submitTimerEndTime;
+        playerData.isRiskDecisionPending = updateData.isRiskDecisionPending;
+        playerData.queuedRiskPatterns = BingoPatternIdentityList.Clone(updateData.queuedRiskPatterns);
+        playerData.activeRiskSubmitPatterns = BingoPatternIdentityList.Clone(updateData.activeRiskSubmitPatterns);
+        playerData.lateRiskPatterns = BingoPatternIdentityList.Clone(updateData.lateRiskPatterns);
+        playerData.pendingRiskCheckPatterns = BingoPatternIdentityList.Clone(updateData.pendingRiskCheckPatterns);
         currentGameSession.revision = updateData.revision;
         ApplyFinalizedScoreForCurrentNetworkUser();
         GameSessionUpdated?.Invoke(new GameSessionData(currentGameSession));

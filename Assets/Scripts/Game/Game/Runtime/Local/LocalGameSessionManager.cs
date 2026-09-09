@@ -407,6 +407,7 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
             !playerData.isConnected ||
             !playerData.canRejoin ||
             gameSessionData.gameState == GameSessionState.Completed ||
+            gameSessionData.gamePlayController?.IsPlayerInputClosed == true ||
             boardData?.cellNumbers == null ||
             cellIndex < 0 ||
             cellIndex >= boardData.cellNumbers.Count ||

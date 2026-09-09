@@ -32,9 +32,6 @@ public class VivoxChatService : MonoBehaviour, IChatService
 
     #region Fields
 
-    [Header("Availability")]
-    [SerializeField] private bool allowVivoxConnections;
-
     private OnlineServicesRoot onlineServicesRoot;
 
     private readonly Dictionary<string, ChatConversationReference> conversationByChannelName = new Dictionary<string, ChatConversationReference>();
@@ -57,10 +54,7 @@ public class VivoxChatService : MonoBehaviour, IChatService
     public bool DevelopmentConnectionAvailable => developmentConnectionAvailable;
 #endif
 
-    public bool ConnectionsEnabled => allowVivoxConnections;
-
     public bool IsReady =>
-        allowVivoxConnections &&
         isAdapterReady &&
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         developmentConnectionAvailable &&
@@ -108,12 +102,6 @@ public class VivoxChatService : MonoBehaviour, IChatService
 
     public async Task<bool> EnsureReadyAsync(ChatParticipantData participant)
     {
-        if (!allowVivoxConnections)
-        {
-            lastError = "Vivox connections are temporarily disabled.";
-            return false;
-        }
-
         if (!isAdapterReady || participant == null || !participant.IsValid)
         {
             return false;

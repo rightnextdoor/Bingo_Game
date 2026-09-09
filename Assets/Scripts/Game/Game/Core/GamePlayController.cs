@@ -27,8 +27,10 @@ public class GamePlayController
     [SerializeField] private float riskMatchDurationSeconds;
 
     [SerializeField] private int ballCallRequestCount;
+    [SerializeField] private bool isFinalBallCountdown;
     [SerializeField] private string matchEndingCheckPlayerId = string.Empty;
     [SerializeField] private List<string> pendingCheckAnimationPlayerIds = new List<string>();
+    [SerializeField] private bool isRuleCompletionAwaitingChecks;
     [SerializeField] private bool isBallPoolExhaustedAwaitingChecks;
     [SerializeField] private bool isRiskTimerExpiredAwaitingChecks;
 
@@ -44,9 +46,21 @@ public class GamePlayController
     public GamePlayTimer BallTimer => ballTimer;
     public GamePlayTimer RiskTimer => riskTimer;
     public int BallCallRequestCount => ballCallRequestCount;
+    public bool IsFinalBallCountdown =>
+        isFinalBallCountdown &&
+        phase == GamePlayPhase.NextBallCountdown;
     public bool HasPendingCheckAnimations => pendingCheckAnimationPlayerIds != null &&
                                              pendingCheckAnimationPlayerIds.Count > 0;
+    public bool IsMatchEndPendingChecks =>
+        isBallPoolExhaustedAwaitingChecks ||
+        isRiskTimerExpiredAwaitingChecks;
+    public bool IsPlayerInputClosed =>
+        phase == GamePlayPhase.Ended ||
+        isRuleCompletionAwaitingChecks ||
+        IsMatchEndPendingChecks;
     public bool IsBallPoolExhaustedAwaitingChecks => isBallPoolExhaustedAwaitingChecks;
+    public bool IsRiskTimerExpiredAwaitingChecks => isRiskTimerExpiredAwaitingChecks;
+    public bool IsRuleCompletionAwaitingChecks => isRuleCompletionAwaitingChecks;
     public float NextBallCountdownSeconds => nextBallCountdownSeconds;
     public bool IsRiskRule => ruleController?.ActiveRuleType == BingoRuleType.Risk;
     public bool IsRunning =>
@@ -57,8 +71,7 @@ public class GamePlayController
         ruleController != null &&
         ruleController.IsSupported &&
         IsRunning &&
-        !isBallPoolExhaustedAwaitingChecks &&
-        !isRiskTimerExpiredAwaitingChecks;
+        !IsPlayerInputClosed;
 
     public GamePlayController()
     {
@@ -68,6 +81,7 @@ public class GamePlayController
             true,
             GameSettings.DefaultFirstBallCountdownSeconds,
             GameSettings.DefaultNextBallCountdownSeconds,
+            GameSettings.DefaultRiskMatchDurationSeconds,
             false,
             BingoRuleType.Traditional);
     }
@@ -82,6 +96,7 @@ public class GamePlayController
                 true,
                 GameSettings.DefaultFirstBallCountdownSeconds,
                 GameSettings.DefaultNextBallCountdownSeconds,
+                GameSettings.DefaultRiskMatchDurationSeconds,
                 false,
                 BingoRuleType.Traditional);
             return;
@@ -101,10 +116,13 @@ public class GamePlayController
         nextBallCountdownSeconds = controller.nextBallCountdownSeconds;
         riskMatchDurationSeconds = controller.riskMatchDurationSeconds;
         ballCallRequestCount = controller.ballCallRequestCount;
+        isFinalBallCountdown = controller.isFinalBallCountdown;
         matchEndingCheckPlayerId = controller.matchEndingCheckPlayerId ?? string.Empty;
         pendingCheckAnimationPlayerIds = controller.pendingCheckAnimationPlayerIds != null
             ? new List<string>(controller.pendingCheckAnimationPlayerIds)
             : new List<string>();
+        isRuleCompletionAwaitingChecks =
+            controller.isRuleCompletionAwaitingChecks;
         isBallPoolExhaustedAwaitingChecks =
             controller.isBallPoolExhaustedAwaitingChecks;
         isRiskTimerExpiredAwaitingChecks =
@@ -121,6 +139,7 @@ public class GamePlayController
         bool requestedUseFreeCell,
         float requestedFirstBallCountdownSeconds,
         float requestedNextBallCountdownSeconds,
+        float requestedRiskMatchDurationSeconds,
         bool requestedHasRule,
         BingoRuleType requestedRuleType)
     {
@@ -131,15 +150,15 @@ public class GamePlayController
         ruleType = requestedRuleType;
         firstBallCountdownSeconds = Mathf.Max(0f, requestedFirstBallCountdownSeconds);
         nextBallCountdownSeconds = Mathf.Max(0f, requestedNextBallCountdownSeconds);
-        riskMatchDurationSeconds = GameSettings.instance != null
-            ? GameSettings.instance.RiskMatchDurationSeconds
-            : GameSettings.DefaultRiskMatchDurationSeconds;
+        riskMatchDurationSeconds = Mathf.Max(0f, requestedRiskMatchDurationSeconds);
         phase = GamePlayPhase.WaitingForFirstPlayer;
         endReason = GameEndReason.None;
         ballCallRequestCount = 0;
+        isFinalBallCountdown = false;
         matchEndingCheckPlayerId = string.Empty;
         pendingCheckAnimationPlayerIds ??= new List<string>();
         pendingCheckAnimationPlayerIds.Clear();
+        isRuleCompletionAwaitingChecks = false;
         isBallPoolExhaustedAwaitingChecks = false;
         isRiskTimerExpiredAwaitingChecks = false;
 
@@ -258,6 +277,7 @@ public class GamePlayController
         }
 
         ballCallRequestCount++;
+        isFinalBallCountdown = !ballController.HasRemainingNumbers;
         return true;
     }
 
@@ -324,10 +344,14 @@ public class GamePlayController
         }
 
         if (!string.IsNullOrWhiteSpace(matchEndingCheckPlayerId) &&
-            string.Equals(
-                playerId,
-                matchEndingCheckPlayerId,
-                StringComparison.Ordinal))
+            string.Equals(playerId, matchEndingCheckPlayerId, StringComparison.Ordinal))
+        {
+            isRuleCompletionAwaitingChecks = true;
+            ballTimer?.Stop();
+            riskTimer?.Stop();
+        }
+
+        if (isRuleCompletionAwaitingChecks && !HasPendingCheckAnimations)
         {
             EndGame(GameEndReason.RuleCompleted);
             return true;
@@ -448,6 +472,31 @@ public class GamePlayController
         return bingoChecker.GetCheckedPatternTypes(playerId);
     }
 
+    public void ApplyNetworkState(GamePlayStateChangedData updateData)
+    {
+        if (updateData == null)
+        {
+            return;
+        }
+
+        phase = updateData.phase;
+        endReason = updateData.endReason;
+        ballCallRequestCount = updateData.ballCallRequestCount;
+        isFinalBallCountdown = updateData.isFinalBallCountdown;
+        isRuleCompletionAwaitingChecks = updateData.isRuleCompletionAwaitingChecks;
+        isBallPoolExhaustedAwaitingChecks = updateData.isBallPoolExhaustedAwaitingChecks;
+        isRiskTimerExpiredAwaitingChecks = updateData.isRiskTimerExpiredAwaitingChecks;
+
+        ballController ??= new GameBallController();
+        ballController.ApplyCalledNumbersSnapshot(updateData.calledNumbers);
+
+        ballTimer ??= new GamePlayTimer();
+        ballTimer.ApplyNetworkState(updateData.isBallTimerActive, updateData.ballTimerEndTime);
+
+        riskTimer ??= new GamePlayTimer();
+        riskTimer.ApplyNetworkState(updateData.isRiskTimerActive, updateData.riskTimerEndTime);
+    }
+
     public void AddCheckedPatterns(
         string playerId,
         IReadOnlyCollection<BingoPatternCheckResult> patternResults)
@@ -472,6 +521,8 @@ public class GamePlayController
 
         phase = GamePlayPhase.Ended;
         endReason = reason;
+        isFinalBallCountdown = false;
+        isRuleCompletionAwaitingChecks = false;
         isBallPoolExhaustedAwaitingChecks = false;
         isRiskTimerExpiredAwaitingChecks = false;
         ballTimer?.Stop();

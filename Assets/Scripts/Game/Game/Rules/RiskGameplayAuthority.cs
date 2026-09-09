@@ -162,7 +162,8 @@ public static class RiskGameplayAuthority
         ClearPlayerRiskState(playerData, true);
         GameScoreAuthority.FinalizePlayerIfNeeded(gameSessionData, playerData);
 
-        if (gameSessionData.GetPlayerCountWithStatus(GamePlayerStatus.Eligible) == 0)
+        if (gameSessionData.GetPlayerCountWithStatus(GamePlayerStatus.Eligible) == 0 &&
+            !gameSessionData.gamePlayController.HasPendingCheckAnimations)
         {
             gameSessionData.gamePlayController.EndGame(GameEndReason.NoEligiblePlayers);
             gameSessionData.gameState = GameSessionState.Completed;

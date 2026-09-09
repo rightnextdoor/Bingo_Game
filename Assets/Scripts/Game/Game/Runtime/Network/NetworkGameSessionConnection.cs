@@ -23,6 +23,7 @@ public class NetworkGameSessionConnection : NetworkBehaviour
 
     public static event Action<GameSessionResult> LocalGameCreationResultReceived;
     public static event Action<GameSessionData> LocalGameSessionUpdatedReceived;
+    public static event Action<GamePlayStateChangedData> LocalGamePlayStateChangedReceived;
     public static event Action<GamePlayerStateChangedData> LocalGamePlayerStateChangedReceived;
     public static event Action<GamePlayerMarkedCellChangedData> LocalGamePlayerMarkedCellChangedReceived;
     public static event Action<GameBingoCheckResolvedData> LocalBingoCheckResolvedReceived;
@@ -35,6 +36,7 @@ public class NetworkGameSessionConnection : NetworkBehaviour
         local = null;
         LocalGameCreationResultReceived = null;
         LocalGameSessionUpdatedReceived = null;
+        LocalGamePlayStateChangedReceived = null;
         LocalGamePlayerStateChangedReceived = null;
         LocalGamePlayerMarkedCellChangedReceived = null;
         LocalBingoCheckResolvedReceived = null;
@@ -615,6 +617,23 @@ public class NetworkGameSessionConnection : NetworkBehaviour
                 connection.RpcTarget.Single(clientId, RpcTargetUse.Temp))));
     }
 
+    public static bool TrySendGamePlayStateChanged(
+        ulong clientId,
+        GamePlayStateChangedData updateData)
+    {
+        if (updateData == null ||
+            !TryGetServerConnection(clientId, out NetworkGameSessionConnection connection))
+        {
+            return false;
+        }
+
+        string updateJson = JsonUtility.ToJson(updateData);
+
+        return TrySend(connection, () => connection.ReceiveGamePlayStateChangedRpc(
+            updateJson,
+            connection.RpcTarget.Single(clientId, RpcTargetUse.Temp)));
+    }
+
     public static bool TrySendGamePlayerStateChanged(ulong clientId, GamePlayerStateChangedData updateData)
     {
         if (updateData == null || !TryGetServerConnection(clientId, out NetworkGameSessionConnection connection))
@@ -766,6 +785,27 @@ public class NetworkGameSessionConnection : NetworkBehaviour
     }
 
     [Rpc(SendTo.SpecifiedInParams)]
+    private void ReceiveGamePlayStateChangedRpc(
+        string updateJson,
+        RpcParams rpcParams = default)
+    {
+        try
+        {
+            GamePlayStateChangedData updateData =
+                JsonUtility.FromJson<GamePlayStateChangedData>(updateJson);
+
+            if (updateData != null)
+            {
+                LocalGamePlayStateChangedReceived?.Invoke(updateData);
+            }
+        }
+        catch (Exception exception)
+        {
+            Debug.LogException(exception);
+        }
+    }
+
+    [Rpc(SendTo.SpecifiedInParams)]
     private void ReceiveGamePlayerStateChangedRpc(string updateJson, RpcParams rpcParams = default)
     {
         try
@@ -891,8 +931,16 @@ public class NetworkGameSessionConnection : NetworkBehaviour
             return false;
         }
 
-        sendAction();
-        return true;
+        try
+        {
+            sendAction();
+            return true;
+        }
+        catch (Exception exception)
+        {
+            Debug.LogException(exception);
+            return false;
+        }
     }
 
     private static GameSessionResult DeserializeResult(string resultJson, GameSessionOperationType operationType)

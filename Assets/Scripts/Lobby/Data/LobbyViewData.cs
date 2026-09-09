@@ -31,6 +31,8 @@ public class LobbyViewData
 
     public BingoBallCountType ballCountType;
     public bool useFreeCell;
+    public bool hasRiskMatchDurationOverride;
+    public float riskMatchDurationMinutes;
 
     public int playerCount;
     public int maxPlayer;
@@ -72,6 +74,8 @@ public class LobbyViewData
 
         ballCountType = BingoBallCountType.Ball75;
         useFreeCell = true;
+        hasRiskMatchDurationOverride = false;
+        riskMatchDurationMinutes = GameSettings.DefaultRiskMatchDurationMinutes;
 
         playerCount = 0;
         maxPlayer = LobbySettings.instance != null ? LobbySettings.instance.MinimumPlayers : 6;

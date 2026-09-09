@@ -1,4 +1,25 @@
+using System;
+using System.Collections.Generic;
 using UnityEngine;
+
+[Serializable]
+public class RiskMatchDurationSetting
+{
+    public BingoBallCountType ballCountType = BingoBallCountType.Ball75;
+    [Min(0f)] public float durationMinutes = GameSettings.DefaultRiskMatchDurationMinutes;
+
+    public RiskMatchDurationSetting()
+    {
+    }
+
+    public RiskMatchDurationSetting(
+        BingoBallCountType ballCountType,
+        float durationMinutes)
+    {
+        this.ballCountType = ballCountType;
+        this.durationMinutes = durationMinutes;
+    }
+}
 
 [DisallowMultipleComponent]
 public class GameSettings : MonoBehaviour
@@ -20,7 +41,15 @@ public class GameSettings : MonoBehaviour
     [SerializeField, Min(0f)] private float ballSlideDurationSeconds = DefaultBallSlideDurationSeconds;
 
     [Header("Risk")]
-    [SerializeField, Min(0f)] private float riskMatchDurationMinutes = DefaultRiskMatchDurationMinutes;
+    [SerializeField] private List<RiskMatchDurationSetting> riskMatchDurations =
+        new List<RiskMatchDurationSetting>
+        {
+            new RiskMatchDurationSetting(BingoBallCountType.Ball30, DefaultRiskMatchDurationMinutes),
+            new RiskMatchDurationSetting(BingoBallCountType.Ball36, DefaultRiskMatchDurationMinutes),
+            new RiskMatchDurationSetting(BingoBallCountType.Ball75, DefaultRiskMatchDurationMinutes),
+            new RiskMatchDurationSetting(BingoBallCountType.Ball80, DefaultRiskMatchDurationMinutes),
+            new RiskMatchDurationSetting(BingoBallCountType.Ball90, DefaultRiskMatchDurationMinutes)
+        };
 
     [Header("Score Limits")]
     [SerializeField, Min(0)] private int minimumScore = UserStats.DefaultMinimumScore;
@@ -29,8 +58,6 @@ public class GameSettings : MonoBehaviour
     public float FirstBallCountdownSeconds => Mathf.Max(0f, firstBallCountdownSeconds);
     public float NextBallCountdownSeconds => Mathf.Max(0f, nextBallCountdownSeconds);
     public float BallSlideDurationSeconds => Mathf.Max(0f, ballSlideDurationSeconds);
-    public float RiskMatchDurationMinutes => Mathf.Max(0f, riskMatchDurationMinutes);
-    public float RiskMatchDurationSeconds => MinutesToSeconds(riskMatchDurationMinutes);
     public int MinimumScore => Mathf.Max(0, minimumScore);
     public int MaximumScore => Mathf.Max(MinimumScore, maximumScore);
 
@@ -55,5 +82,28 @@ public class GameSettings : MonoBehaviour
     public static float MinutesToSeconds(float minutes)
     {
         return Mathf.Max(0f, minutes) * 60f;
+    }
+
+    public float GetRiskMatchDurationMinutes(BingoBallCountType ballCountType)
+    {
+        if (riskMatchDurations != null)
+        {
+            for (int i = 0; i < riskMatchDurations.Count; i++)
+            {
+                RiskMatchDurationSetting setting = riskMatchDurations[i];
+
+                if (setting != null && setting.ballCountType == ballCountType)
+                {
+                    return Mathf.Max(0f, setting.durationMinutes);
+                }
+            }
+        }
+
+        return DefaultRiskMatchDurationMinutes;
+    }
+
+    public float GetRiskMatchDurationSeconds(BingoBallCountType ballCountType)
+    {
+        return MinutesToSeconds(GetRiskMatchDurationMinutes(ballCountType));
     }
 }

@@ -217,6 +217,12 @@ public class GamePlayTimer
         endTime = 0d;
     }
 
+    public void ApplyNetworkState(bool active, double authoritativeEndTime)
+    {
+        isActive = active;
+        endTime = active ? authoritativeEndTime : 0d;
+    }
+
     public float GetRemainingSeconds()
     {
         if (!isActive)

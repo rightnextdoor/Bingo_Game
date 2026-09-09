@@ -115,6 +115,8 @@ public static class LobbySaveDataService
         setupData.gameModeType = savedData.gameModeType;
         setupData.ballCountType = savedData.ballCountType;
         setupData.useFreeCell = savedData.useFreeCell;
+        setupData.hasRiskMatchDurationOverride = savedData.hasRiskMatchDurationOverride;
+        setupData.riskMatchDurationMinutes = savedData.riskMatchDurationMinutes;
         setupData.usesDefaultPatterns = savedData.usesDefaultPatterns;
         setupData.patternTypes = CopyPatterns(savedData.patternTypes, savedData.usesDefaultPatterns);
     }
@@ -131,6 +133,8 @@ public static class LobbySaveDataService
         setupData.gameModeType = savedData.gameModeType;
         setupData.ballCountType = savedData.ballCountType;
         setupData.useFreeCell = savedData.useFreeCell;
+        setupData.hasRiskMatchDurationOverride = savedData.hasRiskMatchDurationOverride;
+        setupData.riskMatchDurationMinutes = savedData.riskMatchDurationMinutes;
         setupData.usesDefaultPatterns = savedData.usesDefaultPatterns;
         setupData.patternTypes = CopyPatterns(savedData.patternTypes, savedData.usesDefaultPatterns);
     }
@@ -149,6 +153,8 @@ public static class LobbySaveDataService
         target.gameModeType = source.gameModeType;
         target.ballCountType = source.ballCountType;
         target.useFreeCell = source.useFreeCell;
+        target.hasRiskMatchDurationOverride = source.hasRiskMatchDurationOverride;
+        target.riskMatchDurationMinutes = source.riskMatchDurationMinutes;
         target.usesDefaultPatterns = source.usesDefaultPatterns;
         target.patternTypes = CopyPatterns(source.patternTypes, source.usesDefaultPatterns);
     }
@@ -163,6 +169,8 @@ public static class LobbySaveDataService
         target.gameModeType = source.gameModeType;
         target.ballCountType = source.ballCountType;
         target.useFreeCell = source.useFreeCell;
+        target.hasRiskMatchDurationOverride = source.hasRiskMatchDurationOverride;
+        target.riskMatchDurationMinutes = source.riskMatchDurationMinutes;
         target.usesDefaultPatterns = source.usesDefaultPatterns;
         target.patternTypes = CopyPatterns(source.patternTypes, source.usesDefaultPatterns);
     }
@@ -177,6 +185,8 @@ public static class LobbySaveDataService
         target.gameModeType = source.gameModeType;
         target.ballCountType = source.ballCountType;
         target.useFreeCell = source.useFreeCell;
+        target.hasRiskMatchDurationOverride = source.hasRiskMatchDurationOverride;
+        target.riskMatchDurationMinutes = source.riskMatchDurationMinutes;
         target.usesDefaultPatterns = source.usesDefaultPatterns;
         target.patternTypes = CopyPatterns(source.patternTypes, source.usesDefaultPatterns);
     }
@@ -191,6 +201,8 @@ public static class LobbySaveDataService
         target.gameModeType = source.gameModeType;
         target.ballCountType = source.ballCountType;
         target.useFreeCell = source.useFreeCell;
+        target.hasRiskMatchDurationOverride = source.hasRiskMatchDurationOverride;
+        target.riskMatchDurationMinutes = source.riskMatchDurationMinutes;
         target.usesDefaultPatterns = source.usesDefaultPatterns;
         target.patternTypes = CopyPatterns(source.patternTypes, source.usesDefaultPatterns);
     }
@@ -252,6 +264,7 @@ public static class LobbySaveDataService
         }
 
         data.patternTypes ??= new List<BingoPatternType>();
+        data.riskMatchDurationMinutes = Math.Max(0f, data.riskMatchDurationMinutes);
 
         if (!data.usesDefaultPatterns && data.patternTypes.Count == 0)
         {
@@ -267,6 +280,7 @@ public static class LobbySaveDataService
         }
 
         data.patternTypes ??= new List<BingoPatternType>();
+        data.riskMatchDurationMinutes = Math.Max(0f, data.riskMatchDurationMinutes);
 
         if (!data.usesDefaultPatterns && data.patternTypes.Count == 0)
         {

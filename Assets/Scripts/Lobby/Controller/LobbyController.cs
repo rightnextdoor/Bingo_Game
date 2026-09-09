@@ -93,6 +93,8 @@ public class LobbyController
 
     [SerializeField] private BingoBallCountType ballCountType = BingoBallCountType.Ball75;
     [SerializeField] private bool useFreeCell = true;
+    [SerializeField] private bool hasRiskMatchDurationOverride;
+    [SerializeField, Min(0f)] private float riskMatchDurationMinutes = GameSettings.DefaultRiskMatchDurationMinutes;
 
     public BingoGameModeType GameModeType => gameModeType;
 
@@ -104,6 +106,8 @@ public class LobbyController
 
     public BingoBallCountType BallCountType => ballCountType;
     public bool UseFreeCell => useFreeCell;
+    public bool HasRiskMatchDurationOverride => hasRiskMatchDurationOverride;
+    public float RiskMatchDurationMinutes => Mathf.Max(0f, riskMatchDurationMinutes);
 
     public bool AddBots => addBots;
     public int BotCount => GetBotCount();
@@ -159,6 +163,8 @@ public class LobbyController
         patternTypes.Clear();
         usesDefaultPatterns = true;
         useFreeCell = true;
+        hasRiskMatchDurationOverride = false;
+        riskMatchDurationMinutes = GameSettings.DefaultRiskMatchDurationMinutes;
 
         maxPlayers = false;
         maxPlayer = GetMinimumPlayers();
@@ -191,6 +197,7 @@ public class LobbyController
 
         gameModeType = ResolveGameModeType(gameModeType);
         ballCountType = ResolveBallCountType(ballCountType);
+        ResolveRiskMatchDuration();
         ResolveGameModeData();
     }
 
@@ -206,6 +213,8 @@ public class LobbyController
         gameModeType = soloSetupData.gameModeType;
         ballCountType = soloSetupData.ballCountType;
         useFreeCell = soloSetupData.useFreeCell;
+        hasRiskMatchDurationOverride = soloSetupData.hasRiskMatchDurationOverride;
+        riskMatchDurationMinutes = soloSetupData.riskMatchDurationMinutes;
         usesDefaultPatterns = soloSetupData.usesDefaultPatterns;
 
         if (usesDefaultPatterns)
@@ -264,6 +273,8 @@ public class LobbyController
         gameModeType = hostSetupData.gameModeType;
         ballCountType = hostSetupData.ballCountType;
         useFreeCell = hostSetupData.useFreeCell;
+        hasRiskMatchDurationOverride = hostSetupData.hasRiskMatchDurationOverride;
+        riskMatchDurationMinutes = hostSetupData.riskMatchDurationMinutes;
         usesDefaultPatterns = hostSetupData.usesDefaultPatterns;
 
         if (usesDefaultPatterns)
@@ -1404,6 +1415,19 @@ public class LobbyController
         return BingoBallCountType.Ball75;
     }
 
+    private void ResolveRiskMatchDuration()
+    {
+        if (hasRiskMatchDurationOverride)
+        {
+            riskMatchDurationMinutes = Mathf.Max(0f, riskMatchDurationMinutes);
+            return;
+        }
+
+        riskMatchDurationMinutes = GameSettings.instance != null
+            ? GameSettings.instance.GetRiskMatchDurationMinutes(ballCountType)
+            : GameSettings.DefaultRiskMatchDurationMinutes;
+    }
+
     private void ResolveGameModeData()
     {
         GameModeManager gameModeManager = GameModeManager.instance;
@@ -1480,6 +1504,9 @@ public class LobbyController
         gameModeType = ResolveGameModeType(settingsData.gameModeType);
         ballCountType = ResolveBallCountType(settingsData.ballCountType);
         useFreeCell = settingsData.useFreeCell;
+        hasRiskMatchDurationOverride = settingsData.hasRiskMatchDurationOverride;
+        riskMatchDurationMinutes = settingsData.riskMatchDurationMinutes;
+        ResolveRiskMatchDuration();
 
         usesDefaultPatterns = settingsData.usesDefaultPatterns;
 
@@ -1709,6 +1736,8 @@ public class LobbyController
             usesDefaultPatterns = usesDefaultPatterns,
             ballCountType = ballCountType,
             useFreeCell = useFreeCell,
+            hasRiskMatchDurationOverride = hasRiskMatchDurationOverride,
+            riskMatchDurationMinutes = RiskMatchDurationMinutes,
             playerCount = GetVisiblePlayerCount(),
             maxPlayer = maxPlayer,
             maxPlayers = maxPlayers,

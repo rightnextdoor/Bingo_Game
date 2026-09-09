@@ -25,6 +25,8 @@ public class LobbySettingsChangedData
 
     public BingoBallCountType ballCountType;
     public bool useFreeCell;
+    public bool hasRiskMatchDurationOverride;
+    public float riskMatchDurationMinutes;
 
     public int playerCount;
     public int maxPlayer;
@@ -53,6 +55,8 @@ public class LobbySettingsChangedData
         usesDefaultPatterns = true;
         ballCountType = BingoBallCountType.Ball75;
         useFreeCell = true;
+        hasRiskMatchDurationOverride = false;
+        riskMatchDurationMinutes = GameSettings.DefaultRiskMatchDurationMinutes;
         playerCount = 0;
         maxPlayer = 0;
         maxPlayers = false;
@@ -82,6 +86,8 @@ public class LobbySettingsChangedData
         usesDefaultPatterns = lobbyViewData.usesDefaultPatterns;
         ballCountType = lobbyViewData.ballCountType;
         useFreeCell = lobbyViewData.useFreeCell;
+        hasRiskMatchDurationOverride = lobbyViewData.hasRiskMatchDurationOverride;
+        riskMatchDurationMinutes = lobbyViewData.riskMatchDurationMinutes;
         playerCount = lobbyViewData.playerCount;
         maxPlayer = lobbyViewData.maxPlayer;
         maxPlayers = lobbyViewData.maxPlayers;

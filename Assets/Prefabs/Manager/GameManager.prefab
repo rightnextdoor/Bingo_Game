@@ -445,6 +445,16 @@ MonoBehaviour:
   firstBallCountdownSeconds: 10
   nextBallCountdownSeconds: 10
   ballSlideDurationSeconds: 1
-  riskMatchDurationMinutes: 5
+  riskMatchDurations:
+  - ballCountType: 30
+    durationMinutes: 6
+  - ballCountType: 36
+    durationMinutes: 7
+  - ballCountType: 75
+    durationMinutes: 10
+  - ballCountType: 80
+    durationMinutes: 15
+  - ballCountType: 90
+    durationMinutes: 20
   minimumScore: 0
   maximumScore: 9000000

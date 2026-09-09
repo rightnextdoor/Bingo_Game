@@ -37,6 +37,8 @@ public class SoloLobbySetupData
     public BingoGameModeType gameModeType = BingoGameModeType.Traditional;
     public BingoBallCountType ballCountType = BingoBallCountType.Ball75;
     public bool useFreeCell = true;
+    public bool hasRiskMatchDurationOverride;
+    public float riskMatchDurationMinutes = GameSettings.DefaultRiskMatchDurationMinutes;
 
     public bool usesDefaultPatterns = true;
     public List<BingoPatternType> patternTypes = new List<BingoPatternType>();
@@ -49,6 +51,8 @@ public class SoloLobbySetupData
         gameModeType = BingoGameModeType.Traditional;
         ballCountType = BingoBallCountType.Ball75;
         useFreeCell = true;
+        hasRiskMatchDurationOverride = false;
+        riskMatchDurationMinutes = GameSettings.DefaultRiskMatchDurationMinutes;
 
         usesDefaultPatterns = true;
         patternTypes = new List<BingoPatternType>();
@@ -107,6 +111,8 @@ public class CustomHostLobbySetupData
     public BingoGameModeType gameModeType = BingoGameModeType.Traditional;
     public BingoBallCountType ballCountType = BingoBallCountType.Ball75;
     public bool useFreeCell = true;
+    public bool hasRiskMatchDurationOverride;
+    public float riskMatchDurationMinutes = GameSettings.DefaultRiskMatchDurationMinutes;
 
     public bool usesDefaultPatterns = true;
     public List<BingoPatternType> patternTypes = new List<BingoPatternType>();
@@ -122,6 +128,8 @@ public class CustomHostLobbySetupData
         gameModeType = BingoGameModeType.Traditional;
         ballCountType = BingoBallCountType.Ball75;
         useFreeCell = true;
+        hasRiskMatchDurationOverride = false;
+        riskMatchDurationMinutes = GameSettings.DefaultRiskMatchDurationMinutes;
 
         usesDefaultPatterns = true;
         patternTypes = new List<BingoPatternType>();

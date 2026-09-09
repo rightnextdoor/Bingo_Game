@@ -90,4 +90,22 @@ public class GameBallController
             ? new List<int>(calledNumbers)
             : new List<int>();
     }
+
+    public void ApplyCalledNumbersSnapshot(IReadOnlyList<int> authoritativeCalledNumbers)
+    {
+        calledNumbers ??= new List<int>();
+        calledNumbers.Clear();
+
+        if (authoritativeCalledNumbers != null)
+        {
+            for (int i = 0; i < authoritativeCalledNumbers.Count; i++)
+            {
+                calledNumbers.Add(authoritativeCalledNumbers[i]);
+            }
+        }
+
+        currentNumber = calledNumbers.Count > 0
+            ? calledNumbers[calledNumbers.Count - 1]
+            : 0;
+    }
 }

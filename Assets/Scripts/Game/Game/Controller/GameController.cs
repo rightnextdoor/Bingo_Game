@@ -324,6 +324,7 @@ public class GameController : MonoBehaviour
             !SessionPauseManager.IsPaused &&
             localPlayer.gameStatus == GamePlayerStatus.Eligible &&
             !localPlayer.isRiskDecisionPending &&
+            gameSessionData.gamePlayController?.IsPlayerInputClosed != true &&
             gameSessionData.gameState != GameSessionState.Completed;
         bool playerCanSubmitBingo =
             playerCanUseBoard &&
@@ -503,10 +504,9 @@ public class GameController : MonoBehaviour
             return;
         }
 
-        isBingoCheckPending = false;
-
         if (!resolvedData.wasAccepted)
         {
+            isBingoCheckPending = false;
             DisplayPlayerBoard(GameSessionManager.instance?.CurrentGameSession);
             Debug.LogWarning(
                 $"[GameController] Bingo check rejected: {resolvedData.failureMessage}");
@@ -525,6 +525,7 @@ public class GameController : MonoBehaviour
 
         if (resolvedData.checkResult == null || bingoCheckAnimationController == null)
         {
+            isBingoCheckPending = false;
             NotifyBingoCheckAnimationCompleted();
             return;
         }
@@ -550,9 +551,17 @@ public class GameController : MonoBehaviour
     {
         if (checkResult == null || bingoCheckAnimationController == null)
         {
+            isBingoCheckPending = false;
             NotifyBingoCheckAnimationCompleted();
             return;
         }
+
+        GameSessionData currentSession =
+            GameSessionManager.instance?.CurrentGameSession;
+        bool matchEndIsWaitingForChecks =
+            currentSession?.gamePlayController?.IsMatchEndPendingChecks == true;
+
+        isBingoCheckPending = false;
 
         if (latePatternCount > 0 && !checkResult.HasFailedPattern)
         {
@@ -567,13 +576,13 @@ public class GameController : MonoBehaviour
                 checkResult.GetWinningPatterns());
             NotifyBingoCheckAnimationCompleted();
 
-            GameSessionData currentSession =
-                GameSessionManager.instance?.CurrentGameSession;
+            currentSession = GameSessionManager.instance?.CurrentGameSession;
             GamePlayerData localPlayer =
                 currentSession?.GetPlayer(UserManager.instance?.UserId);
 
             if (currentSession?.gameState == GameSessionState.InProgress &&
-                localPlayer?.isRiskDecisionPending == true)
+                localPlayer?.isRiskDecisionPending == true &&
+                !matchEndIsWaitingForChecks)
             {
                 OpenRiskDecisionPopup();
             }

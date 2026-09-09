@@ -947,6 +947,8 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
             gameModeType = selectedGameModeType,
             ballCountType = selectedBallCountType,
             useFreeCell = useFreeCell,
+            hasRiskMatchDurationOverride = workingData.hasRiskMatchDurationOverride,
+            riskMatchDurationMinutes = workingData.riskMatchDurationMinutes,
             patternTypes = new List<BingoPatternType>(workingData.patternTypes),
             usesDefaultPatterns = usesDefaultPatterns,
             maxPlayers = maxPlayers,

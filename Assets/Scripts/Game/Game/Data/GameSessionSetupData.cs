@@ -21,12 +21,14 @@ public class GameSessionSetupData
     public bool usesDefaultPatterns;
     public BingoBallCountType ballCountType;
     public bool useFreeCell;
+    public bool hasRiskMatchDurationOverride;
+    public float riskMatchDurationMinutes;
 
     public List<GamePlayerData> players;
 
     public GameSessionSetupData()
     {
-        dataVersion = 2;
+        dataVersion = 3;
         lobbyId = string.Empty;
         runtimeType = SessionRuntimeType.Local;
         playMode = MainMenuPlayMode.None;
@@ -41,6 +43,8 @@ public class GameSessionSetupData
         usesDefaultPatterns = true;
         ballCountType = BingoBallCountType.Ball75;
         useFreeCell = true;
+        hasRiskMatchDurationOverride = false;
+        riskMatchDurationMinutes = GameSettings.DefaultRiskMatchDurationMinutes;
         players = new List<GamePlayerData>();
     }
 
@@ -68,6 +72,8 @@ public class GameSessionSetupData
         usesDefaultPatterns = setupData.usesDefaultPatterns;
         ballCountType = setupData.ballCountType;
         useFreeCell = setupData.useFreeCell;
+        hasRiskMatchDurationOverride = setupData.hasRiskMatchDurationOverride;
+        riskMatchDurationMinutes = setupData.riskMatchDurationMinutes;
 
         if (setupData.players == null)
         {
@@ -109,7 +115,9 @@ public class GameSessionSetupData
                 : new List<BingoPatternType>(),
             usesDefaultPatterns = controller.UsesDefaultPatterns,
             ballCountType = controller.BallCountType,
-            useFreeCell = controller.UseFreeCell
+            useFreeCell = controller.UseFreeCell,
+            hasRiskMatchDurationOverride = controller.HasRiskMatchDurationOverride,
+            riskMatchDurationMinutes = controller.RiskMatchDurationMinutes
         };
 
         IReadOnlyList<LobbyPlayerData> lobbyPlayers = controller.Players;

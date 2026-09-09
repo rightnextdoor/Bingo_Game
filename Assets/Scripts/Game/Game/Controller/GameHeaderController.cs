@@ -87,9 +87,12 @@ public class GameHeaderController : MonoBehaviour
         }
 
         int seconds = Mathf.Max(0, Mathf.CeilToInt(remainingSeconds));
-        string timerLabel = currentGameSession?.gamePlayController?.Phase == GamePlayPhase.FirstBallCountdown
+        GamePlayController playController = currentGameSession?.gamePlayController;
+        string timerLabel = playController?.Phase == GamePlayPhase.FirstBallCountdown
             ? "Start Timer"
-            : "Next Ball";
+            : playController?.IsFinalBallCountdown == true
+                ? "Game Ends In"
+                : "Next Ball";
 
         gameTimerText.gameObject.SetActive(true);
         gameTimerText.text = $"{timerLabel}: {seconds}";

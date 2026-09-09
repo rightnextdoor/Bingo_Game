@@ -25,6 +25,8 @@ public class GameSessionData
     public bool usesDefaultPatterns;
     public BingoBallCountType ballCountType;
     public bool useFreeCell;
+    public bool hasRiskMatchDurationOverride;
+    public float riskMatchDurationMinutes;
 
     public bool hasCachedScoreValues;
     public int cachedLossPoints;
@@ -37,7 +39,7 @@ public class GameSessionData
 
     public GameSessionData()
     {
-        dataVersion = 7;
+        dataVersion = 8;
         revision = 1;
         gameId = string.Empty;
         lobbyId = string.Empty;
@@ -56,6 +58,8 @@ public class GameSessionData
         usesDefaultPatterns = true;
         ballCountType = BingoBallCountType.Ball75;
         useFreeCell = true;
+        hasRiskMatchDurationOverride = false;
+        riskMatchDurationMinutes = GameSettings.DefaultRiskMatchDurationMinutes;
         hasCachedScoreValues = false;
         cachedLossPoints = 0;
         cachedDeathWinPoints = 0;
@@ -88,6 +92,8 @@ public class GameSessionData
         usesDefaultPatterns = setupData.usesDefaultPatterns;
         ballCountType = setupData.ballCountType;
         useFreeCell = setupData.useFreeCell;
+        hasRiskMatchDurationOverride = setupData.hasRiskMatchDurationOverride;
+        riskMatchDurationMinutes = ResolveRiskMatchDurationMinutes(setupData);
         EnsureScoreValuesCached();
 
         GameSettings settings = GameSettings.instance;
@@ -97,6 +103,7 @@ public class GameSessionData
             useFreeCell,
             settings != null ? settings.FirstBallCountdownSeconds : GameSettings.DefaultFirstBallCountdownSeconds,
             settings != null ? settings.NextBallCountdownSeconds : GameSettings.DefaultNextBallCountdownSeconds,
+            GameSettings.MinutesToSeconds(riskMatchDurationMinutes),
             hasRule,
             ruleType);
 
@@ -139,6 +146,8 @@ public class GameSessionData
         usesDefaultPatterns = gameSessionData.usesDefaultPatterns;
         ballCountType = gameSessionData.ballCountType;
         useFreeCell = gameSessionData.useFreeCell;
+        hasRiskMatchDurationOverride = gameSessionData.hasRiskMatchDurationOverride;
+        riskMatchDurationMinutes = gameSessionData.riskMatchDurationMinutes;
         hasCachedScoreValues = gameSessionData.hasCachedScoreValues;
         cachedLossPoints = gameSessionData.cachedLossPoints;
         cachedDeathWinPoints = gameSessionData.cachedDeathWinPoints;
@@ -216,6 +225,141 @@ public class GameSessionData
         hasCachedScoreValues = true;
     }
 
+    private static float ResolveRiskMatchDurationMinutes(GameSessionSetupData setupData)
+    {
+        if (setupData == null)
+        {
+            return GameSettings.DefaultRiskMatchDurationMinutes;
+        }
+
+        if (setupData.hasRiskMatchDurationOverride)
+        {
+            return Math.Max(0f, setupData.riskMatchDurationMinutes);
+        }
+
+        return GameSettings.instance != null
+            ? GameSettings.instance.GetRiskMatchDurationMinutes(setupData.ballCountType)
+            : GameSettings.DefaultRiskMatchDurationMinutes;
+    }
+
+}
+
+[Serializable]
+public class GamePlayStateChangedData
+{
+    public string gameId;
+    public long revision;
+    public GameSessionState gameState;
+    public GamePlayPhase phase;
+    public GameEndReason endReason;
+    public int ballCallRequestCount;
+    public bool isFinalBallCountdown;
+    public bool isRuleCompletionAwaitingChecks;
+    public bool isBallPoolExhaustedAwaitingChecks;
+    public bool isRiskTimerExpiredAwaitingChecks;
+    public bool isBallTimerActive;
+    public double ballTimerEndTime;
+    public bool isRiskTimerActive;
+    public double riskTimerEndTime;
+    public List<int> calledNumbers;
+    public List<GamePlayerMatchStateData> playerStates;
+
+    public GamePlayStateChangedData()
+    {
+        gameId = string.Empty;
+        revision = 0;
+        gameState = GameSessionState.Created;
+        calledNumbers = new List<int>();
+        playerStates = new List<GamePlayerMatchStateData>();
+    }
+
+    public GamePlayStateChangedData(GameSessionData gameSessionData) : this()
+    {
+        if (gameSessionData == null)
+        {
+            return;
+        }
+
+        gameId = gameSessionData.gameId ?? string.Empty;
+        revision = gameSessionData.revision;
+        gameState = gameSessionData.gameState;
+
+        GamePlayController playController = gameSessionData.gamePlayController;
+
+        if (playController != null)
+        {
+            phase = playController.Phase;
+            endReason = playController.EndReason;
+            ballCallRequestCount = playController.BallCallRequestCount;
+            isFinalBallCountdown = playController.IsFinalBallCountdown;
+            isRuleCompletionAwaitingChecks = playController.IsRuleCompletionAwaitingChecks;
+            isBallPoolExhaustedAwaitingChecks = playController.IsBallPoolExhaustedAwaitingChecks;
+            isRiskTimerExpiredAwaitingChecks = playController.IsRiskTimerExpiredAwaitingChecks;
+            isBallTimerActive = playController.BallTimer?.IsActive == true;
+            ballTimerEndTime = playController.BallTimer?.EndTime ?? 0d;
+            isRiskTimerActive = playController.RiskTimer?.IsActive == true;
+            riskTimerEndTime = playController.RiskTimer?.EndTime ?? 0d;
+            calledNumbers = playController.BallController?.GetCalledNumbersSnapshot() ?? new List<int>();
+        }
+
+        if (gameSessionData.players == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < gameSessionData.players.Count; i++)
+        {
+            GamePlayerData playerData = gameSessionData.players[i];
+
+            if (playerData != null)
+            {
+                playerStates.Add(new GamePlayerMatchStateData(playerData));
+            }
+        }
+    }
+}
+
+[Serializable]
+public class GamePlayerMatchStateData
+{
+    public string userId;
+    public bool isConnected;
+    public bool isGameSceneReady;
+    public bool canRejoin;
+    public GamePlayerStatus gameStatus;
+    public int currentMatchScore;
+    public bool areStatisticsFinalized;
+    public int finalizedScoreDelta;
+    public bool isScorePersisted;
+    public bool isSubmitTimerActive;
+    public double submitTimerEndTime;
+    public bool isRiskDecisionPending;
+
+    public GamePlayerMatchStateData()
+    {
+        userId = string.Empty;
+    }
+
+    public GamePlayerMatchStateData(GamePlayerData playerData) : this()
+    {
+        if (playerData == null)
+        {
+            return;
+        }
+
+        userId = playerData.userId ?? string.Empty;
+        isConnected = playerData.isConnected;
+        isGameSceneReady = playerData.isGameSceneReady;
+        canRejoin = playerData.canRejoin;
+        gameStatus = playerData.gameStatus;
+        currentMatchScore = playerData.currentMatchScore;
+        areStatisticsFinalized = playerData.areStatisticsFinalized;
+        finalizedScoreDelta = playerData.finalizedScoreDelta;
+        isScorePersisted = playerData.isScorePersisted;
+        isSubmitTimerActive = playerData.isSubmitTimerActive;
+        submitTimerEndTime = playerData.submitTimerEndTime;
+        isRiskDecisionPending = playerData.isRiskDecisionPending;
+    }
 }
 
 [Serializable]

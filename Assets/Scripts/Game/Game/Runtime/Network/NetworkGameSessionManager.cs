@@ -84,7 +84,7 @@ public class NetworkGameSessionManager : MonoBehaviour
             }
 
             gameSessionData.revision++;
-            BroadcastGameSessionUpdated(gameSessionData);
+            BroadcastGamePlayStateChanged(gameSessionData);
         }
     }
 
@@ -321,7 +321,7 @@ public class NetworkGameSessionManager : MonoBehaviour
         {
             gameSessionData.gameState = GameSessionState.InProgress;
             gameSessionData.revision++;
-            BroadcastGameSessionUpdated(gameSessionData);
+            BroadcastGamePlayStateChanged(gameSessionData);
         }
 
         return GameSessionResult.Acknowledged(GameSessionOperationType.SceneReady, gameSessionData);
@@ -425,6 +425,7 @@ public class NetworkGameSessionManager : MonoBehaviour
             !playerData.isConnected ||
             !playerData.canRejoin ||
             gameSessionData.gameState == GameSessionState.Completed ||
+            gameSessionData.gamePlayController?.IsPlayerInputClosed == true ||
             boardData?.cellNumbers == null ||
             cellIndex < 0 ||
             cellIndex >= boardData.cellNumbers.Count ||
@@ -482,7 +483,7 @@ public class NetworkGameSessionManager : MonoBehaviour
         gameSessionData.revision++;
         resolvedData.revision = gameSessionData.revision;
         resolvedData.matchCompleted = gameSessionData.gameState == GameSessionState.Completed;
-        BroadcastGameSessionUpdated(gameSessionData);
+        BroadcastGamePlayStateChanged(gameSessionData);
         return resolvedData;
     }
 
@@ -506,7 +507,7 @@ public class NetworkGameSessionManager : MonoBehaviour
         }
 
         gameSessionData.revision++;
-        BroadcastGameSessionUpdated(gameSessionData);
+        BroadcastGamePlayStateChanged(gameSessionData);
         return true;
     }
 
@@ -532,7 +533,7 @@ public class NetworkGameSessionManager : MonoBehaviour
         }
 
         gameSessionData.revision++;
-        BroadcastGameSessionUpdated(gameSessionData);
+        BroadcastGamePlayStateChanged(gameSessionData);
         return true;
     }
 
@@ -587,13 +588,15 @@ public class NetworkGameSessionManager : MonoBehaviour
         }
     }
 
-    private void BroadcastGameSessionUpdated(GameSessionData gameSessionData)
+    private void BroadcastGamePlayStateChanged(GameSessionData gameSessionData)
     {
         if (gameSessionData?.players == null ||
             connectionRegistry == null || !connectionRegistry.IsReady)
         {
             return;
         }
+
+        GamePlayStateChangedData updateData = new GamePlayStateChangedData(gameSessionData);
 
         for (int i = 0; i < gameSessionData.players.Count; i++)
         {
@@ -605,7 +608,7 @@ public class NetworkGameSessionManager : MonoBehaviour
                 continue;
             }
 
-            NetworkGameSessionConnection.TrySendGameSessionUpdated(clientId, gameSessionData);
+            NetworkGameSessionConnection.TrySendGamePlayStateChanged(clientId, updateData);
         }
     }
 

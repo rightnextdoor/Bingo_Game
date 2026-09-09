@@ -152,7 +152,8 @@ public static class GameBingoCheckAuthority
             ruleDecision);
 
         if (playerData.gameStatus == GamePlayerStatus.Lost &&
-            gameSessionData.GetPlayerCountWithStatus(GamePlayerStatus.Eligible) == 0)
+            gameSessionData.GetPlayerCountWithStatus(GamePlayerStatus.Eligible) == 0 &&
+            !playController.HasPendingCheckAnimations)
         {
             playController.EndGame(GameEndReason.NoEligiblePlayers);
         }
@@ -197,20 +198,46 @@ public static class GameBingoCheckAuthority
 
         GamePlayerData playerData = gameSessionData.GetPlayer(userId);
 
-        if (playerData == null ||
-            !gameSessionData.gamePlayController.TryCompleteBingoCheckAnimation(userId))
+        if (playerData == null)
+        {
+            return false;
+        }
+
+        GamePlayController playController = gameSessionData.gamePlayController;
+        bool resolveSuccessfulRiskCheckAsWin =
+            playController.IsMatchEndPendingChecks &&
+            RiskGameplayAuthority.IsRiskGame(gameSessionData) &&
+            playerData.gameStatus == GamePlayerStatus.Eligible &&
+            playerData.isRiskDecisionPending;
+
+        if (!playController.TryCompleteBingoCheckAnimation(userId))
         {
             return false;
         }
 
         RiskGameplayAuthority.CompletePendingCheck(gameSessionData, playerData);
 
-        if (gameSessionData.gamePlayController.Phase == GamePlayPhase.Ended &&
+        if (resolveSuccessfulRiskCheckAsWin)
+        {
+            RiskGameplayAuthority.ResolveDecision(
+                gameSessionData,
+                userId,
+                true);
+        }
+
+        if (playController.Phase != GamePlayPhase.Ended &&
+            !playController.HasPendingCheckAnimations &&
+            gameSessionData.GetPlayerCountWithStatus(GamePlayerStatus.Eligible) == 0)
+        {
+            playController.EndGame(GameEndReason.NoEligiblePlayers);
+        }
+
+        if (playController.Phase == GamePlayPhase.Ended &&
             gameSessionData.gameState != GameSessionState.Completed)
         {
             GameScoreAuthority.FinalizeEligiblePlayers(
                 gameSessionData,
-                gameSessionData.gamePlayController.ResolveEligiblePlayerAtMatchEnd());
+                playController.ResolveEligiblePlayerAtMatchEnd());
             gameSessionData.gameState = GameSessionState.Completed;
         }
 

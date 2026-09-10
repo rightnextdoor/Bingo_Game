@@ -26,8 +26,15 @@ public static class GameScoreAuthority
                 (long)playerData.currentMatchScore + currentCheckPoints);
         }
 
-        playerData.gameStatus = ruleDecision.playerStatus;
-        FinalizePlayerIfNeeded(gameSessionData, playerData);
+        if (ruleDecision.playerStatus == GamePlayerStatus.Eligible)
+        {
+            playerData.gameStatus = GamePlayerStatus.Eligible;
+        }
+        else
+        {
+            TrySetFinalStatus(gameSessionData, playerData, ruleDecision.playerStatus);
+        }
+
         return currentCheckPoints;
     }
 
@@ -53,17 +60,31 @@ public static class GameScoreAuthority
 
             if (playerData.gameStatus == GamePlayerStatus.Eligible)
             {
-                playerData.gameStatus = finalStatus;
-                changed = true;
-            }
-
-            if (FinalizePlayerIfNeeded(gameSessionData, playerData))
-            {
-                changed = true;
+                changed |= TrySetFinalStatus(gameSessionData, playerData, finalStatus);
             }
         }
 
         return changed;
+    }
+
+    public static bool TrySetFinalStatus(
+        GameSessionData gameSessionData,
+        GamePlayerData playerData,
+        GamePlayerStatus finalStatus)
+    {
+        if (gameSessionData == null ||
+            playerData == null ||
+            (finalStatus != GamePlayerStatus.Won && finalStatus != GamePlayerStatus.Lost) ||
+            playerData.gameStatus == GamePlayerStatus.Won ||
+            playerData.gameStatus == GamePlayerStatus.Lost ||
+            playerData.areStatisticsFinalized)
+        {
+            return false;
+        }
+
+        playerData.gameStatus = finalStatus;
+        FinalizePlayerIfNeeded(gameSessionData, playerData);
+        return true;
     }
 
     public static bool FinalizePlayerIfNeeded(
@@ -73,7 +94,8 @@ public static class GameScoreAuthority
         if (gameSessionData == null ||
             playerData == null ||
             playerData.areStatisticsFinalized ||
-            playerData.gameStatus == GamePlayerStatus.Eligible)
+            (playerData.gameStatus != GamePlayerStatus.Won &&
+             playerData.gameStatus != GamePlayerStatus.Lost))
         {
             return false;
         }

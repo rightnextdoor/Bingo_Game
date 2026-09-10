@@ -142,6 +142,49 @@ public class BingoChecker
         return completedPatterns;
     }
 
+    public List<BingoPatternCheckResult> GetCompletedAvailablePatterns(
+        string playerId,
+        LobbyBoardData boardData,
+        IReadOnlyCollection<int> markedCellIndices,
+        IReadOnlyCollection<int> calledNumbers,
+        IReadOnlyCollection<BingoPatternType> configuredPatternTypes)
+    {
+        List<BingoPatternCheckResult> completedPatterns =
+            new List<BingoPatternCheckResult>();
+
+        if (string.IsNullOrWhiteSpace(playerId) ||
+            boardData?.cellNumbers == null ||
+            configuredPatternTypes == null)
+        {
+            return completedPatterns;
+        }
+
+        BingoCheckResult result = validator.Validate(
+            playerId,
+            boardData,
+            markedCellIndices,
+            calledNumbers,
+            configuredPatternTypes,
+            GetCheckHistory(playerId));
+
+        if (result?.patterns == null)
+        {
+            return completedPatterns;
+        }
+
+        for (int i = 0; i < result.patterns.Count; i++)
+        {
+            BingoPatternCheckResult patternResult = result.patterns[i];
+
+            if (patternResult?.isWinningPattern == true)
+            {
+                completedPatterns.Add(patternResult);
+            }
+        }
+
+        return completedPatterns;
+    }
+
     public IReadOnlyList<BingoCheckResult> GetCheckHistory(string playerId)
     {
         if (string.IsNullOrWhiteSpace(playerId) ||

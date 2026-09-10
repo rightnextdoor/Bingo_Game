@@ -677,6 +677,29 @@ public class NetworkGameSessionConnection : NetworkBehaviour
                 connection.RpcTarget.Single(clientId, RpcTargetUse.Temp))));
     }
 
+    public static bool TrySendBingoCheckResolved(
+        ulong clientId,
+        GameBingoCheckResolvedData resolvedData)
+    {
+        if (resolvedData == null ||
+            !TryGetServerConnection(clientId, out NetworkGameSessionConnection connection))
+        {
+            return false;
+        }
+
+        string resultJson = JsonUtility.ToJson(resolvedData);
+
+        return ScheduleAuthoritySend(
+            resolvedData.gameId,
+            resultJson,
+            MultiplayerNetworkPriority.Critical,
+            MultiplayerNetworkWorkType.Event,
+            string.Empty,
+            () => TrySend(connection, () => connection.ReceiveBingoCheckResolvedRpc(
+                resultJson,
+                connection.RpcTarget.Single(clientId, RpcTargetUse.Temp))));
+    }
+
     public static bool TrySendGamePlayerLeft(ulong clientId, GamePlayerLeftData updateData)
     {
         if (updateData == null || !TryGetServerConnection(clientId, out NetworkGameSessionConnection connection))

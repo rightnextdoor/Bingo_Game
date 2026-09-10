@@ -37,9 +37,12 @@ public class GameSessionData
 
     public List<GamePlayerData> players;
 
+    [NonSerialized]
+    private List<GameBingoCheckResolvedData> pendingBingoCheckPresentations;
+
     public GameSessionData()
     {
-        dataVersion = 8;
+        dataVersion = 9;
         revision = 1;
         gameId = string.Empty;
         lobbyId = string.Empty;
@@ -66,6 +69,7 @@ public class GameSessionData
         lastRiskPatternScanBallCallCount = 0;
         lastRiskSubmitCutoffBallCallCount = 0;
         players = new List<GamePlayerData>();
+        pendingBingoCheckPresentations = new List<GameBingoCheckResolvedData>();
     }
 
     public GameSessionData(string gameId, GameSessionSetupData setupData) : this()
@@ -211,6 +215,53 @@ public class GameSessionData
         return count;
     }
 
+    public int GetEligiblePlayerCount()
+    {
+        if (players == null)
+        {
+            return 0;
+        }
+
+        int count = 0;
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            if (IsPlayerEligibleForCount(players[i]))
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    public bool IsPlayerEligibleForCount(GamePlayerData playerData)
+    {
+        return playerData != null &&
+               playerData.gameStatus == GamePlayerStatus.Eligible &&
+               playerData.isConnected;
+    }
+
+    public void QueueBingoCheckPresentation(GameBingoCheckResolvedData resolvedData)
+    {
+        if (resolvedData == null)
+        {
+            return;
+        }
+
+        pendingBingoCheckPresentations ??= new List<GameBingoCheckResolvedData>();
+        pendingBingoCheckPresentations.Add(resolvedData);
+    }
+
+    public List<GameBingoCheckResolvedData> DrainBingoCheckPresentations()
+    {
+        pendingBingoCheckPresentations ??= new List<GameBingoCheckResolvedData>();
+        List<GameBingoCheckResolvedData> presentations =
+            new List<GameBingoCheckResolvedData>(pendingBingoCheckPresentations);
+        pendingBingoCheckPresentations.Clear();
+        return presentations;
+    }
+
     public void EnsureScoreValuesCached()
     {
         if (hasCachedScoreValues ||
@@ -257,6 +308,7 @@ public class GamePlayStateChangedData
     public bool isRuleCompletionAwaitingChecks;
     public bool isBallPoolExhaustedAwaitingChecks;
     public bool isRiskTimerExpiredAwaitingChecks;
+    public bool deathFinalChecksWereRequired;
     public bool isBallTimerActive;
     public double ballTimerEndTime;
     public bool isRiskTimerActive;
@@ -295,6 +347,7 @@ public class GamePlayStateChangedData
             isRuleCompletionAwaitingChecks = playController.IsRuleCompletionAwaitingChecks;
             isBallPoolExhaustedAwaitingChecks = playController.IsBallPoolExhaustedAwaitingChecks;
             isRiskTimerExpiredAwaitingChecks = playController.IsRiskTimerExpiredAwaitingChecks;
+            deathFinalChecksWereRequired = playController.DeathFinalChecksWereRequired;
             isBallTimerActive = playController.BallTimer?.IsActive == true;
             ballTimerEndTime = playController.BallTimer?.EndTime ?? 0d;
             isRiskTimerActive = playController.RiskTimer?.IsActive == true;
@@ -334,10 +387,12 @@ public class GamePlayerMatchStateData
     public bool isSubmitTimerActive;
     public double submitTimerEndTime;
     public bool isRiskDecisionPending;
+    public List<int> markedCellIndices;
 
     public GamePlayerMatchStateData()
     {
         userId = string.Empty;
+        markedCellIndices = new List<int>();
     }
 
     public GamePlayerMatchStateData(GamePlayerData playerData) : this()
@@ -359,6 +414,9 @@ public class GamePlayerMatchStateData
         isSubmitTimerActive = playerData.isSubmitTimerActive;
         submitTimerEndTime = playerData.submitTimerEndTime;
         isRiskDecisionPending = playerData.isRiskDecisionPending;
+        markedCellIndices = playerData.markedCellIndices != null
+            ? new List<int>(playerData.markedCellIndices)
+            : new List<int>();
     }
 }
 
@@ -380,6 +438,7 @@ public class GamePlayerStateChangedData
     public bool isSubmitTimerActive;
     public double submitTimerEndTime;
     public bool isRiskDecisionPending;
+    public List<int> markedCellIndices;
     public List<BingoPatternIdentity> queuedRiskPatterns;
     public List<BingoPatternIdentity> activeRiskSubmitPatterns;
     public List<BingoPatternIdentity> lateRiskPatterns;
@@ -395,6 +454,7 @@ public class GamePlayerStateChangedData
         activeRiskSubmitPatterns = new List<BingoPatternIdentity>();
         lateRiskPatterns = new List<BingoPatternIdentity>();
         pendingRiskCheckPatterns = new List<BingoPatternIdentity>();
+        markedCellIndices = new List<int>();
     }
 
     public GamePlayerStateChangedData(GameSessionData gameSessionData, GamePlayerData playerData) : this()
@@ -419,6 +479,9 @@ public class GamePlayerStateChangedData
         isSubmitTimerActive = playerData.isSubmitTimerActive;
         submitTimerEndTime = playerData.submitTimerEndTime;
         isRiskDecisionPending = playerData.isRiskDecisionPending;
+        markedCellIndices = playerData.markedCellIndices != null
+            ? new List<int>(playerData.markedCellIndices)
+            : new List<int>();
         queuedRiskPatterns = BingoPatternIdentityList.Clone(playerData.queuedRiskPatterns);
         activeRiskSubmitPatterns = BingoPatternIdentityList.Clone(playerData.activeRiskSubmitPatterns);
         lateRiskPatterns = BingoPatternIdentityList.Clone(playerData.lateRiskPatterns);
@@ -524,6 +587,7 @@ public class GameBingoCheckResolvedData
     public int currentCheckScore;
     public int currentMatchScore;
     public bool matchCompleted;
+    public bool isAutomaticCheck;
     public bool requiresRiskDecision;
     public int latePatternCount;
     public List<BingoPatternType> availablePatternTypes;

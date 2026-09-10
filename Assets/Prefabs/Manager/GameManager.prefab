@@ -345,6 +345,8 @@ MonoBehaviour:
   - {fileID: 11400000, guid: f5e4e302a412f254c91274046802e2d8, type: 2}
   - {fileID: 11400000, guid: ebcd16614166d0e44a50626dad98de77, type: 2}
   - {fileID: 11400000, guid: 81cacf046cd4dbf439155e7283da9cbf, type: 2}
+  - {fileID: 11400000, guid: 1579b18bb07e5bf4e814c2e03f3d0f68, type: 2}
+  - {fileID: 11400000, guid: 5aa917c3a1f32314598abde113dc3154, type: 2}
 --- !u!114 &2222644560770358961
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -445,6 +447,13 @@ MonoBehaviour:
   firstBallCountdownSeconds: 10
   nextBallCountdownSeconds: 10
   ballSlideDurationSeconds: 1
+  automaticMarkDelayMinimumSeconds: 0.35
+  automaticMarkDelayMaximumSeconds: 1.25
+  automaticBingoDelayMinimumSeconds: 0.25
+  automaticBingoDelayMaximumSeconds: 0.75
+  automaticMarkPulseCount: 2
+  automaticMarkPulseSeconds: 0.15
+  deathFrozenPlayerOutEligibleCount: 1
   riskMatchDurations:
   - ballCountType: 30
     durationMinutes: 6

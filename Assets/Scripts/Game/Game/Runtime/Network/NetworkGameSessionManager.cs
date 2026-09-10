@@ -85,6 +85,46 @@ public class NetworkGameSessionManager : MonoBehaviour
 
             gameSessionData.revision++;
             BroadcastGamePlayStateChanged(gameSessionData);
+            SendPendingBingoCheckPresentations(gameSessionData);
+        }
+    }
+
+    private void SendPendingBingoCheckPresentations(
+        GameSessionData gameSessionData)
+    {
+        List<GameBingoCheckResolvedData> presentations =
+            gameSessionData?.DrainBingoCheckPresentations();
+
+        if (presentations == null ||
+            connectionRegistry == null ||
+            !connectionRegistry.IsReady)
+        {
+            return;
+        }
+
+        for (int i = 0; i < presentations.Count; i++)
+        {
+            GameBingoCheckResolvedData resolvedData = presentations[i];
+
+            if (resolvedData == null ||
+                !connectionRegistry.TryGetClientId(
+                    resolvedData.userId,
+                    out ulong clientId))
+            {
+                continue;
+            }
+
+            GamePlayerData playerData = gameSessionData.GetPlayer(resolvedData.userId);
+            resolvedData.revision = gameSessionData.revision;
+            resolvedData.playerStatus =
+                playerData?.gameStatus ?? resolvedData.playerStatus;
+            resolvedData.currentMatchScore =
+                playerData?.currentMatchScore ?? resolvedData.currentMatchScore;
+            resolvedData.matchCompleted =
+                gameSessionData.gameState == GameSessionState.Completed;
+            NetworkGameSessionConnection.TrySendBingoCheckResolved(
+                clientId,
+                resolvedData);
         }
     }
 
@@ -424,6 +464,7 @@ public class NetworkGameSessionManager : MonoBehaviour
             playerData.userTag == UserTag.Bot ||
             !playerData.isConnected ||
             !playerData.canRejoin ||
+            gameSessionData.gamePlayController?.IsDeathRule == true ||
             gameSessionData.gameState == GameSessionState.Completed ||
             gameSessionData.gamePlayController?.IsPlayerInputClosed == true ||
             boardData?.cellNumbers == null ||
@@ -434,13 +475,14 @@ public class NetworkGameSessionManager : MonoBehaviour
             return;
         }
 
+        playerData.TrySetMarkedCell(cellIndex, isMarked);
         BroadcastGamePlayerMarkedCellChanged(
             gameSessionData,
             new GamePlayerMarkedCellChangedData(
                 gameSessionData.gameId,
                 userId,
                 cellIndex,
-                isMarked));
+                boardData.usesFreeCell && cellIndex == 12 ? true : isMarked));
     }
 
     public GameBingoCheckResolvedData ProcessAuthorityBingoCheck(

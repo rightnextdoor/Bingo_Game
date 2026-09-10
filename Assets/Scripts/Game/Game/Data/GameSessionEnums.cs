@@ -17,7 +17,8 @@ public enum GamePlayerStatus
 {
     Eligible,
     Won,
-    Lost
+    Lost,
+    Checking
 }
 
 public enum GameEndReason

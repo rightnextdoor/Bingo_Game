@@ -22,6 +22,18 @@ public class GamePlayerData
     public bool isSubmitTimerActive;
     public double submitTimerEndTime;
     public bool isRiskDecisionPending;
+    public List<int> markedCellIndices;
+
+    public int automaticBoardLastProcessedBallCallId;
+    public int automaticBoardPendingCellIndex;
+    public int automaticBoardPendingBallCallId;
+    public double automaticBoardMarkDueTime;
+    public int automaticBoardPendingCheckBallCallId;
+    public double automaticBoardCheckDueTime;
+
+    public int deathCheckBallCallId;
+    public bool deathCheckSucceeded;
+    public bool deathCheckCanWin;
     public List<BingoPatternIdentity> queuedRiskPatterns;
     public List<BingoPatternIdentity> activeRiskSubmitPatterns;
     public List<BingoPatternIdentity> lateRiskPatterns;
@@ -52,6 +64,16 @@ public class GamePlayerData
         isSubmitTimerActive = false;
         submitTimerEndTime = 0d;
         isRiskDecisionPending = false;
+        markedCellIndices = new List<int>();
+        automaticBoardLastProcessedBallCallId = 0;
+        automaticBoardPendingCellIndex = -1;
+        automaticBoardPendingBallCallId = 0;
+        automaticBoardMarkDueTime = 0d;
+        automaticBoardPendingCheckBallCallId = 0;
+        automaticBoardCheckDueTime = 0d;
+        deathCheckBallCallId = 0;
+        deathCheckSucceeded = false;
+        deathCheckCanWin = false;
         queuedRiskPatterns = new List<BingoPatternIdentity>();
         activeRiskSubmitPatterns = new List<BingoPatternIdentity>();
         lateRiskPatterns = new List<BingoPatternIdentity>();
@@ -75,6 +97,7 @@ public class GamePlayerData
         isGameSceneReady = userTag == UserTag.Bot;
         canRejoin = userTag != UserTag.Bot;
         boardData = new LobbyBoardData(lobbyPlayerData.boardData);
+        EnsureFreeCellMarked();
     }
 
     public GamePlayerData(GamePlayerData playerData) : this()
@@ -100,10 +123,69 @@ public class GamePlayerData
         isSubmitTimerActive = playerData.isSubmitTimerActive;
         submitTimerEndTime = playerData.submitTimerEndTime;
         isRiskDecisionPending = playerData.isRiskDecisionPending;
+        markedCellIndices = playerData.markedCellIndices != null
+            ? new List<int>(playerData.markedCellIndices)
+            : new List<int>();
+        automaticBoardLastProcessedBallCallId = playerData.automaticBoardLastProcessedBallCallId;
+        automaticBoardPendingCellIndex = playerData.automaticBoardPendingCellIndex;
+        automaticBoardPendingBallCallId = playerData.automaticBoardPendingBallCallId;
+        automaticBoardMarkDueTime = playerData.automaticBoardMarkDueTime;
+        automaticBoardPendingCheckBallCallId = playerData.automaticBoardPendingCheckBallCallId;
+        automaticBoardCheckDueTime = playerData.automaticBoardCheckDueTime;
+        deathCheckBallCallId = playerData.deathCheckBallCallId;
+        deathCheckSucceeded = playerData.deathCheckSucceeded;
+        deathCheckCanWin = playerData.deathCheckCanWin;
         queuedRiskPatterns = BingoPatternIdentityList.Clone(playerData.queuedRiskPatterns);
         activeRiskSubmitPatterns = BingoPatternIdentityList.Clone(playerData.activeRiskSubmitPatterns);
         lateRiskPatterns = BingoPatternIdentityList.Clone(playerData.lateRiskPatterns);
         pendingRiskCheckPatterns = BingoPatternIdentityList.Clone(playerData.pendingRiskCheckPatterns);
         boardData = new LobbyBoardData(playerData.boardData);
+        EnsureFreeCellMarked();
+    }
+
+    public bool TrySetMarkedCell(int cellIndex, bool isMarked)
+    {
+        if (boardData?.cellNumbers == null ||
+            cellIndex < 0 ||
+            cellIndex >= boardData.cellNumbers.Count)
+        {
+            return false;
+        }
+
+        markedCellIndices ??= new List<int>();
+        bool mustRemainMarked = boardData.usesFreeCell && cellIndex == 12;
+        bool resolvedMarked = mustRemainMarked || isMarked;
+        bool wasMarked = markedCellIndices.Contains(cellIndex);
+
+        if (resolvedMarked == wasMarked)
+        {
+            return false;
+        }
+
+        if (resolvedMarked)
+        {
+            markedCellIndices.Add(cellIndex);
+            markedCellIndices.Sort();
+        }
+        else
+        {
+            markedCellIndices.Remove(cellIndex);
+        }
+
+        return true;
+    }
+
+    public void EnsureFreeCellMarked()
+    {
+        markedCellIndices ??= new List<int>();
+
+        if (boardData?.usesFreeCell == true &&
+            boardData.cellNumbers != null &&
+            boardData.cellNumbers.Count > 12 &&
+            !markedCellIndices.Contains(12))
+        {
+            markedCellIndices.Add(12);
+            markedCellIndices.Sort();
+        }
     }
 }

@@ -11,6 +11,7 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
 
     public static LocalGameSessionManager instance;
     public static event Action<GameSessionData> LocalGameSessionUpdated;
+    public static event Action<GameBingoCheckResolvedData> LocalBingoCheckResolved;
 
     private readonly List<GameSessionData> gameSessions = new List<GameSessionData>();
     private bool isReady;
@@ -24,6 +25,7 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
     {
         instance = null;
         LocalGameSessionUpdated = null;
+        LocalBingoCheckResolved = null;
     }
 
     private void Awake()
@@ -75,6 +77,42 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
             GameScoreAuthority.PersistFinalizedLocalScores(gameSessionData);
             gameSessionData.revision++;
             LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData));
+            SendPendingBingoCheckPresentations(gameSessionData);
+        }
+    }
+
+    private static void SendPendingBingoCheckPresentations(
+        GameSessionData gameSessionData)
+    {
+        List<GameBingoCheckResolvedData> presentations =
+            gameSessionData?.DrainBingoCheckPresentations();
+
+        if (presentations == null)
+        {
+            return;
+        }
+
+        string localUserId = UserManager.instance?.UserId;
+
+        for (int i = 0; i < presentations.Count; i++)
+        {
+            GameBingoCheckResolvedData resolvedData = presentations[i];
+
+            if (resolvedData == null ||
+                !string.Equals(resolvedData.userId, localUserId, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            GamePlayerData playerData = gameSessionData.GetPlayer(resolvedData.userId);
+            resolvedData.revision = gameSessionData.revision;
+            resolvedData.playerStatus =
+                playerData?.gameStatus ?? resolvedData.playerStatus;
+            resolvedData.currentMatchScore =
+                playerData?.currentMatchScore ?? resolvedData.currentMatchScore;
+            resolvedData.matchCompleted =
+                gameSessionData.gameState == GameSessionState.Completed;
+            LocalBingoCheckResolved?.Invoke(resolvedData);
         }
     }
 
@@ -406,6 +444,7 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
             playerData.userTag == UserTag.Bot ||
             !playerData.isConnected ||
             !playerData.canRejoin ||
+            gameSessionData.gamePlayController?.IsDeathRule == true ||
             gameSessionData.gameState == GameSessionState.Completed ||
             gameSessionData.gamePlayController?.IsPlayerInputClosed == true ||
             boardData?.cellNumbers == null ||
@@ -416,11 +455,12 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
             return false;
         }
 
+        playerData.TrySetMarkedCell(cellIndex, isMarked);
         updateData = new GamePlayerMarkedCellChangedData(
             gameSessionData.gameId,
             playerData.userId,
             cellIndex,
-            isMarked);
+            boardData.usesFreeCell && cellIndex == 12 ? true : isMarked);
         return true;
     }
 

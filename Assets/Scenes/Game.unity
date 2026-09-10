@@ -12181,6 +12181,30 @@ PrefabInstance:
       propertyPath: riskMatchDurationMinutes
       value: 6
       objectReference: {fileID: 0}
+    - target: {fileID: 1122387465010203044, guid: f7e0f34e7bbfde64d932d6d233ff8e28, type: 3}
+      propertyPath: automaticMarkPulseSeconds
+      value: 0.35
+      objectReference: {fileID: 0}
+    - target: {fileID: 1122387465010203044, guid: f7e0f34e7bbfde64d932d6d233ff8e28, type: 3}
+      propertyPath: automaticMarkDelayMaximumSeconds
+      value: 3
+      objectReference: {fileID: 0}
+    - target: {fileID: 1122387465010203044, guid: f7e0f34e7bbfde64d932d6d233ff8e28, type: 3}
+      propertyPath: automaticMarkDelayMinimumSeconds
+      value: 2.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 1122387465010203044, guid: f7e0f34e7bbfde64d932d6d233ff8e28, type: 3}
+      propertyPath: automaticBingoDelayMaximumSeconds
+      value: 1.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 1122387465010203044, guid: f7e0f34e7bbfde64d932d6d233ff8e28, type: 3}
+      propertyPath: automaticBingoDelayMinimumSeconds
+      value: 0.55
+      objectReference: {fileID: 0}
+    - target: {fileID: 1122387465010203044, guid: f7e0f34e7bbfde64d932d6d233ff8e28, type: 3}
+      propertyPath: deathFrozenPlayerOutEligibleCount
+      value: 5
+      objectReference: {fileID: 0}
     - target: {fileID: 1854102416727074944, guid: f7e0f34e7bbfde64d932d6d233ff8e28, type: 3}
       propertyPath: m_LocalPosition.x
       value: 582.04675
@@ -14257,11 +14281,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6207814632284159071, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
       propertyPath: gameModeType
-      value: 2
+      value: 3
       objectReference: {fileID: 0}
     - target: {fileID: 6207814632284159071, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
       propertyPath: ballCountType
-      value: 90
+      value: 30
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

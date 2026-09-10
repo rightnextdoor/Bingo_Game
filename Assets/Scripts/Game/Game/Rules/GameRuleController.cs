@@ -18,6 +18,7 @@ public class GameRuleController
 
     public BingoRuleType ActiveRuleType => activeRuleType;
     public bool IsSupported => isSupported;
+    public bool IsElimination => activeRuleType == BingoRuleType.Elimination;
 
     public void Setup(
         BingoGameModeType gameModeType,
@@ -30,7 +31,8 @@ public class GameRuleController
 
         isSupported = activeRuleType == BingoRuleType.Traditional ||
                       activeRuleType == BingoRuleType.Blackout ||
-                      activeRuleType == BingoRuleType.Risk;
+                      activeRuleType == BingoRuleType.Risk ||
+                      activeRuleType == BingoRuleType.Elimination;
     }
 
     public bool TryResolveCheck(
@@ -50,17 +52,20 @@ public class GameRuleController
             !checkResult.HasFailedPattern;
 
         bool isRisk = activeRuleType == BingoRuleType.Risk;
+        bool isElimination = activeRuleType == BingoRuleType.Elimination;
         bool awardedRiskPoints =
             isRisk && checkResult.currentCheckPatternPoints > 0;
 
         decision = new GameRuleCheckDecision
         {
-            playerStatus = isValidWin && isRisk
+            playerStatus = isElimination
+                ? GamePlayerStatus.Lost
+                : isValidWin && isRisk
                 ? GamePlayerStatus.Eligible
                 : isValidWin
                     ? GamePlayerStatus.Won
                     : GamePlayerStatus.Lost,
-            waitsForWinningCheckAnimation = isValidWin && !isRisk,
+            waitsForWinningCheckAnimation = isValidWin && !isRisk && !isElimination,
             requiresRiskDecision = isValidWin && awardedRiskPoints
         };
 
@@ -76,9 +81,20 @@ public class GameRuleController
             case BingoRuleType.Risk:
                 return GamePlayerStatus.Lost;
 
+            case BingoRuleType.Elimination:
+                return GamePlayerStatus.Won;
+
             default:
                 return GamePlayerStatus.Lost;
         }
+    }
+
+    public bool ShouldEndBeforeNextBall(int eligiblePlayerCount)
+    {
+        int safeEligiblePlayerCount = Math.Max(0, eligiblePlayerCount);
+        return IsElimination
+            ? safeEligiblePlayerCount <= 1
+            : safeEligiblePlayerCount == 0;
     }
 
     private static BingoRuleType ResolveDefaultRule(BingoGameModeType gameModeType)

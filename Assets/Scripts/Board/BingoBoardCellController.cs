@@ -119,6 +119,12 @@ public class BingoBoardCellController : MonoBehaviour
         RefreshHighlights();
     }
 
+    public void SetAutomaticMarkHighlight(bool highlighted)
+    {
+        isCheckHighlighted = highlighted;
+        RefreshHighlights();
+    }
+
     #endregion
 
     #region Input

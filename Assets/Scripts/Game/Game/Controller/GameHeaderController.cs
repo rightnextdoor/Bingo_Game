@@ -196,7 +196,17 @@ public class GameHeaderController : MonoBehaviour
 
         bool isRiskUiActive = isRisk && riskTimer != null && riskTimer.IsActive;
 
-        if (isRiskUiActive)
+        if (isDeath)
+        {
+            int playerTotal = currentGameSession.players?.Count ?? 0;
+            int playersLeft = currentGameSession.gameState == GameSessionState.Completed
+                ? currentGameSession.GetPlayerCountWithStatus(GamePlayerStatus.Won)
+                : currentGameSession.GetPlayerCountWithStatus(GamePlayerStatus.Eligible) +
+                  currentGameSession.GetPlayerCountWithStatus(GamePlayerStatus.Checking);
+
+            SetText(riskTimerText, $"Players Left: {playersLeft} / {playerTotal}");
+        }
+        else if (isRiskUiActive)
         {
             int seconds = Mathf.Max(0, Mathf.CeilToInt(riskTimer.GetRemainingSeconds()));
             SetText(riskTimerText, $"Game Time Left: {FormatMinutesAndSeconds(seconds)}");
@@ -227,7 +237,7 @@ public class GameHeaderController : MonoBehaviour
             return;
         }
 
-        if (isDeath && localPlayer.gameStatus != GamePlayerStatus.Eligible)
+        if (isDeath)
         {
             string deathStatus = localPlayer.gameStatus switch
             {

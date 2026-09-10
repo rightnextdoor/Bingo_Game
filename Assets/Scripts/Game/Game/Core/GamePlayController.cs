@@ -33,6 +33,7 @@ public class GamePlayController
     [SerializeField] private bool isRuleCompletionAwaitingChecks;
     [SerializeField] private bool isBallPoolExhaustedAwaitingChecks;
     [SerializeField] private bool isRiskTimerExpiredAwaitingChecks;
+    [SerializeField] private bool deathFinalChecksWereRequired;
 
     [NonSerialized] private BingoChecker bingoChecker = new BingoChecker();
 
@@ -61,8 +62,10 @@ public class GamePlayController
     public bool IsBallPoolExhaustedAwaitingChecks => isBallPoolExhaustedAwaitingChecks;
     public bool IsRiskTimerExpiredAwaitingChecks => isRiskTimerExpiredAwaitingChecks;
     public bool IsRuleCompletionAwaitingChecks => isRuleCompletionAwaitingChecks;
+    public bool DeathFinalChecksWereRequired => deathFinalChecksWereRequired;
     public float NextBallCountdownSeconds => nextBallCountdownSeconds;
     public bool IsRiskRule => ruleController?.ActiveRuleType == BingoRuleType.Risk;
+    public bool IsDeathRule => ruleController?.ActiveRuleType == BingoRuleType.Elimination;
     public bool IsRunning =>
         phase == GamePlayPhase.FirstBallCountdown ||
         phase == GamePlayPhase.NextBallCountdown;
@@ -127,6 +130,7 @@ public class GamePlayController
             controller.isBallPoolExhaustedAwaitingChecks;
         isRiskTimerExpiredAwaitingChecks =
             controller.isRiskTimerExpiredAwaitingChecks;
+        deathFinalChecksWereRequired = controller.deathFinalChecksWereRequired;
 
         ruleController = new GameRuleController();
         ruleController.Setup(gameModeType, hasRule, ruleType);
@@ -161,6 +165,7 @@ public class GamePlayController
         isRuleCompletionAwaitingChecks = false;
         isBallPoolExhaustedAwaitingChecks = false;
         isRiskTimerExpiredAwaitingChecks = false;
+        deathFinalChecksWereRequired = false;
 
         ballController ??= new GameBallController();
         ballController.Setup(ballCountType);
@@ -413,6 +418,71 @@ public class GamePlayController
             configuredPatternTypes);
     }
 
+    public List<BingoPatternCheckResult> GetCompletedAvailablePatterns(
+        string playerId,
+        LobbyBoardData boardData,
+        IReadOnlyCollection<int> markedCellIndices,
+        IReadOnlyCollection<int> calledNumbers,
+        IReadOnlyCollection<BingoPatternType> configuredPatternTypes)
+    {
+        bingoChecker ??= new BingoChecker();
+        return bingoChecker.GetCompletedAvailablePatterns(
+            playerId,
+            boardData,
+            markedCellIndices,
+            calledNumbers,
+            configuredPatternTypes);
+    }
+
+    public bool TryCheckAutomaticBingo(
+        string playerId,
+        LobbyBoardData boardData,
+        IReadOnlyCollection<int> markedCellIndices,
+        IReadOnlyCollection<int> calledNumbers,
+        IReadOnlyCollection<BingoPatternType> configuredPatternTypes,
+        out BingoCheckResult checkResult,
+        out GameRuleCheckDecision ruleDecision)
+    {
+        checkResult = null;
+        ruleDecision = null;
+
+        if (!CanAcceptBingoChecks ||
+            !IsDeathRule ||
+            string.IsNullOrWhiteSpace(playerId) ||
+            boardData == null)
+        {
+            return false;
+        }
+
+        bingoChecker ??= new BingoChecker();
+
+        if (!bingoChecker.TryCheck(
+                playerId,
+                boardData,
+                markedCellIndices,
+                calledNumbers,
+                configuredPatternTypes,
+                null))
+        {
+            return false;
+        }
+
+        checkResult = bingoChecker.CurrentCheckResult;
+        return ruleController.TryResolveCheck(checkResult, out ruleDecision);
+    }
+
+    public bool ShouldEndBeforeNextBall(int eligiblePlayerCount)
+    {
+        ruleController ??= new GameRuleController();
+        ruleController.Setup(gameModeType, hasRule, ruleType);
+        return ruleController.ShouldEndBeforeNextBall(eligiblePlayerCount);
+    }
+
+    public void MarkDeathFinalChecksRequired()
+    {
+        deathFinalChecksWereRequired = true;
+    }
+
     public bool TryCheckRiskBingo(
         string playerId,
         LobbyBoardData boardData,
@@ -486,6 +556,7 @@ public class GamePlayController
         isRuleCompletionAwaitingChecks = updateData.isRuleCompletionAwaitingChecks;
         isBallPoolExhaustedAwaitingChecks = updateData.isBallPoolExhaustedAwaitingChecks;
         isRiskTimerExpiredAwaitingChecks = updateData.isRiskTimerExpiredAwaitingChecks;
+        deathFinalChecksWereRequired = updateData.deathFinalChecksWereRequired;
 
         ballController ??= new GameBallController();
         ballController.ApplyCalledNumbersSnapshot(updateData.calledNumbers);

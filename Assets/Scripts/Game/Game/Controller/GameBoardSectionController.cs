@@ -86,6 +86,21 @@ public class GameBoardSectionController : MonoBehaviour
         boardController?.SetInteractable(interactable);
     }
 
+    public void SetCellMarked(int cellIndex, bool isMarked)
+    {
+        boardController?.SetCellMarked(cellIndex, isMarked);
+    }
+
+    public void SetMarkedCells(IReadOnlyCollection<int> markedCellIndices)
+    {
+        boardController?.SetMarkedCells(markedCellIndices);
+    }
+
+    public void SetAutomaticMarkHighlight(int cellIndex, bool highlighted)
+    {
+        boardController?.SetAutomaticMarkHighlight(cellIndex, highlighted);
+    }
+
     #endregion
 
     #region Controls
@@ -95,6 +110,14 @@ public class GameBoardSectionController : MonoBehaviour
         if (bingoButton != null)
         {
             bingoButton.interactable = interactable;
+        }
+    }
+
+    public void SetBingoVisible(bool isVisible)
+    {
+        if (bingoButton != null)
+        {
+            bingoButton.gameObject.SetActive(isVisible);
         }
     }
 

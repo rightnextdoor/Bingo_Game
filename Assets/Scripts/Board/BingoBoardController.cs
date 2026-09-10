@@ -192,6 +192,12 @@ public class BingoBoardController : MonoBehaviour
             cells[i]?.ClearCheckHighlight();
     }
 
+    public void SetAutomaticMarkHighlight(int cellIndex, bool highlighted)
+    {
+        BingoBoardCellController cell = GetCell(cellIndex);
+        cell?.SetAutomaticMarkHighlight(highlighted);
+    }
+
     #endregion
 
     #region Interaction

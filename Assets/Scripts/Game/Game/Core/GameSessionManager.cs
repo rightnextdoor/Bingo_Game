@@ -77,6 +77,8 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
     {
         LocalGameSessionManager.LocalGameSessionUpdated -= OnLocalGameSessionUpdated;
         LocalGameSessionManager.LocalGameSessionUpdated += OnLocalGameSessionUpdated;
+        LocalGameSessionManager.LocalBingoCheckResolved -= OnLocalBingoCheckResolved;
+        LocalGameSessionManager.LocalBingoCheckResolved += OnLocalBingoCheckResolved;
         NetworkGameSessionConnection.LocalGameCreationResultReceived -= ReceiveGameCreationResult;
         NetworkGameSessionConnection.LocalGameCreationResultReceived += ReceiveGameCreationResult;
         NetworkGameSessionConnection.LocalGameSessionUpdatedReceived -= OnNetworkGameSessionUpdated;
@@ -100,6 +102,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
     private void OnDisable()
     {
         LocalGameSessionManager.LocalGameSessionUpdated -= OnLocalGameSessionUpdated;
+        LocalGameSessionManager.LocalBingoCheckResolved -= OnLocalBingoCheckResolved;
         NetworkGameSessionConnection.LocalGameCreationResultReceived -= ReceiveGameCreationResult;
         NetworkGameSessionConnection.LocalGameSessionUpdatedReceived -= OnNetworkGameSessionUpdated;
         NetworkGameSessionConnection.LocalGamePlayStateChangedReceived -= OnNetworkGamePlayStateChanged;
@@ -114,6 +117,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
     private void OnDestroy()
     {
         LocalGameSessionManager.LocalGameSessionUpdated -= OnLocalGameSessionUpdated;
+        LocalGameSessionManager.LocalBingoCheckResolved -= OnLocalBingoCheckResolved;
         NetworkGameSessionConnection.LocalGameCreationResultReceived -= ReceiveGameCreationResult;
         NetworkGameSessionConnection.LocalGameSessionUpdatedReceived -= OnNetworkGameSessionUpdated;
         NetworkGameSessionConnection.LocalGamePlayStateChangedReceived -= OnNetworkGamePlayStateChanged;
@@ -803,6 +807,8 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
             updateData.isMarked = true;
         }
 
+        playerData.TrySetMarkedCell(updateData.cellIndex, updateData.isMarked);
+
         GamePlayerMarkedCellChanged?.Invoke(updateData);
     }
 
@@ -874,6 +880,9 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         playerData.isSubmitTimerActive = updateData.isSubmitTimerActive;
         playerData.submitTimerEndTime = updateData.submitTimerEndTime;
         playerData.isRiskDecisionPending = updateData.isRiskDecisionPending;
+        playerData.markedCellIndices = updateData.markedCellIndices != null
+            ? new List<int>(updateData.markedCellIndices)
+            : new List<int>();
         playerData.queuedRiskPatterns = BingoPatternIdentityList.Clone(updateData.queuedRiskPatterns);
         playerData.activeRiskSubmitPatterns = BingoPatternIdentityList.Clone(updateData.activeRiskSubmitPatterns);
         playerData.lateRiskPatterns = BingoPatternIdentityList.Clone(updateData.lateRiskPatterns);
@@ -895,6 +904,9 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         playerData.isSubmitTimerActive = updateData.isSubmitTimerActive;
         playerData.submitTimerEndTime = updateData.submitTimerEndTime;
         playerData.isRiskDecisionPending = updateData.isRiskDecisionPending;
+        playerData.markedCellIndices = updateData.markedCellIndices != null
+            ? new List<int>(updateData.markedCellIndices)
+            : new List<int>();
     }
 
     private void ApplyFinalizedScoreForCurrentNetworkUser()
@@ -1331,6 +1343,11 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
     private void OnLocalGameSessionUpdated(GameSessionData gameSessionData)
     {
         ApplyGameSessionUpdate(gameSessionData);
+    }
+
+    private void OnLocalBingoCheckResolved(GameBingoCheckResolvedData resolvedData)
+    {
+        BingoCheckResolved?.Invoke(resolvedData);
     }
 
     private void OnNetworkGamePlayerStateChanged(GamePlayerStateChangedData updateData)

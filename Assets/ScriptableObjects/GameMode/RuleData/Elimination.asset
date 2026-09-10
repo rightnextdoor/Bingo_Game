@@ -13,5 +13,8 @@ MonoBehaviour:
   m_Name: Elimination
   m_EditorClassIdentifier: Assembly-CSharp::BingoGameRuleData
   ruleType: 3
-  description: Avoid completing the active pattern. Any player who completes the
-    pattern is eliminated from the match. The last remaining player wins.
+  description: Boards mark called numbers automatically. Completing an active Bingo
+    pattern puts that player out. When one connected eligible player remains, that
+    player wins. If multiple players enter their final check from the same ball,
+    every good check wins the tie and every bad check is out. Connected eligible
+    players who remain when the ball pool ends win together.

@@ -11,4 +11,6 @@ public enum UIMessageType
     RiskTimeRemaining,
     RiskPatternAvailable,
     RiskPatternSubmittedLate,
+    DeathPlayerOut,
+    DeathFinalChecks,
 }

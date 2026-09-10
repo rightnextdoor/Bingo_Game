@@ -1,0 +1,32 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6b33075be95cdb746abd148dfc70db25, type: 3}
+  m_Name: DeathPlayerOut
+  m_EditorClassIdentifier: Assembly-CSharp::UIMessageData
+  messageType: 11
+  messageText: A player is OUT.
+  imageMode: 2
+  customImage: {fileID: 0}
+  fontAsset: {fileID: 0}
+  fontSize: 40
+  textColor: {r: 0, g: 0, b: 0, a: 1}
+  numberColor: {r: 0.078431375, g: 0.078431375, b: 0.078431375, a: 1}
+  backgroundColor: {r: 0.96226406, g: 0.96226406, b: 0.96226406, a: 0.14117648}
+  displaySeconds: 3
+  fadeOutSeconds: 0.35
+  tooltipOpenDelay: 0
+  tooltipMinimumWidth: 120
+  tooltipMaximumWidth: 360
+  tooltipMinimumHeight: 44
+  tooltipMaximumHeight: 220
+  tooltipGrowthDirection: 0
+  tooltipOffset: {x: 18, y: -18}

@@ -41,15 +41,7 @@ public class GameSettings : MonoBehaviour
     [SerializeField, Min(0f)] private float ballSlideDurationSeconds = DefaultBallSlideDurationSeconds;
 
     [Header("Risk")]
-    [SerializeField] private List<RiskMatchDurationSetting> riskMatchDurations =
-        new List<RiskMatchDurationSetting>
-        {
-            new RiskMatchDurationSetting(BingoBallCountType.Ball30, DefaultRiskMatchDurationMinutes),
-            new RiskMatchDurationSetting(BingoBallCountType.Ball36, DefaultRiskMatchDurationMinutes),
-            new RiskMatchDurationSetting(BingoBallCountType.Ball75, DefaultRiskMatchDurationMinutes),
-            new RiskMatchDurationSetting(BingoBallCountType.Ball80, DefaultRiskMatchDurationMinutes),
-            new RiskMatchDurationSetting(BingoBallCountType.Ball90, DefaultRiskMatchDurationMinutes)
-        };
+    [SerializeField] private List<RiskMatchDurationSetting> riskMatchDurations = new List<RiskMatchDurationSetting>();
 
     [Header("Score Limits")]
     [SerializeField, Min(0)] private int minimumScore = UserStats.DefaultMinimumScore;

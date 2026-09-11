@@ -369,12 +369,173 @@ public static class DeathGameplayAuthority
 
         bool resolvedCheckingPlayers = ResolveOrdinaryCheckingPlayers(gameSessionData);
         changed |= resolvedCheckingPlayers;
+        changed |= ResolveZeroEligibleTieBreak(gameSessionData);
+
+        if (gameSessionData.gamePlayController.Phase == GamePlayPhase.Ended)
+        {
+            return changed;
+        }
 
         if (resolvedCheckingPlayers &&
             gameSessionData.GetEligiblePlayerCount() == 1 &&
             !HasCheckingPlayers(gameSessionData))
         {
             changed |= gameSessionData.gamePlayController.EndGame(GameEndReason.RuleCompleted);
+        }
+
+        return changed;
+    }
+
+    private static bool ResolveZeroEligibleTieBreak(GameSessionData gameSessionData)
+    {
+        if (!IsDeathGame(gameSessionData) ||
+            gameSessionData.gameState != GameSessionState.InProgress ||
+            gameSessionData.players == null ||
+            gameSessionData.GetEligiblePlayerCount() != 0)
+        {
+            return false;
+        }
+
+        GamePlayController playController = gameSessionData.gamePlayController;
+        int finalBallCallId = 0;
+
+        for (int i = 0; i < gameSessionData.players.Count; i++)
+        {
+            GamePlayerData playerData = gameSessionData.players[i];
+
+            if (playerData?.gameStatus == GamePlayerStatus.Checking &&
+                playerData.deathCheckCanWin)
+            {
+                finalBallCallId = Math.Max(finalBallCallId, playerData.deathCheckBallCallId);
+            }
+        }
+
+        if (finalBallCallId <= 0)
+        {
+            return false;
+        }
+
+        List<GamePlayerData> finalCohort = new List<GamePlayerData>();
+        List<GamePlayerData> successfulPlayers = new List<GamePlayerData>();
+        List<GamePlayerData> exhaustedPlayers = new List<GamePlayerData>();
+
+        for (int i = 0; i < gameSessionData.players.Count; i++)
+        {
+            GamePlayerData playerData = gameSessionData.players[i];
+
+            if (playerData?.gameStatus != GamePlayerStatus.Checking ||
+                !playerData.deathCheckCanWin ||
+                playerData.deathCheckBallCallId != finalBallCallId)
+            {
+                continue;
+            }
+
+            finalCohort.Add(playerData);
+
+            if (!playerData.deathCheckSucceeded)
+            {
+                continue;
+            }
+
+            successfulPlayers.Add(playerData);
+
+            if (playController.GetAvailablePatternTypes(
+                    playerData.userId,
+                    gameSessionData.patternTypes).Count == 0)
+            {
+                exhaustedPlayers.Add(playerData);
+            }
+        }
+
+        if (finalCohort.Count <= 1)
+        {
+            return false;
+        }
+
+        if (playController.BallController?.HasRemainingNumbers != true)
+        {
+            if (playController.DeathFinalChecksWereRequired)
+            {
+                return false;
+            }
+
+            playController.MarkDeathFinalChecksRequired();
+            return true;
+        }
+
+        if (successfulPlayers.Count <= 1)
+        {
+            bool changed = FinalizeTieBreakPlayers(
+                gameSessionData,
+                successfulPlayers);
+            changed |= playController.EndGame(
+                successfulPlayers.Count == 0
+                    ? GameEndReason.NoEligiblePlayers
+                    : GameEndReason.RuleCompleted);
+            return changed;
+        }
+
+        if (exhaustedPlayers.Count > 0)
+        {
+            bool changed = FinalizeTieBreakPlayers(
+                gameSessionData,
+                exhaustedPlayers);
+            changed |= playController.EndGame(GameEndReason.RuleCompleted);
+            return changed;
+        }
+
+        bool continued = false;
+
+        for (int i = 0; i < gameSessionData.players.Count; i++)
+        {
+            GamePlayerData playerData = gameSessionData.players[i];
+
+            if (playerData?.gameStatus != GamePlayerStatus.Checking)
+            {
+                continue;
+            }
+
+            if (successfulPlayers.Contains(playerData))
+            {
+                playerData.gameStatus = GamePlayerStatus.Eligible;
+                ClearAutomaticRuntime(playerData);
+                ClearDeathCheckRuntime(playerData);
+                continued = true;
+                continue;
+            }
+
+            continued |= GameScoreAuthority.TrySetFinalStatus(
+                gameSessionData,
+                playerData,
+                GamePlayerStatus.Lost);
+            ClearAutomaticRuntime(playerData);
+        }
+
+        return continued;
+    }
+
+    private static bool FinalizeTieBreakPlayers(
+        GameSessionData gameSessionData,
+        List<GamePlayerData> winningPlayers)
+    {
+        bool changed = false;
+
+        for (int i = 0; i < gameSessionData.players.Count; i++)
+        {
+            GamePlayerData playerData = gameSessionData.players[i];
+
+            if (playerData?.gameStatus != GamePlayerStatus.Checking)
+            {
+                continue;
+            }
+
+            changed |= GameScoreAuthority.TrySetFinalStatus(
+                gameSessionData,
+                playerData,
+                winningPlayers != null && winningPlayers.Contains(playerData)
+                    ? GamePlayerStatus.Won
+                    : GamePlayerStatus.Lost);
+            ClearAutomaticRuntime(playerData);
         }
 
         return changed;
@@ -724,12 +885,6 @@ public static class DeathGameplayAuthority
                 });
         }
 
-        if (gameSessionData.GetEligiblePlayerCount() == 0 &&
-            CountCheckingPlayersForBall(gameSessionData, ballCallId) > 1)
-        {
-            gameSessionData.gamePlayController.MarkDeathFinalChecksRequired();
-        }
-
         return true;
     }
 
@@ -853,31 +1008,6 @@ public static class DeathGameplayAuthority
         return -1;
     }
 
-    private static int CountCheckingPlayersForBall(
-        GameSessionData gameSessionData,
-        int ballCallId)
-    {
-        if (gameSessionData?.players == null || ballCallId <= 0)
-        {
-            return 0;
-        }
-
-        int count = 0;
-
-        for (int i = 0; i < gameSessionData.players.Count; i++)
-        {
-            GamePlayerData playerData = gameSessionData.players[i];
-
-            if (playerData?.gameStatus == GamePlayerStatus.Checking &&
-                playerData.deathCheckBallCallId == ballCallId)
-            {
-                count++;
-            }
-        }
-
-        return count;
-    }
-
     private static bool HasCheckingPlayers(GameSessionData gameSessionData)
     {
         if (gameSessionData?.players == null)
@@ -894,6 +1024,18 @@ public static class DeathGameplayAuthority
         }
 
         return false;
+    }
+
+    private static void ClearDeathCheckRuntime(GamePlayerData playerData)
+    {
+        if (playerData == null)
+        {
+            return;
+        }
+
+        playerData.deathCheckBallCallId = 0;
+        playerData.deathCheckSucceeded = false;
+        playerData.deathCheckCanWin = false;
     }
 
     private static double GetRandomDelay(float minimumSeconds, float maximumSeconds)

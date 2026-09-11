@@ -21,7 +21,7 @@ MonoBehaviour:
   textColor: {r: 0, g: 0, b: 0, a: 1}
   numberColor: {r: 0.078431375, g: 0.078431375, b: 0.078431375, a: 1}
   backgroundColor: {r: 0.96226406, g: 0.96226406, b: 0.96226406, a: 0.14117648}
-  displaySeconds: 3
+  displaySeconds: 1.5
   fadeOutSeconds: 0.35
   tooltipOpenDelay: 0
   tooltipMinimumWidth: 120

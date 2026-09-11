@@ -11,6 +11,7 @@ public class NetworkGameSessionConnection : NetworkBehaviour
     public static NetworkGameSessionConnection local;
 
     private const float RequestTimeoutSeconds = 30f;
+    private const int MaximumSerializedBatchBytes = 4096;
 
     private readonly Dictionary<string, TaskCompletionSource<GameSessionResult>> pendingRejoinRequests =
         new Dictionary<string, TaskCompletionSource<GameSessionResult>>();
@@ -20,6 +21,10 @@ public class NetworkGameSessionConnection : NetworkBehaviour
         new Dictionary<string, TaskCompletionSource<GameSessionResult>>();
     private readonly Dictionary<string, TaskCompletionSource<GameSessionResult>> pendingLeaveRequests =
         new Dictionary<string, TaskCompletionSource<GameSessionResult>>();
+    private readonly Dictionary<string, GameSessionBatchAssembly> incomingGameSessionBatches =
+        new Dictionary<string, GameSessionBatchAssembly>(StringComparer.Ordinal);
+    private readonly Dictionary<string, GamePlayStateBatchAssembly> incomingGamePlayStateBatches =
+        new Dictionary<string, GamePlayStateBatchAssembly>(StringComparer.Ordinal);
 
     public static event Action<GameSessionResult> LocalGameCreationResultReceived;
     public static event Action<GameSessionData> LocalGameSessionUpdatedReceived;
@@ -29,6 +34,20 @@ public class NetworkGameSessionConnection : NetworkBehaviour
     public static event Action<GameBingoCheckResolvedData> LocalBingoCheckResolvedReceived;
     public static event Action<GamePlayerLeftData> LocalGamePlayerLeftReceived;
     public static event Action<string> LocalGameDeletedReceived;
+
+    private sealed class GameSessionBatchAssembly
+    {
+        public string requestId = string.Empty;
+        public GameSessionOperationType operationType = GameSessionOperationType.None;
+        public int nextBatchIndex;
+        public GameSessionData gameSessionData;
+    }
+
+    private sealed class GamePlayStateBatchAssembly
+    {
+        public int nextBatchIndex;
+        public GamePlayStateChangedData gamePlayState;
+    }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetStaticState()
@@ -62,6 +81,8 @@ public class NetworkGameSessionConnection : NetworkBehaviour
         }
 
         CompletePendingRequestsAsFailed();
+        incomingGameSessionBatches.Clear();
+        incomingGamePlayStateBatches.Clear();
         base.OnNetworkDespawn();
     }
 
@@ -365,17 +386,29 @@ public class NetworkGameSessionConnection : NetworkBehaviour
 
         if (TryGetServerConnection(senderClientId, out NetworkGameSessionConnection connection))
         {
-            string resultJson = JsonUtility.ToJson(result);
-            ScheduleAuthoritySend(
-                result?.gameId ?? gameId,
-                resultJson,
-                MultiplayerNetworkPriority.Critical,
-                MultiplayerNetworkWorkType.Event,
-                string.Empty,
-                () => TrySend(connection, () => connection.ReceiveRejoinGameResultRpc(
+            if (result?.success == true && result.gameSessionData != null)
+            {
+                TrySendGameSessionBatches(
+                    connection,
+                    senderClientId,
                     requestId,
+                    result,
+                    MultiplayerNetworkPriority.Critical);
+            }
+            else
+            {
+                string resultJson = JsonUtility.ToJson(result);
+                ScheduleAuthoritySend(
+                    result?.gameId ?? gameId,
                     resultJson,
-                    connection.RpcTarget.Single(senderClientId, RpcTargetUse.Temp))));
+                    MultiplayerNetworkPriority.Critical,
+                    MultiplayerNetworkWorkType.Event,
+                    string.Empty,
+                    () => TrySend(connection, () => connection.ReceiveRejoinGameResultRpc(
+                        requestId,
+                        resultJson,
+                        connection.RpcTarget.Single(senderClientId, RpcTargetUse.Temp))));
+            }
         }
     }
 
@@ -436,17 +469,29 @@ public class NetworkGameSessionConnection : NetworkBehaviour
 
         if (TryGetServerConnection(senderClientId, out NetworkGameSessionConnection connection))
         {
-            string resultJson = JsonUtility.ToJson(result);
-            ScheduleAuthoritySend(
-                result?.gameId ?? gameId,
-                resultJson,
-                MultiplayerNetworkPriority.Critical,
-                MultiplayerNetworkWorkType.Event,
-                string.Empty,
-                () => TrySend(connection, () => connection.ReceiveGameSessionSyncResultRpc(
+            if (result?.success == true && result.gameSessionData != null)
+            {
+                TrySendGameSessionBatches(
+                    connection,
+                    senderClientId,
                     requestId,
+                    result,
+                    MultiplayerNetworkPriority.Critical);
+            }
+            else
+            {
+                string resultJson = JsonUtility.ToJson(result);
+                ScheduleAuthoritySend(
+                    result?.gameId ?? gameId,
                     resultJson,
-                    connection.RpcTarget.Single(senderClientId, RpcTargetUse.Temp))));
+                    MultiplayerNetworkPriority.Critical,
+                    MultiplayerNetworkWorkType.Event,
+                    string.Empty,
+                    () => TrySend(connection, () => connection.ReceiveGameSessionSyncResultRpc(
+                        requestId,
+                        resultJson,
+                        connection.RpcTarget.Single(senderClientId, RpcTargetUse.Temp))));
+            }
         }
     }
 
@@ -583,6 +628,16 @@ public class NetworkGameSessionConnection : NetworkBehaviour
             return false;
         }
 
+        if (result.success && result.gameSessionData != null)
+        {
+            return TrySendGameSessionBatches(
+                connection,
+                clientId,
+                string.Empty,
+                result,
+                MultiplayerNetworkPriority.Critical);
+        }
+
         string resultJson = JsonUtility.ToJson(result);
         string sessionId = !string.IsNullOrWhiteSpace(result.gameId) ? result.gameId : result.lobbyId;
 
@@ -604,17 +659,16 @@ public class NetworkGameSessionConnection : NetworkBehaviour
             return false;
         }
 
-        string gameSessionJson = JsonUtility.ToJson(gameSessionData);
+        GameSessionResult result = GameSessionResult.Succeeded(
+            GameSessionOperationType.None,
+            gameSessionData);
 
-        return ScheduleAuthoritySend(
-            gameSessionData.gameId,
-            gameSessionJson,
-            MultiplayerNetworkPriority.High,
-            MultiplayerNetworkWorkType.State,
-            $"game-session:{clientId}",
-            () => TrySend(connection, () => connection.ReceiveGameSessionUpdatedRpc(
-                gameSessionJson,
-                connection.RpcTarget.Single(clientId, RpcTargetUse.Temp))));
+        return TrySendGameSessionBatches(
+            connection,
+            clientId,
+            string.Empty,
+            result,
+            MultiplayerNetworkPriority.High);
     }
 
     public static bool TrySendGamePlayStateChanged(
@@ -627,11 +681,33 @@ public class NetworkGameSessionConnection : NetworkBehaviour
             return false;
         }
 
-        string updateJson = JsonUtility.ToJson(updateData);
+        List<GamePlayStateChangedBatchData> batches =
+            BuildGamePlayStateBatches(updateData);
 
-        return TrySend(connection, () => connection.ReceiveGamePlayStateChangedRpc(
-            updateJson,
-            connection.RpcTarget.Single(clientId, RpcTargetUse.Temp)));
+        if (batches == null || batches.Count == 0)
+        {
+            return false;
+        }
+
+        bool allScheduled = true;
+
+        for (int i = 0; i < batches.Count; i++)
+        {
+            GamePlayStateChangedBatchData batch = batches[i];
+            string batchJson = JsonUtility.ToJson(batch);
+
+            allScheduled &= ScheduleAuthoritySend(
+                updateData.gameId,
+                batchJson,
+                MultiplayerNetworkPriority.High,
+                MultiplayerNetworkWorkType.Event,
+                string.Empty,
+                () => TrySend(connection, () => connection.ReceiveGamePlayStateBatchRpc(
+                    batchJson,
+                    connection.RpcTarget.Single(clientId, RpcTargetUse.Temp))));
+        }
+
+        return allScheduled;
     }
 
     public static bool TrySendGamePlayerStateChanged(ulong clientId, GamePlayerStateChangedData updateData)
@@ -790,16 +866,15 @@ public class NetworkGameSessionConnection : NetworkBehaviour
     }
 
     [Rpc(SendTo.SpecifiedInParams)]
-    private void ReceiveGameSessionUpdatedRpc(string gameSessionJson, RpcParams rpcParams = default)
+    private void ReceiveGameSessionBatchRpc(
+        string batchJson,
+        RpcParams rpcParams = default)
     {
         try
         {
-            GameSessionData gameSessionData = JsonUtility.FromJson<GameSessionData>(gameSessionJson);
-
-            if (gameSessionData != null)
-            {
-                LocalGameSessionUpdatedReceived?.Invoke(gameSessionData);
-            }
+            GameSessionSyncBatchData batch =
+                JsonUtility.FromJson<GameSessionSyncBatchData>(batchJson);
+            ApplyIncomingGameSessionBatch(batch);
         }
         catch (Exception exception)
         {
@@ -808,19 +883,15 @@ public class NetworkGameSessionConnection : NetworkBehaviour
     }
 
     [Rpc(SendTo.SpecifiedInParams)]
-    private void ReceiveGamePlayStateChangedRpc(
-        string updateJson,
+    private void ReceiveGamePlayStateBatchRpc(
+        string batchJson,
         RpcParams rpcParams = default)
     {
         try
         {
-            GamePlayStateChangedData updateData =
-                JsonUtility.FromJson<GamePlayStateChangedData>(updateJson);
-
-            if (updateData != null)
-            {
-                LocalGamePlayStateChangedReceived?.Invoke(updateData);
-            }
+            GamePlayStateChangedBatchData batch =
+                JsonUtility.FromJson<GamePlayStateChangedBatchData>(batchJson);
+            ApplyIncomingGamePlayStateBatch(batch);
         }
         catch (Exception exception)
         {
@@ -910,6 +981,403 @@ public class NetworkGameSessionConnection : NetworkBehaviour
     private void ReceiveGameDeletedRpc(string gameId, RpcParams rpcParams = default)
     {
         LocalGameDeletedReceived?.Invoke(gameId);
+    }
+
+    private static bool TrySendGameSessionBatches(
+        NetworkGameSessionConnection connection,
+        ulong clientId,
+        string requestId,
+        GameSessionResult result,
+        MultiplayerNetworkPriority priority)
+    {
+        if (connection == null || result?.gameSessionData == null)
+        {
+            return false;
+        }
+
+        List<GameSessionSyncBatchData> batches =
+            BuildGameSessionBatches(requestId, result);
+
+        if (batches.Count == 0)
+        {
+            return false;
+        }
+
+        List<string> serializedBatches = new List<string>(batches.Count);
+
+        for (int i = 0; i < batches.Count; i++)
+        {
+            serializedBatches.Add(JsonUtility.ToJson(batches[i]));
+        }
+
+        bool allScheduled = true;
+
+        for (int i = 0; i < serializedBatches.Count; i++)
+        {
+            string batchJson = serializedBatches[i];
+
+            allScheduled &= ScheduleAuthoritySend(
+                result.gameId,
+                batchJson,
+                priority,
+                MultiplayerNetworkWorkType.Event,
+                string.Empty,
+                () => TrySend(connection, () => connection.ReceiveGameSessionBatchRpc(
+                    batchJson,
+                    connection.RpcTarget.Single(clientId, RpcTargetUse.Temp))));
+        }
+
+        return allScheduled;
+    }
+
+    private static List<GameSessionSyncBatchData> BuildGameSessionBatches(
+        string requestId,
+        GameSessionResult result)
+    {
+        List<GameSessionSyncBatchData> batches =
+            new List<GameSessionSyncBatchData>();
+        GameSessionData source = result?.gameSessionData;
+
+        if (source == null)
+        {
+            return batches;
+        }
+
+        string transferId = Guid.NewGuid().ToString("N");
+        GameSessionData header = new GameSessionData(source);
+        header.players.Clear();
+
+        GameSessionSyncBatchData currentBatch = new GameSessionSyncBatchData(
+            transferId,
+            requestId,
+            result.operationType,
+            0,
+            true,
+            false,
+            header,
+            null);
+
+        IReadOnlyList<GamePlayerData> sourcePlayers = source.players;
+
+        if (sourcePlayers != null)
+        {
+            for (int i = 0; i < sourcePlayers.Count; i++)
+            {
+                GamePlayerData playerData = sourcePlayers[i];
+
+                if (playerData == null)
+                {
+                    continue;
+                }
+
+                currentBatch.players.Add(new GamePlayerData(playerData));
+
+                if (FitsBatchBudget(currentBatch))
+                {
+                    continue;
+                }
+
+                currentBatch.players.RemoveAt(currentBatch.players.Count - 1);
+
+                if (currentBatch.gameSessionData != null ||
+                    currentBatch.players.Count > 0)
+                {
+                    batches.Add(currentBatch);
+                    currentBatch = new GameSessionSyncBatchData(
+                        transferId,
+                        requestId,
+                        result.operationType,
+                        batches.Count,
+                        false,
+                        false,
+                        null,
+                        new[] { playerData });
+                }
+                else
+                {
+                    currentBatch.players.Add(new GamePlayerData(playerData));
+                }
+            }
+        }
+
+        batches.Add(currentBatch);
+
+        for (int i = 0; i < batches.Count; i++)
+        {
+            batches[i].batchIndex = i;
+            batches[i].isFinalBatch = i == batches.Count - 1;
+        }
+
+        return batches;
+    }
+
+    private static List<GamePlayStateChangedBatchData> BuildGamePlayStateBatches(
+        GamePlayStateChangedData updateData)
+    {
+        List<GamePlayStateChangedBatchData> batches =
+            new List<GamePlayStateChangedBatchData>();
+
+        if (updateData == null)
+        {
+            return batches;
+        }
+
+        string transferId = Guid.NewGuid().ToString("N");
+        GamePlayStateChangedBatchData currentBatch =
+            CreateGamePlayStateBatch(transferId, 0, true, updateData);
+
+        if (updateData.playerStates != null)
+        {
+            for (int i = 0; i < updateData.playerStates.Count; i++)
+            {
+                GamePlayerMatchStateData playerState = updateData.playerStates[i];
+
+                if (playerState == null)
+                {
+                    continue;
+                }
+
+                currentBatch.playerStates.Add(playerState);
+
+                if (FitsBatchBudget(currentBatch))
+                {
+                    continue;
+                }
+
+                currentBatch.playerStates.RemoveAt(currentBatch.playerStates.Count - 1);
+
+                if (currentBatch.gamePlayState != null ||
+                    currentBatch.playerStates.Count > 0)
+                {
+                    batches.Add(currentBatch);
+                    currentBatch = CreateGamePlayStateBatch(
+                        transferId,
+                        batches.Count,
+                        false,
+                        updateData);
+                    currentBatch.playerStates.Add(playerState);
+                }
+                else
+                {
+                    currentBatch.playerStates.Add(playerState);
+                }
+            }
+        }
+
+        batches.Add(currentBatch);
+
+        for (int i = 0; i < batches.Count; i++)
+        {
+            batches[i].batchIndex = i;
+            batches[i].isFinalBatch = i == batches.Count - 1;
+        }
+
+        return batches;
+    }
+
+    private static GamePlayStateChangedBatchData CreateGamePlayStateBatch(
+        string transferId,
+        int batchIndex,
+        bool resetState,
+        GamePlayStateChangedData updateData)
+    {
+        GamePlayStateChangedBatchData batch =
+            new GamePlayStateChangedBatchData(
+                transferId,
+                batchIndex,
+                resetState,
+                false,
+                updateData,
+                null);
+
+        if (!resetState)
+        {
+            batch.gamePlayState = null;
+        }
+
+        return batch;
+    }
+
+    private static bool FitsBatchBudget(object batch)
+    {
+        return batch != null &&
+               MultiplayerNetworkScheduler.EstimateUtf8Bytes(
+                   JsonUtility.ToJson(batch)) <= MaximumSerializedBatchBytes;
+    }
+
+    private void ApplyIncomingGameSessionBatch(GameSessionSyncBatchData batch)
+    {
+        if (batch == null || string.IsNullOrWhiteSpace(batch.transferId))
+        {
+            return;
+        }
+
+        if (batch.resetState)
+        {
+            if (batch.batchIndex != 0 || batch.gameSessionData == null)
+            {
+                return;
+            }
+
+            GameSessionData gameSessionData = new GameSessionData(batch.gameSessionData);
+            gameSessionData.players.Clear();
+            incomingGameSessionBatches[batch.transferId] =
+                new GameSessionBatchAssembly
+                {
+                    requestId = batch.requestId ?? string.Empty,
+                    operationType = batch.operationType,
+                    nextBatchIndex = 0,
+                    gameSessionData = gameSessionData
+                };
+        }
+
+        if (!incomingGameSessionBatches.TryGetValue(
+                batch.transferId,
+                out GameSessionBatchAssembly assembly) ||
+            assembly.gameSessionData == null ||
+            batch.batchIndex != assembly.nextBatchIndex ||
+            batch.operationType != assembly.operationType ||
+            !string.Equals(
+                batch.requestId ?? string.Empty,
+                assembly.requestId,
+                StringComparison.Ordinal))
+        {
+            incomingGameSessionBatches.Remove(batch.transferId);
+            return;
+        }
+
+        if (batch.players != null)
+        {
+            for (int i = 0; i < batch.players.Count; i++)
+            {
+                GamePlayerData playerData = batch.players[i];
+
+                if (playerData != null)
+                {
+                    assembly.gameSessionData.players.Add(
+                        new GamePlayerData(playerData));
+                }
+            }
+        }
+
+        assembly.nextBatchIndex++;
+
+        if (!batch.isFinalBatch)
+        {
+            return;
+        }
+
+        incomingGameSessionBatches.Remove(batch.transferId);
+        CompleteGameSessionBatch(assembly);
+    }
+
+    private void CompleteGameSessionBatch(GameSessionBatchAssembly assembly)
+    {
+        if (assembly?.gameSessionData == null)
+        {
+            return;
+        }
+
+        GameSessionResult result = GameSessionResult.Succeeded(
+            assembly.operationType,
+            assembly.gameSessionData);
+
+        switch (assembly.operationType)
+        {
+            case GameSessionOperationType.Create:
+                LocalGameCreationResultReceived?.Invoke(result);
+                break;
+
+            case GameSessionOperationType.Rejoin:
+                if (pendingRejoinRequests.TryGetValue(
+                        assembly.requestId,
+                        out TaskCompletionSource<GameSessionResult> rejoinCompletion))
+                {
+                    rejoinCompletion.TrySetResult(result);
+                }
+                break;
+
+            case GameSessionOperationType.Sync:
+                if (pendingSyncRequests.TryGetValue(
+                        assembly.requestId,
+                        out TaskCompletionSource<GameSessionResult> syncCompletion))
+                {
+                    syncCompletion.TrySetResult(result);
+                }
+                break;
+
+            default:
+                LocalGameSessionUpdatedReceived?.Invoke(
+                    new GameSessionData(assembly.gameSessionData));
+                break;
+        }
+    }
+
+    private void ApplyIncomingGamePlayStateBatch(
+        GamePlayStateChangedBatchData batch)
+    {
+        if (batch == null ||
+            string.IsNullOrWhiteSpace(batch.transferId) ||
+            string.IsNullOrWhiteSpace(batch.gameId))
+        {
+            return;
+        }
+
+        if (batch.resetState)
+        {
+            if (batch.batchIndex != 0 || batch.gamePlayState == null)
+            {
+                return;
+            }
+
+            batch.gamePlayState.playerStates ??=
+                new List<GamePlayerMatchStateData>();
+            batch.gamePlayState.playerStates.Clear();
+            incomingGamePlayStateBatches[batch.transferId] =
+                new GamePlayStateBatchAssembly
+                {
+                    nextBatchIndex = 0,
+                    gamePlayState = batch.gamePlayState
+                };
+        }
+
+        if (!incomingGamePlayStateBatches.TryGetValue(
+                batch.transferId,
+                out GamePlayStateBatchAssembly assembly) ||
+            assembly.gamePlayState == null ||
+            batch.batchIndex != assembly.nextBatchIndex ||
+            batch.revision != assembly.gamePlayState.revision ||
+            !string.Equals(
+                batch.gameId,
+                assembly.gamePlayState.gameId,
+                StringComparison.Ordinal))
+        {
+            incomingGamePlayStateBatches.Remove(batch.transferId);
+            return;
+        }
+
+        if (batch.playerStates != null)
+        {
+            for (int i = 0; i < batch.playerStates.Count; i++)
+            {
+                GamePlayerMatchStateData playerState = batch.playerStates[i];
+
+                if (playerState != null)
+                {
+                    assembly.gamePlayState.playerStates.Add(playerState);
+                }
+            }
+        }
+
+        assembly.nextBatchIndex++;
+
+        if (!batch.isFinalBatch)
+        {
+            return;
+        }
+
+        incomingGamePlayStateBatches.Remove(batch.transferId);
+        LocalGamePlayStateChangedReceived?.Invoke(assembly.gamePlayState);
     }
 
     private static bool ScheduleAuthoritySend(

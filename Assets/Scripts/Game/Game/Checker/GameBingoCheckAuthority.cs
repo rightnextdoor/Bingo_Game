@@ -367,7 +367,16 @@ public static class DeathGameplayAuthority
             changed |= ScheduleNextMark(gameSessionData, playerData, currentTime);
         }
 
-        changed |= ResolveOrdinaryCheckingPlayers(gameSessionData);
+        bool resolvedCheckingPlayers = ResolveOrdinaryCheckingPlayers(gameSessionData);
+        changed |= resolvedCheckingPlayers;
+
+        if (resolvedCheckingPlayers &&
+            gameSessionData.GetEligiblePlayerCount() == 1 &&
+            !HasCheckingPlayers(gameSessionData))
+        {
+            changed |= gameSessionData.gamePlayController.EndGame(GameEndReason.RuleCompleted);
+        }
+
         return changed;
     }
 
@@ -430,7 +439,13 @@ public static class DeathGameplayAuthority
         if (eligiblePlayerCount > 1)
         {
             changed |= ResolveCheckingPlayersAsOut(gameSessionData);
-            return false;
+
+            eligiblePlayerCount = gameSessionData.GetEligiblePlayerCount();
+
+            if (eligiblePlayerCount > 1 || HasCheckingPlayers(gameSessionData))
+            {
+                return false;
+            }
         }
 
         GameEndReason endReason = eligiblePlayerCount == 0
@@ -861,6 +876,24 @@ public static class DeathGameplayAuthority
         }
 
         return count;
+    }
+
+    private static bool HasCheckingPlayers(GameSessionData gameSessionData)
+    {
+        if (gameSessionData?.players == null)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < gameSessionData.players.Count; i++)
+        {
+            if (gameSessionData.players[i]?.gameStatus == GamePlayerStatus.Checking)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static double GetRandomDelay(float minimumSeconds, float maximumSeconds)

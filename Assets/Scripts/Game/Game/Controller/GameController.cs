@@ -1030,9 +1030,7 @@ public class GameController : MonoBehaviour
                     currentPlayer.playerName,
                     currentPlayer.iconId),
                 profiles);
-            int remainingCount = currentSession.GetEligiblePlayerCount();
-            string message =
-                $"{displayName} is OUT. {remainingCount} player{(remainingCount == 1 ? string.Empty : "s")} remain.";
+            string message = $"{displayName} is out.";
             NotificationService.instance?.SendLocal(
                 UIMessageType.DeathPlayerOut,
                 message);

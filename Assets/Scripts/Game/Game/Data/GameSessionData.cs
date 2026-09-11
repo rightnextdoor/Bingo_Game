@@ -421,6 +421,173 @@ public class GamePlayerMatchStateData
 }
 
 [Serializable]
+public class GameSessionSyncBatchData
+{
+    public string transferId;
+    public string requestId;
+    public GameSessionOperationType operationType;
+    public int batchIndex;
+    public bool resetState;
+    public bool isFinalBatch;
+    public GameSessionData gameSessionData;
+    public List<GamePlayerData> players;
+
+    public GameSessionSyncBatchData()
+    {
+        transferId = string.Empty;
+        requestId = string.Empty;
+        operationType = GameSessionOperationType.None;
+        batchIndex = 0;
+        resetState = false;
+        isFinalBatch = false;
+        gameSessionData = null;
+        players = new List<GamePlayerData>();
+    }
+
+    public GameSessionSyncBatchData(
+        string transferId,
+        string requestId,
+        GameSessionOperationType operationType,
+        int batchIndex,
+        bool resetState,
+        bool isFinalBatch,
+        GameSessionData gameSessionData,
+        IEnumerable<GamePlayerData> players) : this()
+    {
+        this.transferId = transferId ?? string.Empty;
+        this.requestId = requestId ?? string.Empty;
+        this.operationType = operationType;
+        this.batchIndex = batchIndex;
+        this.resetState = resetState;
+        this.isFinalBatch = isFinalBatch;
+        this.gameSessionData = gameSessionData != null
+            ? new GameSessionData(gameSessionData)
+            : null;
+
+        if (this.gameSessionData?.players != null)
+        {
+            this.gameSessionData.players.Clear();
+        }
+
+        if (players == null)
+        {
+            return;
+        }
+
+        foreach (GamePlayerData playerData in players)
+        {
+            if (playerData != null)
+            {
+                this.players.Add(new GamePlayerData(playerData));
+            }
+        }
+    }
+}
+
+[Serializable]
+public class GamePlayStateChangedBatchData
+{
+    public string transferId;
+    public string gameId;
+    public long revision;
+    public int batchIndex;
+    public bool resetState;
+    public bool isFinalBatch;
+    public GamePlayStateChangedData gamePlayState;
+    public List<GamePlayerMatchStateData> playerStates;
+
+    public GamePlayStateChangedBatchData()
+    {
+        transferId = string.Empty;
+        gameId = string.Empty;
+        revision = 0;
+        batchIndex = 0;
+        resetState = false;
+        isFinalBatch = false;
+        gamePlayState = null;
+        playerStates = new List<GamePlayerMatchStateData>();
+    }
+
+    public GamePlayStateChangedBatchData(
+        string transferId,
+        int batchIndex,
+        bool resetState,
+        bool isFinalBatch,
+        GamePlayStateChangedData gamePlayState,
+        IEnumerable<GamePlayerMatchStateData> playerStates) : this()
+    {
+        this.transferId = transferId ?? string.Empty;
+        this.batchIndex = batchIndex;
+        this.resetState = resetState;
+        this.isFinalBatch = isFinalBatch;
+
+        if (gamePlayState != null)
+        {
+            gameId = gamePlayState.gameId ?? string.Empty;
+            revision = gamePlayState.revision;
+            this.gamePlayState = CopyGamePlayStateWithoutPlayers(gamePlayState);
+        }
+
+        if (playerStates == null)
+        {
+            return;
+        }
+
+        foreach (GamePlayerMatchStateData playerState in playerStates)
+        {
+            if (playerState != null)
+            {
+                this.playerStates.Add(new GamePlayerMatchStateData
+                {
+                    userId = playerState.userId ?? string.Empty,
+                    isConnected = playerState.isConnected,
+                    isGameSceneReady = playerState.isGameSceneReady,
+                    canRejoin = playerState.canRejoin,
+                    gameStatus = playerState.gameStatus,
+                    currentMatchScore = playerState.currentMatchScore,
+                    areStatisticsFinalized = playerState.areStatisticsFinalized,
+                    finalizedScoreDelta = playerState.finalizedScoreDelta,
+                    isScorePersisted = playerState.isScorePersisted,
+                    isSubmitTimerActive = playerState.isSubmitTimerActive,
+                    submitTimerEndTime = playerState.submitTimerEndTime,
+                    isRiskDecisionPending = playerState.isRiskDecisionPending,
+                    markedCellIndices = playerState.markedCellIndices != null
+                        ? new List<int>(playerState.markedCellIndices)
+                        : new List<int>()
+                });
+            }
+        }
+    }
+
+    private static GamePlayStateChangedData CopyGamePlayStateWithoutPlayers(
+        GamePlayStateChangedData source)
+    {
+        return new GamePlayStateChangedData
+        {
+            gameId = source.gameId ?? string.Empty,
+            revision = source.revision,
+            gameState = source.gameState,
+            phase = source.phase,
+            endReason = source.endReason,
+            ballCallRequestCount = source.ballCallRequestCount,
+            isFinalBallCountdown = source.isFinalBallCountdown,
+            isRuleCompletionAwaitingChecks = source.isRuleCompletionAwaitingChecks,
+            isBallPoolExhaustedAwaitingChecks = source.isBallPoolExhaustedAwaitingChecks,
+            isRiskTimerExpiredAwaitingChecks = source.isRiskTimerExpiredAwaitingChecks,
+            deathFinalChecksWereRequired = source.deathFinalChecksWereRequired,
+            isBallTimerActive = source.isBallTimerActive,
+            ballTimerEndTime = source.ballTimerEndTime,
+            isRiskTimerActive = source.isRiskTimerActive,
+            riskTimerEndTime = source.riskTimerEndTime,
+            calledNumbers = source.calledNumbers != null
+                ? new List<int>(source.calledNumbers)
+                : new List<int>(),
+            playerStates = new List<GamePlayerMatchStateData>()
+        };
+    }
+}
+
+[Serializable]
 public class GamePlayerStateChangedData
 {
     public string gameId;

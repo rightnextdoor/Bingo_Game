@@ -14265,7 +14265,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6207814632284159071, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
       propertyPath: botCount
-      value: 20
+      value: 100
       objectReference: {fileID: 0}
     - target: {fileID: 6207814632284159071, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
       propertyPath: playMode
@@ -14273,7 +14273,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6207814632284159071, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
       propertyPath: roomSize
-      value: 30
+      value: 100
       objectReference: {fileID: 0}
     - target: {fileID: 6207814632284159071, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
       propertyPath: useFreeCell
@@ -14285,7 +14285,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6207814632284159071, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
       propertyPath: ballCountType
-      value: 30
+      value: 90
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

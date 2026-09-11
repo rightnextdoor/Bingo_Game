@@ -163,6 +163,15 @@ public class GameHeaderController : MonoBehaviour
 
     private void RefreshSubmitTimer()
     {
+        GamePlayController playController = currentGameSession?.gamePlayController;
+
+        if (currentGameSession?.gameState == GameSessionState.Completed ||
+            playController?.Phase == GamePlayPhase.Ended)
+        {
+            SetText(submitTimerText, "Game Is Over");
+            return;
+        }
+
         GamePlayerData localPlayer = currentGameSession?.GetPlayer(UserManager.instance?.UserId);
 
         if (localPlayer == null || !localPlayer.isSubmitTimerActive)

@@ -42,7 +42,7 @@ public class NotificationManager : MonoBehaviour
 
     private RectTransform notificationAreaRect;
 
-    private readonly Queue<NotificationRequest> notificationQueue = new Queue<NotificationRequest>();
+    private readonly List<NotificationRequest> notificationQueue = new List<NotificationRequest>();
 
     private Coroutine notificationRoutine;
     private bool isPlayingNotification;
@@ -108,7 +108,13 @@ public class NotificationManager : MonoBehaviour
             return;
         }
 
-        notificationQueue.Enqueue(new NotificationRequest(messageData, messageOverride));
+        if (messageData.ClearPendingClearableMessages)
+        {
+            notificationQueue.RemoveAll(request =>
+                request?.MessageData != null && request.MessageData.CanBeCleared);
+        }
+
+        notificationQueue.Add(new NotificationRequest(messageData, messageOverride));
 
         if (!isPlayingNotification)
         {
@@ -122,7 +128,9 @@ public class NotificationManager : MonoBehaviour
 
         while (notificationQueue.Count > 0)
         {
-            NotificationRequest request = notificationQueue.Dequeue();
+            int nextRequestIndex = GetNextRequestIndex();
+            NotificationRequest request = notificationQueue[nextRequestIndex];
+            notificationQueue.RemoveAt(nextRequestIndex);
 
             yield return PlayNotification(request);
 
@@ -134,6 +142,27 @@ public class NotificationManager : MonoBehaviour
 
         isPlayingNotification = false;
         notificationRoutine = null;
+    }
+
+    private int GetNextRequestIndex()
+    {
+        int nextRequestIndex = 0;
+        UIMessagePriority highestPriority = UIMessagePriority.Low;
+
+        for (int i = 0; i < notificationQueue.Count; i++)
+        {
+            UIMessageData messageData = notificationQueue[i]?.MessageData;
+
+            if (messageData == null || messageData.Priority <= highestPriority)
+            {
+                continue;
+            }
+
+            highestPriority = messageData.Priority;
+            nextRequestIndex = i;
+        }
+
+        return nextRequestIndex;
     }
 
     private IEnumerator PlayNotification(NotificationRequest request)

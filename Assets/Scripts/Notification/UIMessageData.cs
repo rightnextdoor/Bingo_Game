@@ -2,6 +2,13 @@ using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 
+public enum UIMessagePriority
+{
+    Low,
+    Normal,
+    High
+}
+
 [CreateAssetMenu(fileName = "UIMessageData", menuName = "Bingo Game/UI/UI Message Data")]
 public class UIMessageData : ScriptableObject
 {
@@ -28,6 +35,11 @@ public class UIMessageData : ScriptableObject
     [SerializeField] private float displaySeconds = 1.5f;
     [SerializeField] private float fadeOutSeconds = 0.35f;
 
+    [Header("Notification Queue")]
+    [SerializeField] private UIMessagePriority priority = UIMessagePriority.Low;
+    [SerializeField] private bool canBeCleared;
+    [SerializeField] private bool clearPendingClearableMessages;
+
     [Header("Tooltip Timing")]
     [SerializeField, Min(0f)] private float tooltipOpenDelay;
 
@@ -52,6 +64,9 @@ public class UIMessageData : ScriptableObject
     public Color BackgroundColor => backgroundColor;
     public float DisplaySeconds => displaySeconds;
     public float FadeOutSeconds => fadeOutSeconds;
+    public UIMessagePriority Priority => priority;
+    public bool CanBeCleared => canBeCleared;
+    public bool ClearPendingClearableMessages => clearPendingClearableMessages;
     public float TooltipOpenDelay => tooltipOpenDelay;
     public float TooltipMinimumWidth => tooltipMinimumWidth;
     public float TooltipMaximumWidth => tooltipMaximumWidth;

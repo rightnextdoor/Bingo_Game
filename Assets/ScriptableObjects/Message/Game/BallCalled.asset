@@ -23,6 +23,9 @@ MonoBehaviour:
   backgroundColor: {r: 0.96226406, g: 0.96226406, b: 0.96226406, a: 0.14117648}
   displaySeconds: 3
   fadeOutSeconds: 0.35
+  priority: 2
+  canBeCleared: 0
+  clearPendingClearableMessages: 1
   tooltipOpenDelay: 0
   tooltipMinimumWidth: 120
   tooltipMaximumWidth: 360

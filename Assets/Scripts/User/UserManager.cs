@@ -489,6 +489,60 @@ public class UserManager : MonoBehaviour, ISceneReadyCheck
         return true;
     }
 
+    public bool ApplyGameScoreOnce(
+        string resultId,
+        string userId,
+        ScorePlayMode playMode,
+        BingoGameModeType gameModeType,
+        int scoreDelta)
+    {
+        if (string.IsNullOrWhiteSpace(resultId) ||
+            string.IsNullOrWhiteSpace(userId) ||
+            !UserStats.IsScoredGameMode(gameModeType))
+        {
+            return false;
+        }
+
+        bool isCurrentUser = string.Equals(
+            CurrentUser.userId,
+            userId,
+            StringComparison.Ordinal);
+        UserData userData = isCurrentUser ? CurrentUser : GetUser(userId);
+
+        if (userData == null)
+        {
+            return false;
+        }
+
+        userData.RepairData();
+
+        if (userData.stats.HasAppliedGameScoreResult(resultId))
+        {
+            return true;
+        }
+
+        if (!userData.stats.TryApplyGameScoreResult(
+                resultId,
+                playMode,
+                gameModeType,
+                scoreDelta))
+        {
+            return false;
+        }
+
+        if (isCurrentUser)
+        {
+            AddOrUpdateCurrentUser();
+            UserChanged?.Invoke();
+        }
+        else
+        {
+            AddOrUpdateUser(userData);
+        }
+
+        return true;
+    }
+
     #endregion
 
     #region Database

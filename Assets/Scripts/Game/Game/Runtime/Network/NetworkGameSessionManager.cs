@@ -85,7 +85,29 @@ public class NetworkGameSessionManager : MonoBehaviour
 
             gameSessionData.revision++;
             BroadcastGamePlayStateChanged(gameSessionData);
+            SendPendingMarkedCellUpdates(gameSessionData);
             SendPendingBingoCheckPresentations(gameSessionData);
+        }
+    }
+
+    private void SendPendingMarkedCellUpdates(GameSessionData gameSessionData)
+    {
+        List<GamePlayerMarkedCellChangedData> updates =
+            gameSessionData?.DrainMarkedCellUpdates();
+
+        if (updates == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < updates.Count; i++)
+        {
+            GamePlayerMarkedCellChangedData updateData = updates[i];
+
+            if (updateData != null)
+            {
+                BroadcastGamePlayerMarkedCellChanged(gameSessionData, updateData);
+            }
         }
     }
 
@@ -235,8 +257,7 @@ public class NetworkGameSessionManager : MonoBehaviour
 
         if (!playerData.isConnected || playerData.isGameSceneReady)
         {
-            playerData.isConnected = true;
-            playerData.isGameSceneReady = false;
+            GameBotManager.RestorePlayerControl(gameSessionData, userId, false);
             gameSessionData.revision++;
             BroadcastGamePlayerStateChanged(gameSessionData, playerData);
         }
@@ -350,8 +371,7 @@ public class NetworkGameSessionManager : MonoBehaviour
 
         if (!playerData.isConnected || !playerData.isGameSceneReady)
         {
-            playerData.isConnected = true;
-            playerData.isGameSceneReady = true;
+            GameBotManager.RestorePlayerControl(gameSessionData, userId, true);
             gameSessionData.revision++;
             BroadcastGamePlayerStateChanged(gameSessionData, playerData);
         }
@@ -410,14 +430,22 @@ public class NetworkGameSessionManager : MonoBehaviour
                 gameSessionData.lobbyId);
         }
 
-        playerData.isConnected = false;
-        playerData.isGameSceneReady = false;
-        playerData.canRejoin = false;
-        gameSessionData.RemovePlayer(userId);
+        GameBotTransitionResult transition = GameBotManager.HandlePlayerLeave(
+            gameSessionData,
+            userId);
         gameSessionData.revision++;
-        BroadcastGamePlayerLeft(gameSessionData, userId);
+        BroadcastGamePlayerStateChanged(gameSessionData, playerData);
 
-        return GameSessionResult.Acknowledged(GameSessionOperationType.Leave, gameSessionData);
+        if (transition.shouldDeleteGame)
+        {
+            gameSessions.Remove(gameSessionData);
+        }
+
+        return GameSessionResult
+            .Acknowledged(GameSessionOperationType.Leave, gameSessionData)
+            .WithFinalScore(GameScoreAuthority.CreateFinalScoreResult(
+                gameSessionData,
+                playerData));
     }
 
     public bool RemovePlayerFromAnyGame(string userId)
@@ -435,12 +463,76 @@ public class NetworkGameSessionManager : MonoBehaviour
             return false;
         }
 
-        playerData.isConnected = false;
-        playerData.isGameSceneReady = false;
-        playerData.canRejoin = false;
-        gameSessionData.RemovePlayer(userId);
+        GameBotTransitionResult transition = GameBotManager.HandlePlayerDeclinedReturn(
+            gameSessionData,
+            userId);
         gameSessionData.revision++;
-        BroadcastGamePlayerLeft(gameSessionData, userId);
+
+        if (transition.shouldDeleteGame)
+        {
+            gameSessions.Remove(gameSessionData);
+        }
+        else
+        {
+            BroadcastGamePlayerStateChanged(gameSessionData, playerData);
+        }
+
+        return true;
+    }
+
+    public bool ProcessAuthorityHostKick(
+        string gameId,
+        string requesterUserId,
+        string targetUserId)
+    {
+        GameSessionData gameSessionData = FindGame(gameId);
+        GamePlayerData requester = gameSessionData?.GetPlayer(requesterUserId);
+        GamePlayerData target = gameSessionData?.GetPlayer(targetUserId);
+
+        if (requester?.isLobbyHost != true ||
+            target == null ||
+            target.isLobbyHost ||
+            target.userTag == UserTag.Bot ||
+            target.controlType == GamePlayerControlType.Bot)
+        {
+            return false;
+        }
+
+        GameBotTransitionResult transition = GameBotManager.HandleHostKick(
+            gameSessionData,
+            targetUserId);
+
+        if (!transition.changed)
+        {
+            return false;
+        }
+
+        gameSessionData.revision++;
+
+        if (transition.shouldDeleteGame)
+        {
+            gameSessions.Remove(gameSessionData);
+        }
+        else
+        {
+            BroadcastGamePlayerStateChanged(gameSessionData, target);
+        }
+
+        return true;
+    }
+
+    public bool ProcessAuthorityPlayerConnectionLost(string userId)
+    {
+        GameSessionData gameSessionData = FindGameByPlayerId(userId);
+        GamePlayerData playerData = gameSessionData?.GetPlayer(userId);
+
+        if (!GameBotManager.FreezePlayerAwaitingReturn(gameSessionData, userId))
+        {
+            return false;
+        }
+
+        gameSessionData.revision++;
+        BroadcastGamePlayerStateChanged(gameSessionData, playerData);
         return true;
     }
 
@@ -462,6 +554,8 @@ public class NetworkGameSessionManager : MonoBehaviour
 
         if (playerData == null ||
             playerData.userTag == UserTag.Bot ||
+            playerData.controlType != GamePlayerControlType.Human ||
+            playerData.returnState != GamePlayerReturnState.Active ||
             !playerData.isConnected ||
             !playerData.canRejoin ||
             gameSessionData.gamePlayController?.IsDeathRule == true ||

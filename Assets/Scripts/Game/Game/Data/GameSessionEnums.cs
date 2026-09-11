@@ -21,6 +21,26 @@ public enum GamePlayerStatus
     Checking
 }
 
+public enum GamePlayerReturnState
+{
+    Active,
+    FrozenAwaitingReturn,
+    DeclinedReturn
+}
+
+public enum GamePlayerControlType
+{
+    Human,
+    Bot
+}
+
+public enum GamePlayerDepartureReason
+{
+    Leave,
+    DeclinedReturn,
+    HostKick
+}
+
 public enum GameEndReason
 {
     None,

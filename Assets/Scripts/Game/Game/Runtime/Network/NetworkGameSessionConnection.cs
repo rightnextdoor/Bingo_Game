@@ -746,8 +746,8 @@ public class NetworkGameSessionConnection : NetworkBehaviour
             updateData.gameId,
             updateJson,
             MultiplayerNetworkPriority.Normal,
-            MultiplayerNetworkWorkType.Event,
-            string.Empty,
+            MultiplayerNetworkWorkType.State,
+            $"game-board-cell:{clientId}:{updateData.userId}:{updateData.cellIndex}",
             () => TrySend(connection, () => connection.ReceiveGamePlayerMarkedCellChangedRpc(
                 updateJson,
                 connection.RpcTarget.Single(clientId, RpcTargetUse.Temp))));

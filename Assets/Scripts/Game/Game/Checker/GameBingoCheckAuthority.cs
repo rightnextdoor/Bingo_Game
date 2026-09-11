@@ -19,6 +19,7 @@ public static class GameBingoCheckAuthority
         if (playController.Phase != GamePlayPhase.Ended)
         {
             changed |= DeathGameplayAuthority.UpdateAutomaticBoards(gameSessionData);
+            changed |= GameBotManager.UpdateBots(gameSessionData);
             changed |= DeathGameplayAuthority.ApplyFrozenPlayerThreshold(gameSessionData);
             changed |= RiskGameplayAuthority.UpdatePatternWindows(gameSessionData);
 
@@ -41,6 +42,7 @@ public static class GameBingoCheckAuthority
             }
 
             changed |= DeathGameplayAuthority.UpdateAutomaticBoards(gameSessionData);
+            changed |= GameBotManager.UpdateBots(gameSessionData);
             changed |= RiskGameplayAuthority.UpdatePatternWindows(gameSessionData);
         }
 
@@ -96,7 +98,10 @@ public static class GameBingoCheckAuthority
 
         GamePlayerData playerData = gameSessionData.GetPlayer(userId);
 
-        if (playerData == null || playerData.userTag == UserTag.Bot)
+        if (playerData == null ||
+            playerData.userTag == UserTag.Bot ||
+            playerData.controlType != GamePlayerControlType.Human ||
+            playerData.returnState != GamePlayerReturnState.Active)
         {
             return GameBingoCheckResolvedData.Rejected(
                 gameId,
@@ -336,8 +341,6 @@ public static class DeathGameplayAuthority
         }
 
         bool changed = false;
-        double currentTime = GamePlayTimer.GetCurrentTime();
-
         for (int i = 0; i < gameSessionData.players.Count; i++)
         {
             GamePlayerData playerData = gameSessionData.players[i];
@@ -349,22 +352,19 @@ public static class DeathGameplayAuthority
                 continue;
             }
 
-            changed |= CompletePendingCheck(gameSessionData, playerData, currentTime);
+            changed |= GameAutomaticBoardAuthority.UpdatePlayer(
+                gameSessionData,
+                playerData,
+                false,
+                out GameAutomaticBoardCheckRequest checkRequest);
 
-            if (playerData.gameStatus != GamePlayerStatus.Eligible)
+            if (checkRequest != null)
             {
-                continue;
+                changed |= CompletePendingCheck(
+                    gameSessionData,
+                    playerData,
+                    checkRequest);
             }
-
-            changed |= CompletePendingMark(gameSessionData, playerData, currentTime);
-
-            if (playerData.automaticBoardPendingCellIndex >= 0 ||
-                playerData.automaticBoardPendingCheckBallCallId > 0)
-            {
-                continue;
-            }
-
-            changed |= ScheduleNextMark(gameSessionData, playerData, currentTime);
         }
 
         bool resolvedCheckingPlayers = ResolveOrdinaryCheckingPlayers(gameSessionData);
@@ -741,103 +741,18 @@ public static class DeathGameplayAuthority
         return changed;
     }
 
-    private static bool ScheduleNextMark(
-        GameSessionData gameSessionData,
-        GamePlayerData playerData,
-        double currentTime)
-    {
-        GameBallController ballController = gameSessionData.gamePlayController.BallController;
-        IReadOnlyList<int> calledNumbers = ballController?.CalledNumbers;
-        int calledCount = calledNumbers?.Count ?? 0;
-        int finalBallCallId = Math.Max(0, (int)gameSessionData.ballCountType);
-        int maximumAutomaticCallId = Math.Min(calledCount, Math.Max(0, finalBallCallId - 1));
-
-        if (playerData.automaticBoardLastProcessedBallCallId >= maximumAutomaticCallId)
-        {
-            return false;
-        }
-
-        int nextCallId = playerData.automaticBoardLastProcessedBallCallId + 1;
-        int calledNumber = calledNumbers[nextCallId - 1];
-        int cellIndex = FindBoardCell(playerData.boardData, calledNumber);
-
-        if (cellIndex < 0)
-        {
-            playerData.automaticBoardLastProcessedBallCallId = nextCallId;
-            return true;
-        }
-
-        playerData.automaticBoardPendingCellIndex = cellIndex;
-        playerData.automaticBoardPendingBallCallId = nextCallId;
-        playerData.automaticBoardMarkDueTime = currentTime + GetRandomDelay(
-            GameSettings.instance != null
-                ? GameSettings.instance.AutomaticMarkDelayMinimumSeconds
-                : GameSettings.DefaultAutomaticMarkDelayMinimumSeconds,
-            GameSettings.instance != null
-                ? GameSettings.instance.AutomaticMarkDelayMaximumSeconds
-                : GameSettings.DefaultAutomaticMarkDelayMaximumSeconds);
-        return true;
-    }
-
-    private static bool CompletePendingMark(
-        GameSessionData gameSessionData,
-        GamePlayerData playerData,
-        double currentTime)
-    {
-        if (playerData.automaticBoardPendingCellIndex < 0 ||
-            currentTime < playerData.automaticBoardMarkDueTime)
-        {
-            return false;
-        }
-
-        int cellIndex = playerData.automaticBoardPendingCellIndex;
-        int ballCallId = playerData.automaticBoardPendingBallCallId;
-        playerData.TrySetMarkedCell(cellIndex, true);
-        playerData.automaticBoardLastProcessedBallCallId = Math.Max(
-            playerData.automaticBoardLastProcessedBallCallId,
-            ballCallId);
-        playerData.automaticBoardPendingCellIndex = -1;
-        playerData.automaticBoardPendingBallCallId = 0;
-        playerData.automaticBoardMarkDueTime = 0d;
-
-        List<int> calledNumbers = GetCalledNumberPrefix(gameSessionData, ballCallId);
-        List<BingoPatternCheckResult> completedPatterns =
-            gameSessionData.gamePlayController.GetCompletedAvailablePatterns(
-                playerData.userId,
-                playerData.boardData,
-                playerData.markedCellIndices,
-                calledNumbers,
-                gameSessionData.patternTypes);
-
-        if (completedPatterns.Count == 0)
-        {
-            return true;
-        }
-
-        playerData.automaticBoardPendingCheckBallCallId = ballCallId;
-        playerData.automaticBoardCheckDueTime = currentTime + GetRandomDelay(
-            GameSettings.instance != null
-                ? GameSettings.instance.AutomaticBingoDelayMinimumSeconds
-                : GameSettings.DefaultAutomaticBingoDelayMinimumSeconds,
-            GameSettings.instance != null
-                ? GameSettings.instance.AutomaticBingoDelayMaximumSeconds
-                : GameSettings.DefaultAutomaticBingoDelayMaximumSeconds);
-        return true;
-    }
-
     private static bool CompletePendingCheck(
         GameSessionData gameSessionData,
         GamePlayerData playerData,
-        double currentTime)
+        GameAutomaticBoardCheckRequest checkRequest)
     {
-        int ballCallId = playerData.automaticBoardPendingCheckBallCallId;
-
-        if (ballCallId <= 0 || currentTime < playerData.automaticBoardCheckDueTime)
+        if (checkRequest == null)
         {
             return false;
         }
 
-        List<int> calledNumbers = GetCalledNumberPrefix(gameSessionData, ballCallId);
+        int ballCallId = checkRequest.ballCallId;
+        List<int> calledNumbers = checkRequest.calledNumbers;
         bool canWinFinalCohort = gameSessionData.IsPlayerEligibleForCount(playerData);
         bool checkStarted = gameSessionData.gamePlayController.TryCheckAutomaticBingo(
             playerData.userId,
@@ -847,9 +762,6 @@ public static class DeathGameplayAuthority
             gameSessionData.patternTypes,
             out BingoCheckResult checkResult,
             out GameRuleCheckDecision _);
-
-        playerData.automaticBoardPendingCheckBallCallId = 0;
-        playerData.automaticBoardCheckDueTime = 0d;
 
         if (!checkStarted)
         {
@@ -864,7 +776,8 @@ public static class DeathGameplayAuthority
             !checkResult.HasFailedPattern;
         playerData.deathCheckCanWin = canWinFinalCohort;
 
-        if (playerData.userTag != UserTag.Bot && playerData.isConnected)
+        if (playerData.controlType == GamePlayerControlType.Human &&
+            playerData.isConnected)
         {
             gameSessionData.QueueBingoCheckPresentation(
                 new GameBingoCheckResolvedData
@@ -973,41 +886,6 @@ public static class DeathGameplayAuthority
         return changed;
     }
 
-    private static List<int> GetCalledNumberPrefix(
-        GameSessionData gameSessionData,
-        int ballCallId)
-    {
-        IReadOnlyList<int> calledNumbers =
-            gameSessionData.gamePlayController?.BallController?.CalledNumbers;
-        int count = Math.Min(Math.Max(0, ballCallId), calledNumbers?.Count ?? 0);
-        List<int> result = new List<int>(count);
-
-        for (int i = 0; i < count; i++)
-        {
-            result.Add(calledNumbers[i]);
-        }
-
-        return result;
-    }
-
-    private static int FindBoardCell(LobbyBoardData boardData, int number)
-    {
-        if (boardData?.cellNumbers == null)
-        {
-            return -1;
-        }
-
-        for (int i = 0; i < boardData.cellNumbers.Count; i++)
-        {
-            if (boardData.cellNumbers[i] == number)
-            {
-                return i;
-            }
-        }
-
-        return -1;
-    }
-
     private static bool HasCheckingPlayers(GameSessionData gameSessionData)
     {
         if (gameSessionData?.players == null)
@@ -1036,13 +914,6 @@ public static class DeathGameplayAuthority
         playerData.deathCheckBallCallId = 0;
         playerData.deathCheckSucceeded = false;
         playerData.deathCheckCanWin = false;
-    }
-
-    private static double GetRandomDelay(float minimumSeconds, float maximumSeconds)
-    {
-        float minimum = Math.Max(0f, minimumSeconds);
-        float maximum = Math.Max(minimum, maximumSeconds);
-        return UnityEngine.Random.Range(minimum, maximum);
     }
 
     private static void ClearAutomaticRuntime(GamePlayerData playerData)

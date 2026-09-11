@@ -158,9 +158,11 @@ public static class RiskGameplayAuthority
             return true;
         }
 
-        playerData.gameStatus = GamePlayerStatus.Won;
         ClearPlayerRiskState(playerData, true);
-        GameScoreAuthority.FinalizePlayerIfNeeded(gameSessionData, playerData);
+        GameScoreAuthority.TrySetFinalStatus(
+            gameSessionData,
+            playerData,
+            GamePlayerStatus.Won);
 
         if (gameSessionData.GetEligiblePlayerCount() == 0 &&
             !gameSessionData.gamePlayController.HasPendingCheckAnimations)
@@ -208,6 +210,7 @@ public static class RiskGameplayAuthority
 
             if (playerData == null ||
                 playerData.gameStatus != GamePlayerStatus.Eligible ||
+                !playerData.isAutomaticBoardEnabled ||
                 playerData.boardData == null)
             {
                 continue;
@@ -253,7 +256,9 @@ public static class RiskGameplayAuthority
         {
             GamePlayerData playerData = gameSessionData.players[i];
 
-            if (playerData == null || playerData.gameStatus != GamePlayerStatus.Eligible)
+            if (playerData == null ||
+                playerData.gameStatus != GamePlayerStatus.Eligible ||
+                !playerData.isAutomaticBoardEnabled)
             {
                 continue;
             }

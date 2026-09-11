@@ -64,6 +64,7 @@ public class GamePlayController
     public bool IsRuleCompletionAwaitingChecks => isRuleCompletionAwaitingChecks;
     public bool DeathFinalChecksWereRequired => deathFinalChecksWereRequired;
     public float NextBallCountdownSeconds => nextBallCountdownSeconds;
+    public float RiskMatchDurationSeconds => riskMatchDurationSeconds;
     public bool IsRiskRule => ruleController?.ActiveRuleType == BingoRuleType.Risk;
     public bool IsDeathRule => ruleController?.ActiveRuleType == BingoRuleType.Elimination;
     public bool IsRunning =>
@@ -405,6 +406,24 @@ public class GamePlayController
                pendingCheckAnimationPlayerIds.Contains(playerId);
     }
 
+    public bool CancelPendingCheckAnimation(string playerId)
+    {
+        if (string.IsNullOrWhiteSpace(playerId) ||
+            pendingCheckAnimationPlayerIds == null ||
+            !pendingCheckAnimationPlayerIds.Remove(playerId))
+        {
+            return false;
+        }
+
+        if (string.Equals(matchEndingCheckPlayerId, playerId, StringComparison.Ordinal))
+        {
+            matchEndingCheckPlayerId = string.Empty;
+            isRuleCompletionAwaitingChecks = false;
+        }
+
+        return true;
+    }
+
     public List<BingoPatternCheckResult> GetCompletedAvailablePatterns(
         string playerId,
         LobbyBoardData boardData,
@@ -443,11 +462,31 @@ public class GamePlayController
         out BingoCheckResult checkResult,
         out GameRuleCheckDecision ruleDecision)
     {
+        return TryCheckAutomaticBingo(
+            playerId,
+            boardData,
+            markedCellIndices,
+            calledNumbers,
+            configuredPatternTypes,
+            null,
+            out checkResult,
+            out ruleDecision);
+    }
+
+    public bool TryCheckAutomaticBingo(
+        string playerId,
+        LobbyBoardData boardData,
+        IReadOnlyCollection<int> markedCellIndices,
+        IReadOnlyCollection<int> calledNumbers,
+        IReadOnlyCollection<BingoPatternType> configuredPatternTypes,
+        IReadOnlyList<BingoPatternIdentity> latePatterns,
+        out BingoCheckResult checkResult,
+        out GameRuleCheckDecision ruleDecision)
+    {
         checkResult = null;
         ruleDecision = null;
 
         if (!CanAcceptBingoChecks ||
-            !IsDeathRule ||
             string.IsNullOrWhiteSpace(playerId) ||
             boardData == null)
         {
@@ -462,7 +501,7 @@ public class GamePlayController
                 markedCellIndices,
                 calledNumbers,
                 configuredPatternTypes,
-                null))
+                latePatterns))
         {
             return false;
         }

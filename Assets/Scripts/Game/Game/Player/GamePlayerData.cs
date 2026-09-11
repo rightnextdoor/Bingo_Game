@@ -13,6 +13,9 @@ public class GamePlayerData
     public bool isConnected;
     public bool isGameSceneReady;
     public bool canRejoin;
+    public GamePlayerReturnState returnState;
+    public GamePlayerControlType controlType;
+    public bool isAutomaticBoardEnabled;
 
     public GamePlayerStatus gameStatus;
     public int currentMatchScore;
@@ -56,6 +59,9 @@ public class GamePlayerData
         isConnected = false;
         isGameSceneReady = false;
         canRejoin = true;
+        returnState = GamePlayerReturnState.Active;
+        controlType = GamePlayerControlType.Human;
+        isAutomaticBoardEnabled = false;
         gameStatus = GamePlayerStatus.Eligible;
         currentMatchScore = 0;
         areStatisticsFinalized = false;
@@ -96,6 +102,11 @@ public class GamePlayerData
         isConnected = true;
         isGameSceneReady = userTag == UserTag.Bot;
         canRejoin = userTag != UserTag.Bot;
+        returnState = GamePlayerReturnState.Active;
+        controlType = userTag == UserTag.Bot
+            ? GamePlayerControlType.Bot
+            : GamePlayerControlType.Human;
+        isAutomaticBoardEnabled = controlType == GamePlayerControlType.Bot;
         boardData = new LobbyBoardData(lobbyPlayerData.boardData);
         EnsureFreeCellMarked();
     }
@@ -115,6 +126,9 @@ public class GamePlayerData
         isConnected = playerData.isConnected;
         isGameSceneReady = playerData.isGameSceneReady;
         canRejoin = playerData.canRejoin;
+        returnState = playerData.returnState;
+        controlType = playerData.controlType;
+        isAutomaticBoardEnabled = playerData.isAutomaticBoardEnabled;
         gameStatus = playerData.gameStatus;
         currentMatchScore = playerData.currentMatchScore;
         areStatisticsFinalized = playerData.areStatisticsFinalized;
@@ -140,7 +154,19 @@ public class GamePlayerData
         lateRiskPatterns = BingoPatternIdentityList.Clone(playerData.lateRiskPatterns);
         pendingRiskCheckPatterns = BingoPatternIdentityList.Clone(playerData.pendingRiskCheckPatterns);
         boardData = new LobbyBoardData(playerData.boardData);
+        RepairControlState();
         EnsureFreeCellMarked();
+    }
+
+    public void RepairControlState()
+    {
+        if (userTag == UserTag.Bot)
+        {
+            controlType = GamePlayerControlType.Bot;
+            isAutomaticBoardEnabled = true;
+            canRejoin = false;
+            returnState = GamePlayerReturnState.Active;
+        }
     }
 
     public bool TrySetMarkedCell(int cellIndex, bool isMarked)

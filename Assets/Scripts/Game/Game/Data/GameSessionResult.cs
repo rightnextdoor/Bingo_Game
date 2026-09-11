@@ -10,6 +10,7 @@ public class GameSessionResult
     public string gameId;
     public string lobbyId;
     public GameSessionData gameSessionData;
+    public GameFinalScoreResultData finalScoreResult;
 
     public GameSessionResult()
     {
@@ -20,6 +21,13 @@ public class GameSessionResult
         gameId = string.Empty;
         lobbyId = string.Empty;
         gameSessionData = null;
+        finalScoreResult = null;
+    }
+
+    public GameSessionResult WithFinalScore(GameFinalScoreResultData scoreResult)
+    {
+        finalScoreResult = scoreResult;
+        return this;
     }
 
     public static GameSessionResult Succeeded(GameSessionOperationType operationType, GameSessionData gameSessionData)
@@ -79,5 +87,21 @@ public class GameSessionResult
             lobbyId = lobbyId ?? string.Empty,
             gameSessionData = null
         };
+    }
+}
+
+[Serializable]
+public class GameFinalScoreResultData
+{
+    public string resultId;
+    public string userId;
+    public ScorePlayMode playMode;
+    public BingoGameModeType gameModeType;
+    public int scoreDelta;
+
+    public GameFinalScoreResultData()
+    {
+        resultId = string.Empty;
+        userId = string.Empty;
     }
 }

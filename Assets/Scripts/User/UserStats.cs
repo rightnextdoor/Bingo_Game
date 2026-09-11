@@ -9,8 +9,10 @@ public class UserStats
     public const int DefaultMaximumScore = 9000000;
 
     [SerializeField] private List<UserPlayModeScoreMap> scoreMaps = new();
+    [SerializeField] private List<string> appliedGameScoreResultIds = new();
 
     public IReadOnlyList<UserPlayModeScoreMap> ScoreMaps => scoreMaps;
+    public IReadOnlyList<string> AppliedGameScoreResultIds => appliedGameScoreResultIds;
     public int MinimumScore => GameSettings.instance != null
         ? GameSettings.instance.MinimumScore
         : DefaultMinimumScore;
@@ -77,9 +79,57 @@ public class UserStats
         return SetPoints(playMode, gameModeType, ClampScore(updatedPoints));
     }
 
+    public bool HasAppliedGameScoreResult(string resultId)
+    {
+        if (string.IsNullOrWhiteSpace(resultId))
+        {
+            return false;
+        }
+
+        appliedGameScoreResultIds ??= new List<string>();
+        return appliedGameScoreResultIds.Contains(resultId.Trim());
+    }
+
+    public bool TryApplyGameScoreResult(
+        string resultId,
+        ScorePlayMode playMode,
+        BingoGameModeType gameModeType,
+        int scoreDelta)
+    {
+        if (string.IsNullOrWhiteSpace(resultId) ||
+            !IsScoredGameMode(gameModeType))
+        {
+            return false;
+        }
+
+        RepairData();
+        string normalizedResultId = resultId.Trim();
+
+        if (appliedGameScoreResultIds.Contains(normalizedResultId))
+        {
+            return false;
+        }
+
+        if (scoreDelta >= 0)
+        {
+            AddPoints(playMode, gameModeType, scoreDelta);
+        }
+        else
+        {
+            RemovePoints(
+                playMode,
+                gameModeType,
+                -(long)scoreDelta > int.MaxValue ? int.MaxValue : -scoreDelta);
+        }
+
+        appliedGameScoreResultIds.Add(normalizedResultId);
+        return true;
+    }
+
     public void ResetStats()
     {
         RepairData();
+        appliedGameScoreResultIds.Clear();
 
         for (int mapIndex = 0; mapIndex < scoreMaps.Count; mapIndex++)
         {
@@ -105,8 +155,10 @@ public class UserStats
     public void RepairData()
     {
         scoreMaps ??= new List<UserPlayModeScoreMap>();
+        appliedGameScoreResultIds ??= new List<string>();
 
         RemoveDuplicatePlayModeMaps();
+        RepairAppliedGameScoreResultIds();
 
         foreach (ScorePlayMode playMode in Enum.GetValues(typeof(ScorePlayMode)))
         {
@@ -197,6 +249,24 @@ public class UserStats
             {
                 scoreMaps.RemoveAt(i);
             }
+        }
+    }
+
+    private void RepairAppliedGameScoreResultIds()
+    {
+        HashSet<string> addedResultIds = new(StringComparer.Ordinal);
+
+        for (int i = appliedGameScoreResultIds.Count - 1; i >= 0; i--)
+        {
+            string resultId = appliedGameScoreResultIds[i]?.Trim();
+
+            if (string.IsNullOrWhiteSpace(resultId) || !addedResultIds.Add(resultId))
+            {
+                appliedGameScoreResultIds.RemoveAt(i);
+                continue;
+            }
+
+            appliedGameScoreResultIds[i] = resultId;
         }
     }
 }

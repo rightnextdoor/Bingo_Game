@@ -74,17 +74,21 @@ public static class GameScoreAuthority
     {
         if (gameSessionData == null ||
             playerData == null ||
-            (finalStatus != GamePlayerStatus.Won && finalStatus != GamePlayerStatus.Lost) ||
-            playerData.gameStatus == GamePlayerStatus.Won ||
-            playerData.gameStatus == GamePlayerStatus.Lost ||
-            playerData.areStatisticsFinalized)
+            (finalStatus != GamePlayerStatus.Won && finalStatus != GamePlayerStatus.Lost))
         {
             return false;
         }
 
+        if ((playerData.gameStatus == GamePlayerStatus.Won ||
+             playerData.gameStatus == GamePlayerStatus.Lost) &&
+            playerData.gameStatus != finalStatus)
+        {
+            return false;
+        }
+
+        bool changed = playerData.gameStatus != finalStatus;
         playerData.gameStatus = finalStatus;
-        FinalizePlayerIfNeeded(gameSessionData, playerData);
-        return true;
+        return FinalizePlayerIfNeeded(gameSessionData, playerData) || changed;
     }
 
     public static bool FinalizePlayerIfNeeded(
@@ -118,15 +122,25 @@ public static class GameScoreAuthority
             playerData.finalizedScoreDelta = playerData.currentMatchScore;
         }
 
-        playerData.areStatisticsFinalized = true;
-        playerData.isScorePersisted = false;
-        playerData.isSubmitTimerActive = false;
-        playerData.submitTimerEndTime = 0d;
-        playerData.isRiskDecisionPending = false;
-        playerData.queuedRiskPatterns?.Clear();
-        playerData.activeRiskSubmitPatterns?.Clear();
-        playerData.lateRiskPatterns?.Clear();
-        playerData.pendingRiskCheckPatterns?.Clear();
+        MarkStatisticsFinalized(playerData);
+        return true;
+    }
+
+    public static bool FinalizeDepartingHumanLoss(
+        GameSessionData gameSessionData,
+        GamePlayerData playerData)
+    {
+        if (gameSessionData == null ||
+            playerData == null ||
+            playerData.userTag != UserTag.Player ||
+            playerData.areStatisticsFinalized)
+        {
+            return false;
+        }
+
+        gameSessionData.EnsureScoreValuesCached();
+        playerData.finalizedScoreDelta = -Mathf.Max(0, gameSessionData.cachedLossPoints);
+        MarkStatisticsFinalized(playerData);
         return true;
     }
 
@@ -159,11 +173,11 @@ public static class GameScoreAuthority
                 continue;
             }
 
-            if (UserManager.instance.ApplyGameScore(
-                    playerData.userId,
+            if (PersistFinalizedScore(
+                    gameSessionData,
+                    playerData,
                     scorePlayMode,
-                    scoreGameMode,
-                    playerData.finalizedScoreDelta))
+                    scoreGameMode))
             {
                 playerData.isScorePersisted = true;
                 changed = true;
@@ -171,6 +185,72 @@ public static class GameScoreAuthority
         }
 
         return changed;
+    }
+
+    public static bool PersistFinalizedScoreForCurrentUser(
+        GameSessionData gameSessionData)
+    {
+        if (gameSessionData == null ||
+            UserManager.instance == null ||
+            MultiplayerPlayModeTestContext.IsActive)
+        {
+            return false;
+        }
+
+        GamePlayerData playerData = gameSessionData.GetPlayer(UserManager.instance.UserId);
+
+        if (playerData == null ||
+            playerData.userTag != UserTag.Player ||
+            !playerData.areStatisticsFinalized)
+        {
+            return false;
+        }
+
+        bool persisted = PersistFinalizedScore(
+            gameSessionData,
+            playerData,
+            ResolveScorePlayMode(gameSessionData.playMode),
+            ResolveScoreGameMode(gameSessionData));
+
+        if (persisted)
+        {
+            playerData.isScorePersisted = true;
+        }
+
+        return persisted;
+    }
+
+    public static GameFinalScoreResultData CreateFinalScoreResult(
+        GameSessionData gameSessionData,
+        GamePlayerData playerData)
+    {
+        if (gameSessionData == null ||
+            playerData == null ||
+            !playerData.areStatisticsFinalized)
+        {
+            return null;
+        }
+
+        return new GameFinalScoreResultData
+        {
+            resultId = GetScoreResultId(gameSessionData, playerData),
+            userId = playerData.userId ?? string.Empty,
+            playMode = ResolveScorePlayMode(gameSessionData.playMode),
+            gameModeType = ResolveScoreGameMode(gameSessionData),
+            scoreDelta = playerData.finalizedScoreDelta
+        };
+    }
+
+    public static bool PersistFinalScoreResult(GameFinalScoreResultData scoreResult)
+    {
+        return scoreResult != null &&
+               UserManager.instance != null &&
+               UserManager.instance.ApplyGameScoreOnce(
+                   scoreResult.resultId,
+                   scoreResult.userId,
+                   scoreResult.playMode,
+                   scoreResult.gameModeType,
+                   scoreResult.scoreDelta);
     }
 
     public static ScorePlayMode ResolveScorePlayMode(MainMenuPlayMode playMode)
@@ -237,6 +317,41 @@ public static class GameScoreAuthority
                    UserManager.instance.UserId,
                    playerData.userId,
                    StringComparison.Ordinal);
+    }
+
+    private static bool PersistFinalizedScore(
+        GameSessionData gameSessionData,
+        GamePlayerData playerData,
+        ScorePlayMode scorePlayMode,
+        BingoGameModeType scoreGameMode)
+    {
+        return UserManager.instance != null &&
+               UserManager.instance.ApplyGameScoreOnce(
+                   GetScoreResultId(gameSessionData, playerData),
+                   playerData.userId,
+                   scorePlayMode,
+                   scoreGameMode,
+                   playerData.finalizedScoreDelta);
+    }
+
+    private static string GetScoreResultId(
+        GameSessionData gameSessionData,
+        GamePlayerData playerData)
+    {
+        return $"{gameSessionData?.gameId ?? string.Empty}:{playerData?.userId ?? string.Empty}";
+    }
+
+    private static void MarkStatisticsFinalized(GamePlayerData playerData)
+    {
+        playerData.areStatisticsFinalized = true;
+        playerData.isScorePersisted = false;
+        playerData.isSubmitTimerActive = false;
+        playerData.submitTimerEndTime = 0d;
+        playerData.isRiskDecisionPending = false;
+        playerData.queuedRiskPatterns?.Clear();
+        playerData.activeRiskSubmitPatterns?.Clear();
+        playerData.lateRiskPatterns?.Clear();
+        playerData.pendingRiskCheckPatterns?.Clear();
     }
 
     private static int ClampMatchScore(long score)

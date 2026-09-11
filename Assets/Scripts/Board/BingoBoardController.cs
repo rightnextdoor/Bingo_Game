@@ -161,13 +161,26 @@ public class BingoBoardController : MonoBehaviour
 
     public void SetMarkedCells(IReadOnlyCollection<int> cellIndices)
     {
-        ClearMarks();
+        HashSet<int> desiredMarkedCells = cellIndices != null
+            ? new HashSet<int>(cellIndices)
+            : new HashSet<int>();
 
-        if (cellIndices == null)
-            return;
+        if (currentBoardData?.usesFreeCell == true)
+            desiredMarkedCells.Add(FreeCellIndex);
 
-        foreach (int cellIndex in cellIndices)
-            SetCellMarked(cellIndex, true);
+        for (int cellIndex = 0; cellIndex < cells.Count; cellIndex++)
+        {
+            BingoBoardCellController cell = cells[cellIndex];
+
+            if (cell == null || cell.CellIndex < 0)
+                continue;
+
+            bool shouldBeMarked = desiredMarkedCells.Contains(cellIndex);
+            bool isCurrentlyMarked = markedCellIndices.Contains(cellIndex);
+
+            if (shouldBeMarked != isCurrentlyMarked)
+                SetCellMarked(cellIndex, shouldBeMarked);
+        }
     }
 
     #endregion

@@ -28,7 +28,6 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
     private GameSceneManager gameSceneManager;
     private bool isSubscribedToGameSceneManager;
     private bool isSceneReadyCheckRegistered;
-    private readonly HashSet<string> appliedFinalScoreKeys = new();
 
     public string CurrentGameId => currentGameSession?.gameId ?? string.Empty;
     public string CurrentLobbyId => currentGameSession?.lobbyId ?? pendingLobbyId;
@@ -77,6 +76,8 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
     {
         LocalGameSessionManager.LocalGameSessionUpdated -= OnLocalGameSessionUpdated;
         LocalGameSessionManager.LocalGameSessionUpdated += OnLocalGameSessionUpdated;
+        LocalGameSessionManager.LocalGamePlayerMarkedCellChanged -= OnLocalGamePlayerMarkedCellChanged;
+        LocalGameSessionManager.LocalGamePlayerMarkedCellChanged += OnLocalGamePlayerMarkedCellChanged;
         LocalGameSessionManager.LocalBingoCheckResolved -= OnLocalBingoCheckResolved;
         LocalGameSessionManager.LocalBingoCheckResolved += OnLocalBingoCheckResolved;
         NetworkGameSessionConnection.LocalGameCreationResultReceived -= ReceiveGameCreationResult;
@@ -102,6 +103,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
     private void OnDisable()
     {
         LocalGameSessionManager.LocalGameSessionUpdated -= OnLocalGameSessionUpdated;
+        LocalGameSessionManager.LocalGamePlayerMarkedCellChanged -= OnLocalGamePlayerMarkedCellChanged;
         LocalGameSessionManager.LocalBingoCheckResolved -= OnLocalBingoCheckResolved;
         NetworkGameSessionConnection.LocalGameCreationResultReceived -= ReceiveGameCreationResult;
         NetworkGameSessionConnection.LocalGameSessionUpdatedReceived -= OnNetworkGameSessionUpdated;
@@ -117,6 +119,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
     private void OnDestroy()
     {
         LocalGameSessionManager.LocalGameSessionUpdated -= OnLocalGameSessionUpdated;
+        LocalGameSessionManager.LocalGamePlayerMarkedCellChanged -= OnLocalGamePlayerMarkedCellChanged;
         LocalGameSessionManager.LocalBingoCheckResolved -= OnLocalBingoCheckResolved;
         NetworkGameSessionConnection.LocalGameCreationResultReceived -= ReceiveGameCreationResult;
         NetworkGameSessionConnection.LocalGameSessionUpdatedReceived -= OnNetworkGameSessionUpdated;
@@ -404,7 +407,6 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
     public void ResetForFreshApplicationStart()
     {
         ClearCurrentGame(false);
-        appliedFinalScoreKeys.Clear();
         runtimeType = SessionRuntimeType.Local;
         nextGameSessionSyncTime = 0f;
     }
@@ -447,6 +449,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
                 try
                 {
                     GameSessionResult result = await service.LeaveGameAsync(gameId, userData);
+                    GameScoreAuthority.PersistFinalScoreResult(result?.finalScoreResult);
 
                     if (result == null ||
                         (!result.success && !IsAlreadyDetachedFailure(result.failureType)))
@@ -496,6 +499,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
                 try
                 {
                     GameSessionResult result = await service.LeaveGameAsync(gameId, userData);
+                    GameScoreAuthority.PersistFinalScoreResult(result?.finalScoreResult);
 
                     if (result == null || !result.success)
                     {
@@ -545,6 +549,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
     {
         if (!HasEnteredGame ||
             SessionPauseManager.IsPaused ||
+            GetCurrentPlayer()?.isAutomaticBoardEnabled == true ||
             currentGameSession.gamePlayController?.IsPlayerInputClosed == true)
         {
             return false;
@@ -591,6 +596,8 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         if (userData == null ||
             !userData.HasUser ||
             playerData == null ||
+            playerData.controlType != GamePlayerControlType.Human ||
+            playerData.returnState != GamePlayerReturnState.Active ||
             playerData.gameStatus != GamePlayerStatus.Eligible ||
             service == null ||
             !service.IsReady ||
@@ -872,6 +879,9 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         playerData.isConnected = updateData.isConnected;
         playerData.isGameSceneReady = updateData.isGameSceneReady;
         playerData.canRejoin = updateData.canRejoin;
+        playerData.returnState = updateData.returnState;
+        playerData.controlType = updateData.controlType;
+        playerData.isAutomaticBoardEnabled = updateData.isAutomaticBoardEnabled;
         playerData.gameStatus = updateData.gameStatus;
         playerData.currentMatchScore = updateData.currentMatchScore;
         playerData.areStatisticsFinalized = updateData.areStatisticsFinalized;
@@ -880,9 +890,6 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         playerData.isSubmitTimerActive = updateData.isSubmitTimerActive;
         playerData.submitTimerEndTime = updateData.submitTimerEndTime;
         playerData.isRiskDecisionPending = updateData.isRiskDecisionPending;
-        playerData.markedCellIndices = updateData.markedCellIndices != null
-            ? new List<int>(updateData.markedCellIndices)
-            : new List<int>();
         playerData.queuedRiskPatterns = BingoPatternIdentityList.Clone(updateData.queuedRiskPatterns);
         playerData.activeRiskSubmitPatterns = BingoPatternIdentityList.Clone(updateData.activeRiskSubmitPatterns);
         playerData.lateRiskPatterns = BingoPatternIdentityList.Clone(updateData.lateRiskPatterns);
@@ -896,6 +903,9 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         playerData.isConnected = updateData.isConnected;
         playerData.isGameSceneReady = updateData.isGameSceneReady;
         playerData.canRejoin = updateData.canRejoin;
+        playerData.returnState = updateData.returnState;
+        playerData.controlType = updateData.controlType;
+        playerData.isAutomaticBoardEnabled = updateData.isAutomaticBoardEnabled;
         playerData.gameStatus = updateData.gameStatus;
         playerData.currentMatchScore = updateData.currentMatchScore;
         playerData.areStatisticsFinalized = updateData.areStatisticsFinalized;
@@ -904,46 +914,18 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         playerData.isSubmitTimerActive = updateData.isSubmitTimerActive;
         playerData.submitTimerEndTime = updateData.submitTimerEndTime;
         playerData.isRiskDecisionPending = updateData.isRiskDecisionPending;
-        playerData.markedCellIndices = updateData.markedCellIndices != null
-            ? new List<int>(updateData.markedCellIndices)
-            : new List<int>();
     }
 
     private void ApplyFinalizedScoreForCurrentNetworkUser()
     {
         if (currentGameSession == null ||
             currentGameSession.runtimeType != SessionRuntimeType.Network ||
-            MultiplayerPlayModeTestContext.IsActive ||
-            UserManager.instance == null)
+            MultiplayerPlayModeTestContext.IsActive)
         {
             return;
         }
 
-        string userId = UserManager.instance.UserId;
-        GamePlayerData playerData = currentGameSession.GetPlayer(userId);
-
-        if (playerData == null ||
-            playerData.userTag != UserTag.Player ||
-            !playerData.areStatisticsFinalized)
-        {
-            return;
-        }
-
-        string scoreKey = $"{currentGameSession.gameId}:{userId}";
-
-        if (appliedFinalScoreKeys.Contains(scoreKey))
-        {
-            return;
-        }
-
-        if (UserManager.instance.ApplyGameScore(
-                userId,
-                GameScoreAuthority.ResolveScorePlayMode(currentGameSession.playMode),
-                GameScoreAuthority.ResolveScoreGameMode(currentGameSession),
-                playerData.finalizedScoreDelta))
-        {
-            appliedFinalScoreKeys.Add(scoreKey);
-        }
+        GameScoreAuthority.PersistFinalizedScoreForCurrentUser(currentGameSession);
     }
 
     private async void RequestGameSessionSync(bool recoverMissingEntry)
@@ -1343,6 +1325,12 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
     private void OnLocalGameSessionUpdated(GameSessionData gameSessionData)
     {
         ApplyGameSessionUpdate(gameSessionData);
+    }
+
+    private void OnLocalGamePlayerMarkedCellChanged(
+        GamePlayerMarkedCellChangedData updateData)
+    {
+        ApplyGamePlayerMarkedCellChanged(updateData);
     }
 
     private void OnLocalBingoCheckResolved(GameBingoCheckResolvedData resolvedData)

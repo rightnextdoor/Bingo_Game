@@ -40,9 +40,12 @@ public class GameSessionData
     [NonSerialized]
     private List<GameBingoCheckResolvedData> pendingBingoCheckPresentations;
 
+    [NonSerialized]
+    private List<GamePlayerMarkedCellChangedData> pendingMarkedCellUpdates;
+
     public GameSessionData()
     {
-        dataVersion = 9;
+        dataVersion = 12;
         revision = 1;
         gameId = string.Empty;
         lobbyId = string.Empty;
@@ -70,6 +73,7 @@ public class GameSessionData
         lastRiskSubmitCutoffBallCallCount = 0;
         players = new List<GamePlayerData>();
         pendingBingoCheckPresentations = new List<GameBingoCheckResolvedData>();
+        pendingMarkedCellUpdates = new List<GamePlayerMarkedCellChangedData>();
     }
 
     public GameSessionData(string gameId, GameSessionSetupData setupData) : this()
@@ -118,7 +122,11 @@ public class GameSessionData
 
         for (int i = 0; i < setupData.players.Count; i++)
         {
-            players.Add(new GamePlayerData(setupData.players[i]));
+            GamePlayerData playerData = new GamePlayerData(setupData.players[i]);
+            playerData.isAutomaticBoardEnabled =
+                gamePlayController.IsDeathRule ||
+                playerData.controlType == GamePlayerControlType.Bot;
+            players.Add(playerData);
         }
     }
 
@@ -239,7 +247,39 @@ public class GameSessionData
     {
         return playerData != null &&
                playerData.gameStatus == GamePlayerStatus.Eligible &&
-               playerData.isConnected;
+               playerData.returnState != GamePlayerReturnState.FrozenAwaitingReturn &&
+               (playerData.controlType == GamePlayerControlType.Bot || playerData.isConnected);
+    }
+
+    public int GetRemainingRealHumanCount(string excludedUserId = "")
+    {
+        if (players == null)
+        {
+            return 0;
+        }
+
+        int count = 0;
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            GamePlayerData playerData = players[i];
+
+            if (playerData == null ||
+                string.Equals(playerData.userId, excludedUserId, StringComparison.Ordinal) ||
+                playerData.userTag != UserTag.Player ||
+                playerData.controlType != GamePlayerControlType.Human ||
+                playerData.returnState == GamePlayerReturnState.DeclinedReturn ||
+                !playerData.canRejoin ||
+                (playerData.gameStatus != GamePlayerStatus.Eligible &&
+                 playerData.gameStatus != GamePlayerStatus.Checking))
+            {
+                continue;
+            }
+
+            count++;
+        }
+
+        return count;
     }
 
     public void QueueBingoCheckPresentation(GameBingoCheckResolvedData resolvedData)
@@ -260,6 +300,54 @@ public class GameSessionData
             new List<GameBingoCheckResolvedData>(pendingBingoCheckPresentations);
         pendingBingoCheckPresentations.Clear();
         return presentations;
+    }
+
+    public void QueueMarkedCellUpdate(
+        GamePlayerData playerData,
+        int cellIndex,
+        bool isMarked,
+        bool isAutomaticBoardUpdate)
+    {
+        if (playerData == null || string.IsNullOrWhiteSpace(playerData.userId))
+        {
+            return;
+        }
+
+        pendingMarkedCellUpdates ??= new List<GamePlayerMarkedCellChangedData>();
+        GamePlayerMarkedCellChangedData updateData =
+            new GamePlayerMarkedCellChangedData(
+                gameId,
+                playerData.userId,
+                cellIndex,
+                isMarked,
+                isAutomaticBoardUpdate);
+
+        for (int i = pendingMarkedCellUpdates.Count - 1; i >= 0; i--)
+        {
+            GamePlayerMarkedCellChangedData pendingUpdate = pendingMarkedCellUpdates[i];
+
+            if (pendingUpdate != null &&
+                pendingUpdate.cellIndex == cellIndex &&
+                string.Equals(
+                    pendingUpdate.userId,
+                    playerData.userId,
+                    StringComparison.Ordinal))
+            {
+                pendingMarkedCellUpdates[i] = updateData;
+                return;
+            }
+        }
+
+        pendingMarkedCellUpdates.Add(updateData);
+    }
+
+    public List<GamePlayerMarkedCellChangedData> DrainMarkedCellUpdates()
+    {
+        pendingMarkedCellUpdates ??= new List<GamePlayerMarkedCellChangedData>();
+        List<GamePlayerMarkedCellChangedData> updates =
+            new List<GamePlayerMarkedCellChangedData>(pendingMarkedCellUpdates);
+        pendingMarkedCellUpdates.Clear();
+        return updates;
     }
 
     public void EnsureScoreValuesCached()
@@ -379,6 +467,9 @@ public class GamePlayerMatchStateData
     public bool isConnected;
     public bool isGameSceneReady;
     public bool canRejoin;
+    public GamePlayerReturnState returnState;
+    public GamePlayerControlType controlType;
+    public bool isAutomaticBoardEnabled;
     public GamePlayerStatus gameStatus;
     public int currentMatchScore;
     public bool areStatisticsFinalized;
@@ -387,12 +478,10 @@ public class GamePlayerMatchStateData
     public bool isSubmitTimerActive;
     public double submitTimerEndTime;
     public bool isRiskDecisionPending;
-    public List<int> markedCellIndices;
 
     public GamePlayerMatchStateData()
     {
         userId = string.Empty;
-        markedCellIndices = new List<int>();
     }
 
     public GamePlayerMatchStateData(GamePlayerData playerData) : this()
@@ -406,6 +495,9 @@ public class GamePlayerMatchStateData
         isConnected = playerData.isConnected;
         isGameSceneReady = playerData.isGameSceneReady;
         canRejoin = playerData.canRejoin;
+        returnState = playerData.returnState;
+        controlType = playerData.controlType;
+        isAutomaticBoardEnabled = playerData.isAutomaticBoardEnabled;
         gameStatus = playerData.gameStatus;
         currentMatchScore = playerData.currentMatchScore;
         areStatisticsFinalized = playerData.areStatisticsFinalized;
@@ -414,9 +506,6 @@ public class GamePlayerMatchStateData
         isSubmitTimerActive = playerData.isSubmitTimerActive;
         submitTimerEndTime = playerData.submitTimerEndTime;
         isRiskDecisionPending = playerData.isRiskDecisionPending;
-        markedCellIndices = playerData.markedCellIndices != null
-            ? new List<int>(playerData.markedCellIndices)
-            : new List<int>();
     }
 }
 
@@ -543,6 +632,9 @@ public class GamePlayStateChangedBatchData
                     isConnected = playerState.isConnected,
                     isGameSceneReady = playerState.isGameSceneReady,
                     canRejoin = playerState.canRejoin,
+                    returnState = playerState.returnState,
+                    controlType = playerState.controlType,
+                    isAutomaticBoardEnabled = playerState.isAutomaticBoardEnabled,
                     gameStatus = playerState.gameStatus,
                     currentMatchScore = playerState.currentMatchScore,
                     areStatisticsFinalized = playerState.areStatisticsFinalized,
@@ -550,10 +642,7 @@ public class GamePlayStateChangedBatchData
                     isScorePersisted = playerState.isScorePersisted,
                     isSubmitTimerActive = playerState.isSubmitTimerActive,
                     submitTimerEndTime = playerState.submitTimerEndTime,
-                    isRiskDecisionPending = playerState.isRiskDecisionPending,
-                    markedCellIndices = playerState.markedCellIndices != null
-                        ? new List<int>(playerState.markedCellIndices)
-                        : new List<int>()
+                    isRiskDecisionPending = playerState.isRiskDecisionPending
                 });
             }
         }
@@ -597,6 +686,9 @@ public class GamePlayerStateChangedData
     public bool isConnected;
     public bool isGameSceneReady;
     public bool canRejoin;
+    public GamePlayerReturnState returnState;
+    public GamePlayerControlType controlType;
+    public bool isAutomaticBoardEnabled;
     public GamePlayerStatus gameStatus;
     public int currentMatchScore;
     public bool areStatisticsFinalized;
@@ -605,7 +697,6 @@ public class GamePlayerStateChangedData
     public bool isSubmitTimerActive;
     public double submitTimerEndTime;
     public bool isRiskDecisionPending;
-    public List<int> markedCellIndices;
     public List<BingoPatternIdentity> queuedRiskPatterns;
     public List<BingoPatternIdentity> activeRiskSubmitPatterns;
     public List<BingoPatternIdentity> lateRiskPatterns;
@@ -621,7 +712,6 @@ public class GamePlayerStateChangedData
         activeRiskSubmitPatterns = new List<BingoPatternIdentity>();
         lateRiskPatterns = new List<BingoPatternIdentity>();
         pendingRiskCheckPatterns = new List<BingoPatternIdentity>();
-        markedCellIndices = new List<int>();
     }
 
     public GamePlayerStateChangedData(GameSessionData gameSessionData, GamePlayerData playerData) : this()
@@ -638,6 +728,9 @@ public class GamePlayerStateChangedData
         isConnected = playerData.isConnected;
         isGameSceneReady = playerData.isGameSceneReady;
         canRejoin = playerData.canRejoin;
+        returnState = playerData.returnState;
+        controlType = playerData.controlType;
+        isAutomaticBoardEnabled = playerData.isAutomaticBoardEnabled;
         gameStatus = playerData.gameStatus;
         currentMatchScore = playerData.currentMatchScore;
         areStatisticsFinalized = playerData.areStatisticsFinalized;
@@ -646,9 +739,6 @@ public class GamePlayerStateChangedData
         isSubmitTimerActive = playerData.isSubmitTimerActive;
         submitTimerEndTime = playerData.submitTimerEndTime;
         isRiskDecisionPending = playerData.isRiskDecisionPending;
-        markedCellIndices = playerData.markedCellIndices != null
-            ? new List<int>(playerData.markedCellIndices)
-            : new List<int>();
         queuedRiskPatterns = BingoPatternIdentityList.Clone(playerData.queuedRiskPatterns);
         activeRiskSubmitPatterns = BingoPatternIdentityList.Clone(playerData.activeRiskSubmitPatterns);
         lateRiskPatterns = BingoPatternIdentityList.Clone(playerData.lateRiskPatterns);
@@ -693,6 +783,7 @@ public class GamePlayerMarkedCellChangedData
     public string userId;
     public int cellIndex;
     public bool isMarked;
+    public bool isAutomaticBoardUpdate;
 
     public GamePlayerMarkedCellChangedData()
     {
@@ -700,18 +791,21 @@ public class GamePlayerMarkedCellChangedData
         userId = string.Empty;
         cellIndex = -1;
         isMarked = false;
+        isAutomaticBoardUpdate = false;
     }
 
     public GamePlayerMarkedCellChangedData(
         string gameId,
         string userId,
         int cellIndex,
-        bool isMarked) : this()
+        bool isMarked,
+        bool isAutomaticBoardUpdate = false) : this()
     {
         this.gameId = gameId ?? string.Empty;
         this.userId = userId ?? string.Empty;
         this.cellIndex = cellIndex;
         this.isMarked = isMarked;
+        this.isAutomaticBoardUpdate = isAutomaticBoardUpdate;
     }
 }
 

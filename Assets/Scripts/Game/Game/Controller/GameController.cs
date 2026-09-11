@@ -39,6 +39,10 @@ public class GameController : MonoBehaviour
     private int previousRiskRemainingSeconds = -1;
     private double lastRiskSubmitNotificationEndTime;
     private string automaticBoardGameId = string.Empty;
+    private string displayedBoardGameId = string.Empty;
+    private string displayedBoardUserId = string.Empty;
+    private bool hasDisplayedLocalBoard;
+    private bool displayedLocalAutomaticBoardEnabled;
     private BingoCheckResult activeDeathCheckResult;
     private int activeDeathCheckNumber;
     private GamePlayerStatus activeDeathCheckStatus = GamePlayerStatus.Checking;
@@ -104,6 +108,7 @@ public class GameController : MonoBehaviour
         bingoCheckAnimationController?.StopAndClear();
         StopAutomaticMarkPresentation();
         isBingoCheckPending = false;
+        ResetLocalBoardPresentation();
     }
 
     private void Update()
@@ -133,6 +138,8 @@ public class GameController : MonoBehaviour
 
         if (isNewGame)
         {
+            markedCellsByUserId.Clear();
+            ResetLocalBoardPresentation();
             ResetRiskNotificationTracking(gameSessionData);
             ResetDeathCheckPresentation();
         }
@@ -230,14 +237,15 @@ public class GameController : MonoBehaviour
             isHost = gamePlayerData.isLobbyHost,
             isReady = true,
             boardData = new LobbyBoardData(gamePlayerData.boardData),
-            markedCellIndices = gamePlayerData.markedCellIndices != null
-                ? new List<int>(gamePlayerData.markedCellIndices)
-                : GetMarkedCellSnapshot(gamePlayerData.userId),
+            markedCellIndices = GetOrCreateMarkedCellSnapshot(gamePlayerData),
             gameplayStatusText = ResolveGameplayStatusText(
                 gamePlayerData,
                 gameSessionData),
             canKick = false,
-            showBotIcon = localPlayerIsHost && gamePlayerData.userTag == UserTag.Bot,
+            showBotIcon = gamePlayerData.controlType == GamePlayerControlType.Bot &&
+                          (gameSessionData.playMode == MainMenuPlayMode.Solo ||
+                           (gameSessionData.playMode == MainMenuPlayMode.Custom &&
+                            localPlayerIsHost)),
             showReadyIcon = false
         };
 
@@ -305,6 +313,7 @@ public class GameController : MonoBehaviour
         lastRiskSubmitNotificationEndTime = 0d;
         ResetDeathCheckPresentation();
         StopAutomaticMarkPresentation();
+        ResetLocalBoardPresentation();
         headerController?.ClearHeader();
         boardSectionController?.ClearBoard();
         boardSectionController?.SetBoardInteractable(false);
@@ -340,26 +349,58 @@ public class GameController : MonoBehaviour
         }
 
         bool isDeath = DeathGameplayAuthority.IsDeathGame(gameSessionData);
+        bool usesAutomaticBoard =
+            GameAutomaticBoardAuthority.IsAutomaticBoardEnabled(
+                gameSessionData,
+                localPlayer);
+        string gameId = gameSessionData?.gameId ?? string.Empty;
+        bool boardContextChanged =
+            !hasDisplayedLocalBoard ||
+            !string.Equals(displayedBoardGameId, gameId, StringComparison.Ordinal) ||
+            !string.Equals(displayedBoardUserId, localUserId, StringComparison.Ordinal) ||
+            displayedLocalAutomaticBoardEnabled != usesAutomaticBoard;
 
         boardSectionController.SetBingoVisible(!isDeath);
 
         if (boardDisplayed && localPlayer != null)
         {
-            if (isDeath)
-            {
-                PresentAutomaticMarks(gameSessionData, localPlayer);
-            }
-            else
+            if (boardContextChanged)
             {
                 StopAutomaticMarkPresentation();
-                boardSectionController.SetMarkedCells(localPlayer.markedCellIndices);
+                boardSectionController.SetMarkedCells(
+                    localPlayer.markedCellIndices);
+                displayedBoardGameId = gameId;
+                displayedBoardUserId = localUserId ?? string.Empty;
+                hasDisplayedLocalBoard = true;
+                displayedLocalAutomaticBoardEnabled = usesAutomaticBoard;
+
+                if (usesAutomaticBoard)
+                {
+                    automaticBoardGameId = gameId;
+
+                    if (localPlayer.markedCellIndices != null)
+                    {
+                        for (int i = 0; i < localPlayer.markedCellIndices.Count; i++)
+                        {
+                            presentedAutomaticMarks.Add(localPlayer.markedCellIndices[i]);
+                        }
+                    }
+                }
             }
+        }
+        else
+        {
+            StopAutomaticMarkPresentation();
+            ResetLocalBoardPresentation();
         }
 
         bool playerCanUseBoard =
             boardDisplayed &&
-            !isDeath &&
+            !usesAutomaticBoard &&
             !SessionPauseManager.IsPaused &&
+            localPlayer.controlType == GamePlayerControlType.Human &&
+            localPlayer.returnState == GamePlayerReturnState.Active &&
+            localPlayer.isConnected &&
             localPlayer.gameStatus == GamePlayerStatus.Eligible &&
             !localPlayer.isRiskDecisionPending &&
             gameSessionData.gamePlayController?.IsPlayerInputClosed != true &&
@@ -400,12 +441,20 @@ public class GameController : MonoBehaviour
     {
         if (SessionPauseManager.IsPaused)
         {
-            DisplayPlayerBoard(GameSessionManager.instance?.CurrentGameSession);
             return;
         }
 
-        if (GameSessionManager.instance == null ||
-            !GameSessionManager.instance.SetCurrentPlayerMarkedCell(cellIndex, isMarked))
+        GameSessionManager gameSessionManager = GameSessionManager.instance;
+        GamePlayerData localPlayer = gameSessionManager?.GetCurrentPlayer();
+
+        if (gameSessionManager == null ||
+            localPlayer == null ||
+            localPlayer.isAutomaticBoardEnabled)
+        {
+            return;
+        }
+
+        if (!gameSessionManager.SetCurrentPlayerMarkedCell(cellIndex, isMarked))
         {
             Debug.LogWarning(
                 $"[GameController] Could not update marked cell {cellIndex} for the current player.");
@@ -515,6 +564,37 @@ public class GameController : MonoBehaviour
             updateData.userId,
             updateData.cellIndex,
             updateData.isMarked);
+
+        string localUserId = UserManager.instance?.UserId;
+
+        if (string.Equals(updateData.userId, localUserId, StringComparison.Ordinal))
+        {
+            GamePlayerData localPlayer =
+                GameSessionManager.instance?.CurrentGameSession?.GetPlayer(localUserId);
+
+            if (localPlayer?.isAutomaticBoardEnabled == true &&
+                updateData.isAutomaticBoardUpdate)
+            {
+                PresentAutomaticMark(updateData.cellIndex, updateData.isMarked);
+            }
+        }
+    }
+
+    private List<int> GetOrCreateMarkedCellSnapshot(GamePlayerData playerData)
+    {
+        if (playerData == null || string.IsNullOrWhiteSpace(playerData.userId))
+        {
+            return new List<int>();
+        }
+
+        if (!markedCellsByUserId.ContainsKey(playerData.userId))
+        {
+            markedCellsByUserId[playerData.userId] = playerData.markedCellIndices != null
+                ? new HashSet<int>(playerData.markedCellIndices)
+                : new HashSet<int>();
+        }
+
+        return GetMarkedCellSnapshot(playerData.userId);
     }
 
     private List<int> GetMarkedCellSnapshot(string userId)
@@ -892,47 +972,30 @@ public class GameController : MonoBehaviour
         return "LOST";
     }
 
-    private void PresentAutomaticMarks(
-        GameSessionData gameSessionData,
-        GamePlayerData localPlayer)
+    private void PresentAutomaticMark(int cellIndex, bool isMarked)
     {
-        string gameId = gameSessionData?.gameId ?? string.Empty;
-
-        if (!string.Equals(automaticBoardGameId, gameId, StringComparison.Ordinal))
-        {
-            StopAutomaticMarkPresentation();
-            automaticBoardGameId = gameId;
-
-            if (localPlayer.markedCellIndices != null)
-            {
-                for (int i = 0; i < localPlayer.markedCellIndices.Count; i++)
-                {
-                    presentedAutomaticMarks.Add(localPlayer.markedCellIndices[i]);
-                }
-            }
-
-            boardSectionController.SetMarkedCells(presentedAutomaticMarks);
-            return;
-        }
-
-        if (localPlayer.markedCellIndices == null)
+        if (cellIndex < 0)
         {
             return;
         }
 
-        for (int i = 0; i < localPlayer.markedCellIndices.Count; i++)
+        if (!isMarked)
         {
-            int cellIndex = localPlayer.markedCellIndices[i];
-
-            if (presentedAutomaticMarks.Contains(cellIndex) ||
-                queuedAutomaticMarks.Contains(cellIndex))
-            {
-                continue;
-            }
-
-            queuedAutomaticMarks.Add(cellIndex);
-            automaticMarkQueue.Enqueue(cellIndex);
+            queuedAutomaticMarks.Remove(cellIndex);
+            presentedAutomaticMarks.Remove(cellIndex);
+            boardSectionController?.SetAutomaticMarkHighlight(cellIndex, false);
+            boardSectionController?.SetCellMarked(cellIndex, false);
+            return;
         }
+
+        if (presentedAutomaticMarks.Contains(cellIndex) ||
+            queuedAutomaticMarks.Contains(cellIndex))
+        {
+            return;
+        }
+
+        queuedAutomaticMarks.Add(cellIndex);
+        automaticMarkQueue.Enqueue(cellIndex);
 
         if (automaticMarkRoutine == null && automaticMarkQueue.Count > 0)
         {
@@ -952,6 +1015,11 @@ public class GameController : MonoBehaviour
         while (automaticMarkQueue.Count > 0)
         {
             int cellIndex = automaticMarkQueue.Dequeue();
+
+            if (!queuedAutomaticMarks.Contains(cellIndex))
+            {
+                continue;
+            }
 
             for (int pulse = 0; pulse < pulseCount; pulse++)
             {
@@ -981,6 +1049,14 @@ public class GameController : MonoBehaviour
         queuedAutomaticMarks.Clear();
         presentedAutomaticMarks.Clear();
         automaticBoardGameId = string.Empty;
+    }
+
+    private void ResetLocalBoardPresentation()
+    {
+        displayedBoardGameId = string.Empty;
+        displayedBoardUserId = string.Empty;
+        hasDisplayedLocalBoard = false;
+        displayedLocalAutomaticBoardEnabled = false;
     }
 
     private static void ShowDeathNotifications(

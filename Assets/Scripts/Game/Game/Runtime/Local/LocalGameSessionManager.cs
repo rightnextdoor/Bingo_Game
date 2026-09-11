@@ -11,6 +11,7 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
 
     public static LocalGameSessionManager instance;
     public static event Action<GameSessionData> LocalGameSessionUpdated;
+    public static event Action<GamePlayerMarkedCellChangedData> LocalGamePlayerMarkedCellChanged;
     public static event Action<GameBingoCheckResolvedData> LocalBingoCheckResolved;
 
     private readonly List<GameSessionData> gameSessions = new List<GameSessionData>();
@@ -25,6 +26,7 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
     {
         instance = null;
         LocalGameSessionUpdated = null;
+        LocalGamePlayerMarkedCellChanged = null;
         LocalBingoCheckResolved = null;
     }
 
@@ -77,7 +79,29 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
             GameScoreAuthority.PersistFinalizedLocalScores(gameSessionData);
             gameSessionData.revision++;
             LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData));
+            SendPendingMarkedCellUpdates(gameSessionData);
             SendPendingBingoCheckPresentations(gameSessionData);
+        }
+    }
+
+    private static void SendPendingMarkedCellUpdates(GameSessionData gameSessionData)
+    {
+        List<GamePlayerMarkedCellChangedData> updates =
+            gameSessionData?.DrainMarkedCellUpdates();
+
+        if (updates == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < updates.Count; i++)
+        {
+            GamePlayerMarkedCellChangedData updateData = updates[i];
+
+            if (updateData != null)
+            {
+                LocalGamePlayerMarkedCellChanged?.Invoke(updateData);
+            }
         }
     }
 
@@ -216,8 +240,10 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
                 gameSessionData.lobbyId));
         }
 
-        playerData.isConnected = true;
-        playerData.isGameSceneReady = false;
+        GameBotManager.RestorePlayerControl(
+            gameSessionData,
+            userData.userId,
+            false);
         gameSessionData.revision++;
         return Task.FromResult(GameSessionResult.Succeeded(GameSessionOperationType.Rejoin, gameSessionData));
     }
@@ -330,8 +356,10 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
 
         if (!playerData.isConnected || !playerData.isGameSceneReady)
         {
-            playerData.isConnected = true;
-            playerData.isGameSceneReady = true;
+            GameBotManager.RestorePlayerControl(
+                gameSessionData,
+                userData.userId,
+                true);
             sessionChanged = true;
         }
 
@@ -394,13 +422,27 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
                 gameSessionData.lobbyId));
         }
 
-        playerData.isConnected = false;
-        playerData.isGameSceneReady = false;
-        playerData.canRejoin = false;
-        gameSessionData.RemovePlayer(userData.userId);
+        GameBotTransitionResult transition = GameBotManager.HandlePlayerLeave(
+            gameSessionData,
+            userData.userId);
+        GameScoreAuthority.PersistFinalizedLocalScores(gameSessionData);
         gameSessionData.revision++;
 
-        return Task.FromResult(GameSessionResult.Succeeded(GameSessionOperationType.Leave, gameSessionData));
+        if (transition.shouldDeleteGame)
+        {
+            gameSessions.Remove(gameSessionData);
+        }
+        else
+        {
+            LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData));
+        }
+
+        return Task.FromResult(
+            GameSessionResult
+                .Succeeded(GameSessionOperationType.Leave, gameSessionData)
+                .WithFinalScore(GameScoreAuthority.CreateFinalScoreResult(
+                    gameSessionData,
+                    playerData)));
     }
 
     public bool RemovePlayerFromAnyGame(string userId)
@@ -413,10 +455,75 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
             return false;
         }
 
-        playerData.isConnected = false;
-        playerData.isGameSceneReady = false;
-        playerData.canRejoin = false;
-        gameSessionData.RemovePlayer(userId);
+        GameBotTransitionResult transition = GameBotManager.HandlePlayerDeclinedReturn(
+            gameSessionData,
+            userId);
+        GameScoreAuthority.PersistFinalizedLocalScores(gameSessionData);
+        gameSessionData.revision++;
+
+        if (transition.shouldDeleteGame)
+        {
+            gameSessions.Remove(gameSessionData);
+        }
+        else
+        {
+            LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData));
+        }
+
+        return true;
+    }
+
+    public bool TryHostKick(
+        string gameId,
+        string requesterUserId,
+        string targetUserId)
+    {
+        GameSessionData gameSessionData = FindGame(gameId);
+        GamePlayerData requester = gameSessionData?.GetPlayer(requesterUserId);
+        GamePlayerData target = gameSessionData?.GetPlayer(targetUserId);
+
+        if (requester?.isLobbyHost != true ||
+            target == null ||
+            target.isLobbyHost ||
+            target.userTag == UserTag.Bot ||
+            target.controlType == GamePlayerControlType.Bot)
+        {
+            return false;
+        }
+
+        GameBotTransitionResult transition = GameBotManager.HandleHostKick(
+            gameSessionData,
+            targetUserId);
+
+        if (!transition.changed)
+        {
+            return false;
+        }
+
+        GameScoreAuthority.PersistFinalizedLocalScores(gameSessionData);
+        gameSessionData.revision++;
+
+        if (transition.shouldDeleteGame)
+        {
+            gameSessions.Remove(gameSessionData);
+        }
+        else
+        {
+            LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData));
+        }
+
+        return true;
+    }
+
+    public bool SetPlayerFrozenAwaitingReturn(string userId)
+    {
+        GameSessionData gameSessionData = FindGameByPlayerId(userId);
+
+        if (!GameBotManager.FreezePlayerAwaitingReturn(gameSessionData, userId))
+        {
+            return false;
+        }
+
         gameSessionData.revision++;
         LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData));
         return true;
@@ -442,6 +549,8 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
 
         if (playerData == null ||
             playerData.userTag == UserTag.Bot ||
+            playerData.controlType != GamePlayerControlType.Human ||
+            playerData.returnState != GamePlayerReturnState.Active ||
             !playerData.isConnected ||
             !playerData.canRejoin ||
             gameSessionData.gamePlayController?.IsDeathRule == true ||

@@ -1,17 +1,53 @@
+using System;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
 [DisallowMultipleComponent]
 public class GameRejoinController : MonoBehaviour
 {
+    private enum RejoinSource
+    {
+        Network,
+        SavedSolo
+    }
+
+    [Header("Text")]
+    [SerializeField] private TMP_Text gameDisplayText;
+
     [Header("Buttons")]
     [SerializeField] private Button yesButton;
     [SerializeField] private Button noButton;
 
     private bool isDecliningGame;
+    private RejoinSource rejoinSource;
+    private string gameDisplayTitle = string.Empty;
+    private Action savedSoloDeclinedAction;
+
+    public void ConfigureNetworkRejoin(string displayTitle)
+    {
+        rejoinSource = RejoinSource.Network;
+        gameDisplayTitle = displayTitle ?? string.Empty;
+        savedSoloDeclinedAction = null;
+        ApplyDisplayTitle();
+    }
+
+    public void ConfigureSavedSoloRejoin(
+        string displayTitle,
+        Action declinedAction)
+    {
+        rejoinSource = RejoinSource.SavedSolo;
+        gameDisplayTitle = displayTitle ?? string.Empty;
+        savedSoloDeclinedAction = declinedAction;
+        ApplyDisplayTitle();
+    }
 
     private void OnEnable()
     {
+        isDecliningGame = false;
+        SetButtonsInteractable(true);
+        ApplyDisplayTitle();
+
         if (yesButton != null)
         {
             yesButton.onClick.AddListener(RejoinLastGame);
@@ -38,6 +74,12 @@ public class GameRejoinController : MonoBehaviour
 
     private void RejoinLastGame()
     {
+        if (rejoinSource == RejoinSource.SavedSolo)
+        {
+            RejoinSavedSoloGame();
+            return;
+        }
+
         UserData userData = UserManager.instance?.CurrentUser;
         string lastGameId = userData?.lastGameId;
 
@@ -49,6 +91,20 @@ public class GameRejoinController : MonoBehaviour
         }
 
         if (!GameSessionManager.instance.PrepareLastGameRejoin(lastGameId))
+        {
+            return;
+        }
+
+        PopupManager.instance?.CloseActivePopup();
+        GameSceneManager.instance.LoadGameScene();
+        GameSessionManager.instance.BeginPendingGameEntry();
+    }
+
+    private void RejoinSavedSoloGame()
+    {
+        if (GameSessionManager.instance == null ||
+            GameSceneManager.instance == null ||
+            !GameSessionManager.instance.PrepareSavedSoloRejoin())
         {
             return;
         }
@@ -70,6 +126,20 @@ public class GameRejoinController : MonoBehaviour
 
         try
         {
+            if (rejoinSource == RejoinSource.SavedSolo)
+            {
+                if (GameSessionManager.instance == null)
+                {
+                    return;
+                }
+
+                await GameSessionManager.instance.DeclineSavedSoloGameAsync();
+                Action declinedAction = savedSoloDeclinedAction;
+                PopupManager.instance?.CloseActivePopup();
+                declinedAction?.Invoke();
+                return;
+            }
+
             UserData userData = UserManager.instance?.CurrentUser;
 
             if (GameSessionManager.instance != null)
@@ -93,6 +163,18 @@ public class GameRejoinController : MonoBehaviour
             isDecliningGame = false;
             SetButtonsInteractable(true);
         }
+    }
+
+    private void ApplyDisplayTitle()
+    {
+        if (gameDisplayText == null)
+        {
+            return;
+        }
+
+        gameDisplayText.text = gameDisplayTitle;
+        gameDisplayText.textWrappingMode = TextWrappingModes.Normal;
+        gameDisplayText.enableAutoSizing = true;
     }
 
     private void SetButtonsInteractable(bool isInteractable)

@@ -348,6 +348,27 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
         lobby.Controller.ResetAfterGameCreationFailure();
     }
 
+    public bool PrepareLobbyAfterCompletedGame(string lobbyId)
+    {
+        if (string.IsNullOrWhiteSpace(lobbyId))
+        {
+            return false;
+        }
+
+        for (int i = 0; i < lobbies.Count; i++)
+        {
+            Lobby lobby = lobbies[i];
+
+            if (lobby != null &&
+                string.Equals(lobby.GetLobbyId(), lobbyId, StringComparison.Ordinal))
+            {
+                return lobby.Controller?.ResetAfterGameCreationFailure() == true;
+            }
+        }
+
+        return false;
+    }
+
     private void OnLobbyPlayerExitProcessed(LobbyController controller, LobbyExitResult exitResult)
     {
         if (controller == null || exitResult == null || !exitResult.success || !exitResult.shouldCloseLobby)

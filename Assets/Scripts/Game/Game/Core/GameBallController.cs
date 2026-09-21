@@ -93,19 +93,39 @@ public class GameBallController
 
     public void ApplyCalledNumbersSnapshot(IReadOnlyList<int> authoritativeCalledNumbers)
     {
+        remainingNumbers ??= new List<int>();
         calledNumbers ??= new List<int>();
+        remainingNumbers.Clear();
         calledNumbers.Clear();
+
+        int totalBallCount = Mathf.Max(0, (int)ballCountType);
+
+        for (int number = 1; number <= totalBallCount; number++)
+        {
+            remainingNumbers.Add(number);
+        }
 
         if (authoritativeCalledNumbers != null)
         {
             for (int i = 0; i < authoritativeCalledNumbers.Count; i++)
             {
-                calledNumbers.Add(authoritativeCalledNumbers[i]);
+                int calledNumber = authoritativeCalledNumbers[i];
+
+                if (calledNumber < 1 ||
+                    calledNumber > totalBallCount ||
+                    calledNumbers.Contains(calledNumber))
+                {
+                    continue;
+                }
+
+                calledNumbers.Add(calledNumber);
+                remainingNumbers.Remove(calledNumber);
             }
         }
 
         currentNumber = calledNumbers.Count > 0
             ? calledNumbers[calledNumbers.Count - 1]
             : 0;
+        isInitialized = totalBallCount > 0;
     }
 }

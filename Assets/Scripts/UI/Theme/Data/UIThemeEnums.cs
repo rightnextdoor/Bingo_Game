@@ -63,7 +63,8 @@ public enum UIThemeTextType
     PatternTooltip,
     ChatCurrentUser,
     ChatOtherUser,
-    ChatPrivate
+    ChatPrivate,
+    Winner
 }
 
 public enum UIThemeInputType

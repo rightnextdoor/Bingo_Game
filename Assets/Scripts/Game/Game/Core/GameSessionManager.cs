@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using UnityEngine;
 
 [DisallowMultipleComponent]
-public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
+public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
 {
     public static GameSessionManager instance;
 
@@ -28,6 +28,10 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
     private GameSceneManager gameSceneManager;
     private bool isSubscribedToGameSceneManager;
     private bool isSceneReadyCheckRegistered;
+    private SoloGameSaveData savedSoloGameData = new SoloGameSaveData();
+    private SoloGameCheckpointData latestSoloCheckpoint;
+    private string pendingSoloReplayGameId = string.Empty;
+    private string handledCompletedGameId = string.Empty;
 
     public string CurrentGameId => currentGameSession?.gameId ?? string.Empty;
     public string CurrentLobbyId => currentGameSession?.lobbyId ?? pendingLobbyId;
@@ -38,6 +42,12 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
     public bool IsEnteringGame => isEnteringGame;
     public bool IsLeavingGame => isLeavingGame;
     public bool HasEnteredGame => entryState == GameSessionEntryState.Completed && currentGameSession != null;
+    public bool HasSavedSoloGameForCurrentUser =>
+        savedSoloGameData?.IsValidFor(UserManager.instance?.UserId) == true;
+    public string SavedSoloGameDisplayTitle =>
+        HasSavedSoloGameForCurrentUser
+            ? savedSoloGameData.displayTitle ?? string.Empty
+            : string.Empty;
 
     string ISceneReadyCheck.ReadyName => "Game Session Manager";
     bool ISceneReadyCheck.IsReady =>
@@ -187,6 +197,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         isLeavingGame = false;
         isReportingGameSceneReady = false;
         isGameSessionSyncPending = false;
+        handledCompletedGameId = string.Empty;
         SetEntryState(GameSessionEntryState.WaitingForService);
     }
 
@@ -391,6 +402,268 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         }
 
         GameSessionUpdated?.Invoke(null);
+    }
+
+    public void LoadData(GameData data)
+    {
+        savedSoloGameData = data?.soloGameSaveData != null
+            ? new SoloGameSaveData(data.soloGameSaveData)
+            : new SoloGameSaveData();
+        latestSoloCheckpoint = null;
+        pendingSoloReplayGameId = string.Empty;
+    }
+
+    public void SaveData(ref GameData data)
+    {
+        data ??= new GameData();
+        data.soloGameSaveData = new SoloGameSaveData(savedSoloGameData);
+    }
+
+    public bool IsReady()
+    {
+        return true;
+    }
+
+    public void CaptureSoloCheckpoint(GameSessionData gameSessionData)
+    {
+        UserData currentUser = UserManager.instance?.CurrentUser;
+
+        if (gameSessionData == null ||
+            gameSessionData.playMode != MainMenuPlayMode.Solo ||
+            gameSessionData.runtimeType != SessionRuntimeType.Local ||
+            gameSessionData.gameState != GameSessionState.InProgress ||
+            currentUser == null ||
+            !currentUser.HasUser ||
+            gameSessionData.GetPlayer(currentUser.userId) == null)
+        {
+            return;
+        }
+
+        latestSoloCheckpoint = new SoloGameCheckpointData(gameSessionData);
+    }
+
+    public bool IsCurrentSoloCheckActive()
+    {
+        if (currentGameSession?.playMode != MainMenuPlayMode.Solo)
+        {
+            return false;
+        }
+
+        string userId = UserManager.instance?.UserId;
+        GamePlayerData playerData = currentGameSession.GetPlayer(userId);
+
+        return playerData?.gameStatus == GamePlayerStatus.Checking ||
+               currentGameSession.gamePlayController?.HasPendingCheckAnimation(userId) == true;
+    }
+
+    public async void SaveAndLeaveCurrentSoloGame()
+    {
+        if (isLeavingGame ||
+            currentGameSession?.playMode != MainMenuPlayMode.Solo ||
+            latestSoloCheckpoint == null ||
+            IsCurrentSoloCheckActive())
+        {
+            return;
+        }
+
+        UserData currentUser = UserManager.instance?.CurrentUser;
+
+        if (currentUser == null ||
+            !currentUser.HasUser ||
+            !latestSoloCheckpoint.IsValidFor(currentUser.userId))
+        {
+            return;
+        }
+
+        isLeavingGame = true;
+        savedSoloGameData = new SoloGameSaveData
+        {
+            hasSavedGame = true,
+            ownerUserId = currentUser.userId,
+            displayTitle = BuildGameDisplayTitle(
+                MainMenuPlayMode.Solo,
+                latestSoloCheckpoint.gameSessionData.gameModeType),
+            checkpoint = new SoloGameCheckpointData(latestSoloCheckpoint)
+        };
+
+        SaveManager.instance?.SaveGame();
+        LocalGameSessionManager.instance?.SuspendSoloGame(currentGameSession.gameId);
+
+        if (LobbyManager.instance?.HasEnteredLobby == true)
+        {
+            await LobbyManager.instance.LeaveCurrentLobbyAsync(false);
+        }
+
+        ClearCurrentGame(false);
+        GameSceneManager.instance?.LoadMainScene();
+    }
+
+    public void LeaveCurrentSoloWithoutSaving()
+    {
+        if (currentGameSession?.playMode != MainMenuPlayMode.Solo)
+        {
+            return;
+        }
+
+        ClearSavedSoloGame(true);
+        LeaveCurrentGame();
+    }
+
+    public async void LeaveCurrentSoloDuringCheck()
+    {
+        if (isLeavingGame || currentGameSession?.playMode != MainMenuPlayMode.Solo)
+        {
+            return;
+        }
+
+        isLeavingGame = true;
+        UserData currentUser = UserManager.instance?.CurrentUser;
+        GameSessionResult result =
+            LocalGameSessionManager.instance?.FinalizeSoloCheckAndRemoveGame(
+                currentGameSession.gameId,
+                currentUser);
+        GameScoreAuthority.PersistFinalScoreResult(result?.finalScoreResult);
+        ClearSavedSoloGame(true);
+
+        if (LobbyManager.instance?.HasEnteredLobby == true)
+        {
+            await LobbyManager.instance.LeaveCurrentLobbyAsync(false);
+        }
+
+        ClearCurrentGame(false);
+        GameSceneManager.instance?.LoadMainScene();
+    }
+
+    public bool PrepareSavedSoloRejoin()
+    {
+        UserData currentUser = UserManager.instance?.CurrentUser;
+
+        if (currentUser == null ||
+            !currentUser.HasUser ||
+            !savedSoloGameData.IsValidFor(currentUser.userId) ||
+            LocalGameSessionManager.instance == null ||
+            !LocalGameSessionManager.instance.RestoreSavedSoloGame(
+                savedSoloGameData.checkpoint))
+        {
+            return false;
+        }
+
+        string gameId = savedSoloGameData.checkpoint.gameSessionData.gameId;
+        latestSoloCheckpoint = new SoloGameCheckpointData(
+            savedSoloGameData.checkpoint);
+        pendingSoloReplayGameId = savedSoloGameData.checkpoint.replayCurrentBall
+            ? gameId
+            : string.Empty;
+        return PrepareLastGameRejoin(gameId);
+    }
+
+    public async Task DeclineSavedSoloGameAsync()
+    {
+        UserData currentUser = UserManager.instance?.CurrentUser;
+
+        if (currentUser != null &&
+            currentUser.HasUser &&
+            savedSoloGameData.IsValidFor(currentUser.userId) &&
+            LocalGameSessionManager.instance != null &&
+            LocalGameSessionManager.instance.RestoreSavedSoloGame(
+                savedSoloGameData.checkpoint))
+        {
+            GameSessionResult result = await LocalGameSessionManager.instance.LeaveGameAsync(
+                savedSoloGameData.checkpoint.gameSessionData.gameId,
+                currentUser);
+            GameScoreAuthority.PersistFinalScoreResult(result?.finalScoreResult);
+        }
+
+        ClearSavedSoloGame(true);
+    }
+
+    public bool ConsumeSavedSoloBallReplay(string gameId)
+    {
+        if (string.IsNullOrWhiteSpace(gameId) ||
+            !string.Equals(pendingSoloReplayGameId, gameId, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        pendingSoloReplayGameId = string.Empty;
+        return true;
+    }
+
+    public string GetNetworkRejoinDisplayTitle()
+    {
+        GameSessionData sessionData = currentGameSession;
+
+        if (sessionData != null && sessionData.playMode != MainMenuPlayMode.Solo)
+        {
+            return BuildGameDisplayTitle(sessionData.playMode, sessionData.gameModeType);
+        }
+
+        LobbyViewData lobbyViewData = LobbyManager.instance?.CurrentLobbyViewData;
+
+        if (lobbyViewData != null && lobbyViewData.playMode != MainMenuPlayMode.Solo)
+        {
+            return BuildGameDisplayTitle(
+                lobbyViewData.playMode,
+                lobbyViewData.gameModeType);
+        }
+
+        UserData currentUser = UserManager.instance?.CurrentUser;
+
+        if (currentUser?.hasLastGameDisplayData == true &&
+            currentUser.lastGamePlayMode != MainMenuPlayMode.Solo)
+        {
+            return BuildGameDisplayTitle(
+                currentUser.lastGamePlayMode,
+                currentUser.lastGameModeType);
+        }
+
+        return "Online - Game";
+    }
+
+    public void ReturnToLobbyAfterCompletedGame()
+    {
+        if (currentGameSession?.gameState != GameSessionState.Completed)
+        {
+            return;
+        }
+
+        GameSessionData completedSession = new GameSessionData(currentGameSession);
+        LobbyManager lobbyManager = LobbyManager.instance;
+        bool hasExistingLobby = lobbyManager?.HasEnteredLobby == true;
+
+        PrepareLobbyAfterCompletedGame(completedSession);
+        ClearCurrentGame(true);
+
+        if (!hasExistingLobby &&
+            completedSession.playMode == MainMenuPlayMode.Solo &&
+            lobbyManager != null &&
+            UserManager.instance?.CurrentUser != null)
+        {
+            LobbySetupData lobbySetupData = BuildSoloLobbySetupData(
+                completedSession,
+                UserManager.instance.CurrentUser);
+            lobbyManager.SetPendingLobbySetupData(lobbySetupData, false);
+            GameSceneManager.instance?.LoadLobbyScene();
+            lobbyManager.BeginPendingLobbyEntry();
+            return;
+        }
+
+        GameSceneManager.instance?.LoadLobbyScene();
+    }
+
+    public void ReturnToMainMenuAfterCompletedGame()
+    {
+        if (currentGameSession?.gameState != GameSessionState.Completed)
+        {
+            return;
+        }
+
+        if (currentGameSession.playMode == MainMenuPlayMode.Solo)
+        {
+            ClearSavedSoloGame(true);
+        }
+
+        LeaveCurrentGame();
     }
 
     public bool SetCurrentGamePaused(bool paused)
@@ -703,6 +976,17 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         }
 
         currentGameSession = new GameSessionData(result.gameSessionData);
+        if (result.operationType == GameSessionOperationType.Create &&
+            currentGameSession.playMode == MainMenuPlayMode.Solo)
+        {
+            latestSoloCheckpoint = null;
+            pendingSoloReplayGameId = string.Empty;
+        }
+
+        if (currentGameSession.gameState != GameSessionState.Completed)
+        {
+            handledCompletedGameId = string.Empty;
+        }
         runtimeType = currentGameSession.runtimeType;
         pendingGameId = string.Empty;
         pendingLobbyId = currentGameSession.lobbyId;
@@ -710,9 +994,16 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         isGameSessionSyncPending = false;
         isGameSimulationCreationPending = false;
         SetEntryState(GameSessionEntryState.Completed);
-        UserManager.instance?.SetLastGameId(currentGameSession.gameId);
+        if (currentGameSession.playMode != MainMenuPlayMode.Solo)
+        {
+            UserManager.instance?.SetLastGameInfo(
+                currentGameSession.gameId,
+                currentGameSession.playMode,
+                currentGameSession.gameModeType);
+        }
         ApplyFinalizedScoreForCurrentNetworkUser();
         GameSessionUpdated?.Invoke(new GameSessionData(currentGameSession));
+        HandleCurrentGameCompletion();
         return true;
     }
 
@@ -766,6 +1057,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         currentGameSession.revision = updateData.revision;
         ApplyFinalizedScoreForCurrentNetworkUser();
         GameSessionUpdated?.Invoke(new GameSessionData(currentGameSession));
+        HandleCurrentGameCompletion();
     }
 
     private void ApplyGamePlayerStateChanged(GamePlayerStateChangedData updateData)
@@ -870,6 +1162,109 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck
         pendingLobbyId = currentGameSession.lobbyId;
         ApplyFinalizedScoreForCurrentNetworkUser();
         GameSessionUpdated?.Invoke(new GameSessionData(currentGameSession));
+        HandleCurrentGameCompletion();
+    }
+
+    private void HandleCurrentGameCompletion()
+    {
+        if (currentGameSession?.gameState != GameSessionState.Completed ||
+            string.Equals(
+                handledCompletedGameId,
+                currentGameSession.gameId,
+                StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        handledCompletedGameId = currentGameSession.gameId ?? string.Empty;
+        PrepareLobbyAfterCompletedGame(currentGameSession);
+
+        if (currentGameSession.playMode == MainMenuPlayMode.Solo)
+        {
+            ClearSavedSoloGame(true);
+        }
+        else
+        {
+            UserManager.instance?.ClearLastGameId();
+        }
+    }
+
+    private static void PrepareLobbyAfterCompletedGame(GameSessionData gameSessionData)
+    {
+        if (gameSessionData == null || string.IsNullOrWhiteSpace(gameSessionData.lobbyId))
+        {
+            return;
+        }
+
+        if (gameSessionData.runtimeType == SessionRuntimeType.Local)
+        {
+            LocalLobbyManager.instance?.PrepareLobbyAfterCompletedGame(
+                gameSessionData.lobbyId);
+        }
+        else
+        {
+            NetworkLobbyManager.instance?.PrepareLobbyAfterCompletedGame(
+                gameSessionData.lobbyId);
+        }
+    }
+
+    private void ClearSavedSoloGame(bool queueSave)
+    {
+        savedSoloGameData = new SoloGameSaveData();
+        latestSoloCheckpoint = null;
+        pendingSoloReplayGameId = string.Empty;
+
+        if (queueSave)
+        {
+            SaveManager.instance?.SaveGame();
+        }
+    }
+
+    private static string BuildGameDisplayTitle(
+        MainMenuPlayMode playMode,
+        BingoGameModeType gameModeType)
+    {
+        string playModeName = playMode switch
+        {
+            MainMenuPlayMode.Solo => "Solo",
+            MainMenuPlayMode.Online => "Online",
+            MainMenuPlayMode.Custom => "Custom",
+            _ => "Game"
+        };
+        BingoGameModeData gameModeData =
+            GameModeManager.instance?.GetGameModeData(gameModeType);
+        string gameName = gameModeData != null &&
+                          !string.IsNullOrWhiteSpace(gameModeData.GameName)
+            ? gameModeData.GameName
+            : gameModeType.ToString();
+        return $"{playModeName} - {gameName}";
+    }
+
+    private static LobbySetupData BuildSoloLobbySetupData(
+        GameSessionData gameSessionData,
+        UserData userData)
+    {
+        return new LobbySetupData
+        {
+            playMode = MainMenuPlayMode.Solo,
+            startFreshEntry = true,
+            userData = userData,
+            soloSetupData = new SoloLobbySetupData
+            {
+                gameModeType = gameSessionData.gameModeType,
+                ballCountType = gameSessionData.ballCountType,
+                useFreeCell = gameSessionData.useFreeCell,
+                hasRiskMatchDurationOverride =
+                    gameSessionData.hasRiskMatchDurationOverride,
+                riskMatchDurationMinutes = gameSessionData.riskMatchDurationMinutes,
+                usesDefaultPatterns = gameSessionData.usesDefaultPatterns,
+                patternTypes = gameSessionData.patternTypes != null
+                    ? new List<BingoPatternType>(gameSessionData.patternTypes)
+                    : new List<BingoPatternType>(),
+                maxPlayers = true,
+                maxPlayer = Math.Max(1, gameSessionData.players?.Count ?? 1)
+            }
+        };
     }
 
     private static void ApplyPlayerState(

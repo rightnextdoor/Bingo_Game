@@ -432,9 +432,21 @@ public class UserManager : MonoBehaviour, ISceneReadyCheck
         UserChanged?.Invoke();
     }
 
+    public void SetLastGameInfo(
+        string gameId,
+        MainMenuPlayMode playMode,
+        BingoGameModeType gameModeType)
+    {
+        CurrentUser.SetLastGameInfo(gameId, playMode, gameModeType);
+
+        AddOrUpdateCurrentUser();
+
+        UserChanged?.Invoke();
+    }
+
     public void ClearLastGameId()
     {
-        CurrentUser.lastGameId = string.Empty;
+        CurrentUser.ClearLastGameInfo();
 
         AddOrUpdateCurrentUser();
 

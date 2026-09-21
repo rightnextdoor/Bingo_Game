@@ -67,6 +67,51 @@ public class GameBallDisplayController : MonoBehaviour
         animationController?.ClearDisplay();
     }
 
+    public void ReplayLatestBall(GameSessionData gameSessionData)
+    {
+        GameBallController ballController =
+            gameSessionData?.gamePlayController?.BallController;
+        IReadOnlyList<int> calledNumbers = ballController?.CalledNumbers;
+        int calledNumberCount = calledNumbers?.Count ?? 0;
+
+        if (calledNumberCount == 0)
+        {
+            return;
+        }
+
+        currentSessionKey = ResolveSessionKey(gameSessionData);
+        processedCalledNumberCount = calledNumberCount;
+        hasSession = true;
+
+        List<GameBallPresentationData> history = new List<GameBallPresentationData>();
+        int replayIndex = calledNumberCount - 1;
+        int firstHistoryIndex = Mathf.Max(0, replayIndex - 3);
+
+        for (int calledIndex = firstHistoryIndex;
+             calledIndex < replayIndex;
+             calledIndex++)
+        {
+            if (TryBuildPresentation(
+                    calledNumbers[calledIndex],
+                    gameSessionData.ballCountType,
+                    out GameBallPresentationData historyData))
+            {
+                history.Add(historyData);
+            }
+        }
+
+        animationController?.ShowHistoryImmediately(history);
+
+        if (TryBuildPresentation(
+                calledNumbers[replayIndex],
+                gameSessionData.ballCountType,
+                out GameBallPresentationData replayData))
+        {
+            animationController?.EnqueueBall(replayData);
+            SendBallCalledNotification(replayData);
+        }
+    }
+
     private void BindSession(
         string sessionKey,
         IReadOnlyList<int> calledNumbers,

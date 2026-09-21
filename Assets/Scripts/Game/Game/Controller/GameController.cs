@@ -48,6 +48,7 @@ public class GameController : MonoBehaviour
     private GamePlayerStatus activeDeathCheckStatus = GamePlayerStatus.Checking;
     private bool isDeathCheckAnimationComplete;
     private bool isDeathEndAnimationPlaying;
+    private string gameOverPopupGameId = string.Empty;
 
     #endregion
 
@@ -155,6 +156,14 @@ public class GameController : MonoBehaviour
 
         headerController?.DisplayGameInfo(gameSessionData, gameName);
         ballDisplayController?.DisplayGameInfo(gameSessionData);
+
+        if (isNewGame &&
+            GameSessionManager.instance?.ConsumeSavedSoloBallReplay(
+                gameSessionData.gameId) == true)
+        {
+            ballDisplayController?.ReplayLatestBall(gameSessionData);
+        }
+
         ShowDeathNotifications(previousSession, gameSessionData, isNewGame);
         EnsureBoardPatternTracker(gameSessionData);
         DisplayPlayerBoard(gameSessionData);
@@ -164,6 +173,7 @@ public class GameController : MonoBehaviour
         DisplayCustomLobbyInfo(gameSessionData);
         ShowRiskSubmitNotificationIfNeeded(gameSessionData);
         CloseRiskDecisionPopupIfResolved(gameSessionData);
+        TryOpenGameOverPopup(gameSessionData);
     }
 
     public void SetTimerSeconds(float remainingSeconds)
@@ -311,6 +321,7 @@ public class GameController : MonoBehaviour
         riskNotificationGameId = string.Empty;
         previousRiskRemainingSeconds = -1;
         lastRiskSubmitNotificationEndTime = 0d;
+        gameOverPopupGameId = string.Empty;
         ResetDeathCheckPresentation();
         StopAutomaticMarkPresentation();
         ResetLocalBoardPresentation();
@@ -1319,12 +1330,107 @@ public class GameController : MonoBehaviour
 
         if (GameSessionManager.instance != null)
         {
+            if (GameSessionManager.instance.CurrentGameSession?.playMode ==
+                MainMenuPlayMode.Solo)
+            {
+                if (GameSessionManager.instance.IsCurrentSoloCheckActive())
+                {
+                    bingoCheckAnimationController?.StopAndClear();
+                    StopAutomaticMarkPresentation();
+                    isBingoCheckPending = false;
+                    GameSessionManager.instance.LeaveCurrentSoloDuringCheck();
+                    return;
+                }
+
+                if (PopupManager.instance != null)
+                {
+                    PopupManager.instance.OpenSoloLeavePopup();
+                    headerController?.SetLeaveInteractable(true);
+                    return;
+                }
+            }
+
             GameSessionManager.instance.LeaveCurrentGame();
             return;
         }
 
         UserManager.instance?.ClearLastGameId();
         GameSceneManager.instance?.LoadMainScene();
+    }
+
+    private void TryOpenGameOverPopup(GameSessionData gameSessionData)
+    {
+        if (gameSessionData == null ||
+            gameSessionData.gameState != GameSessionState.Completed ||
+            string.Equals(
+                gameOverPopupGameId,
+                gameSessionData.gameId,
+                StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        gameOverPopupGameId = gameSessionData.gameId ?? string.Empty;
+        PopupManager.instance?.OpenGameOverPopup(
+            BuildGameOverPopupData(gameSessionData));
+    }
+
+    private static GameOverPopupData BuildGameOverPopupData(
+        GameSessionData gameSessionData)
+    {
+        GameOverPopupData popupData = new GameOverPopupData();
+        GamePlayerData localPlayer =
+            gameSessionData?.GetPlayer(UserManager.instance?.UserId);
+
+        if (localPlayer != null)
+        {
+            popupData.localPlayerStatus = localPlayer.gameStatus;
+            popupData.localPlayerScore = localPlayer.currentMatchScore;
+        }
+
+        if (gameSessionData?.players == null)
+        {
+            return popupData;
+        }
+
+        List<GamePlayerData> winners = new List<GamePlayerData>();
+        List<PlayerProfileData> profiles = new List<PlayerProfileData>();
+
+        for (int i = 0; i < gameSessionData.players.Count; i++)
+        {
+            GamePlayerData playerData = gameSessionData.players[i];
+
+            if (playerData == null)
+            {
+                continue;
+            }
+
+            profiles.Add(new PlayerProfileData(
+                playerData.userId,
+                playerData.playerName,
+                playerData.iconId));
+
+            if (playerData.gameStatus == GamePlayerStatus.Won)
+            {
+                winners.Add(playerData);
+            }
+        }
+
+        popupData.winnerCount = winners.Count;
+
+        if (winners.Count == 1)
+        {
+            GamePlayerData winner = winners[0];
+            popupData.singleWinnerDisplayName =
+                PlayerDisplayIdentityResolver.GetDisplayName(
+                    new PlayerProfileData(
+                        winner.userId,
+                        winner.playerName,
+                        winner.iconId),
+                    profiles);
+        }
+
+        return popupData;
     }
 
     #endregion

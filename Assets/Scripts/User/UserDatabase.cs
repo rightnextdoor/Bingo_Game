@@ -161,7 +161,7 @@ public class UserDatabase : MonoBehaviour, ISaveManager
                 continue;
             }
 
-            user.lastGameId = string.Empty;
+            user.ClearLastGameInfo();
             changed = true;
         }
 

@@ -217,7 +217,10 @@ public class MainMenuController : MonoBehaviour
 
         if (currentUser != null &&
             currentUser.HasUser &&
-            !string.IsNullOrWhiteSpace(currentUser.lastGameId))
+            !string.IsNullOrWhiteSpace(currentUser.lastGameId) &&
+            currentUser.lastGameId.StartsWith(
+                NetworkGameSessionManager.GameIdPrefix,
+                System.StringComparison.Ordinal))
         {
             if (popupManager == null)
             {
@@ -242,7 +245,41 @@ public class MainMenuController : MonoBehaviour
 
     private void OnSoloButtonClicked()
     {
-        TryOpenModeSetup(MainMenuPlayMode.Solo);
+        CacheManagers();
+
+        if (userManager != null && userManager.HasUser)
+        {
+            OpenSoloSetupOrSavedGamePrompt();
+            return;
+        }
+
+        if (popupManager == null)
+        {
+            Debug.LogWarning("MainMenuController could not open Create User because PopupManager was not found.");
+            return;
+        }
+
+        popupManager.OpenCreateUserPopup(OpenSoloSetupOrSavedGamePrompt);
+    }
+
+    private void OpenSoloSetupOrSavedGamePrompt()
+    {
+        CacheManagers();
+
+        if (GameSessionManager.instance?.HasSavedSoloGameForCurrentUser == true)
+        {
+            if (popupManager == null)
+            {
+                Debug.LogWarning("MainMenuController could not open the saved Solo rejoin popup because PopupManager was not found.");
+                return;
+            }
+
+            popupManager.OpenSavedSoloGameRejoinPopup(
+                () => OpenModeSetup(MainMenuPlayMode.Solo));
+            return;
+        }
+
+        OpenModeSetup(MainMenuPlayMode.Solo);
     }
 
     private void OnOnlineButtonClicked()

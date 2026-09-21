@@ -37,6 +37,7 @@ public class GameSettings : MonoBehaviour
     public const float DefaultRiskMatchDurationMinutes = 5f;
     public const float DefaultRiskMatchDurationSeconds =
         DefaultRiskMatchDurationMinutes * 60f;
+    public const float DefaultGameOverCountdownSeconds = 15f;
 
     public static GameSettings instance;
 
@@ -61,6 +62,9 @@ public class GameSettings : MonoBehaviour
     [Header("Risk")]
     [SerializeField] private List<RiskMatchDurationSetting> riskMatchDurations = new List<RiskMatchDurationSetting>();
 
+    [Header("Game Over")]
+    [SerializeField, Min(0f)] private float gameOverCountdownSeconds = DefaultGameOverCountdownSeconds;
+
     [Header("Score Limits")]
     [SerializeField, Min(0)] private int minimumScore = UserStats.DefaultMinimumScore;
     [SerializeField, Min(0)] private int maximumScore = UserStats.DefaultMaximumScore;
@@ -77,6 +81,7 @@ public class GameSettings : MonoBehaviour
     public int DeathFrozenPlayerOutEligibleCount => Mathf.Max(0, deathFrozenPlayerOutEligibleCount);
     public int MinimumScore => Mathf.Max(0, minimumScore);
     public int MaximumScore => Mathf.Max(MinimumScore, maximumScore);
+    public float GameOverCountdownSeconds => Mathf.Max(0f, gameOverCountdownSeconds);
 
     private void Awake()
     {

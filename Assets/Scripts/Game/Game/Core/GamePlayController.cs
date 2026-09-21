@@ -581,6 +581,59 @@ public class GamePlayController
         return bingoChecker.GetCheckedPatternTypes(playerId);
     }
 
+    public List<BingoPlayerCheckHistoryData> CaptureBingoCheckHistory()
+    {
+        bingoChecker ??= new BingoChecker();
+        return bingoChecker.CaptureCheckHistory();
+    }
+
+    public void RestoreSoloCheckpoint(SoloGameCheckpointData checkpointData)
+    {
+        if (checkpointData == null)
+        {
+            return;
+        }
+
+        ballController ??= new GameBallController();
+        List<int> calledNumberSnapshot = ballController.GetCalledNumbersSnapshot();
+        ballController.ApplyCalledNumbersSnapshot(calledNumberSnapshot);
+
+        bingoChecker = new BingoChecker();
+        bingoChecker.RestoreCheckHistory(checkpointData.checkerHistory);
+
+        pendingCheckAnimationPlayerIds ??= new List<string>();
+        pendingCheckAnimationPlayerIds.Clear();
+        matchEndingCheckPlayerId = string.Empty;
+        isRuleCompletionAwaitingChecks = false;
+        isBallPoolExhaustedAwaitingChecks = false;
+        isRiskTimerExpiredAwaitingChecks = false;
+
+        ballTimer ??= new GamePlayTimer();
+
+        if (checkpointData.ballTimerWasActive)
+        {
+            float restoredBallSeconds = checkpointData.replayCurrentBall
+                ? nextBallCountdownSeconds
+                : firstBallCountdownSeconds;
+            ballTimer.Start(restoredBallSeconds);
+        }
+        else
+        {
+            ballTimer.Stop();
+        }
+
+        riskTimer ??= new GamePlayTimer();
+
+        if (checkpointData.riskTimerWasActive)
+        {
+            riskTimer.Start(checkpointData.riskTimerRemainingSeconds);
+        }
+        else
+        {
+            riskTimer.Stop();
+        }
+    }
+
     public void ApplyNetworkState(GamePlayStateChangedData updateData)
     {
         if (updateData == null)

@@ -3,7 +3,9 @@ using System.Collections.Generic;
 
 public static class GameBingoCheckAuthority
 {
-    public static bool UpdateSessionLoop(GameSessionData gameSessionData)
+    public static bool UpdateSessionLoop(
+        GameSessionData gameSessionData,
+        Action<GameSessionData> ballCalled = null)
     {
         if (gameSessionData == null ||
             gameSessionData.gameState != GameSessionState.InProgress ||
@@ -38,7 +40,13 @@ public static class GameBingoCheckAuthority
             }
             else if (!deathHandledBallBoundary)
             {
+                int previousBallCallCount = playController.BallCallRequestCount;
                 changed |= playController.UpdateBallCallLoop();
+
+                if (playController.BallCallRequestCount > previousBallCallCount)
+                {
+                    ballCalled?.Invoke(gameSessionData);
+                }
             }
 
             changed |= DeathGameplayAuthority.UpdateAutomaticBoards(gameSessionData);

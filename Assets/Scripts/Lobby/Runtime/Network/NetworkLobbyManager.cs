@@ -1046,6 +1046,54 @@ public class NetworkLobbyManager : MonoBehaviour
         }
     }
 
+    public bool PrepareLobbyAfterCompletedGame(string lobbyId)
+    {
+        if (!isReady ||
+            networkBootstrap?.IsAuthority != true ||
+            string.IsNullOrWhiteSpace(lobbyId))
+        {
+            return false;
+        }
+
+        Lobby lobby = null;
+
+        for (int i = 0; i < lobbies.Count; i++)
+        {
+            if (lobbies[i] != null &&
+                string.Equals(lobbies[i].GetLobbyId(), lobbyId, StringComparison.Ordinal))
+            {
+                lobby = lobbies[i];
+                break;
+            }
+        }
+
+        if (lobby?.Controller == null ||
+            !lobby.Controller.ResetAfterGameCreationFailure())
+        {
+            return false;
+        }
+
+        BroadcastLobbyStateChanged(lobby);
+
+        IReadOnlyList<LobbyPlayerData> players = lobby.Controller.Players;
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            LobbyPlayerData playerData = players[i];
+
+            if (playerData?.userData != null &&
+                playerData.userData.userTag != UserTag.Bot)
+            {
+                BroadcastPlayerReadyChanged(
+                    lobby,
+                    playerData.userData.userId,
+                    false);
+            }
+        }
+
+        return true;
+    }
+
     private void BroadcastGameCreationResult(Lobby lobby, GameSessionResult result)
     {
         if (lobby == null || result == null)

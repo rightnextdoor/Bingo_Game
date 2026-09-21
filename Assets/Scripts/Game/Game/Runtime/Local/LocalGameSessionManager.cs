@@ -71,7 +71,9 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
         {
             GameSessionData gameSessionData = gameSessions[i];
 
-            if (!GameBingoCheckAuthority.UpdateSessionLoop(gameSessionData))
+            if (!GameBingoCheckAuthority.UpdateSessionLoop(
+                    gameSessionData,
+                    CaptureSoloBallCheckpoint))
             {
                 continue;
             }
@@ -185,6 +187,112 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
         }
 
         return GameSessionResult.Succeeded(GameSessionOperationType.Create, gameSessionData);
+    }
+
+    public bool RestoreSavedSoloGame(SoloGameCheckpointData checkpointData)
+    {
+        GameSessionData savedSession = checkpointData?.gameSessionData;
+
+        if (!isReady ||
+            savedSession == null ||
+            savedSession.playMode != MainMenuPlayMode.Solo ||
+            savedSession.runtimeType != SessionRuntimeType.Local ||
+            savedSession.gameState == GameSessionState.Completed ||
+            string.IsNullOrWhiteSpace(savedSession.gameId))
+        {
+            return false;
+        }
+
+        GameSessionData restoredSession = new GameSessionData(savedSession);
+        restoredSession.gamePlayController?.RestoreSoloCheckpoint(checkpointData);
+        restoredSession.revision++;
+
+        GameSessionData existingSession = FindGame(restoredSession.gameId);
+
+        if (existingSession != null)
+        {
+            gameSessions[gameSessions.IndexOf(existingSession)] = restoredSession;
+        }
+        else
+        {
+            GameSessionData lobbySession = FindGameByLobbyId(restoredSession.lobbyId);
+
+            if (lobbySession != null)
+            {
+                gameSessions[gameSessions.IndexOf(lobbySession)] = restoredSession;
+            }
+            else
+            {
+                gameSessions.Add(restoredSession);
+            }
+        }
+
+        return true;
+    }
+
+    public bool SuspendSoloGame(string gameId)
+    {
+        GameSessionData gameSessionData = FindGame(gameId);
+
+        return gameSessionData != null &&
+               gameSessionData.playMode == MainMenuPlayMode.Solo &&
+               gameSessions.Remove(gameSessionData);
+    }
+
+    public GameSessionResult FinalizeSoloCheckAndRemoveGame(
+        string gameId,
+        UserData userData)
+    {
+        GameSessionData gameSessionData = FindGame(gameId);
+        GamePlayerData playerData = gameSessionData?.GetPlayer(userData?.userId);
+
+        if (gameSessionData == null ||
+            gameSessionData.playMode != MainMenuPlayMode.Solo ||
+            playerData == null)
+        {
+            return GameSessionResult.Failed(
+                GameSessionOperationType.Leave,
+                GameSessionFailureType.GameNotFound,
+                "The Solo game could not be finalized before leaving.",
+                gameId);
+        }
+
+        GamePlayController playController = gameSessionData.gamePlayController;
+
+        if (playController?.HasPendingCheckAnimation(playerData.userId) == true)
+        {
+            GameBingoCheckAuthority.CompleteBingoCheckAnimation(
+                gameSessionData,
+                playerData.userId);
+        }
+
+        if (playerData.isRiskDecisionPending)
+        {
+            RiskGameplayAuthority.ResolveDecision(
+                gameSessionData,
+                playerData.userId,
+                true);
+        }
+
+        if (playerData.gameStatus == GamePlayerStatus.Eligible ||
+            playerData.gameStatus == GamePlayerStatus.Checking)
+        {
+            GameScoreAuthority.TrySetFinalStatus(
+                gameSessionData,
+                playerData,
+                GamePlayerStatus.Lost);
+        }
+
+        playController?.EndGame(GameEndReason.AuthorityEnded);
+        GameBingoCheckAuthority.UpdateSessionLoop(gameSessionData);
+        GameScoreAuthority.PersistFinalizedLocalScores(gameSessionData);
+        gameSessions.Remove(gameSessionData);
+
+        return GameSessionResult
+            .Succeeded(GameSessionOperationType.Leave, gameSessionData)
+            .WithFinalScore(GameScoreAuthority.CreateFinalScoreResult(
+                gameSessionData,
+                playerData));
     }
 
     public Task<GameSessionResult> RejoinGameAsync(string gameId, UserData userData)
@@ -363,11 +471,20 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
             sessionChanged = true;
         }
 
-        if (gameSessionData.gamePlayController != null &&
-            gameSessionData.gamePlayController.TryStartFirstBallCountdown())
+        bool startedFirstBallCountdown =
+            gameSessionData.gamePlayController != null &&
+            gameSessionData.gamePlayController.TryStartFirstBallCountdown();
+
+        if (startedFirstBallCountdown)
         {
             gameSessionData.gameState = GameSessionState.InProgress;
             sessionChanged = true;
+        }
+
+        if (startedFirstBallCountdown &&
+            gameSessionData.playMode == MainMenuPlayMode.Solo)
+        {
+            GameSessionManager.instance?.CaptureSoloCheckpoint(gameSessionData);
         }
 
         if (sessionChanged)
@@ -676,6 +793,14 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
     {
         GameSessionData gameSessionData = FindGame(gameId);
         return gameSessionData != null && gameSessions.Remove(gameSessionData);
+    }
+
+    private static void CaptureSoloBallCheckpoint(GameSessionData gameSessionData)
+    {
+        if (gameSessionData?.playMode == MainMenuPlayMode.Solo)
+        {
+            GameSessionManager.instance?.CaptureSoloCheckpoint(gameSessionData);
+        }
     }
 
     public bool DeleteGameForLobby(string lobbyId)

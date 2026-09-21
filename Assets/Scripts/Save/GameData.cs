@@ -10,6 +10,7 @@ public class GameData
     public ChatSettingsData chatSettingsData = new ChatSettingsData();
     public MenuData menuData = new MenuData();
     public LobbyData lobbyData = new LobbyData();
+    public SoloGameSaveData soloGameSaveData = new SoloGameSaveData();
 
     public GameData()
     {
@@ -20,5 +21,6 @@ public class GameData
         chatSettingsData = new ChatSettingsData();
         menuData = new MenuData();
         lobbyData = new LobbyData();
+        soloGameSaveData = new SoloGameSaveData();
     }
 }

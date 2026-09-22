@@ -255,6 +255,8 @@ public class LobbyClientState
         viewData.useFreeCell = data.useFreeCell;
         viewData.hasRiskMatchDurationOverride = data.hasRiskMatchDurationOverride;
         viewData.riskMatchDurationMinutes = data.riskMatchDurationMinutes;
+        viewData.usesDefaultRank = data.usesDefaultRank;
+        viewData.useRank = data.useRank;
         viewData.playerCount = data.playerCount;
         viewData.maxPlayer = data.maxPlayer;
         viewData.maxPlayers = data.maxPlayers;

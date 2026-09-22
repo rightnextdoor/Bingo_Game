@@ -6,6 +6,14 @@ using UnityEngine;
 [DisallowMultipleComponent]
 public class GameSimulationController : MonoBehaviour
 {
+    private enum SimulationGameModeType
+    {
+        Traditional,
+        Blackout,
+        Risk,
+        Death
+    }
+
     private const float LobbyEntryRetryDelaySeconds = 0.5f;
     private const float LobbyEntryTimeoutSeconds = 30f;
     private const float NetworkPlayerWaitTimeoutSeconds = 35f;
@@ -18,9 +26,10 @@ public class GameSimulationController : MonoBehaviour
     [SerializeField] private MainMenuPlayMode playMode = MainMenuPlayMode.Solo;
 
     [Header("Game Setup")]
-    [SerializeField] private BingoGameModeType gameModeType = BingoGameModeType.Traditional;
+    [SerializeField] private SimulationGameModeType gameModeType = SimulationGameModeType.Traditional;
     [SerializeField] private BingoBallCountType ballCountType = BingoBallCountType.Ball75;
     [SerializeField] private bool useFreeCell = true;
+    [SerializeField] private bool useRank;
 
     [Header("Room Setup")]
     [SerializeField, Min(1)] private int roomSize = 9;
@@ -222,6 +231,7 @@ public class GameSimulationController : MonoBehaviour
 
     private LobbySetupData BuildLobbySetupData()
     {
+        BingoGameModeType selectedGameModeType = GetSelectedGameModeType();
         int simulationPlayerNumber = GetSimulationPlayerNumber();
         MainMenuPlayMode requestedPlayMode = simulationPlayerNumber > 1
             ? MainMenuPlayMode.Online
@@ -240,17 +250,21 @@ public class GameSimulationController : MonoBehaviour
         switch (requestedPlayMode)
         {
             case MainMenuPlayMode.Solo:
-                setupData.soloSetupData.gameModeType = gameModeType;
+                setupData.soloSetupData.gameModeType = selectedGameModeType;
                 setupData.soloSetupData.ballCountType = ballCountType;
                 setupData.soloSetupData.useFreeCell = useFreeCell;
+                setupData.soloSetupData.usesDefaultRank = false;
+                setupData.soloSetupData.useRank = useRank;
                 setupData.soloSetupData.maxPlayers = false;
                 setupData.soloSetupData.maxPlayer = validRoomSize;
                 break;
 
             case MainMenuPlayMode.Online:
-                setupData.onlineSetupData.gameModeType = gameModeType;
+                setupData.onlineSetupData.gameModeType = selectedGameModeType;
                 setupData.onlineSetupData.ballCountType = ballCountType;
                 setupData.onlineSetupData.useFreeCell = useFreeCell;
+                setupData.onlineSetupData.hasUseRankOverride = true;
+                setupData.onlineSetupData.useRank = useRank;
                 setupData.onlineSetupData.maxPlayers = false;
                 setupData.onlineSetupData.maxPlayer = validRoomSize;
                 break;
@@ -263,9 +277,11 @@ public class GameSimulationController : MonoBehaviour
 
                 if (shouldHost)
                 {
-                    setupData.customSetupData.hostSetupData.gameModeType = gameModeType;
+                    setupData.customSetupData.hostSetupData.gameModeType = selectedGameModeType;
                     setupData.customSetupData.hostSetupData.ballCountType = ballCountType;
                     setupData.customSetupData.hostSetupData.useFreeCell = useFreeCell;
+                    setupData.customSetupData.hostSetupData.usesDefaultRank = false;
+                    setupData.customSetupData.hostSetupData.useRank = useRank;
                     setupData.customSetupData.hostSetupData.maxPlayers = false;
                     setupData.customSetupData.hostSetupData.maxPlayer = validRoomSize;
                 }
@@ -273,6 +289,17 @@ public class GameSimulationController : MonoBehaviour
         }
 
         return setupData;
+    }
+
+    private BingoGameModeType GetSelectedGameModeType()
+    {
+        return gameModeType switch
+        {
+            SimulationGameModeType.Blackout => BingoGameModeType.Blackout,
+            SimulationGameModeType.Risk => BingoGameModeType.Risk,
+            SimulationGameModeType.Death => BingoGameModeType.Death,
+            _ => BingoGameModeType.Traditional
+        };
     }
 
     private int GetValidRoomSize()

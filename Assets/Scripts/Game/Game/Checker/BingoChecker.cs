@@ -488,7 +488,7 @@ public class BingoChecker
                 }
             }
 
-            return checkedLines.Count >= 10;
+            return checkedLines.Count >= 12;
         }
 
         for (int checkIndex = 0; checkIndex < checkHistory.Count; checkIndex++)

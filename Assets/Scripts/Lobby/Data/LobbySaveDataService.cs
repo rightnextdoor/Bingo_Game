@@ -115,6 +115,8 @@ public static class LobbySaveDataService
         setupData.gameModeType = savedData.gameModeType;
         setupData.ballCountType = savedData.ballCountType;
         setupData.useFreeCell = savedData.useFreeCell;
+        setupData.usesDefaultRank = savedData.usesDefaultRank;
+        setupData.useRank = savedData.useRank;
         setupData.hasRiskMatchDurationOverride = savedData.hasRiskMatchDurationOverride;
         setupData.riskMatchDurationMinutes = savedData.riskMatchDurationMinutes;
         setupData.usesDefaultPatterns = savedData.usesDefaultPatterns;
@@ -133,6 +135,8 @@ public static class LobbySaveDataService
         setupData.gameModeType = savedData.gameModeType;
         setupData.ballCountType = savedData.ballCountType;
         setupData.useFreeCell = savedData.useFreeCell;
+        setupData.usesDefaultRank = savedData.usesDefaultRank;
+        setupData.useRank = savedData.useRank;
         setupData.hasRiskMatchDurationOverride = savedData.hasRiskMatchDurationOverride;
         setupData.riskMatchDurationMinutes = savedData.riskMatchDurationMinutes;
         setupData.usesDefaultPatterns = savedData.usesDefaultPatterns;
@@ -153,6 +157,8 @@ public static class LobbySaveDataService
         target.gameModeType = source.gameModeType;
         target.ballCountType = source.ballCountType;
         target.useFreeCell = source.useFreeCell;
+        target.usesDefaultRank = source.usesDefaultRank;
+        target.useRank = source.useRank;
         target.hasRiskMatchDurationOverride = source.hasRiskMatchDurationOverride;
         target.riskMatchDurationMinutes = source.riskMatchDurationMinutes;
         target.usesDefaultPatterns = source.usesDefaultPatterns;
@@ -169,6 +175,8 @@ public static class LobbySaveDataService
         target.gameModeType = source.gameModeType;
         target.ballCountType = source.ballCountType;
         target.useFreeCell = source.useFreeCell;
+        target.usesDefaultRank = source.usesDefaultRank;
+        target.useRank = source.useRank;
         target.hasRiskMatchDurationOverride = source.hasRiskMatchDurationOverride;
         target.riskMatchDurationMinutes = source.riskMatchDurationMinutes;
         target.usesDefaultPatterns = source.usesDefaultPatterns;
@@ -185,6 +193,8 @@ public static class LobbySaveDataService
         target.gameModeType = source.gameModeType;
         target.ballCountType = source.ballCountType;
         target.useFreeCell = source.useFreeCell;
+        target.usesDefaultRank = source.usesDefaultRank;
+        target.useRank = source.useRank;
         target.hasRiskMatchDurationOverride = source.hasRiskMatchDurationOverride;
         target.riskMatchDurationMinutes = source.riskMatchDurationMinutes;
         target.usesDefaultPatterns = source.usesDefaultPatterns;
@@ -201,6 +211,8 @@ public static class LobbySaveDataService
         target.gameModeType = source.gameModeType;
         target.ballCountType = source.ballCountType;
         target.useFreeCell = source.useFreeCell;
+        target.usesDefaultRank = source.usesDefaultRank;
+        target.useRank = source.useRank;
         target.hasRiskMatchDurationOverride = source.hasRiskMatchDurationOverride;
         target.riskMatchDurationMinutes = source.riskMatchDurationMinutes;
         target.usesDefaultPatterns = source.usesDefaultPatterns;
@@ -225,6 +237,13 @@ public static class LobbySaveDataService
         gameData.lobbyData ??= new LobbyData();
         gameData.lobbyData.soloLobbyData ??= new SoloLobbyData();
         gameData.lobbyData.customLobbyData ??= new CustomLobbyData();
+
+        if (gameData.lobbyData.lobbyVersion < 3)
+        {
+            gameData.lobbyData.soloLobbyData.usesDefaultRank = true;
+            gameData.lobbyData.customLobbyData.usesDefaultRank = true;
+            gameData.lobbyData.lobbyVersion = 3;
+        }
 
         Repair(gameData.lobbyData.soloLobbyData);
         Repair(gameData.lobbyData.customLobbyData);

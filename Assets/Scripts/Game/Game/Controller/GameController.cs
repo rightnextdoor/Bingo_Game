@@ -48,6 +48,9 @@ public class GameController : MonoBehaviour
     private GamePlayerStatus activeDeathCheckStatus = GamePlayerStatus.Checking;
     private bool isDeathCheckAnimationComplete;
     private bool isDeathEndAnimationPlaying;
+    private BingoCheckResult pendingRankedManualCheckResult;
+    private string pendingRankedManualCheckUserId = string.Empty;
+    private bool isRankedManualEndAnimationPlaying;
     private string gameOverPopupGameId = string.Empty;
 
     #endregion
@@ -143,6 +146,7 @@ public class GameController : MonoBehaviour
             ResetLocalBoardPresentation();
             ResetRiskNotificationTracking(gameSessionData);
             ResetDeathCheckPresentation();
+            ResetRankedManualCheckPresentation();
         }
 
         GameModeManager gameModeManager = GameModeManager.instance;
@@ -168,6 +172,7 @@ public class GameController : MonoBehaviour
         EnsureBoardPatternTracker(gameSessionData);
         DisplayPlayerBoard(gameSessionData);
         TryPlayDeathEndAnimation(gameSessionData);
+        TryPlayRankedManualEndAnimation(gameSessionData);
         DisplayPlayerList(gameSessionData);
         DisplayGameModeInfo(gameSessionData, gameModeData, gameName, gameModeManager);
         DisplayCustomLobbyInfo(gameSessionData);
@@ -323,6 +328,7 @@ public class GameController : MonoBehaviour
         lastRiskSubmitNotificationEndTime = 0d;
         gameOverPopupGameId = string.Empty;
         ResetDeathCheckPresentation();
+        ResetRankedManualCheckPresentation();
         StopAutomaticMarkPresentation();
         ResetLocalBoardPresentation();
         headerController?.ClearHeader();
@@ -357,6 +363,21 @@ public class GameController : MonoBehaviour
         if (!boardDisplayed)
         {
             boardSectionController.ClearBoard();
+        }
+
+        if (boardDisplayed &&
+            gameSessionData?.useRank == true &&
+            localPlayer != null)
+        {
+            boardSectionController.DisplayRank(
+                localPlayer.rank,
+                gameSessionData.rankPlayerTotal > 0
+                    ? gameSessionData.rankPlayerTotal
+                    : gameSessionData.players?.Count ?? 1);
+        }
+        else
+        {
+            boardSectionController.SetRankVisible(false);
         }
 
         bool isDeath = DeathGameplayAuthority.IsDeathGame(gameSessionData);
@@ -413,6 +434,7 @@ public class GameController : MonoBehaviour
             localPlayer.returnState == GamePlayerReturnState.Active &&
             localPlayer.isConnected &&
             localPlayer.gameStatus == GamePlayerStatus.Eligible &&
+            !localPlayer.hasRiskCashedOut &&
             !localPlayer.isRiskDecisionPending &&
             gameSessionData.gamePlayController?.IsPlayerInputClosed != true &&
             gameSessionData.gameState != GameSessionState.Completed;
@@ -668,6 +690,7 @@ public class GameController : MonoBehaviour
         BingoCheckResult checkResult = resolvedData.checkResult;
         GamePlayerStatus playerStatus = resolvedData.playerStatus;
         bool requiresRiskDecision = resolvedData.requiresRiskDecision;
+        bool awaitsRankResolution = resolvedData.awaitsRankResolution;
         int latePatternCount = resolvedData.latePatternCount;
         bingoCheckAnimationController.PlayCheckAnimation(
             checkResult,
@@ -675,6 +698,7 @@ public class GameController : MonoBehaviour
                 checkResult,
                 playerStatus,
                 requiresRiskDecision,
+                awaitsRankResolution,
                 latePatternCount));
     }
 
@@ -789,7 +813,9 @@ public class GameController : MonoBehaviour
             losingPatterns = activeDeathCheckResult.patterns;
         }
 
-        bingoCheckAnimationController.PlayLoserAnimation(losingPatterns);
+        bingoCheckAnimationController.PlayLoserAnimation(
+            losingPatterns,
+            activeDeathCheckResult.failedSubmissionCells);
         return true;
     }
 
@@ -833,6 +859,7 @@ public class GameController : MonoBehaviour
         BingoCheckResult checkResult,
         GamePlayerStatus playerStatus,
         bool requiresRiskDecision,
+        bool awaitsRankResolution,
         int latePatternCount)
     {
         if (checkResult == null || bingoCheckAnimationController == null)
@@ -848,6 +875,17 @@ public class GameController : MonoBehaviour
             currentSession?.gamePlayController?.IsMatchEndPendingChecks == true;
 
         isBingoCheckPending = false;
+
+        if (awaitsRankResolution)
+        {
+            pendingRankedManualCheckResult = checkResult;
+            pendingRankedManualCheckUserId = UserManager.instance?.UserId ?? string.Empty;
+            isRankedManualEndAnimationPlaying = false;
+            NotifyBingoCheckAnimationCompleted();
+            TryPlayRankedManualEndAnimation(
+                GameSessionManager.instance?.CurrentGameSession);
+            return;
+        }
 
         if (latePatternCount > 0 && !checkResult.HasFailedPattern)
         {
@@ -892,11 +930,68 @@ public class GameController : MonoBehaviour
 
             case GamePlayerStatus.Lost:
                 bingoCheckAnimationController.PlayLoserAnimation(
-                    checkResult.GetFailedPatterns());
+                    checkResult.GetFailedPatterns(),
+                    checkResult.failedSubmissionCells);
                 break;
         }
 
         NotifyBingoCheckAnimationCompleted();
+    }
+
+    private bool TryPlayRankedManualEndAnimation(GameSessionData gameSessionData)
+    {
+        if (pendingRankedManualCheckResult == null ||
+            isRankedManualEndAnimationPlaying ||
+            string.IsNullOrWhiteSpace(pendingRankedManualCheckUserId))
+        {
+            return false;
+        }
+
+        GamePlayerData playerData =
+            gameSessionData?.GetPlayer(pendingRankedManualCheckUserId);
+
+        if (playerData == null ||
+            (playerData.gameStatus != GamePlayerStatus.Won &&
+             playerData.gameStatus != GamePlayerStatus.Lost))
+        {
+            return false;
+        }
+
+        isRankedManualEndAnimationPlaying = true;
+
+        if (bingoCheckAnimationController == null)
+        {
+            return true;
+        }
+
+        if (playerData.gameStatus == GamePlayerStatus.Won)
+        {
+            bingoCheckAnimationController.PlayWinnerAnimation(
+                pendingRankedManualCheckResult.GetWinningPatterns());
+        }
+        else
+        {
+            IReadOnlyList<BingoPatternCheckResult> losingPatterns =
+                pendingRankedManualCheckResult.GetFailedPatterns();
+
+            if (losingPatterns.Count == 0)
+            {
+                losingPatterns = pendingRankedManualCheckResult.GetWinningPatterns();
+            }
+
+            bingoCheckAnimationController.PlayLoserAnimation(
+                losingPatterns,
+                pendingRankedManualCheckResult.failedSubmissionCells);
+        }
+
+        return true;
+    }
+
+    private void ResetRankedManualCheckPresentation()
+    {
+        pendingRankedManualCheckResult = null;
+        pendingRankedManualCheckUserId = string.Empty;
+        isRankedManualEndAnimationPlaying = false;
     }
 
     private void NotifyBingoCheckAnimationCompleted()
@@ -943,14 +1038,28 @@ public class GameController : MonoBehaviour
             gameSessionData?.gameModeType == BingoGameModeType.Risk ||
             (gameSessionData?.hasRule == true &&
              gameSessionData.ruleType == BingoRuleType.Risk);
+        bool useRank = gameSessionData?.useRank == true;
+        string rankText = $"RANK {Mathf.Max(1, playerData.rank)}";
 
         if (isRisk)
         {
+            string scoreText = $"SCORE: {playerData.currentMatchScore}";
+
+            if (!useRank)
+            {
+                return playerData.gameStatus switch
+                {
+                    GamePlayerStatus.Won => $"WON - {scoreText}",
+                    GamePlayerStatus.Lost => $"LOST - {scoreText}",
+                    _ => scoreText
+                };
+            }
+
             return playerData.gameStatus switch
             {
-                GamePlayerStatus.Won => $"WON - SCORE: {playerData.currentMatchScore}",
-                GamePlayerStatus.Lost => $"LOST - SCORE: {playerData.currentMatchScore}",
-                _ => $"SCORE: {playerData.currentMatchScore}"
+                GamePlayerStatus.Won => $"{rankText}\nWON - {scoreText}",
+                GamePlayerStatus.Lost => $"{rankText}\nLOST - {scoreText}",
+                _ => $"{rankText}\n{scoreText}"
             };
         }
 
@@ -963,24 +1072,26 @@ public class GameController : MonoBehaviour
         {
             return playerData.gameStatus switch
             {
-                GamePlayerStatus.Won => "WON",
-                GamePlayerStatus.Lost => "OUT",
-                _ => string.Empty
+                GamePlayerStatus.Won => useRank ? $"{rankText}\nWON" : "WON",
+                GamePlayerStatus.Lost => useRank ? $"{rankText}\nOUT" : "OUT",
+                _ => useRank ? rankText : string.Empty
             };
         }
 
         if (playerData.gameStatus == GamePlayerStatus.Eligible ||
             playerData.gameStatus == GamePlayerStatus.Checking)
         {
-            return string.Empty;
+            return useRank
+                ? rankText
+                : string.Empty;
         }
 
         if (playerData.gameStatus == GamePlayerStatus.Won)
         {
-            return "WON";
+            return useRank ? $"{rankText}\nWON" : "WON";
         }
 
-        return "LOST";
+        return useRank ? $"{rankText}\nLOST" : "LOST";
     }
 
     private void PresentAutomaticMark(int cellIndex, bool isMarked)
@@ -1418,19 +1529,105 @@ public class GameController : MonoBehaviour
 
         popupData.winnerCount = winners.Count;
 
-        if (winners.Count == 1)
+        if (winners.Count == 0)
         {
-            GamePlayerData winner = winners[0];
-            popupData.singleWinnerDisplayName =
-                PlayerDisplayIdentityResolver.GetDisplayName(
-                    new PlayerProfileData(
-                        winner.userId,
-                        winner.playerName,
-                        winner.iconId),
-                    profiles);
+            return popupData;
         }
 
+        if (!GameRankAuthority.IsEnabled(gameSessionData))
+        {
+            if (winners.Count == 1)
+            {
+                popupData.winnerDisplayText = GetGameOverDisplayName(
+                    winners[0],
+                    profiles);
+            }
+
+            return popupData;
+        }
+
+        winners.Sort(CompareGameOverWinners);
+
+        if (HasSharedWinningRank(winners))
+        {
+            return popupData;
+        }
+
+        int displayedWinnerCount = Math.Min(
+            GameRankAuthority.MaximumWinningRank,
+            winners.Count);
+        List<string> winnerLines = new List<string>(displayedWinnerCount);
+
+        for (int i = 0; i < displayedWinnerCount; i++)
+        {
+            GamePlayerData winner = winners[i];
+            winnerLines.Add(
+                $"Rank {Math.Max(1, winner.rank)} - " +
+                GetGameOverDisplayName(winner, profiles));
+        }
+
+        popupData.winnerDisplayText = string.Join("\n", winnerLines);
         return popupData;
+    }
+
+    private static bool HasSharedWinningRank(List<GamePlayerData> winners)
+    {
+        HashSet<int> winningRanks = new HashSet<int>();
+
+        for (int i = 0; i < winners.Count; i++)
+        {
+            int rank = Math.Max(1, winners[i]?.rank ?? 1);
+
+            if (!winningRanks.Add(rank))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static int CompareGameOverWinners(
+        GamePlayerData left,
+        GamePlayerData right)
+    {
+        int rankComparison = Math.Max(1, left?.rank ?? int.MaxValue)
+            .CompareTo(Math.Max(1, right?.rank ?? int.MaxValue));
+
+        if (rankComparison != 0)
+        {
+            return rankComparison;
+        }
+
+        int orderComparison = (left?.rankResolutionOrder ?? long.MaxValue)
+            .CompareTo(right?.rankResolutionOrder ?? long.MaxValue);
+
+        if (orderComparison != 0)
+        {
+            return orderComparison;
+        }
+
+        return string.Compare(
+            left?.userId,
+            right?.userId,
+            StringComparison.Ordinal);
+    }
+
+    private static string GetGameOverDisplayName(
+        GamePlayerData playerData,
+        IReadOnlyList<PlayerProfileData> profiles)
+    {
+        if (playerData == null)
+        {
+            return "Player";
+        }
+
+        return PlayerDisplayIdentityResolver.GetDisplayName(
+            new PlayerProfileData(
+                playerData.userId,
+                playerData.playerName,
+                playerData.iconId),
+            profiles);
     }
 
     #endregion

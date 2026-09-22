@@ -25,6 +25,10 @@ public class GameSessionData
     public bool usesDefaultPatterns;
     public BingoBallCountType ballCountType;
     public bool useFreeCell;
+    public bool usesDefaultRank;
+    public bool useRank;
+    public int rankPlayerTotal;
+    public long rankResolutionSequence;
     public bool hasRiskMatchDurationOverride;
     public float riskMatchDurationMinutes;
 
@@ -45,7 +49,7 @@ public class GameSessionData
 
     public GameSessionData()
     {
-        dataVersion = 12;
+        dataVersion = 13;
         revision = 1;
         gameId = string.Empty;
         lobbyId = string.Empty;
@@ -64,6 +68,10 @@ public class GameSessionData
         usesDefaultPatterns = true;
         ballCountType = BingoBallCountType.Ball75;
         useFreeCell = true;
+        usesDefaultRank = true;
+        useRank = false;
+        rankPlayerTotal = 0;
+        rankResolutionSequence = 0;
         hasRiskMatchDurationOverride = false;
         riskMatchDurationMinutes = GameSettings.DefaultRiskMatchDurationMinutes;
         hasCachedScoreValues = false;
@@ -100,6 +108,8 @@ public class GameSessionData
         usesDefaultPatterns = setupData.usesDefaultPatterns;
         ballCountType = setupData.ballCountType;
         useFreeCell = setupData.useFreeCell;
+        usesDefaultRank = setupData.usesDefaultRank;
+        useRank = setupData.useRank;
         hasRiskMatchDurationOverride = setupData.hasRiskMatchDurationOverride;
         riskMatchDurationMinutes = ResolveRiskMatchDurationMinutes(setupData);
         EnsureScoreValuesCached();
@@ -113,7 +123,8 @@ public class GameSessionData
             settings != null ? settings.NextBallCountdownSeconds : GameSettings.DefaultNextBallCountdownSeconds,
             GameSettings.MinutesToSeconds(riskMatchDurationMinutes),
             hasRule,
-            ruleType);
+            ruleType,
+            useRank);
 
         if (setupData.players == null)
         {
@@ -128,6 +139,8 @@ public class GameSessionData
                 playerData.controlType == GamePlayerControlType.Bot;
             players.Add(playerData);
         }
+
+        GameRankAuthority.Initialize(this);
     }
 
     public GameSessionData(GameSessionData gameSessionData) : this()
@@ -158,6 +171,10 @@ public class GameSessionData
         usesDefaultPatterns = gameSessionData.usesDefaultPatterns;
         ballCountType = gameSessionData.ballCountType;
         useFreeCell = gameSessionData.useFreeCell;
+        usesDefaultRank = gameSessionData.usesDefaultRank;
+        useRank = gameSessionData.useRank;
+        rankPlayerTotal = gameSessionData.rankPlayerTotal;
+        rankResolutionSequence = gameSessionData.rankResolutionSequence;
         hasRiskMatchDurationOverride = gameSessionData.hasRiskMatchDurationOverride;
         riskMatchDurationMinutes = gameSessionData.riskMatchDurationMinutes;
         hasCachedScoreValues = gameSessionData.hasCachedScoreValues;
@@ -247,6 +264,7 @@ public class GameSessionData
     {
         return playerData != null &&
                playerData.gameStatus == GamePlayerStatus.Eligible &&
+               !playerData.hasRiskCashedOut &&
                playerData.returnState != GamePlayerReturnState.FrozenAwaitingReturn &&
                (playerData.controlType == GamePlayerControlType.Bot || playerData.isConnected);
     }
@@ -472,6 +490,13 @@ public class GamePlayerMatchStateData
     public bool isAutomaticBoardEnabled;
     public GamePlayerStatus gameStatus;
     public int currentMatchScore;
+    public int rank;
+    public bool isRankFinal;
+    public bool isRankWinBlocked;
+    public bool hasRiskCashedOut;
+    public bool hasPendingRankCheck;
+    public int pendingRankCheckScore;
+    public long rankResolutionOrder;
     public bool areStatisticsFinalized;
     public int finalizedScoreDelta;
     public bool isScorePersisted;
@@ -500,6 +525,13 @@ public class GamePlayerMatchStateData
         isAutomaticBoardEnabled = playerData.isAutomaticBoardEnabled;
         gameStatus = playerData.gameStatus;
         currentMatchScore = playerData.currentMatchScore;
+        rank = playerData.rank;
+        isRankFinal = playerData.isRankFinal;
+        isRankWinBlocked = playerData.isRankWinBlocked;
+        hasRiskCashedOut = playerData.hasRiskCashedOut;
+        hasPendingRankCheck = playerData.hasPendingRankCheck;
+        pendingRankCheckScore = playerData.pendingRankCheckScore;
+        rankResolutionOrder = playerData.rankResolutionOrder;
         areStatisticsFinalized = playerData.areStatisticsFinalized;
         finalizedScoreDelta = playerData.finalizedScoreDelta;
         isScorePersisted = playerData.isScorePersisted;
@@ -637,6 +669,13 @@ public class GamePlayStateChangedBatchData
                     isAutomaticBoardEnabled = playerState.isAutomaticBoardEnabled,
                     gameStatus = playerState.gameStatus,
                     currentMatchScore = playerState.currentMatchScore,
+                    rank = playerState.rank,
+                    isRankFinal = playerState.isRankFinal,
+                    isRankWinBlocked = playerState.isRankWinBlocked,
+                    hasRiskCashedOut = playerState.hasRiskCashedOut,
+                    hasPendingRankCheck = playerState.hasPendingRankCheck,
+                    pendingRankCheckScore = playerState.pendingRankCheckScore,
+                    rankResolutionOrder = playerState.rankResolutionOrder,
                     areStatisticsFinalized = playerState.areStatisticsFinalized,
                     finalizedScoreDelta = playerState.finalizedScoreDelta,
                     isScorePersisted = playerState.isScorePersisted,
@@ -691,6 +730,13 @@ public class GamePlayerStateChangedData
     public bool isAutomaticBoardEnabled;
     public GamePlayerStatus gameStatus;
     public int currentMatchScore;
+    public int rank;
+    public bool isRankFinal;
+    public bool isRankWinBlocked;
+    public bool hasRiskCashedOut;
+    public bool hasPendingRankCheck;
+    public int pendingRankCheckScore;
+    public long rankResolutionOrder;
     public bool areStatisticsFinalized;
     public int finalizedScoreDelta;
     public bool isScorePersisted;
@@ -733,6 +779,13 @@ public class GamePlayerStateChangedData
         isAutomaticBoardEnabled = playerData.isAutomaticBoardEnabled;
         gameStatus = playerData.gameStatus;
         currentMatchScore = playerData.currentMatchScore;
+        rank = playerData.rank;
+        isRankFinal = playerData.isRankFinal;
+        isRankWinBlocked = playerData.isRankWinBlocked;
+        hasRiskCashedOut = playerData.hasRiskCashedOut;
+        hasPendingRankCheck = playerData.hasPendingRankCheck;
+        pendingRankCheckScore = playerData.pendingRankCheckScore;
+        rankResolutionOrder = playerData.rankResolutionOrder;
         areStatisticsFinalized = playerData.areStatisticsFinalized;
         finalizedScoreDelta = playerData.finalizedScoreDelta;
         isScorePersisted = playerData.isScorePersisted;
@@ -850,6 +903,7 @@ public class GameBingoCheckResolvedData
     public bool matchCompleted;
     public bool isAutomaticCheck;
     public bool requiresRiskDecision;
+    public bool awaitsRankResolution;
     public int latePatternCount;
     public List<BingoPatternType> availablePatternTypes;
 

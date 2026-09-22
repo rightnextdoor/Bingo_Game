@@ -38,7 +38,7 @@ public class BingoCheckAnimationController : MonoBehaviour
 
     private IEnumerator PlayCheckRoutine(BingoCheckResult checkResult, Action onComplete)
     {
-        if (checkResult?.patterns != null)
+        if (checkResult?.patterns != null && checkResult.patterns.Count > 0)
         {
             for (int patternIndex = 0; patternIndex < checkResult.patterns.Count; patternIndex++)
             {
@@ -65,9 +65,39 @@ public class BingoCheckAnimationController : MonoBehaviour
                     boardController?.ClearCheckHighlights();
             }
         }
+        else if (checkResult?.failedSubmissionCells != null)
+        {
+            yield return PlayFailedSubmissionCellCheck(checkResult.failedSubmissionCells);
+            ShowCells(checkResult.failedSubmissionCells, failureColor);
+
+            if (patternResultSeconds > 0f)
+                yield return SessionPauseManager.WaitForSeconds(patternResultSeconds);
+        }
 
         animationRoutine = null;
         onComplete?.Invoke();
+    }
+
+    private IEnumerator PlayFailedSubmissionCellCheck(
+        IReadOnlyList<BingoCellCheckResult> submittedCells)
+    {
+        if (submittedCells == null)
+            yield break;
+
+        for (int i = 0; i < submittedCells.Count; i++)
+        {
+            BingoCellCheckResult cellResult = submittedCells[i];
+
+            if (cellResult == null)
+                continue;
+
+            boardController?.ShowCheckHighlight(cellResult.cellIndex, failureColor);
+
+            if (cellCheckSeconds > 0f)
+                yield return SessionPauseManager.WaitForSeconds(cellCheckSeconds);
+
+            boardController?.ClearCheckHighlight(cellResult.cellIndex);
+        }
     }
 
     private IEnumerator PlayPatternCellCheck(BingoPatternCheckResult patternResult, Color patternColor)
@@ -124,17 +154,25 @@ public class BingoCheckAnimationController : MonoBehaviour
 
     #region Final Loser
 
-    public void PlayLoserAnimation(IReadOnlyList<BingoPatternCheckResult> failedPatterns)
+    public void PlayLoserAnimation(
+        IReadOnlyList<BingoPatternCheckResult> failedPatterns,
+        IReadOnlyList<BingoCellCheckResult> failedSubmissionCells = null)
     {
         StopAnimation();
         boardController?.ClearCheckHighlights();
 
         List<BingoPatternCheckResult> validPatterns = GetValidPatterns(failedPatterns);
 
-        if (validPatterns.Count == 0)
+        if (validPatterns.Count > 0)
+        {
+            animationRoutine = StartCoroutine(PlayFinalPatternRoutine(validPatterns, false));
             return;
+        }
 
-        animationRoutine = StartCoroutine(PlayFinalPatternRoutine(validPatterns, false));
+        List<BingoCellCheckResult> validCells = GetValidCells(failedSubmissionCells);
+
+        if (validCells.Count > 0)
+            animationRoutine = StartCoroutine(PlayFinalCellRoutine(validCells));
     }
 
     #endregion
@@ -197,6 +235,27 @@ public class BingoCheckAnimationController : MonoBehaviour
         }
     }
 
+    private IEnumerator PlayFinalCellRoutine(IReadOnlyList<BingoCellCheckResult> cells)
+    {
+        while (true)
+        {
+            boardController?.ClearCheckHighlights();
+            ShowCells(cells, failureColor);
+
+            if (finalPatternSeconds > 0f)
+                yield return SessionPauseManager.WaitForSeconds(finalPatternSeconds);
+            else
+                yield return null;
+
+            boardController?.ClearCheckHighlights();
+
+            if (finalPatternSeconds > 0f)
+                yield return SessionPauseManager.WaitForSeconds(finalPatternSeconds);
+            else
+                yield return null;
+        }
+    }
+
     #endregion
 
     #region Pattern Display
@@ -209,6 +268,20 @@ public class BingoCheckAnimationController : MonoBehaviour
         for (int i = 0; i < patternResult.cells.Count; i++)
         {
             BingoCellCheckResult cellResult = patternResult.cells[i];
+
+            if (cellResult != null)
+                boardController?.ShowCheckHighlight(cellResult.cellIndex, color);
+        }
+    }
+
+    private void ShowCells(IReadOnlyList<BingoCellCheckResult> cells, Color color)
+    {
+        if (cells == null)
+            return;
+
+        for (int i = 0; i < cells.Count; i++)
+        {
+            BingoCellCheckResult cellResult = cells[i];
 
             if (cellResult != null)
                 boardController?.ShowCheckHighlight(cellResult.cellIndex, color);
@@ -280,6 +353,23 @@ public class BingoCheckAnimationController : MonoBehaviour
         }
 
         return validPatterns;
+    }
+
+    private List<BingoCellCheckResult> GetValidCells(
+        IReadOnlyList<BingoCellCheckResult> cells)
+    {
+        List<BingoCellCheckResult> validCells = new List<BingoCellCheckResult>();
+
+        if (cells == null)
+            return validCells;
+
+        for (int i = 0; i < cells.Count; i++)
+        {
+            if (cells[i] != null)
+                validCells.Add(cells[i]);
+        }
+
+        return validCells;
     }
 
     #endregion

@@ -7,7 +7,7 @@ using UnityEngine.UI;
 public class GameOverPopupData
 {
     public int winnerCount;
-    public string singleWinnerDisplayName = string.Empty;
+    public string winnerDisplayText = string.Empty;
     public GamePlayerStatus localPlayerStatus = GamePlayerStatus.Lost;
     public int localPlayerScore;
 }
@@ -100,12 +100,12 @@ public class GameOverPopupController : MonoBehaviour
 
         if (winnerNameText != null)
         {
-            bool showWinnerName = data.winnerCount == 1 &&
-                                  !string.IsNullOrWhiteSpace(
-                                      data.singleWinnerDisplayName);
-            winnerNameText.gameObject.SetActive(showWinnerName);
-            winnerNameText.text = showWinnerName
-                ? data.singleWinnerDisplayName
+            bool showWinnerNames = showWinner &&
+                                   !string.IsNullOrWhiteSpace(
+                                       data.winnerDisplayText);
+            winnerNameText.gameObject.SetActive(showWinnerNames);
+            winnerNameText.text = showWinnerNames
+                ? data.winnerDisplayText
                 : string.Empty;
         }
 

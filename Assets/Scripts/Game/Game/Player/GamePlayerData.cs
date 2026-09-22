@@ -19,6 +19,13 @@ public class GamePlayerData
 
     public GamePlayerStatus gameStatus;
     public int currentMatchScore;
+    public int rank;
+    public bool isRankFinal;
+    public bool isRankWinBlocked;
+    public bool hasRiskCashedOut;
+    public bool hasPendingRankCheck;
+    public int pendingRankCheckScore;
+    public long rankResolutionOrder;
     public bool areStatisticsFinalized;
     public int finalizedScoreDelta;
     public bool isScorePersisted;
@@ -64,6 +71,13 @@ public class GamePlayerData
         isAutomaticBoardEnabled = false;
         gameStatus = GamePlayerStatus.Eligible;
         currentMatchScore = 0;
+        rank = 0;
+        isRankFinal = false;
+        isRankWinBlocked = false;
+        hasRiskCashedOut = false;
+        hasPendingRankCheck = false;
+        pendingRankCheckScore = 0;
+        rankResolutionOrder = 0;
         areStatisticsFinalized = false;
         finalizedScoreDelta = 0;
         isScorePersisted = false;
@@ -131,6 +145,13 @@ public class GamePlayerData
         isAutomaticBoardEnabled = playerData.isAutomaticBoardEnabled;
         gameStatus = playerData.gameStatus;
         currentMatchScore = playerData.currentMatchScore;
+        rank = playerData.rank;
+        isRankFinal = playerData.isRankFinal;
+        isRankWinBlocked = playerData.isRankWinBlocked;
+        hasRiskCashedOut = playerData.hasRiskCashedOut;
+        hasPendingRankCheck = playerData.hasPendingRankCheck;
+        pendingRankCheckScore = playerData.pendingRankCheckScore;
+        rankResolutionOrder = playerData.rankResolutionOrder;
         areStatisticsFinalized = playerData.areStatisticsFinalized;
         finalizedScoreDelta = playerData.finalizedScoreDelta;
         isScorePersisted = playerData.isScorePersisted;

@@ -72,6 +72,8 @@ public class BingoCheckResult
     public int checkNumber;
     public int currentCheckPatternPoints;
     public List<BingoPatternCheckResult> patterns = new List<BingoPatternCheckResult>();
+    public List<BingoCellCheckResult> failedSubmissionCells =
+        new List<BingoCellCheckResult>();
 
     public int LatePatternCount
     {
@@ -237,6 +239,18 @@ public class BingoPatternValidator
         20, 21, 22, 23, 24
     };
 
+    private static readonly BingoPatternType[] ValidationOrder =
+    {
+        BingoPatternType.SingleLine,
+        BingoPatternType.TwoLines,
+        BingoPatternType.FourCorners,
+        BingoPatternType.Cross,
+        BingoPatternType.XPattern,
+        BingoPatternType.Star,
+        BingoPatternType.Diamond,
+        BingoPatternType.Blackout
+    };
+
     #endregion
 
     #region Validation
@@ -260,8 +274,10 @@ public class BingoPatternValidator
         HashSet<int> pressedCells = BuildSet(pressedCellIndices);
         HashSet<int> calledNumberSet = BuildSet(calledNumbers);
 
-        foreach (BingoPatternType patternType in Enum.GetValues(typeof(BingoPatternType)))
+        for (int patternIndex = 0; patternIndex < ValidationOrder.Length; patternIndex++)
         {
+            BingoPatternType patternType = ValidationOrder[patternIndex];
+
             if (!ContainsPattern(configuredPatterns, patternType))
                 continue;
 
@@ -351,12 +367,11 @@ public class BingoPatternValidator
 
         if (!result.HasCheckedPatterns)
         {
-            AddFailedSubmissionResult(
+            AddFailedSubmissionCells(
                 result,
                 boardData,
                 pressedCells,
-                calledNumberSet,
-                configuredPatterns);
+                calledNumberSet);
         }
 
         return result;
@@ -422,7 +437,10 @@ public class BingoPatternValidator
             BingoLineType.Column1,
             BingoLineType.Column2,
             BingoLineType.Column3,
-            BingoLineType.Column4
+            BingoLineType.Column4,
+
+            BingoLineType.DiagonalDown,
+            BingoLineType.DiagonalUp
         };
 
         for (int i = 0; i < lines.Length; i++)
@@ -591,34 +609,16 @@ public class BingoPatternValidator
 
     #region Pattern Result
 
-    private void AddFailedSubmissionResult(
+    private void AddFailedSubmissionCells(
         BingoCheckResult result,
         LobbyBoardData boardData,
         HashSet<int> pressedCells,
-        HashSet<int> calledNumbers,
-        IReadOnlyCollection<BingoPatternType> configuredPatterns)
+        HashSet<int> calledNumbers)
     {
         if (result == null || boardData?.cellNumbers == null)
         {
             return;
         }
-
-        BingoPatternType patternType = BingoPatternType.SingleLine;
-
-        foreach (BingoPatternType configuredPattern in configuredPatterns)
-        {
-            patternType = configuredPattern;
-            break;
-        }
-
-        BingoPatternCheckResult failedResult =
-            new BingoPatternCheckResult(
-                patternType,
-                BingoLineType.None,
-                BingoLineType.None)
-            {
-                isWinningPattern = false
-            };
 
         List<int> sortedPressedCells = new List<int>(pressedCells);
         sortedPressedCells.Sort();
@@ -635,7 +635,7 @@ public class BingoPatternValidator
             int number = boardData.cellNumbers[cellIndex];
             bool isFree = boardData.usesFreeCell && cellIndex == FreeCellIndex;
 
-            failedResult.cells.Add(
+            result.failedSubmissionCells.Add(
                 new BingoCellCheckResult(
                     cellIndex,
                     number,
@@ -644,7 +644,6 @@ public class BingoPatternValidator
                     isFree || calledNumbers.Contains(number)));
         }
 
-        result.patterns.Add(failedResult);
     }
 
     private BingoPatternCheckResult BuildPatternResult(

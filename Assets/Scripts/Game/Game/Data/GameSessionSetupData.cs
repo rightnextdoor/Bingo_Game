@@ -21,6 +21,8 @@ public class GameSessionSetupData
     public bool usesDefaultPatterns;
     public BingoBallCountType ballCountType;
     public bool useFreeCell;
+    public bool usesDefaultRank;
+    public bool useRank;
     public bool hasRiskMatchDurationOverride;
     public float riskMatchDurationMinutes;
 
@@ -28,7 +30,7 @@ public class GameSessionSetupData
 
     public GameSessionSetupData()
     {
-        dataVersion = 3;
+        dataVersion = 4;
         lobbyId = string.Empty;
         runtimeType = SessionRuntimeType.Local;
         playMode = MainMenuPlayMode.None;
@@ -43,6 +45,8 @@ public class GameSessionSetupData
         usesDefaultPatterns = true;
         ballCountType = BingoBallCountType.Ball75;
         useFreeCell = true;
+        usesDefaultRank = true;
+        useRank = false;
         hasRiskMatchDurationOverride = false;
         riskMatchDurationMinutes = GameSettings.DefaultRiskMatchDurationMinutes;
         players = new List<GamePlayerData>();
@@ -72,6 +76,8 @@ public class GameSessionSetupData
         usesDefaultPatterns = setupData.usesDefaultPatterns;
         ballCountType = setupData.ballCountType;
         useFreeCell = setupData.useFreeCell;
+        usesDefaultRank = setupData.usesDefaultRank;
+        useRank = setupData.useRank;
         hasRiskMatchDurationOverride = setupData.hasRiskMatchDurationOverride;
         riskMatchDurationMinutes = setupData.riskMatchDurationMinutes;
 
@@ -116,6 +122,8 @@ public class GameSessionSetupData
             usesDefaultPatterns = controller.UsesDefaultPatterns,
             ballCountType = controller.BallCountType,
             useFreeCell = controller.UseFreeCell,
+            usesDefaultRank = controller.UsesDefaultRank,
+            useRank = controller.UseRank,
             hasRiskMatchDurationOverride = controller.HasRiskMatchDurationOverride,
             riskMatchDurationMinutes = controller.RiskMatchDurationMinutes
         };

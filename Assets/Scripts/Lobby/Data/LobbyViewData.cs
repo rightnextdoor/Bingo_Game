@@ -33,6 +33,8 @@ public class LobbyViewData
     public bool useFreeCell;
     public bool hasRiskMatchDurationOverride;
     public float riskMatchDurationMinutes;
+    public bool usesDefaultRank;
+    public bool useRank;
 
     public int playerCount;
     public int maxPlayer;
@@ -76,6 +78,8 @@ public class LobbyViewData
         useFreeCell = true;
         hasRiskMatchDurationOverride = false;
         riskMatchDurationMinutes = GameSettings.DefaultRiskMatchDurationMinutes;
+        usesDefaultRank = true;
+        useRank = false;
 
         playerCount = 0;
         maxPlayer = LobbySettings.instance != null ? LobbySettings.instance.MinimumPlayers : 6;

@@ -22,8 +22,19 @@ public static class GameScoreAuthority
             !checkResult.HasFailedPattern)
         {
             currentCheckPoints = GetCurrentCheckPatternPoints(checkResult);
+
+            if (ruleDecision.playerStatus == GamePlayerStatus.Won &&
+                GameRankAuthority.PrepareDefaultRankedCheck(
+                    gameSessionData,
+                    playerData,
+                    currentCheckPoints))
+            {
+                return currentCheckPoints;
+            }
+
             playerData.currentMatchScore = ClampMatchScore(
                 (long)playerData.currentMatchScore + currentCheckPoints);
+            GameRankAuthority.RefreshLiveRanks(gameSessionData);
         }
 
         if (ruleDecision.playerStatus == GamePlayerStatus.Eligible)
@@ -87,8 +98,14 @@ public static class GameScoreAuthority
         }
 
         bool changed = playerData.gameStatus != finalStatus;
+        GameRankAuthority.PrepareFinalRank(
+            gameSessionData,
+            playerData,
+            finalStatus);
         playerData.gameStatus = finalStatus;
-        return FinalizePlayerIfNeeded(gameSessionData, playerData) || changed;
+        bool finalized = FinalizePlayerIfNeeded(gameSessionData, playerData);
+        GameRankAuthority.RefreshLiveRanks(gameSessionData);
+        return finalized || changed;
     }
 
     public static bool FinalizePlayerIfNeeded(
@@ -113,12 +130,30 @@ public static class GameScoreAuthority
         }
         else if (UsesDeathWinScore(gameSessionData))
         {
-            playerData.currentMatchScore = ClampMatchScore(gameSessionData.cachedDeathWinPoints);
+            int deathWinPoints = gameSessionData.cachedDeathWinPoints;
+
+            if (GameRankAuthority.IsEnabled(gameSessionData))
+            {
+                deathWinPoints = GameRankAuthority.ApplyPlacementPercentage(
+                    deathWinPoints,
+                    playerData.rank);
+            }
+
+            playerData.currentMatchScore = ClampMatchScore(deathWinPoints);
             playerData.finalizedScoreDelta = playerData.currentMatchScore;
         }
         else
         {
-            playerData.currentMatchScore = ClampMatchScore(playerData.currentMatchScore);
+            int awardedScore = playerData.currentMatchScore;
+
+            if (GameRankAuthority.UsesDefaultRankRules(gameSessionData))
+            {
+                awardedScore = GameRankAuthority.ApplyPlacementPercentage(
+                    awardedScore,
+                    playerData.rank);
+            }
+
+            playerData.currentMatchScore = ClampMatchScore(awardedScore);
             playerData.finalizedScoreDelta = playerData.currentMatchScore;
         }
 
@@ -139,6 +174,11 @@ public static class GameScoreAuthority
         }
 
         gameSessionData.EnsureScoreValuesCached();
+        playerData.isRankWinBlocked = true;
+        GameRankAuthority.PrepareFinalRank(
+            gameSessionData,
+            playerData,
+            GamePlayerStatus.Lost);
         playerData.finalizedScoreDelta = -Mathf.Max(0, gameSessionData.cachedLossPoints);
         MarkStatisticsFinalized(playerData);
         return true;
@@ -348,6 +388,8 @@ public static class GameScoreAuthority
         playerData.isSubmitTimerActive = false;
         playerData.submitTimerEndTime = 0d;
         playerData.isRiskDecisionPending = false;
+        playerData.hasPendingRankCheck = false;
+        playerData.pendingRankCheckScore = 0;
         playerData.queuedRiskPatterns?.Clear();
         playerData.activeRiskSubmitPatterns?.Clear();
         playerData.lateRiskPatterns?.Clear();

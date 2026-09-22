@@ -62,6 +62,10 @@ public static class GameBingoCheckAuthority
             {
                 DeathGameplayAuthority.FinalizeMatch(gameSessionData);
             }
+            else if (RiskGameplayAuthority.IsRiskGame(gameSessionData))
+            {
+                GameRankAuthority.FinalizeRiskMatch(gameSessionData);
+            }
             else
             {
                 GameScoreAuthority.FinalizeEligiblePlayers(
@@ -132,6 +136,7 @@ public static class GameBingoCheckAuthority
         if (!playerData.isConnected ||
             !playerData.canRejoin ||
             playerData.gameStatus != GamePlayerStatus.Eligible ||
+            playerData.hasRiskCashedOut ||
             playerData.isRiskDecisionPending ||
             gameSessionData.gamePlayController.HasPendingCheckAnimation(userId))
         {
@@ -201,6 +206,9 @@ public static class GameBingoCheckAuthority
             playerData,
             checkResult,
             ruleDecision);
+        bool awaitsRankResolution =
+            playerData.hasPendingRankCheck &&
+            GameRankAuthority.UsesDefaultRankRules(gameSessionData);
 
         if (playerData.gameStatus == GamePlayerStatus.Lost &&
             gameSessionData.GetEligiblePlayerCount() == 0 &&
@@ -211,9 +219,7 @@ public static class GameBingoCheckAuthority
 
         if (playController.Phase == GamePlayPhase.Ended)
         {
-            GameScoreAuthority.FinalizeEligiblePlayers(
-                gameSessionData,
-                playController.ResolveEligiblePlayerAtMatchEnd());
+            FinalizeEndedMatchPlayers(gameSessionData);
             gameSessionData.gameState = GameSessionState.Completed;
         }
 
@@ -229,6 +235,7 @@ public static class GameBingoCheckAuthority
             currentMatchScore = playerData.currentMatchScore,
             matchCompleted = gameSessionData.gameState == GameSessionState.Completed,
             requiresRiskDecision = ruleDecision.requiresRiskDecision,
+            awaitsRankResolution = awaitsRankResolution,
             latePatternCount = checkResult?.LatePatternCount ?? 0,
             availablePatternTypes = playController.GetAvailablePatternTypes(
                 userId,
@@ -255,6 +262,7 @@ public static class GameBingoCheckAuthority
         }
 
         GamePlayController playController = gameSessionData.gamePlayController;
+        bool hadPendingRankCheck = playerData.hasPendingRankCheck;
         bool resolveSuccessfulRiskCheckAsWin =
             playController.IsMatchEndPendingChecks &&
             RiskGameplayAuthority.IsRiskGame(gameSessionData) &&
@@ -264,6 +272,13 @@ public static class GameBingoCheckAuthority
         if (!playController.TryCompleteBingoCheckAnimation(userId))
         {
             return false;
+        }
+
+        if (hadPendingRankCheck)
+        {
+            GameRankAuthority.CompleteDefaultRankedCheck(
+                gameSessionData,
+                playerData);
         }
 
         RiskGameplayAuthority.CompletePendingCheck(gameSessionData, playerData);
@@ -286,9 +301,7 @@ public static class GameBingoCheckAuthority
         if (playController.Phase == GamePlayPhase.Ended &&
             gameSessionData.gameState != GameSessionState.Completed)
         {
-            GameScoreAuthority.FinalizeEligiblePlayers(
-                gameSessionData,
-                playController.ResolveEligiblePlayerAtMatchEnd());
+            FinalizeEndedMatchPlayers(gameSessionData);
             gameSessionData.gameState = GameSessionState.Completed;
         }
 
@@ -304,6 +317,25 @@ public static class GameBingoCheckAuthority
             gameSessionData,
             userId,
             endPlayerGame);
+    }
+
+    private static void FinalizeEndedMatchPlayers(GameSessionData gameSessionData)
+    {
+        if (DeathGameplayAuthority.IsDeathGame(gameSessionData))
+        {
+            DeathGameplayAuthority.FinalizeMatch(gameSessionData);
+            return;
+        }
+
+        if (RiskGameplayAuthority.IsRiskGame(gameSessionData))
+        {
+            GameRankAuthority.FinalizeRiskMatch(gameSessionData);
+            return;
+        }
+
+        GameScoreAuthority.FinalizeEligiblePlayers(
+            gameSessionData,
+            gameSessionData.gamePlayController.ResolveEligiblePlayerAtMatchEnd());
     }
 
     private static bool BoardsMatch(LobbyBoardData authoritativeBoard, LobbyBoardData submittedBoard)
@@ -373,6 +405,13 @@ public static class DeathGameplayAuthority
                     playerData,
                     checkRequest);
             }
+        }
+
+        if (GameRankAuthority.IsEnabled(gameSessionData))
+        {
+            changed |= ResolveRankedCheckingPlayers(gameSessionData);
+            changed |= FinalizeRankedDeathIfReady(gameSessionData);
+            return changed;
         }
 
         bool resolvedCheckingPlayers = ResolveOrdinaryCheckingPlayers(gameSessionData);
@@ -537,6 +576,7 @@ public static class DeathGameplayAuthority
                 continue;
             }
 
+            playerData.isRankWinBlocked = true;
             changed |= GameScoreAuthority.TrySetFinalStatus(
                 gameSessionData,
                 playerData,
@@ -605,6 +645,14 @@ public static class DeathGameplayAuthority
         GamePlayController playController = gameSessionData.gamePlayController;
         int eligiblePlayerCount = gameSessionData.GetEligiblePlayerCount();
 
+        if (GameRankAuthority.IsEnabled(gameSessionData))
+        {
+            changed |= ResolveRankedCheckingPlayers(gameSessionData);
+            changed |= FinalizeRankedDeathIfReady(gameSessionData);
+            return eligiblePlayerCount <= 1 ||
+                   gameSessionData.GetEligiblePlayerCount() <= 1;
+        }
+
         if (eligiblePlayerCount > 1)
         {
             changed |= ResolveCheckingPlayersAsOut(gameSessionData);
@@ -630,6 +678,11 @@ public static class DeathGameplayAuthority
         if (!IsDeathGame(gameSessionData) || gameSessionData.players == null)
         {
             return false;
+        }
+
+        if (GameRankAuthority.IsEnabled(gameSessionData))
+        {
+            return GameRankAuthority.FinalizeRankedDeathMatch(gameSessionData);
         }
 
         List<GamePlayerData> activeEligiblePlayers = new List<GamePlayerData>();
@@ -777,6 +830,7 @@ public static class DeathGameplayAuthority
         }
 
         playerData.gameStatus = GamePlayerStatus.Checking;
+        playerData.rankResolutionOrder = ++gameSessionData.rankResolutionSequence;
         playerData.deathCheckBallCallId = ballCallId;
         playerData.deathCheckSucceeded =
             checkResult?.HasCheckedPatterns == true &&
@@ -839,6 +893,103 @@ public static class DeathGameplayAuthority
             ClearAutomaticRuntime(playerData);
         }
 
+        return changed;
+    }
+
+    private static bool ResolveRankedCheckingPlayers(GameSessionData gameSessionData)
+    {
+        if (gameSessionData?.players == null)
+        {
+            return false;
+        }
+
+        Dictionary<int, List<GamePlayerData>> cohorts =
+            new Dictionary<int, List<GamePlayerData>>();
+
+        for (int i = 0; i < gameSessionData.players.Count; i++)
+        {
+            GamePlayerData playerData = gameSessionData.players[i];
+
+            if (playerData?.gameStatus != GamePlayerStatus.Checking ||
+                HasPotentialSameBallCheck(
+                    gameSessionData,
+                    playerData.deathCheckBallCallId))
+            {
+                continue;
+            }
+
+            if (!cohorts.TryGetValue(
+                    playerData.deathCheckBallCallId,
+                    out List<GamePlayerData> cohort))
+            {
+                cohort = new List<GamePlayerData>();
+                cohorts.Add(playerData.deathCheckBallCallId, cohort);
+            }
+
+            cohort.Add(playerData);
+        }
+
+        bool changed = false;
+
+        foreach (KeyValuePair<int, List<GamePlayerData>> pair in cohorts)
+        {
+            changed |= GameRankAuthority.ResolveDeathCohort(
+                gameSessionData,
+                pair.Value);
+
+            for (int i = 0; i < pair.Value.Count; i++)
+            {
+                ClearAutomaticRuntime(pair.Value[i]);
+                ClearDeathCheckRuntime(pair.Value[i]);
+            }
+        }
+
+        return changed;
+    }
+
+    private static bool FinalizeRankedDeathIfReady(GameSessionData gameSessionData)
+    {
+        if (gameSessionData?.gamePlayController == null ||
+            HasCheckingPlayers(gameSessionData))
+        {
+            return false;
+        }
+
+        int eligiblePlayerCount = gameSessionData.GetEligiblePlayerCount();
+
+        if (eligiblePlayerCount > 1)
+        {
+            return false;
+        }
+
+        bool changed = false;
+
+        if (eligiblePlayerCount == 1)
+        {
+            for (int i = 0; i < gameSessionData.players.Count; i++)
+            {
+                GamePlayerData playerData = gameSessionData.players[i];
+
+                if (!gameSessionData.IsPlayerEligibleForCount(playerData))
+                {
+                    continue;
+                }
+
+                playerData.rank = 1;
+                playerData.isRankFinal = true;
+                changed |= GameScoreAuthority.TrySetFinalStatus(
+                    gameSessionData,
+                    playerData,
+                    GamePlayerStatus.Won);
+                ClearAutomaticRuntime(playerData);
+                break;
+            }
+        }
+
+        changed |= gameSessionData.gamePlayController.EndGame(
+            eligiblePlayerCount == 0
+                ? GameEndReason.NoEligiblePlayers
+                : GameEndReason.RuleCompleted);
         return changed;
     }
 

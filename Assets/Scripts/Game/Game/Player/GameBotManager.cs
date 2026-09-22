@@ -249,6 +249,7 @@ public static class GameBotManager
         return playerData != null &&
                playerData.controlType == GamePlayerControlType.Bot &&
                playerData.gameStatus == GamePlayerStatus.Eligible &&
+               !playerData.hasRiskCashedOut &&
                !playerData.isRiskDecisionPending;
     }
 
@@ -287,12 +288,20 @@ public static class GameBotManager
             checkResult,
             ruleDecision);
 
+        if (playerData.hasPendingRankCheck)
+        {
+            GameRankAuthority.CompleteDefaultRankedCheck(
+                gameSessionData,
+                playerData);
+        }
+
         if (playController.IsRiskRule)
         {
             RiskGameplayAuthority.CompletePendingCheck(gameSessionData, playerData);
         }
 
-        if (playerData.gameStatus == GamePlayerStatus.Won)
+        if (!GameRankAuthority.IsEnabled(gameSessionData) &&
+            playerData.gameStatus == GamePlayerStatus.Won)
         {
             playController.EndGame(GameEndReason.RuleCompleted);
         }
@@ -304,9 +313,16 @@ public static class GameBotManager
 
         if (playController.Phase == GamePlayPhase.Ended)
         {
-            GameScoreAuthority.FinalizeEligiblePlayers(
-                gameSessionData,
-                playController.ResolveEligiblePlayerAtMatchEnd());
+            if (RiskGameplayAuthority.IsRiskGame(gameSessionData))
+            {
+                GameRankAuthority.FinalizeRiskMatch(gameSessionData);
+            }
+            else
+            {
+                GameScoreAuthority.FinalizeEligiblePlayers(
+                    gameSessionData,
+                    playController.ResolveEligiblePlayerAtMatchEnd());
+            }
             gameSessionData.gameState = GameSessionState.Completed;
         }
 
@@ -335,6 +351,7 @@ public static class GameBotManager
             if (playerData == null ||
                 playerData.controlType != GamePlayerControlType.Bot ||
                 playerData.gameStatus != GamePlayerStatus.Eligible ||
+                playerData.hasRiskCashedOut ||
                 !playerData.isRiskDecisionPending)
             {
                 continue;

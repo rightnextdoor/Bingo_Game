@@ -27,6 +27,11 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
     [Header("Free Cell")]
     [SerializeField] private Toggle useFreeCellToggle;
 
+    [Header("Rank")]
+    [SerializeField] private Toggle useDefaultRankToggle;
+    [SerializeField] private GameObject useRankRow;
+    [SerializeField] private Toggle useRankToggle;
+
     [Header("Patterns")]
     [SerializeField] private Toggle useDefaultPatternsToggle;
     [SerializeField] private GameObject patternSection;
@@ -223,12 +228,20 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
             useFreeCellToggle.SetIsOnWithoutNotify(workingData.useFreeCell);
         }
 
+        if (useDefaultRankToggle != null)
+        {
+            useDefaultRankToggle.SetIsOnWithoutNotify(workingData.usesDefaultRank);
+        }
+
+        if (useRankToggle != null)
+        {
+            useRankToggle.SetIsOnWithoutNotify(workingData.useRank);
+        }
+
         if (useDefaultPatternsToggle != null)
         {
             useDefaultPatternsToggle.SetIsOnWithoutNotify(workingData.usesDefaultPatterns);
         }
-
-        LoadPatternSelection(workingData.patternTypes);
 
         LoadPatternSelection(workingData.patternTypes);
 
@@ -262,6 +275,7 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
             botCountInput.SetTextWithoutNotify(string.Empty);
         }
 
+        ApplyRankState();
         ApplyPatternState();
         ApplyMaxPlayersState();
         ApplyAddBotsState();
@@ -372,6 +386,24 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
 
         value = options[index];
         return true;
+    }
+
+    #endregion
+
+    #region Rank Setup
+
+    private void ApplyDefaultRankForGameMode(BingoGameModeType gameModeType)
+    {
+        BingoGameModeData gameModeData = GameModeManager.instance != null
+            ? GameModeManager.instance.GetGameModeData(gameModeType)
+            : null;
+
+        workingData.useRank = gameModeData?.RuleData != null && gameModeData.RuleData.UseRank;
+
+        if (useRankToggle != null)
+        {
+            useRankToggle.SetIsOnWithoutNotify(workingData.useRank);
+        }
     }
 
     #endregion
@@ -606,6 +638,18 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
             useFreeCellToggle.onValueChanged.AddListener(OnUseFreeCellChanged);
         }
 
+        if (useDefaultRankToggle != null)
+        {
+            useDefaultRankToggle.onValueChanged.RemoveListener(OnUseDefaultRankChanged);
+            useDefaultRankToggle.onValueChanged.AddListener(OnUseDefaultRankChanged);
+        }
+
+        if (useRankToggle != null)
+        {
+            useRankToggle.onValueChanged.RemoveListener(OnUseRankChanged);
+            useRankToggle.onValueChanged.AddListener(OnUseRankChanged);
+        }
+
         if (useDefaultPatternsToggle != null)
         {
             useDefaultPatternsToggle.onValueChanged.RemoveListener(OnUseDefaultPatternsChanged);
@@ -660,6 +704,16 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
             useFreeCellToggle.onValueChanged.RemoveListener(OnUseFreeCellChanged);
         }
 
+        if (useDefaultRankToggle != null)
+        {
+            useDefaultRankToggle.onValueChanged.RemoveListener(OnUseDefaultRankChanged);
+        }
+
+        if (useRankToggle != null)
+        {
+            useRankToggle.onValueChanged.RemoveListener(OnUseRankChanged);
+        }
+
         if (useDefaultPatternsToggle != null)
         {
             useDefaultPatternsToggle.onValueChanged.RemoveListener(OnUseDefaultPatternsChanged);
@@ -704,6 +758,11 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
 
         workingData.gameModeType = selectedGameModeType;
 
+        if (workingData.usesDefaultRank)
+        {
+            ApplyDefaultRankForGameMode(selectedGameModeType);
+        }
+
         if (workingData.usesDefaultPatterns)
         {
             ApplyDefaultPatternsForGameMode(selectedGameModeType);
@@ -728,6 +787,35 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
         }
 
         ApplyPatternState();
+    }
+
+    private void OnUseDefaultRankChanged(bool isOn)
+    {
+        if (isLoadingUi)
+        {
+            return;
+        }
+
+        workingData.usesDefaultRank = isOn;
+
+        if (isOn)
+        {
+            ApplyDefaultRankForGameMode(workingData.gameModeType);
+        }
+
+        ClearError();
+        ApplyRankState();
+    }
+
+    private void OnUseRankChanged(bool isOn)
+    {
+        if (isLoadingUi)
+        {
+            return;
+        }
+
+        workingData.useRank = isOn;
+        ClearError();
     }
 
     private void OnBallCountChanged(int value)
@@ -836,6 +924,22 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
 
     #region UI State
 
+    private void ApplyRankState()
+    {
+        bool useDefaultRank = useDefaultRankToggle != null
+            ? useDefaultRankToggle.isOn
+            : workingData.usesDefaultRank;
+
+        SetActive(useRankRow, !useDefaultRank);
+
+        if (useRankToggle != null)
+        {
+            useRankToggle.interactable = !useDefaultRank;
+        }
+
+        RefreshLayout();
+    }
+
     private void ApplyMaxPlayersState()
     {
         bool maxPlayers = maxPlayersToggle != null && maxPlayersToggle.isOn;
@@ -905,6 +1009,23 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
             ? useFreeCellToggle.isOn
             : workingData.useFreeCell;
 
+        bool usesDefaultRank = useDefaultRankToggle != null
+            ? useDefaultRankToggle.isOn
+            : workingData.usesDefaultRank;
+
+        workingData.usesDefaultRank = usesDefaultRank;
+
+        if (usesDefaultRank)
+        {
+            ApplyDefaultRankForGameMode(selectedGameModeType);
+        }
+        else
+        {
+            workingData.useRank = useRankToggle != null
+                ? useRankToggle.isOn
+                : workingData.useRank;
+        }
+
         bool usesDefaultPatterns = useDefaultPatternsToggle != null
             ? useDefaultPatternsToggle.isOn
             : workingData.usesDefaultPatterns;
@@ -947,6 +1068,8 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
             gameModeType = selectedGameModeType,
             ballCountType = selectedBallCountType,
             useFreeCell = useFreeCell,
+            usesDefaultRank = usesDefaultRank,
+            useRank = workingData.useRank,
             hasRiskMatchDurationOverride = workingData.hasRiskMatchDurationOverride,
             riskMatchDurationMinutes = workingData.riskMatchDurationMinutes,
             patternTypes = new List<BingoPatternType>(workingData.patternTypes),

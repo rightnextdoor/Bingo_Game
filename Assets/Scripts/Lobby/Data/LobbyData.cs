@@ -4,14 +4,14 @@ using System.Collections.Generic;
 [Serializable]
 public class LobbyData
 {
-    public int lobbyVersion = 2;
+    public int lobbyVersion = 3;
 
     public SoloLobbyData soloLobbyData = new SoloLobbyData();
     public CustomLobbyData customLobbyData = new CustomLobbyData();
 
     public LobbyData()
     {
-        lobbyVersion = 2;
+        lobbyVersion = 3;
         soloLobbyData = new SoloLobbyData();
         customLobbyData = new CustomLobbyData();
     }
@@ -25,6 +25,8 @@ public class SoloLobbyData
     public bool useFreeCell = true;
     public bool hasRiskMatchDurationOverride;
     public float riskMatchDurationMinutes = GameSettings.DefaultRiskMatchDurationMinutes;
+    public bool usesDefaultRank = true;
+    public bool useRank;
     public bool usesDefaultPatterns = true;
     public List<BingoPatternType> patternTypes = new List<BingoPatternType>();
 
@@ -35,6 +37,8 @@ public class SoloLobbyData
         useFreeCell = true;
         hasRiskMatchDurationOverride = false;
         riskMatchDurationMinutes = GameSettings.DefaultRiskMatchDurationMinutes;
+        usesDefaultRank = true;
+        useRank = false;
         usesDefaultPatterns = true;
         patternTypes = new List<BingoPatternType>();
     }
@@ -48,6 +52,8 @@ public class CustomLobbyData
     public bool useFreeCell = true;
     public bool hasRiskMatchDurationOverride;
     public float riskMatchDurationMinutes = GameSettings.DefaultRiskMatchDurationMinutes;
+    public bool usesDefaultRank = true;
+    public bool useRank;
     public bool usesDefaultPatterns = true;
     public List<BingoPatternType> patternTypes = new List<BingoPatternType>();
 
@@ -58,6 +64,8 @@ public class CustomLobbyData
         useFreeCell = true;
         hasRiskMatchDurationOverride = false;
         riskMatchDurationMinutes = GameSettings.DefaultRiskMatchDurationMinutes;
+        usesDefaultRank = true;
+        useRank = false;
         usesDefaultPatterns = true;
         patternTypes = new List<BingoPatternType>();
     }

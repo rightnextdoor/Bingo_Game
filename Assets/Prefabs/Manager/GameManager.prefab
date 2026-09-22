@@ -323,6 +323,8 @@ MonoBehaviour:
   joinLockSeconds: 10
   pendingJoinTimeoutSeconds: 60
   maxOnlineBots: 30
+  useRankWeight: 1
+  noRankWeight: 3
 --- !u!114 &6480048657164182875
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -465,5 +467,6 @@ MonoBehaviour:
     durationMinutes: 15
   - ballCountType: 90
     durationMinutes: 20
+  gameOverCountdownSeconds: 15
   minimumScore: 0
   maximumScore: 9000000

@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: Elimination
   m_EditorClassIdentifier: Assembly-CSharp::BingoGameRuleData
   ruleType: 3
+  useRank: 1
   description: Boards mark called numbers automatically. Completing an active Bingo
     pattern puts that player out. When one connected eligible player remains, that
     player wins. If multiple players enter their final check from the same ball,

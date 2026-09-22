@@ -10,6 +10,9 @@ public class LobbyHostSettingsData
     public bool hasRiskMatchDurationOverride;
     public float riskMatchDurationMinutes;
 
+    public bool usesDefaultRank;
+    public bool useRank;
+
     public List<BingoPatternType> patternTypes;
     public bool usesDefaultPatterns;
 
@@ -26,6 +29,8 @@ public class LobbyHostSettingsData
         useFreeCell = true;
         hasRiskMatchDurationOverride = false;
         riskMatchDurationMinutes = GameSettings.DefaultRiskMatchDurationMinutes;
+        usesDefaultRank = true;
+        useRank = false;
 
         patternTypes = new List<BingoPatternType>();
         usesDefaultPatterns = true;
@@ -56,6 +61,8 @@ public class LobbyHostSettingsData
         useFreeCell = lobbyViewData.useFreeCell;
         hasRiskMatchDurationOverride = lobbyViewData.hasRiskMatchDurationOverride;
         riskMatchDurationMinutes = lobbyViewData.riskMatchDurationMinutes;
+        usesDefaultRank = lobbyViewData.usesDefaultRank;
+        useRank = lobbyViewData.useRank;
 
         patternTypes = lobbyViewData.patternTypes != null
             ? new List<BingoPatternType>(lobbyViewData.patternTypes)

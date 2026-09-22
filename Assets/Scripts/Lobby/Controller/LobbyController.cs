@@ -93,6 +93,8 @@ public class LobbyController
 
     [SerializeField] private BingoBallCountType ballCountType = BingoBallCountType.Ball75;
     [SerializeField] private bool useFreeCell = true;
+    [SerializeField] private bool usesDefaultRank = true;
+    [SerializeField] private bool useRank;
     [SerializeField] private bool hasRiskMatchDurationOverride;
     [SerializeField, Min(0f)] private float riskMatchDurationMinutes = GameSettings.DefaultRiskMatchDurationMinutes;
 
@@ -106,6 +108,8 @@ public class LobbyController
 
     public BingoBallCountType BallCountType => ballCountType;
     public bool UseFreeCell => useFreeCell;
+    public bool UsesDefaultRank => usesDefaultRank;
+    public bool UseRank => useRank;
     public bool HasRiskMatchDurationOverride => hasRiskMatchDurationOverride;
     public float RiskMatchDurationMinutes => Mathf.Max(0f, riskMatchDurationMinutes);
 
@@ -163,6 +167,8 @@ public class LobbyController
         patternTypes.Clear();
         usesDefaultPatterns = true;
         useFreeCell = true;
+        usesDefaultRank = true;
+        useRank = false;
         hasRiskMatchDurationOverride = false;
         riskMatchDurationMinutes = GameSettings.DefaultRiskMatchDurationMinutes;
 
@@ -213,6 +219,8 @@ public class LobbyController
         gameModeType = soloSetupData.gameModeType;
         ballCountType = soloSetupData.ballCountType;
         useFreeCell = soloSetupData.useFreeCell;
+        usesDefaultRank = soloSetupData.usesDefaultRank;
+        useRank = soloSetupData.useRank;
         hasRiskMatchDurationOverride = soloSetupData.hasRiskMatchDurationOverride;
         riskMatchDurationMinutes = soloSetupData.riskMatchDurationMinutes;
         usesDefaultPatterns = soloSetupData.usesDefaultPatterns;
@@ -233,6 +241,8 @@ public class LobbyController
     private void ApplyOnlineSetup(OnlineLobbySetupData onlineSetupData)
     {
         lobbyName = DefaultOnlineLobbyName;
+        usesDefaultRank = false;
+        useRank = LobbySettings.instance != null && LobbySettings.instance.RollUseRank();
 
         if (onlineSetupData == null)
         {
@@ -242,6 +252,12 @@ public class LobbyController
         gameModeType = onlineSetupData.gameModeType;
         ballCountType = onlineSetupData.ballCountType;
         useFreeCell = onlineSetupData.useFreeCell;
+
+        if (onlineSetupData.hasUseRankOverride)
+        {
+            useRank = onlineSetupData.useRank;
+        }
+
         maxPlayers = onlineSetupData.maxPlayers;
         maxPlayer = GetValidMaximumPlayers(onlineSetupData.maxPlayer, maxPlayers);
     }
@@ -273,6 +289,8 @@ public class LobbyController
         gameModeType = hostSetupData.gameModeType;
         ballCountType = hostSetupData.ballCountType;
         useFreeCell = hostSetupData.useFreeCell;
+        usesDefaultRank = hostSetupData.usesDefaultRank;
+        useRank = hostSetupData.useRank;
         hasRiskMatchDurationOverride = hostSetupData.hasRiskMatchDurationOverride;
         riskMatchDurationMinutes = hostSetupData.riskMatchDurationMinutes;
         usesDefaultPatterns = hostSetupData.usesDefaultPatterns;
@@ -1452,6 +1470,11 @@ public class LobbyController
         {
             hasRule = true;
             ruleType = gameModeData.RuleData.RuleType;
+
+            if (usesDefaultRank)
+            {
+                useRank = gameModeData.RuleData.UseRank;
+            }
         }
 
         if (usesDefaultPatterns)
@@ -1504,6 +1527,8 @@ public class LobbyController
         gameModeType = ResolveGameModeType(settingsData.gameModeType);
         ballCountType = ResolveBallCountType(settingsData.ballCountType);
         useFreeCell = settingsData.useFreeCell;
+        usesDefaultRank = settingsData.usesDefaultRank;
+        useRank = settingsData.useRank;
         hasRiskMatchDurationOverride = settingsData.hasRiskMatchDurationOverride;
         riskMatchDurationMinutes = settingsData.riskMatchDurationMinutes;
         ResolveRiskMatchDuration();
@@ -1736,6 +1761,8 @@ public class LobbyController
             usesDefaultPatterns = usesDefaultPatterns,
             ballCountType = ballCountType,
             useFreeCell = useFreeCell,
+            usesDefaultRank = usesDefaultRank,
+            useRank = useRank,
             hasRiskMatchDurationOverride = hasRiskMatchDurationOverride,
             riskMatchDurationMinutes = RiskMatchDurationMinutes,
             playerCount = GetVisiblePlayerCount(),

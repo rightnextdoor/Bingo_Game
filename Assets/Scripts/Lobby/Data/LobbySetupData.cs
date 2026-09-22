@@ -39,6 +39,8 @@ public class SoloLobbySetupData
     public bool useFreeCell = true;
     public bool hasRiskMatchDurationOverride;
     public float riskMatchDurationMinutes = GameSettings.DefaultRiskMatchDurationMinutes;
+    public bool usesDefaultRank = true;
+    public bool useRank;
 
     public bool usesDefaultPatterns = true;
     public List<BingoPatternType> patternTypes = new List<BingoPatternType>();
@@ -53,6 +55,8 @@ public class SoloLobbySetupData
         useFreeCell = true;
         hasRiskMatchDurationOverride = false;
         riskMatchDurationMinutes = GameSettings.DefaultRiskMatchDurationMinutes;
+        usesDefaultRank = true;
+        useRank = false;
 
         usesDefaultPatterns = true;
         patternTypes = new List<BingoPatternType>();
@@ -69,6 +73,8 @@ public class OnlineLobbySetupData
     public OnlineSearchType searchType = OnlineSearchType.QuickPlay;
     public BingoBallCountType ballCountType = BingoBallCountType.Ball75;
     public bool useFreeCell = true;
+    public bool hasUseRankOverride;
+    public bool useRank;
 
     public bool maxPlayers = false;
     public int maxPlayer = 30;
@@ -79,6 +85,8 @@ public class OnlineLobbySetupData
         searchType = OnlineSearchType.QuickPlay;
         ballCountType = BingoBallCountType.Ball75;
         useFreeCell = true;
+        hasUseRankOverride = false;
+        useRank = false;
 
         maxPlayers = false;
         maxPlayer = 30;
@@ -113,6 +121,8 @@ public class CustomHostLobbySetupData
     public bool useFreeCell = true;
     public bool hasRiskMatchDurationOverride;
     public float riskMatchDurationMinutes = GameSettings.DefaultRiskMatchDurationMinutes;
+    public bool usesDefaultRank = true;
+    public bool useRank;
 
     public bool usesDefaultPatterns = true;
     public List<BingoPatternType> patternTypes = new List<BingoPatternType>();
@@ -130,6 +140,8 @@ public class CustomHostLobbySetupData
         useFreeCell = true;
         hasRiskMatchDurationOverride = false;
         riskMatchDurationMinutes = GameSettings.DefaultRiskMatchDurationMinutes;
+        usesDefaultRank = true;
+        useRank = false;
 
         usesDefaultPatterns = true;
         patternTypes = new List<BingoPatternType>();

@@ -16,6 +16,7 @@ public class GamePlayController
     [SerializeField] private bool useFreeCell;
     [SerializeField] private bool hasRule;
     [SerializeField] private BingoRuleType ruleType;
+    [SerializeField] private bool useRank;
     [SerializeField] private GameBallController ballController = new GameBallController();
     [SerializeField] private GameRuleController ruleController = new GameRuleController();
 
@@ -67,6 +68,7 @@ public class GamePlayController
     public float RiskMatchDurationSeconds => riskMatchDurationSeconds;
     public bool IsRiskRule => ruleController?.ActiveRuleType == BingoRuleType.Risk;
     public bool IsDeathRule => ruleController?.ActiveRuleType == BingoRuleType.Elimination;
+    public bool UsesRank => useRank;
     public bool IsRunning =>
         phase == GamePlayPhase.FirstBallCountdown ||
         phase == GamePlayPhase.NextBallCountdown;
@@ -87,7 +89,8 @@ public class GamePlayController
             GameSettings.DefaultNextBallCountdownSeconds,
             GameSettings.DefaultRiskMatchDurationSeconds,
             false,
-            BingoRuleType.Traditional);
+            BingoRuleType.Traditional,
+            false);
     }
 
     public GamePlayController(GamePlayController controller)
@@ -102,7 +105,8 @@ public class GamePlayController
                 GameSettings.DefaultNextBallCountdownSeconds,
                 GameSettings.DefaultRiskMatchDurationSeconds,
                 false,
-                BingoRuleType.Traditional);
+                BingoRuleType.Traditional,
+                false);
             return;
         }
 
@@ -113,6 +117,7 @@ public class GamePlayController
         useFreeCell = controller.useFreeCell;
         hasRule = controller.hasRule;
         ruleType = controller.ruleType;
+        useRank = controller.useRank;
         ballController = new GameBallController(controller.ballController);
         ballTimer = new GamePlayTimer(controller.ballTimer);
         riskTimer = new GamePlayTimer(controller.riskTimer);
@@ -146,13 +151,15 @@ public class GamePlayController
         float requestedNextBallCountdownSeconds,
         float requestedRiskMatchDurationSeconds,
         bool requestedHasRule,
-        BingoRuleType requestedRuleType)
+        BingoRuleType requestedRuleType,
+        bool requestedUseRank)
     {
         gameModeType = requestedGameModeType;
         ballCountType = requestedBallCountType;
         useFreeCell = requestedUseFreeCell;
         hasRule = requestedHasRule;
         ruleType = requestedRuleType;
+        useRank = requestedUseRank;
         firstBallCountdownSeconds = Mathf.Max(0f, requestedFirstBallCountdownSeconds);
         nextBallCountdownSeconds = Mathf.Max(0f, requestedNextBallCountdownSeconds);
         riskMatchDurationSeconds = Mathf.Max(0f, requestedRiskMatchDurationSeconds);
@@ -328,7 +335,8 @@ public class GamePlayController
 
         AddPendingCheckAnimation(playerId);
 
-        if (ruleDecision.waitsForWinningCheckAnimation &&
+        if (!useRank &&
+            ruleDecision.waitsForWinningCheckAnimation &&
             string.IsNullOrWhiteSpace(matchEndingCheckPlayerId))
         {
             matchEndingCheckPlayerId = playerId;

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -9,6 +10,9 @@ public class GameBoardSectionController : MonoBehaviour
     #region Inspector Fields
 
     [SerializeField] private BingoBoardController boardController;
+
+    [Header("Rank")]
+    [SerializeField] private TMP_Text rankText;
 
     [Header("Controls")]
     [SerializeField] private Button bingoButton;
@@ -79,6 +83,26 @@ public class GameBoardSectionController : MonoBehaviour
     public void ClearBoard()
     {
         boardController?.ClearBoard();
+        SetRankVisible(false);
+    }
+
+    public void DisplayRank(int rank, int playerTotal)
+    {
+        if (rankText == null)
+        {
+            return;
+        }
+
+        rankText.text = $"Rank {Mathf.Max(1, rank)} / {Mathf.Max(1, playerTotal)}";
+        rankText.gameObject.SetActive(true);
+    }
+
+    public void SetRankVisible(bool isVisible)
+    {
+        if (rankText != null)
+        {
+            rankText.gameObject.SetActive(isVisible);
+        }
     }
 
     public void SetBoardInteractable(bool interactable)

@@ -155,19 +155,20 @@ public static class RiskGameplayAuthority
 
         if (!endPlayerGame)
         {
+            GameRankAuthority.RefreshLiveRanks(gameSessionData);
             return true;
         }
 
         ClearPlayerRiskState(playerData, true);
-        GameScoreAuthority.TrySetFinalStatus(
-            gameSessionData,
-            playerData,
-            GamePlayerStatus.Won);
+        playerData.hasRiskCashedOut = true;
+        GameAutomaticBoardAuthority.ClearPendingActions(playerData);
+        GameRankAuthority.RefreshLiveRanks(gameSessionData);
 
         if (gameSessionData.GetEligiblePlayerCount() == 0 &&
             !gameSessionData.gamePlayController.HasPendingCheckAnimations)
         {
             gameSessionData.gamePlayController.EndGame(GameEndReason.NoEligiblePlayers);
+            GameRankAuthority.FinalizeRiskMatch(gameSessionData);
             gameSessionData.gameState = GameSessionState.Completed;
         }
 
@@ -210,6 +211,7 @@ public static class RiskGameplayAuthority
 
             if (playerData == null ||
                 playerData.gameStatus != GamePlayerStatus.Eligible ||
+                playerData.hasRiskCashedOut ||
                 !playerData.isAutomaticBoardEnabled ||
                 playerData.boardData == null)
             {
@@ -258,6 +260,7 @@ public static class RiskGameplayAuthority
 
             if (playerData == null ||
                 playerData.gameStatus != GamePlayerStatus.Eligible ||
+                playerData.hasRiskCashedOut ||
                 !playerData.isAutomaticBoardEnabled)
             {
                 continue;

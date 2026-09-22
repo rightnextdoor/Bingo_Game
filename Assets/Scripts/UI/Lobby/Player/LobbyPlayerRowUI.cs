@@ -8,6 +8,12 @@ using UnityEngine.UI;
 [DisallowMultipleComponent]
 public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
 {
+    private const float SingleLineStatusMaximumFontSize = 20f;
+    private const float MultiLineStatusMaximumFontSize = 17f;
+    private const float StatusMinimumFontSize = 12f;
+    private const float NormalStatusPreferredWidth = 190f;
+    private const float CompactStatusPreferredWidth = 150f;
+
     #region Fields
 
     [Header("Selection")]
@@ -30,6 +36,7 @@ public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
     [SerializeField] private Button kickButton;
 
     private string userId = string.Empty;
+    private LayoutElement gameplayStatusLayoutElement;
 
     private Action<string> rowClicked;
     private Action<string> kickRequested;
@@ -42,6 +49,9 @@ public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
 
     private void Awake()
     {
+        gameplayStatusLayoutElement = gameplayStatusText != null
+            ? gameplayStatusText.GetComponent<LayoutElement>()
+            : null;
         ResetVisualState();
     }
 
@@ -87,9 +97,8 @@ public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
 
         SetStatusIcon(botIconImage, UIIconType.Bot, playerData.showBotIcon);
         SetStatusIcon(readyCheckmarkImage, UIIconType.LobbyCheckmark, playerData.showReadyIcon && playerData.isReady);
-        SetGameplayStatus(playerData.gameplayStatusText);
-
         SetKickButtonState(playerData.canKick);
+        SetGameplayStatus(playerData.gameplayStatusText);
         SetHighlighted(isHighlighted);
     }
 
@@ -181,9 +190,38 @@ public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
         }
 
         bool hasStatus = !string.IsNullOrWhiteSpace(statusText);
-        gameplayStatusText.text = hasStatus
+        string resolvedStatus = hasStatus
             ? statusText.Trim().ToUpperInvariant()
             : string.Empty;
+        bool hasMultipleLines = resolvedStatus.Contains("\n");
+
+        gameplayStatusText.enableAutoSizing = true;
+        gameplayStatusText.fontSizeMin = StatusMinimumFontSize;
+        gameplayStatusText.fontSizeMax = hasMultipleLines
+            ? MultiLineStatusMaximumFontSize
+            : SingleLineStatusMaximumFontSize;
+        gameplayStatusText.text = resolvedStatus;
+
+        if (gameplayStatusLayoutElement == null)
+        {
+            gameplayStatusLayoutElement =
+                gameplayStatusText.GetComponent<LayoutElement>();
+        }
+
+        if (gameplayStatusLayoutElement != null)
+        {
+            bool usesTrailingControl =
+                botIconImage?.gameObject.activeSelf == true ||
+                readyCheckmarkImage?.gameObject.activeSelf == true ||
+                kickButton?.gameObject.activeSelf == true;
+            gameplayStatusLayoutElement.preferredWidth = usesTrailingControl
+                ? CompactStatusPreferredWidth
+                : NormalStatusPreferredWidth;
+            gameplayStatusLayoutElement.preferredHeight = hasMultipleLines
+                ? 50f
+                : 30f;
+        }
+
         gameplayStatusText.gameObject.SetActive(hasStatus);
     }
 

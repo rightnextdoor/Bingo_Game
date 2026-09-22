@@ -926,6 +926,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
                userData.HasUser &&
                playerData != null &&
                playerData.gameStatus == GamePlayerStatus.Eligible &&
+               !playerData.hasRiskCashedOut &&
                playerData.isRiskDecisionPending &&
                service != null &&
                service.IsReady &&
@@ -1254,6 +1255,8 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
                 gameModeType = gameSessionData.gameModeType,
                 ballCountType = gameSessionData.ballCountType,
                 useFreeCell = gameSessionData.useFreeCell,
+                usesDefaultRank = gameSessionData.usesDefaultRank,
+                useRank = gameSessionData.useRank,
                 hasRiskMatchDurationOverride =
                     gameSessionData.hasRiskMatchDurationOverride,
                 riskMatchDurationMinutes = gameSessionData.riskMatchDurationMinutes,
@@ -1279,6 +1282,13 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
         playerData.isAutomaticBoardEnabled = updateData.isAutomaticBoardEnabled;
         playerData.gameStatus = updateData.gameStatus;
         playerData.currentMatchScore = updateData.currentMatchScore;
+        playerData.rank = updateData.rank;
+        playerData.isRankFinal = updateData.isRankFinal;
+        playerData.isRankWinBlocked = updateData.isRankWinBlocked;
+        playerData.hasRiskCashedOut = updateData.hasRiskCashedOut;
+        playerData.hasPendingRankCheck = updateData.hasPendingRankCheck;
+        playerData.pendingRankCheckScore = updateData.pendingRankCheckScore;
+        playerData.rankResolutionOrder = updateData.rankResolutionOrder;
         playerData.areStatisticsFinalized = updateData.areStatisticsFinalized;
         playerData.finalizedScoreDelta = updateData.finalizedScoreDelta;
         playerData.isScorePersisted = updateData.isScorePersisted;
@@ -1303,6 +1313,13 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
         playerData.isAutomaticBoardEnabled = updateData.isAutomaticBoardEnabled;
         playerData.gameStatus = updateData.gameStatus;
         playerData.currentMatchScore = updateData.currentMatchScore;
+        playerData.rank = updateData.rank;
+        playerData.isRankFinal = updateData.isRankFinal;
+        playerData.isRankWinBlocked = updateData.isRankWinBlocked;
+        playerData.hasRiskCashedOut = updateData.hasRiskCashedOut;
+        playerData.hasPendingRankCheck = updateData.hasPendingRankCheck;
+        playerData.pendingRankCheckScore = updateData.pendingRankCheckScore;
+        playerData.rankResolutionOrder = updateData.rankResolutionOrder;
         playerData.areStatisticsFinalized = updateData.areStatisticsFinalized;
         playerData.finalizedScoreDelta = updateData.finalizedScoreDelta;
         playerData.isScorePersisted = updateData.isScorePersisted;

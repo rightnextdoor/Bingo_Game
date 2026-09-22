@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: Risk
   m_EditorClassIdentifier: Assembly-CSharp::BingoGameRuleData
   ruleType: 2
+  useRank: 1
   description: Complete and submit marked Bingo patterns to earn points. A completed
     pattern that is not submitted during its timed opportunity can still be checked
     later, but it awards no points. After a successful check, choose Keep Playing

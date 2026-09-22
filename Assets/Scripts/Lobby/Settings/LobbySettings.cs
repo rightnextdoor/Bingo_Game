@@ -20,6 +20,10 @@ public class LobbySettings : MonoBehaviour
     [Header("Online Bots")]
     [SerializeField, Min(0)] private int maxOnlineBots = 30;
 
+    [Header("Online Rank Selection")]
+    [SerializeField, Min(0)] private int useRankWeight = 1;
+    [SerializeField, Min(0)] private int noRankWeight = 1;
+
     public int MinimumPlayers => Mathf.Max(1, minimumPlayers);
     public int MaxPlayerCount => Mathf.Max(MinimumPlayers, maxPlayerCount);
 
@@ -29,6 +33,20 @@ public class LobbySettings : MonoBehaviour
     public float JoinLockSeconds => Mathf.Max(0f, joinLockSeconds);
     public float PendingJoinTimeoutSeconds => Mathf.Max(1f, pendingJoinTimeoutSeconds);
     public int MaxOnlineBots => Mathf.Max(0, maxOnlineBots);
+
+    public bool RollUseRank()
+    {
+        int rankWeight = Mathf.Max(0, useRankWeight);
+        int unrankedWeight = Mathf.Max(0, noRankWeight);
+        int totalWeight = rankWeight + unrankedWeight;
+
+        if (totalWeight <= 0)
+        {
+            return false;
+        }
+
+        return Random.Range(0, totalWeight) < rankWeight;
+    }
 
     #endregion
 

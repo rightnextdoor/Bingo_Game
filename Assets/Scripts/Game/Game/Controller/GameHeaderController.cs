@@ -265,7 +265,9 @@ public class GameHeaderController : MonoBehaviour
             return;
         }
 
-        SetText(localScoreStatusText, localPlayer.gameStatus.ToString().ToUpperInvariant());
+        SetText(
+            localScoreStatusText,
+            localPlayer.gameStatus.ToString().ToUpperInvariant());
     }
 
     private static void SetText(TMP_Text text, string value)

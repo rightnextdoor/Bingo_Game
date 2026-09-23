@@ -14,6 +14,7 @@ public class UserData
     public string playerName;
     public string iconId;
     public string lastGameId;
+    public string pendingNetworkGameCleanupId;
     public bool hasLastGameDisplayData;
     public MainMenuPlayMode lastGamePlayMode;
     public BingoGameModeType lastGameModeType;
@@ -36,6 +37,7 @@ public class UserData
         playerName = string.Empty;
         iconId = string.Empty;
         lastGameId = string.Empty;
+        pendingNetworkGameCleanupId = string.Empty;
         hasLastGameDisplayData = false;
         lastGamePlayMode = MainMenuPlayMode.Online;
         lastGameModeType = BingoGameModeType.Traditional;
@@ -54,6 +56,7 @@ public class UserData
         playerName = newPlayerName.Trim();
         iconId = string.IsNullOrWhiteSpace(newIconId) ? string.Empty : newIconId.Trim();
         lastGameId = string.Empty;
+        pendingNetworkGameCleanupId = string.Empty;
         hasLastGameDisplayData = false;
         lastGamePlayMode = MainMenuPlayMode.Online;
         lastGameModeType = BingoGameModeType.Traditional;
@@ -88,6 +91,7 @@ public class UserData
 
     public void RepairData()
     {
+        pendingNetworkGameCleanupId ??= string.Empty;
         if (stats == null)
         {
             stats = new UserStats();

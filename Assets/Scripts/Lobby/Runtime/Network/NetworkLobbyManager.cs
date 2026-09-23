@@ -287,7 +287,11 @@ public class NetworkLobbyManager : MonoBehaviour
 
 
 
-    public LobbyExitResult ProcessAuthorityKickPlayer(ulong senderClientId, string targetUserId)
+    public LobbyExitResult ProcessAuthorityKickPlayer(
+        ulong senderClientId,
+        string targetUserId,
+        GameFinalScoreResultData finalScoreResult = null,
+        string gameId = "")
     {
         if (!TryResolveConnectedUser(senderClientId, out string requesterUserId, out LobbyExitResult failureResult))
         {
@@ -314,7 +318,11 @@ public class NetworkLobbyManager : MonoBehaviour
         if (result.success && hasTargetConnection)
         {
             StopInitialSync(targetClientId);
-            NetworkLobbyConnection.TrySendForcedLobbyExit(targetClientId, LobbyExitNotification.Kicked(lobby.GetLobbyId()));
+            LobbyExitNotification notification = string.IsNullOrWhiteSpace(gameId)
+                ? LobbyExitNotification.Kicked(lobby.GetLobbyId(), finalScoreResult)
+                : LobbyExitNotification.KickedFromGame(
+                    lobby.GetLobbyId(), gameId, finalScoreResult);
+            NetworkLobbyConnection.TrySendForcedLobbyExit(targetClientId, notification);
         }
 
         return result;
@@ -373,7 +381,11 @@ public class NetworkLobbyManager : MonoBehaviour
             return LobbyExitResult.Succeeded(userId, exitReason, false, 0, false, LobbyCloseReason.None);
         }
 
-        return lobby.Controller.RemovePlayer(userId, exitReason);
+        bool isLeavingLinkedGame =
+            NetworkGameSessionManager.instance?.HasPlayerEnteredLinkedGame(
+                lobby.GetLobbyId(), userId) == true;
+        return lobby.Controller.RemovePlayer(
+            userId, exitReason, isLeavingLinkedGame);
     }
 
     private void OnLobbyPlayerExitProcessed(LobbyController controller, LobbyExitResult exitResult)
@@ -1092,6 +1104,48 @@ public class NetworkLobbyManager : MonoBehaviour
         }
 
         return true;
+    }
+
+    public void CloseLobbyAfterAbandonedGame(string lobbyId)
+    {
+        if (!isReady || networkBootstrap?.IsAuthority != true ||
+            string.IsNullOrWhiteSpace(lobbyId))
+        {
+            return;
+        }
+
+        for (int i = 0; i < lobbies.Count; i++)
+        {
+            Lobby lobby = lobbies[i];
+
+            if (lobby == null ||
+                !string.Equals(lobby.GetLobbyId(), lobbyId, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            bool hostPresent = false;
+            IReadOnlyList<LobbyPlayerData> players = lobby.Controller?.Players;
+
+            if (players != null)
+            {
+                for (int playerIndex = 0; playerIndex < players.Count; playerIndex++)
+                {
+                    if (players[playerIndex]?.isHost == true)
+                    {
+                        hostPresent = true;
+                        break;
+                    }
+                }
+            }
+
+            CloseAndDeleteLobby(
+                lobby,
+                !hostPresent && lobby.playMode == MainMenuPlayMode.Custom
+                    ? LobbyCloseReason.HostLeft
+                    : LobbyCloseReason.Empty);
+            return;
+        }
     }
 
     private void BroadcastGameCreationResult(Lobby lobby, GameSessionResult result)
@@ -2132,6 +2186,16 @@ public class NetworkLobbyManager : MonoBehaviour
         StopInitialSync(clientId);
 
         if (networkBootstrap == null || !networkBootstrap.IsAuthority)
+        {
+            return;
+        }
+
+        Lobby activeLobby = FindUserLobby(userId);
+
+        // Keep the lobby slot while its game is running so a frozen player can return.
+        if (activeLobby != null &&
+            NetworkGameSessionManager.instance?.HasPlayerEnteredLinkedGame(
+                activeLobby.GetLobbyId(), userId) == true)
         {
             return;
         }

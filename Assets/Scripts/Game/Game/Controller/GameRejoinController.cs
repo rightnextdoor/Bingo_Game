@@ -20,6 +20,7 @@ public class GameRejoinController : MonoBehaviour
     [SerializeField] private Button noButton;
 
     private bool isDecliningGame;
+    private bool isRejoiningGame;
     private RejoinSource rejoinSource;
     private string gameDisplayTitle = string.Empty;
     private Action savedSoloDeclinedAction;
@@ -45,6 +46,7 @@ public class GameRejoinController : MonoBehaviour
     private void OnEnable()
     {
         isDecliningGame = false;
+        isRejoiningGame = false;
         SetButtonsInteractable(true);
         ApplyDisplayTitle();
 
@@ -72,8 +74,13 @@ public class GameRejoinController : MonoBehaviour
         }
     }
 
-    private void RejoinLastGame()
+    private async void RejoinLastGame()
     {
+        if (isRejoiningGame)
+        {
+            return;
+        }
+
         if (rejoinSource == RejoinSource.SavedSolo)
         {
             RejoinSavedSoloGame();
@@ -87,6 +94,39 @@ public class GameRejoinController : MonoBehaviour
             GameSessionManager.instance == null ||
             GameSceneManager.instance == null)
         {
+            return;
+        }
+
+        isRejoiningGame = true;
+        SetButtonsInteractable(false);
+        GameSessionResult rejoinCheck;
+
+        try
+        {
+            rejoinCheck = await GameSessionManager.instance.CheckNetworkRejoinAsync(lastGameId);
+        }
+        finally
+        {
+            isRejoiningGame = false;
+        }
+
+        if (rejoinCheck?.success != true)
+        {
+            SetButtonsInteractable(true);
+
+            if (rejoinCheck?.failureType == GameSessionFailureType.GameNotFound ||
+                rejoinCheck?.failureType == GameSessionFailureType.PlayerNotFound ||
+                rejoinCheck?.failureType == GameSessionFailureType.PlayerNotEligible)
+            {
+                UserManager.instance?.ClearLastGameId();
+                PopupManager.instance?.CloseActivePopup();
+                PopupManager.instance?.OpenFailurePopup("This game has ended and can no longer be rejoined.");
+            }
+            else
+            {
+                PopupManager.instance?.OpenFailurePopup("Unable to rejoin the game. Please check your connection.");
+            }
+
             return;
         }
 

@@ -286,6 +286,20 @@ public class NetworkGameSessionService : MonoBehaviour, IGameSessionService
                connection.RequestRiskDecision(gameId, endPlayerGame);
     }
 
+    public bool TryKickGamePlayer(string gameId, string targetUserId)
+    {
+        if (!isReady || networkBootstrap == null ||
+            !networkBootstrap.IsConnected)
+        {
+            return false;
+        }
+
+        NetworkGameSessionConnection connection =
+            NetworkGameSessionConnection.GetLocalConnection();
+        return connection != null &&
+               connection.RequestHostKick(gameId, targetUserId);
+    }
+
     private async Task<NetworkGameSessionConnection> WaitForLocalGameConnectionAsync()
     {
         float timeoutTime = Time.realtimeSinceStartup + GameConnectionTimeoutSeconds;

@@ -365,6 +365,31 @@ public class NetworkGameSessionConnection : NetworkBehaviour
         return true;
     }
 
+    public bool RequestHostKick(string gameId, string targetUserId)
+    {
+        if (!IsSpawned || !IsOwner ||
+            string.IsNullOrWhiteSpace(gameId) ||
+            string.IsNullOrWhiteSpace(targetUserId))
+        {
+            return false;
+        }
+
+        RequestHostKickRpc(gameId, targetUserId);
+        return true;
+    }
+
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Owner)]
+    private void RequestHostKickRpc(
+        string gameId,
+        string targetUserId,
+        RpcParams rpcParams = default)
+    {
+        NetworkGameSessionManager.instance?.ProcessAuthorityHostKick(
+            rpcParams.Receive.SenderClientId,
+            gameId,
+            targetUserId);
+    }
+
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Owner)]
     private void RequestRejoinGameRpc(string requestId, string gameId, RpcParams rpcParams = default)
     {

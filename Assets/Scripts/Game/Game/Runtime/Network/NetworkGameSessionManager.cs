@@ -11,6 +11,8 @@ public class NetworkGameSessionManager : MonoBehaviour
     public static NetworkGameSessionManager instance;
 
     private readonly List<GameSessionData> gameSessions = new List<GameSessionData>();
+    private readonly Dictionary<string, GameFinalScoreResultData> completedScoreResults =
+        new Dictionary<string, GameFinalScoreResultData>(StringComparer.Ordinal);
 
     private bool isReady;
     private NetworkRoot networkRoot;
@@ -56,11 +58,18 @@ public class NetworkGameSessionManager : MonoBehaviour
         networkRoot = NetworkRoot.instance;
         networkBootstrap = NetworkBootstrap.instance;
         connectionRegistry = NetworkConnectionRegistry.instance;
+        connectionRegistry.ConnectionRemoved -= OnConnectionRemoved;
+        connectionRegistry.ConnectionRemoved += OnConnectionRemoved;
         isReady = true;
     }
 
     private void OnDestroy()
     {
+        if (connectionRegistry != null)
+        {
+            connectionRegistry.ConnectionRemoved -= OnConnectionRemoved;
+        }
+
         if (instance == this)
         {
             instance = null;
@@ -78,15 +87,20 @@ public class NetworkGameSessionManager : MonoBehaviour
         {
             GameSessionData gameSessionData = gameSessions[i];
 
-            if (!GameBingoCheckAuthority.UpdateSessionLoop(gameSessionData))
+            if (GameBingoCheckAuthority.UpdateSessionLoop(gameSessionData))
             {
-                continue;
+                gameSessionData.revision++;
+                BroadcastGamePlayStateChanged(gameSessionData);
+                SendPendingMarkedCellUpdates(gameSessionData);
+                SendPendingBingoCheckPresentations(gameSessionData);
             }
 
-            gameSessionData.revision++;
-            BroadcastGamePlayStateChanged(gameSessionData);
-            SendPendingMarkedCellUpdates(gameSessionData);
-            SendPendingBingoCheckPresentations(gameSessionData);
+            if (gameSessionData.gameState == GameSessionState.Completed &&
+                gameSessionData.GetConnectedRealHumanCount() == 0)
+            {
+                DeleteAbandonedGame(gameSessionData);
+                i--;
+            }
         }
     }
 
@@ -257,7 +271,14 @@ public class NetworkGameSessionManager : MonoBehaviour
 
         if (!playerData.isConnected || playerData.isGameSceneReady)
         {
-            GameBotManager.RestorePlayerControl(gameSessionData, userId, false);
+            if (playerData.controlType == GamePlayerControlType.Bot)
+            {
+                GameBotManager.RestoreSpectatorAfterTakeover(gameSessionData, userId, false);
+            }
+            else
+            {
+                GameBotManager.RestorePlayerControl(gameSessionData, userId, false);
+            }
             gameSessionData.revision++;
             BroadcastGamePlayerStateChanged(gameSessionData, playerData);
         }
@@ -298,7 +319,7 @@ public class NetworkGameSessionManager : MonoBehaviour
                 GameSessionFailureType.GameNotFound,
                 "The saved network Game no longer exists.",
                 gameId,
-                lobbyId);
+                lobbyId).WithFinalScore(GetCompletedScoreResult(gameId, userId));
         }
 
         GamePlayerData playerData = gameSessionData.GetPlayer(userId);
@@ -344,7 +365,7 @@ public class NetworkGameSessionManager : MonoBehaviour
                 GameSessionOperationType.SceneReady,
                 GameSessionFailureType.GameNotFound,
                 "The saved network Game no longer exists.",
-                gameId);
+                gameId).WithFinalScore(GetCompletedScoreResult(gameId, userId));
         }
 
         GamePlayerData playerData = gameSessionData.GetPlayer(userId);
@@ -371,7 +392,14 @@ public class NetworkGameSessionManager : MonoBehaviour
 
         if (!playerData.isConnected || !playerData.isGameSceneReady)
         {
-            GameBotManager.RestorePlayerControl(gameSessionData, userId, true);
+            if (playerData.controlType == GamePlayerControlType.Bot)
+            {
+                GameBotManager.RestoreSpectatorAfterTakeover(gameSessionData, userId, true);
+            }
+            else
+            {
+                GameBotManager.RestorePlayerControl(gameSessionData, userId, true);
+            }
             gameSessionData.revision++;
             BroadcastGamePlayerStateChanged(gameSessionData, playerData);
         }
@@ -415,7 +443,7 @@ public class NetworkGameSessionManager : MonoBehaviour
                 GameSessionOperationType.Leave,
                 GameSessionFailureType.GameNotFound,
                 "The saved network Game no longer exists.",
-                gameId);
+                gameId).WithFinalScore(GetCompletedScoreResult(gameId, userId));
         }
 
         GamePlayerData playerData = gameSessionData.GetPlayer(userId);
@@ -438,7 +466,7 @@ public class NetworkGameSessionManager : MonoBehaviour
 
         if (transition.shouldDeleteGame)
         {
-            gameSessions.Remove(gameSessionData);
+            DeleteAbandonedGame(gameSessionData);
         }
 
         return GameSessionResult
@@ -470,7 +498,7 @@ public class NetworkGameSessionManager : MonoBehaviour
 
         if (transition.shouldDeleteGame)
         {
-            gameSessions.Remove(gameSessionData);
+            DeleteAbandonedGame(gameSessionData);
         }
         else
         {
@@ -481,15 +509,24 @@ public class NetworkGameSessionManager : MonoBehaviour
     }
 
     public bool ProcessAuthorityHostKick(
+        ulong senderClientId,
         string gameId,
-        string requesterUserId,
         string targetUserId)
     {
+        if (!CanProcessAuthorityOperation() ||
+            !connectionRegistry.TryGetBingoUserId(senderClientId, out string requesterUserId))
+        {
+            return false;
+        }
+
         GameSessionData gameSessionData = FindGame(gameId);
         GamePlayerData requester = gameSessionData?.GetPlayer(requesterUserId);
         GamePlayerData target = gameSessionData?.GetPlayer(targetUserId);
 
-        if (requester?.isLobbyHost != true ||
+        if (gameSessionData?.playMode != MainMenuPlayMode.Custom ||
+            gameSessionData.gameState != GameSessionState.InProgress ||
+            requester?.isLobbyHost != true ||
+            !requester.isConnected ||
             target == null ||
             target.isLobbyHost ||
             target.userTag == UserTag.Bot ||
@@ -511,11 +548,16 @@ public class NetworkGameSessionManager : MonoBehaviour
 
         if (transition.shouldDeleteGame)
         {
-            gameSessions.Remove(gameSessionData);
+            DeleteAbandonedGame(gameSessionData);
         }
         else
         {
             BroadcastGamePlayerStateChanged(gameSessionData, target);
+            NetworkLobbyManager.instance?.ProcessAuthorityKickPlayer(
+                senderClientId,
+                targetUserId,
+                GameScoreAuthority.CreateFinalScoreResult(gameSessionData, target),
+                gameSessionData.gameId);
         }
 
         return true;
@@ -531,9 +573,30 @@ public class NetworkGameSessionManager : MonoBehaviour
             return false;
         }
 
+        bool thresholdApplied = DeathGameplayAuthority.ApplyFrozenPlayerThreshold(gameSessionData);
         gameSessionData.revision++;
         BroadcastGamePlayerStateChanged(gameSessionData, playerData);
+
+        if (thresholdApplied)
+        {
+            BroadcastGamePlayStateChanged(gameSessionData);
+        }
+
+        if (gameSessionData.GetRemainingRealHumanCount() == 0)
+        {
+            gameSessionData.gamePlayController?.EndGame(GameEndReason.AuthorityEnded);
+            gameSessionData.gameState = GameSessionState.Completed;
+            DeleteAbandonedGame(gameSessionData);
+        }
         return true;
+    }
+
+    private void OnConnectionRemoved(ulong clientId, string userId)
+    {
+        if (CanProcessAuthorityOperation())
+        {
+            ProcessAuthorityPlayerConnectionLost(userId);
+        }
     }
 
     public void ProcessAuthorityPlayerMarkedCell(
@@ -682,6 +745,8 @@ public class NetworkGameSessionManager : MonoBehaviour
             return false;
         }
 
+        CacheCompletedScores(gameSessionData);
+
         MultiplayerNetworkScheduler.instance?.ClearSession(gameSessionData.gameId);
 
         if (notifyPlayers)
@@ -690,6 +755,53 @@ public class NetworkGameSessionManager : MonoBehaviour
         }
 
         return true;
+    }
+
+    private void CacheCompletedScores(GameSessionData gameSessionData)
+    {
+        if (gameSessionData?.players == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < gameSessionData.players.Count; i++)
+        {
+            GamePlayerData playerData = gameSessionData.players[i];
+
+            if (playerData?.userTag != UserTag.Player ||
+                !playerData.areStatisticsFinalized)
+            {
+                continue;
+            }
+
+            GameFinalScoreResultData scoreResult =
+                GameScoreAuthority.CreateFinalScoreResult(gameSessionData, playerData);
+
+            if (scoreResult != null)
+            {
+                completedScoreResults[$"{gameSessionData.gameId}:{playerData.userId}"] = scoreResult;
+            }
+        }
+    }
+
+    private GameFinalScoreResultData GetCompletedScoreResult(string gameId, string userId)
+    {
+        return !string.IsNullOrWhiteSpace(gameId) &&
+               !string.IsNullOrWhiteSpace(userId) &&
+               completedScoreResults.TryGetValue($"{gameId}:{userId}", out GameFinalScoreResultData scoreResult)
+            ? scoreResult
+            : null;
+    }
+
+    private void DeleteAbandonedGame(GameSessionData gameSessionData)
+    {
+        if (gameSessionData == null || !DeleteGame(gameSessionData.gameId))
+        {
+            return;
+        }
+
+        NetworkLobbyManager.instance?.CloseLobbyAfterAbandonedGame(
+            gameSessionData.lobbyId);
     }
 
     public bool DeleteGameForLobby(string lobbyId, bool notifyPlayers = true)
@@ -701,6 +813,18 @@ public class NetworkGameSessionManager : MonoBehaviour
     public bool HasGameForLobby(string lobbyId)
     {
         return FindGameByLobbyId(lobbyId) != null;
+    }
+
+    public bool HasPlayerEnteredLinkedGame(string lobbyId, string userId)
+    {
+        GameSessionData gameSessionData = FindGameByLobbyId(lobbyId);
+        GamePlayerData playerData = gameSessionData?.GetPlayer(userId);
+
+        return playerData != null &&
+               (playerData.returnState == GamePlayerReturnState.DeclinedReturn ||
+                (playerData.isGameSceneReady &&
+                 (gameSessionData.gameState == GameSessionState.InProgress ||
+                  playerData.returnState == GamePlayerReturnState.FrozenAwaitingReturn)));
     }
 
     private void NotifyGameDeleted(GameSessionData gameSessionData)
@@ -744,6 +868,10 @@ public class NetworkGameSessionManager : MonoBehaviour
                 continue;
             }
 
+            updateData.localAutomaticBoardMarks =
+                playerData.isAutomaticBoardEnabled && playerData.markedCellIndices != null
+                    ? new List<int>(playerData.markedCellIndices)
+                    : new List<int>();
             NetworkGameSessionConnection.TrySendGamePlayStateChanged(clientId, updateData);
         }
     }

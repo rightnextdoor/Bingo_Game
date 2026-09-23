@@ -28,6 +28,7 @@ public class MainMenuController : MonoBehaviour
 
     private MainMenuPlayMode selectedMode = MainMenuPlayMode.None;
     private bool isStartingSelectedMode;
+    private bool isCheckingPreviousGame;
 
     private UserManager userManager;
     private PopupManager popupManager;
@@ -209,8 +210,13 @@ public class MainMenuController : MonoBehaviour
         SetScreenActive(modeSetupScreen, false);
     }
 
-    private void OnLandingPlayButtonClicked()
+    private async void OnLandingPlayButtonClicked()
     {
+        if (isCheckingPreviousGame)
+        {
+            return;
+        }
+
         CacheManagers();
 
         UserData currentUser = userManager?.CurrentUser;
@@ -222,6 +228,61 @@ public class MainMenuController : MonoBehaviour
                 NetworkGameSessionManager.GameIdPrefix,
                 System.StringComparison.Ordinal))
         {
+            string previousGameId = currentUser.lastGameId;
+
+            if (NetworkBootstrap.instance?.IsConnected != true)
+            {
+                userManager.DeferNetworkGameCleanup(previousGameId);
+                ShowModeSelectScreen();
+                return;
+            }
+
+            isCheckingPreviousGame = true;
+            if (landingPlayButton != null)
+            {
+                landingPlayButton.interactable = false;
+            }
+
+            GameSessionResult rejoinCheck;
+
+            try
+            {
+                rejoinCheck = GameSessionManager.instance != null
+                    ? await GameSessionManager.instance.CheckNetworkRejoinAsync(previousGameId)
+                    : null;
+            }
+            finally
+            {
+                isCheckingPreviousGame = false;
+                if (landingPlayButton != null)
+                {
+                    landingPlayButton.interactable = true;
+                }
+            }
+
+            if (rejoinCheck?.success != true)
+            {
+                if (NetworkBootstrap.instance?.IsConnected != true)
+                {
+                    userManager.DeferNetworkGameCleanup(previousGameId);
+                    ShowModeSelectScreen();
+                    return;
+                }
+
+                if (rejoinCheck?.failureType == GameSessionFailureType.GameNotFound ||
+                    rejoinCheck?.failureType == GameSessionFailureType.PlayerNotFound ||
+                    rejoinCheck?.failureType == GameSessionFailureType.PlayerNotEligible)
+                {
+                    userManager.ClearLastGameId();
+                    ShowModeSelectScreen();
+                    popupManager?.OpenFailurePopup("This game has ended and can no longer be rejoined.");
+                    return;
+                }
+
+                popupManager?.OpenFailurePopup("Unable to check the previous game. Please try again.");
+                return;
+            }
+
             if (popupManager == null)
             {
                 Debug.LogWarning("MainMenuController could not open Game Rejoin because PopupManager was not found.");
@@ -647,10 +708,22 @@ public class MainMenuController : MonoBehaviour
             return;
         }
 
+        if (selectedMode != MainMenuPlayMode.Solo &&
+            NetworkBootstrap.instance?.IsConnected != true)
+        {
+            popupManager?.OpenFailurePopup("A network connection is required for Online and Custom games.");
+            return;
+        }
+
         isStartingSelectedMode = true;
 
         try
         {
+            if (GameSessionManager.instance?.HasSavedSoloGameForCurrentUser == true)
+            {
+                await GameSessionManager.instance.DeclineSavedSoloGameAsync();
+            }
+
             if (GameSessionManager.instance != null)
             {
                 await GameSessionManager.instance.ClearPreviousSessionForFreshLobbyEntryAsync();

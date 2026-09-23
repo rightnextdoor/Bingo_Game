@@ -472,6 +472,16 @@ public class LobbyManager : MonoBehaviour
         }
 
         isLeavingLobby = true;
+        if (runtimeType == SessionRuntimeType.Network &&
+            NetworkBootstrap.instance?.IsConnected != true)
+        {
+            ClearCurrentLobby();
+            isLeavingLobby = false;
+            returnToMainSceneOnEntryFailure = true;
+            SetEntryState(LobbyEntryState.Idle);
+            return;
+        }
+
         string userId = userData.userId;
         bool hadTrackedLobby = lobbyClientState.HasLobby;
         SessionRuntimeType previousRuntimeType = runtimeType;
@@ -922,17 +932,71 @@ public class LobbyManager : MonoBehaviour
 
     private void HandleForcedLobbyExit(LobbyExitNotification notification)
     {
-        if (notification == null || !lobbyClientState.HasLobby)
+        if (notification == null)
         {
             return;
         }
 
-        if (!string.IsNullOrWhiteSpace(notification.lobbyId) && !lobbyClientState.IsCurrentLobby(notification.lobbyId))
+        bool kickedFromGame = notification.failureType == LobbyEntryFailureType.KickedFromGame;
+        GameSessionManager gameSessionManager = GameSessionManager.instance;
+        string savedGameId = UserManager.instance?.CurrentUser?.lastGameId;
+        bool currentGameMatches = kickedFromGame &&
+                                  !string.IsNullOrWhiteSpace(notification.gameId) &&
+                                  string.Equals(
+                                      gameSessionManager?.CurrentGameId,
+                                      notification.gameId,
+                                      StringComparison.Ordinal);
+        bool savedGameMatches = kickedFromGame &&
+                                !string.IsNullOrWhiteSpace(notification.gameId) &&
+                                string.Equals(
+                                    savedGameId,
+                                    notification.gameId,
+                                    StringComparison.Ordinal);
+
+        if (kickedFromGame && !currentGameMatches && !savedGameMatches)
         {
             return;
         }
 
-        ClearCurrentLobby();
+        if (!kickedFromGame && !lobbyClientState.HasLobby)
+        {
+            return;
+        }
+
+        if (lobbyClientState.HasLobby &&
+            !string.IsNullOrWhiteSpace(notification.lobbyId) &&
+            !lobbyClientState.IsCurrentLobby(notification.lobbyId))
+        {
+            return;
+        }
+
+        GameScoreAuthority.PersistFinalScoreResult(notification.finalScoreResult);
+
+        if (notification.closeReason == LobbyCloseReason.HostLeft &&
+            (isLeavingLobby || GameSessionManager.instance?.IsLeavingGame == true))
+        {
+            // A game departure already owns the scene transition. Do not report it as
+            // a separate lobby failure to the player who is leaving.
+            return;
+        }
+
+        if (kickedFromGame)
+        {
+            if (currentGameMatches)
+            {
+                gameSessionManager.ClearCurrentGame(false);
+            }
+
+            if (savedGameMatches)
+            {
+                UserManager.instance?.ClearLastGameId();
+            }
+        }
+
+        if (lobbyClientState.HasLobby)
+        {
+            ClearCurrentLobby();
+        }
 
         isEnteringLobby = false;
         isLeavingLobby = false;

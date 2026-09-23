@@ -285,16 +285,59 @@ public class GameSessionData
             if (playerData == null ||
                 string.Equals(playerData.userId, excludedUserId, StringComparison.Ordinal) ||
                 playerData.userTag != UserTag.Player ||
-                playerData.controlType != GamePlayerControlType.Human ||
                 playerData.returnState == GamePlayerReturnState.DeclinedReturn ||
                 !playerData.canRejoin ||
-                (playerData.gameStatus != GamePlayerStatus.Eligible &&
-                 playerData.gameStatus != GamePlayerStatus.Checking))
+                (!playerData.isConnected &&
+                 (playerData.controlType != GamePlayerControlType.Human ||
+                  playerData.returnState != GamePlayerReturnState.FrozenAwaitingReturn)))
             {
                 continue;
             }
 
             count++;
+        }
+
+        return count;
+    }
+
+    public bool IsCustomHostGone()
+    {
+        if (playMode != MainMenuPlayMode.Custom || players == null)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            GamePlayerData playerData = players[i];
+
+            if (playerData?.isLobbyHost == true)
+            {
+                return playerData.returnState == GamePlayerReturnState.DeclinedReturn ||
+                       (gameState == GameSessionState.Completed && !playerData.isConnected);
+            }
+        }
+
+        return false;
+    }
+
+    public int GetConnectedRealHumanCount()
+    {
+        if (players == null)
+        {
+            return 0;
+        }
+
+        int count = 0;
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            if (players[i]?.userTag == UserTag.Player &&
+                players[i].isConnected &&
+                players[i].returnState != GamePlayerReturnState.DeclinedReturn)
+            {
+                count++;
+            }
         }
 
         return count;
@@ -420,6 +463,7 @@ public class GamePlayStateChangedData
     public bool isRiskTimerActive;
     public double riskTimerEndTime;
     public List<int> calledNumbers;
+    public List<int> localAutomaticBoardMarks;
     public List<GamePlayerMatchStateData> playerStates;
 
     public GamePlayStateChangedData()
@@ -428,6 +472,7 @@ public class GamePlayStateChangedData
         revision = 0;
         gameState = GameSessionState.Created;
         calledNumbers = new List<int>();
+        localAutomaticBoardMarks = new List<int>();
         playerStates = new List<GamePlayerMatchStateData>();
     }
 
@@ -709,6 +754,9 @@ public class GamePlayStateChangedBatchData
             riskTimerEndTime = source.riskTimerEndTime,
             calledNumbers = source.calledNumbers != null
                 ? new List<int>(source.calledNumbers)
+                : new List<int>(),
+            localAutomaticBoardMarks = source.localAutomaticBoardMarks != null
+                ? new List<int>(source.localAutomaticBoardMarks)
                 : new List<int>(),
             playerStates = new List<GamePlayerMatchStateData>()
         };

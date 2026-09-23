@@ -32,6 +32,8 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
     private SoloGameCheckpointData latestSoloCheckpoint;
     private string pendingSoloReplayGameId = string.Empty;
     private string handledCompletedGameId = string.Empty;
+    private bool isDeferredNetworkCleanupPending;
+    private float nextDeferredNetworkCleanupTime;
 
     public string CurrentGameId => currentGameSession?.gameId ?? string.Empty;
     public string CurrentLobbyId => currentGameSession?.lobbyId ?? pendingLobbyId;
@@ -149,6 +151,8 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
 
     private void Update()
     {
+        TryProcessDeferredNetworkCleanup();
+
         if (GameManager.instance == null ||
             !GameManager.instance.HasCompletedSessionStartupCleanup ||
             GameSceneManager.instance == null ||
@@ -627,6 +631,12 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
             return;
         }
 
+        if (currentGameSession.IsCustomHostGone())
+        {
+            ReturnToMainMenuAfterCompletedGame();
+            return;
+        }
+
         GameSessionData completedSession = new GameSessionData(currentGameSession);
         LobbyManager lobbyManager = LobbyManager.instance;
         bool hasExistingLobby = lobbyManager?.HasEnteredLobby == true;
@@ -715,7 +725,11 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
         if (!string.IsNullOrWhiteSpace(gameId))
         {
             SessionRuntimeType previousRuntimeType = ResolveRuntimeType(gameId);
-            IGameSessionService service = await WaitForGameServiceAsync(previousRuntimeType);
+            bool offlineNetworkGame = previousRuntimeType == SessionRuntimeType.Network &&
+                                      NetworkBootstrap.instance?.IsConnected != true;
+            IGameSessionService service = offlineNetworkGame
+                ? null
+                : await WaitForGameServiceAsync(previousRuntimeType);
 
             if (service != null)
             {
@@ -728,16 +742,27 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
                         (!result.success && !IsAlreadyDetachedFailure(result.failureType)))
                     {
                         Debug.LogWarning($"[GameSessionManager] Previous Game cleanup could not be confirmed: {result?.failureMessage ?? "No result was returned."}");
+                        if (previousRuntimeType == SessionRuntimeType.Network)
+                        {
+                            UserManager.instance?.DeferNetworkGameCleanup(gameId);
+                        }
                     }
                 }
                 catch (Exception exception)
                 {
                     Debug.LogWarning($"[GameSessionManager] Previous Game cleanup failed: {exception.Message}");
+                    if (previousRuntimeType == SessionRuntimeType.Network)
+                    {
+                        UserManager.instance?.DeferNetworkGameCleanup(gameId);
+                    }
                 }
             }
             else
             {
-                Debug.LogWarning("[GameSessionManager] Previous Game cleanup was deferred because its service was unavailable.");
+                if (previousRuntimeType == SessionRuntimeType.Network)
+                {
+                    UserManager.instance?.DeferNetworkGameCleanup(gameId);
+                }
             }
         }
 
@@ -749,6 +774,128 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
         }
 
         ClearCurrentGame(true);
+    }
+
+    public async Task<GameSessionResult> CheckNetworkRejoinAsync(string gameId)
+    {
+        UserData userData = UserManager.instance?.CurrentUser;
+
+        if (userData == null || !userData.HasUser ||
+            string.IsNullOrWhiteSpace(gameId))
+        {
+            return GameSessionResult.Failed(
+                GameSessionOperationType.Rejoin,
+                GameSessionFailureType.PlayerNotFound,
+                "The previous game could not be found.",
+                gameId);
+        }
+
+        if (NetworkBootstrap.instance?.IsConnected != true)
+        {
+            return GameSessionResult.Failed(
+                GameSessionOperationType.Rejoin,
+                GameSessionFailureType.NetworkConnectionFailed,
+                "A connection is required to rejoin this game.",
+                gameId);
+        }
+
+        GameSessionResult result;
+
+        try
+        {
+            IGameSessionService service = await WaitForGameServiceAsync(SessionRuntimeType.Network);
+            result = service != null
+                ? await service.SyncGameSessionAsync(gameId, string.Empty, userData)
+                : GameSessionResult.Failed(
+                    GameSessionOperationType.Rejoin,
+                    GameSessionFailureType.ServiceUnavailable,
+                    "The game service is not available.",
+                    gameId);
+        }
+        catch (Exception exception)
+        {
+            Debug.LogWarning($"[GameSessionManager] Rejoin check failed: {exception.Message}");
+            result = GameSessionResult.Failed(
+                GameSessionOperationType.Rejoin,
+                GameSessionFailureType.NetworkConnectionFailed,
+                "The previous game could not be checked right now.",
+                gameId);
+        }
+
+        GameScoreAuthority.PersistFinalScoreResult(result?.finalScoreResult);
+
+        if (result == null || !result.success)
+        {
+            return result;
+        }
+
+        GamePlayerData playerData = result.gameSessionData?.GetPlayer(userData.userId);
+
+        GameScoreAuthority.PersistFinalScoreResult(
+            GameScoreAuthority.CreateFinalScoreResult(result.gameSessionData, playerData));
+
+        if (result.gameSessionData == null ||
+            result.gameSessionData.gameState == GameSessionState.Completed ||
+            playerData == null || !playerData.canRejoin)
+        {
+            return GameSessionResult.Failed(
+                GameSessionOperationType.Rejoin,
+                GameSessionFailureType.PlayerNotEligible,
+                "This game has ended and can no longer be rejoined.",
+                gameId);
+        }
+
+        return result;
+    }
+
+    private void TryProcessDeferredNetworkCleanup()
+    {
+        string pendingGameId = UserManager.instance?.CurrentUser?.pendingNetworkGameCleanupId;
+
+        if (isDeferredNetworkCleanupPending ||
+            string.IsNullOrWhiteSpace(pendingGameId) ||
+            Time.realtimeSinceStartup < nextDeferredNetworkCleanupTime ||
+            NetworkBootstrap.instance?.IsConnected != true ||
+            NetworkGameSessionService.instance?.IsReady != true)
+        {
+            return;
+        }
+
+        _ = ProcessDeferredNetworkCleanupAsync(pendingGameId);
+    }
+
+    private async Task ProcessDeferredNetworkCleanupAsync(string gameId)
+    {
+        isDeferredNetworkCleanupPending = true;
+
+        try
+        {
+            GameSessionResult result = await NetworkGameSessionService.instance.LeaveGameAsync(
+                gameId,
+                UserManager.instance?.CurrentUser);
+
+            GameScoreAuthority.PersistFinalScoreResult(result?.finalScoreResult);
+
+            if (result != null && (result.success || IsAlreadyDetachedFailure(result.failureType)))
+            {
+                if (string.Equals(
+                        UserManager.instance?.CurrentUser?.pendingNetworkGameCleanupId,
+                        gameId,
+                        StringComparison.Ordinal))
+                {
+                    UserManager.instance.ClearDeferredNetworkGameCleanup();
+                }
+            }
+        }
+        catch (Exception exception)
+        {
+            Debug.LogWarning($"[GameSessionManager] Deferred game cleanup failed: {exception.Message}");
+        }
+        finally
+        {
+            isDeferredNetworkCleanupPending = false;
+            nextDeferredNetworkCleanupTime = Time.realtimeSinceStartup + 10f;
+        }
     }
 
     public async void LeaveCurrentGame()
@@ -1055,6 +1202,18 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
             }
         }
 
+        GamePlayerData localPlayer = currentGameSession.GetPlayer(
+            UserManager.instance?.UserId);
+
+        if (localPlayer?.isAutomaticBoardEnabled == true &&
+            updateData.localAutomaticBoardMarks != null)
+        {
+            for (int i = 0; i < updateData.localAutomaticBoardMarks.Count; i++)
+            {
+                localPlayer.TrySetMarkedCell(updateData.localAutomaticBoardMarks[i], true);
+            }
+        }
+
         currentGameSession.revision = updateData.revision;
         ApplyFinalizedScoreForCurrentNetworkUser();
         GameSessionUpdated?.Invoke(new GameSessionData(currentGameSession));
@@ -1178,7 +1337,10 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
         }
 
         handledCompletedGameId = currentGameSession.gameId ?? string.Empty;
-        PrepareLobbyAfterCompletedGame(currentGameSession);
+        if (!currentGameSession.IsCustomHostGone())
+        {
+            PrepareLobbyAfterCompletedGame(currentGameSession);
+        }
 
         if (currentGameSession.playMode == MainMenuPlayMode.Solo)
         {

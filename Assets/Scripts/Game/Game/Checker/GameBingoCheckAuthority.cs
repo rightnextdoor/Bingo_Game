@@ -591,7 +591,8 @@ public static class DeathGameplayAuthority
 
     public static bool ApplyFrozenPlayerThreshold(GameSessionData gameSessionData)
     {
-        if (!IsDeathGame(gameSessionData) || gameSessionData.players == null)
+        if (gameSessionData?.players == null ||
+            (!IsDeathGame(gameSessionData) && !RiskGameplayAuthority.IsRiskGame(gameSessionData)))
         {
             return false;
         }
@@ -612,17 +613,17 @@ public static class DeathGameplayAuthority
             GamePlayerData playerData = gameSessionData.players[i];
 
             if (playerData == null ||
-                playerData.isConnected ||
+                playerData.returnState != GamePlayerReturnState.FrozenAwaitingReturn ||
+                playerData.controlType != GamePlayerControlType.Human ||
                 (playerData.gameStatus != GamePlayerStatus.Eligible &&
                  playerData.gameStatus != GamePlayerStatus.Checking))
             {
                 continue;
             }
 
-            changed |= GameScoreAuthority.TrySetFinalStatus(
+            changed |= GameBotManager.HandleFrozenPlayerThreshold(
                 gameSessionData,
-                playerData,
-                GamePlayerStatus.Lost);
+                playerData.userId);
             ClearAutomaticRuntime(playerData);
         }
 
@@ -687,6 +688,7 @@ public static class DeathGameplayAuthority
 
         List<GamePlayerData> activeEligiblePlayers = new List<GamePlayerData>();
         List<GamePlayerData> checkingPlayers = new List<GamePlayerData>();
+        List<GamePlayerData> frozenPlayers = new List<GamePlayerData>();
         GamePlayController playController = gameSessionData.gamePlayController;
         bool changed = false;
 
@@ -699,7 +701,14 @@ public static class DeathGameplayAuthority
                 continue;
             }
 
-            if (gameSessionData.IsPlayerEligibleForCount(playerData))
+            if (playerData.returnState == GamePlayerReturnState.FrozenAwaitingReturn &&
+                playerData.controlType == GamePlayerControlType.Human &&
+                (playerData.gameStatus == GamePlayerStatus.Eligible ||
+                 playerData.gameStatus == GamePlayerStatus.Checking))
+            {
+                frozenPlayers.Add(playerData);
+            }
+            else if (gameSessionData.IsPlayerEligibleForCount(playerData))
             {
                 activeEligiblePlayers.Add(playerData);
             }
@@ -707,6 +716,15 @@ public static class DeathGameplayAuthority
             {
                 checkingPlayers.Add(playerData);
             }
+        }
+
+        for (int i = 0; i < frozenPlayers.Count; i++)
+        {
+            changed |= GameScoreAuthority.TrySetFinalStatus(
+                gameSessionData,
+                frozenPlayers[i],
+                GamePlayerStatus.Lost);
+            ClearAutomaticRuntime(frozenPlayers[i]);
         }
 
         if (activeEligiblePlayers.Count > 0)

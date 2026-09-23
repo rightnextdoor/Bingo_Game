@@ -474,7 +474,10 @@ public class LobbyController
         return true;
     }
 
-    public LobbyExitResult RemovePlayer(string userId, LobbyPlayerExitReason exitReason)
+    public LobbyExitResult RemovePlayer(
+        string userId,
+        LobbyPlayerExitReason exitReason,
+        bool isLeavingLinkedGame = false)
     {
         if (string.IsNullOrWhiteSpace(userId))
         {
@@ -504,6 +507,7 @@ public class LobbyController
                 lobby != null &&
                 lobby.playMode == MainMenuPlayMode.Custom &&
                 lobby.lobbyState != LobbyState.InGame &&
+                !isLeavingLinkedGame &&
                 wasHost;
 
             bool shouldCloseLobby = customHostLeft || IsEmpty;

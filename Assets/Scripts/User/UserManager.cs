@@ -453,6 +453,30 @@ public class UserManager : MonoBehaviour, ISceneReadyCheck
         UserChanged?.Invoke();
     }
 
+    public void DeferNetworkGameCleanup(string gameId)
+    {
+        if (!string.IsNullOrWhiteSpace(gameId))
+        {
+            CurrentUser.pendingNetworkGameCleanupId = gameId.Trim();
+        }
+
+        CurrentUser.ClearLastGameInfo();
+        AddOrUpdateCurrentUser();
+        UserChanged?.Invoke();
+    }
+
+    public void ClearDeferredNetworkGameCleanup()
+    {
+        if (string.IsNullOrWhiteSpace(CurrentUser.pendingNetworkGameCleanupId))
+        {
+            return;
+        }
+
+        CurrentUser.pendingNetworkGameCleanupId = string.Empty;
+        AddOrUpdateCurrentUser();
+        UserChanged?.Invoke();
+    }
+
     public bool ApplyGameScore(
         string userId,
         ScorePlayMode playMode,

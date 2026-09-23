@@ -87,6 +87,9 @@ public class LobbyFailure : MonoBehaviour
             case LobbyEntryFailureType.KickedFromLobby:
                 return "You were removed from the lobby by the host.";
 
+            case LobbyEntryFailureType.KickedFromGame:
+                return "You were removed from the game by the host.";
+
             case LobbyEntryFailureType.LobbyClosed:
                 return "The lobby was closed.";
 
@@ -131,6 +134,7 @@ public class LobbyFailure : MonoBehaviour
             case LobbyEntryFailureType.InvalidPassword:
             case LobbyEntryFailureType.AlreadyInLobby:
             case LobbyEntryFailureType.KickedFromLobby:
+            case LobbyEntryFailureType.KickedFromGame:
             case LobbyEntryFailureType.LobbyClosed:
             case LobbyEntryFailureType.ConnectionLost:
             case LobbyEntryFailureType.LobbyStarted:
@@ -145,6 +149,7 @@ public class LobbyFailure : MonoBehaviour
         switch (failureType)
         {
             case LobbyEntryFailureType.KickedFromLobby:
+            case LobbyEntryFailureType.KickedFromGame:
             case LobbyEntryFailureType.LobbyClosed:
             case LobbyEntryFailureType.ConnectionLost:
             case LobbyEntryFailureType.LobbyStarted:

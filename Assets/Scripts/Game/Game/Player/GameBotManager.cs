@@ -103,10 +103,30 @@ public static class GameBotManager
 
         GamePlayerData playerData = gameSessionData.GetPlayer(userId);
 
-        if (playerData == null ||
-            playerData.userTag != UserTag.Player ||
-            playerData.controlType == GamePlayerControlType.Bot)
+        if (playerData == null || playerData.userTag != UserTag.Player)
         {
+            return result;
+        }
+
+        if (playerData.controlType == GamePlayerControlType.Bot)
+        {
+            if (!playerData.canRejoin && !playerData.isConnected)
+            {
+                return result;
+            }
+
+            playerData.isConnected = false;
+            playerData.canRejoin = false;
+            playerData.returnState = GamePlayerReturnState.DeclinedReturn;
+            result.changed = true;
+
+            if (gameSessionData.GetRemainingRealHumanCount() == 0)
+            {
+                gameSessionData.gamePlayController?.EndGame(GameEndReason.AuthorityEnded);
+                gameSessionData.gameState = GameSessionState.Completed;
+                result.shouldDeleteGame = true;
+            }
+
             return result;
         }
 
@@ -128,14 +148,11 @@ public static class GameBotManager
             playerData.controlType = GamePlayerControlType.Bot;
             playerData.isAutomaticBoardEnabled = true;
             playerData.isGameSceneReady = true;
-
-            if (!DeathGameplayAuthority.IsDeathGame(gameSessionData))
-            {
-                playerData.gameStatus = GamePlayerStatus.Eligible;
-                GameAutomaticBoardAuthority.PreparePlayerTakeover(
-                    gameSessionData,
-                    playerData);
-            }
+            playerData.gameStatus = GamePlayerStatus.Eligible;
+            playerData.isRankWinBlocked = false;
+            GameAutomaticBoardAuthority.PreparePlayerTakeover(
+                gameSessionData,
+                playerData);
 
             result.botTookControl = true;
             return result;
@@ -172,21 +189,24 @@ public static class GameBotManager
 
         if (playerData == null ||
             playerData.userTag != UserTag.Player ||
-            playerData.controlType != GamePlayerControlType.Human ||
             playerData.returnState == GamePlayerReturnState.DeclinedReturn)
         {
             return false;
         }
 
-        bool shouldUseAutomaticBoard = DeathGameplayAuthority.IsDeathGame(gameSessionData);
+        bool shouldUseAutomaticBoard = playerData.controlType == GamePlayerControlType.Bot ||
+                                       DeathGameplayAuthority.IsDeathGame(gameSessionData);
+        GamePlayerReturnState frozenState = playerData.controlType == GamePlayerControlType.Bot
+            ? GamePlayerReturnState.Active
+            : GamePlayerReturnState.FrozenAwaitingReturn;
         bool changed = playerData.isConnected ||
                        !playerData.canRejoin ||
-                       playerData.returnState != GamePlayerReturnState.FrozenAwaitingReturn ||
+                       playerData.returnState != frozenState ||
                        playerData.isAutomaticBoardEnabled != shouldUseAutomaticBoard;
         playerData.isConnected = false;
         playerData.isGameSceneReady = true;
         playerData.canRejoin = true;
-        playerData.returnState = GamePlayerReturnState.FrozenAwaitingReturn;
+        playerData.returnState = frozenState;
         playerData.isAutomaticBoardEnabled = shouldUseAutomaticBoard;
 
         if (!shouldUseAutomaticBoard)
@@ -228,6 +248,68 @@ public static class GameBotManager
             GameAutomaticBoardAuthority.ClearPendingActions(playerData);
         }
 
+        return changed;
+    }
+
+    public static bool HandleFrozenPlayerThreshold(
+        GameSessionData gameSessionData,
+        string userId)
+    {
+        GamePlayerData playerData = gameSessionData?.GetPlayer(userId);
+
+        if (playerData == null ||
+            playerData.controlType != GamePlayerControlType.Human ||
+            playerData.returnState != GamePlayerReturnState.FrozenAwaitingReturn)
+        {
+            return false;
+        }
+
+        GameScoreAuthority.FinalizeDepartingHumanLoss(gameSessionData, playerData);
+        gameSessionData.gamePlayController?.CancelPendingCheckAnimation(userId);
+        bool hasOtherRealHuman = gameSessionData.GetRemainingRealHumanCount(userId) > 0;
+
+        if (!hasOtherRealHuman)
+        {
+            playerData.canRejoin = false;
+            playerData.returnState = GamePlayerReturnState.DeclinedReturn;
+            GameScoreAuthority.TrySetFinalStatus(gameSessionData, playerData, GamePlayerStatus.Lost);
+            gameSessionData.gamePlayController?.EndGame(GameEndReason.AuthorityEnded);
+            gameSessionData.gameState = GameSessionState.Completed;
+            return true;
+        }
+
+        // The human's score is final, but the same board slot can keep playing as a bot.
+        playerData.controlType = GamePlayerControlType.Bot;
+        playerData.returnState = GamePlayerReturnState.Active;
+        playerData.gameStatus = GamePlayerStatus.Eligible;
+        playerData.isRankWinBlocked = false;
+        playerData.isAutomaticBoardEnabled = true;
+        playerData.isGameSceneReady = true;
+        playerData.canRejoin = true;
+        GameAutomaticBoardAuthority.PreparePlayerTakeover(gameSessionData, playerData);
+        return true;
+    }
+
+    public static bool RestoreSpectatorAfterTakeover(
+        GameSessionData gameSessionData,
+        string userId,
+        bool isGameSceneReady)
+    {
+        GamePlayerData playerData = gameSessionData?.GetPlayer(userId);
+
+        if (playerData == null ||
+            playerData.userTag != UserTag.Player ||
+            playerData.controlType != GamePlayerControlType.Bot ||
+            !playerData.canRejoin)
+        {
+            return false;
+        }
+
+        bool changed = !playerData.isConnected ||
+                       playerData.isGameSceneReady != isGameSceneReady;
+        playerData.isConnected = true;
+        playerData.isGameSceneReady = isGameSceneReady;
+        playerData.returnState = GamePlayerReturnState.Active;
         return changed;
     }
 

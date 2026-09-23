@@ -93,6 +93,11 @@ public class GameController : MonoBehaviour
         SubscribeToHeader();
         SubscribeToBoardSection();
         SubscribeToRiskDecisionPopup();
+        if (playerListController != null)
+        {
+            playerListController.KickRequested -= OnKickRequested;
+            playerListController.KickRequested += OnKickRequested;
+        }
         bindRoutine = StartCoroutine(BindWhenGameIsReady());
     }
 
@@ -107,6 +112,10 @@ public class GameController : MonoBehaviour
         UnsubscribeFromHeader();
         UnsubscribeFromBoardSection();
         UnsubscribeFromRiskDecisionPopup();
+        if (playerListController != null)
+        {
+            playerListController.KickRequested -= OnKickRequested;
+        }
         UnsubscribeFromGameSessionManager();
         SessionPauseManager.PauseChanged -= OnSessionPauseChanged;
         bingoCheckAnimationController?.StopAndClear();
@@ -256,7 +265,12 @@ public class GameController : MonoBehaviour
             gameplayStatusText = ResolveGameplayStatusText(
                 gamePlayerData,
                 gameSessionData),
-            canKick = false,
+            canKick = gameSessionData.playMode == MainMenuPlayMode.Custom &&
+                      localPlayerIsHost &&
+                      !gamePlayerData.isLobbyHost &&
+                      gamePlayerData.userTag == UserTag.Player &&
+                      gamePlayerData.controlType == GamePlayerControlType.Human &&
+                      gamePlayerData.isConnected,
             showBotIcon = gamePlayerData.controlType == GamePlayerControlType.Bot &&
                           (gameSessionData.playMode == MainMenuPlayMode.Solo ||
                            (gameSessionData.playMode == MainMenuPlayMode.Custom &&
@@ -424,6 +438,15 @@ public class GameController : MonoBehaviour
         {
             StopAutomaticMarkPresentation();
             ResetLocalBoardPresentation();
+        }
+
+        if (boardDisplayed && usesAutomaticBoard && !boardContextChanged &&
+            localPlayer?.markedCellIndices != null)
+        {
+            for (int i = 0; i < localPlayer.markedCellIndices.Count; i++)
+            {
+                PresentAutomaticMark(localPlayer.markedCellIndices[i], true);
+            }
         }
 
         bool playerCanUseBoard =
@@ -1469,6 +1492,23 @@ public class GameController : MonoBehaviour
         GameSceneManager.instance?.LoadMainScene();
     }
 
+    private void OnKickRequested(string targetUserId)
+    {
+        GameSessionData session = GameSessionManager.instance?.CurrentGameSession;
+        GamePlayerData localPlayer = session?.GetPlayer(UserManager.instance?.UserId);
+
+        if (session?.playMode != MainMenuPlayMode.Custom ||
+            localPlayer?.isLobbyHost != true ||
+            string.IsNullOrWhiteSpace(targetUserId))
+        {
+            return;
+        }
+
+        NetworkGameSessionService.instance?.TryKickGamePlayer(
+            session.gameId,
+            targetUserId);
+    }
+
     private void TryOpenGameOverPopup(GameSessionData gameSessionData)
     {
         if (gameSessionData == null ||
@@ -1490,6 +1530,7 @@ public class GameController : MonoBehaviour
         GameSessionData gameSessionData)
     {
         GameOverPopupData popupData = new GameOverPopupData();
+        popupData.returnToMainMenuOnly = gameSessionData?.IsCustomHostGone() == true;
         GamePlayerData localPlayer =
             gameSessionData?.GetPlayer(UserManager.instance?.UserId);
 

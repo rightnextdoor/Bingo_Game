@@ -10,6 +10,7 @@ public class GameOverPopupData
     public string winnerDisplayText = string.Empty;
     public GamePlayerStatus localPlayerStatus = GamePlayerStatus.Lost;
     public int localPlayerScore;
+    public bool returnToMainMenuOnly;
 }
 
 [DisallowMultipleComponent]
@@ -83,7 +84,14 @@ public class GameOverPopupController : MonoBehaviour
 
         if (SessionPauseManager.GetCurrentTime() >= countdownEndTime)
         {
-            ReturnToLobby();
+            if (popupData?.returnToMainMenuOnly == true)
+            {
+                ReturnToMainMenu();
+            }
+            else
+            {
+                ReturnToLobby();
+            }
         }
     }
 
@@ -120,6 +128,11 @@ public class GameOverPopupController : MonoBehaviour
         {
             scoreText.text = $"Score: {Mathf.Max(0, data.localPlayerScore)}";
         }
+
+        if (returnToLobbyButton != null)
+        {
+            returnToLobbyButton.gameObject.SetActive(!data.returnToMainMenuOnly);
+        }
     }
 
     private void UpdateCountdownText()
@@ -133,11 +146,19 @@ public class GameOverPopupController : MonoBehaviour
             0,
             Mathf.CeilToInt((float)(
                 countdownEndTime - SessionPauseManager.GetCurrentTime())));
-        countdownText.text = $"Returning to lobby in {remainingSeconds}";
+        countdownText.text = popupData?.returnToMainMenuOnly == true
+            ? $"Returning to main menu in {remainingSeconds}"
+            : $"Returning to lobby in {remainingSeconds}";
     }
 
     private void ReturnToLobby()
     {
+        if (popupData?.returnToMainMenuOnly == true)
+        {
+            ReturnToMainMenu();
+            return;
+        }
+
         if (!BeginSubmission())
         {
             return;

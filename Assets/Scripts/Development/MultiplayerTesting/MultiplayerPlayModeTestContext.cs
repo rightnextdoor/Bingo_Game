@@ -244,7 +244,6 @@ public static class MultiplayerPlayModeTestContext
             return;
         }
 
-        isResolved = true;
         playerNumber = 0;
 
 #if UNITY_EDITOR
@@ -254,20 +253,30 @@ public static class MultiplayerPlayModeTestContext
             {
                 case Player1Tag:
                     playerNumber = 1;
+                    isResolved = true;
                     return;
 
                 case Player2Tag:
                     playerNumber = 2;
+                    isResolved = true;
                     return;
 
                 case Player3Tag:
                     playerNumber = 3;
+                    isResolved = true;
                     return;
 
                 case Player4Tag:
                     playerNumber = 4;
+                    isResolved = true;
                     return;
             }
+        }
+
+        if (CurrentPlayer.IsMainEditor)
+        {
+            playerNumber = 1;
+            isResolved = true;
         }
 #endif
     }

@@ -25,7 +25,8 @@ public enum GamePlayerReturnState
 {
     Active,
     FrozenAwaitingReturn,
-    DeclinedReturn
+    DeclinedReturn,
+    Reconnecting
 }
 
 public enum GamePlayerControlType

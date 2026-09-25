@@ -601,7 +601,24 @@ public static class DeathGameplayAuthority
             ? GameSettings.instance.DeathFrozenPlayerOutEligibleCount
             : GameSettings.DefaultDeathFrozenPlayerOutEligibleCount;
 
-        if (gameSessionData.GetEligiblePlayerCount() > threshold)
+        // Reconnecting humans are not actively playing, so only the remaining
+        // eligible humans and bots decide when takeover becomes necessary.
+        int activeEligibleCount = 0;
+
+        for (int i = 0; i < gameSessionData.players.Count; i++)
+        {
+            GamePlayerData playerData = gameSessionData.players[i];
+
+            if (playerData != null &&
+                (playerData.controlType == GamePlayerControlType.Bot ||
+                 playerData.returnState != GamePlayerReturnState.Reconnecting) &&
+                gameSessionData.IsPlayerEligibleForCount(playerData))
+            {
+                activeEligibleCount++;
+            }
+        }
+
+        if (activeEligibleCount > threshold)
         {
             return false;
         }
@@ -613,12 +630,29 @@ public static class DeathGameplayAuthority
             GamePlayerData playerData = gameSessionData.players[i];
 
             if (playerData == null ||
-                playerData.returnState != GamePlayerReturnState.FrozenAwaitingReturn ||
+                (playerData.returnState != GamePlayerReturnState.FrozenAwaitingReturn &&
+                 playerData.returnState != GamePlayerReturnState.Reconnecting) ||
                 playerData.controlType != GamePlayerControlType.Human ||
                 (playerData.gameStatus != GamePlayerStatus.Eligible &&
                  playerData.gameStatus != GamePlayerStatus.Checking))
             {
                 continue;
+            }
+
+            // A disconnected player's submitted check still has to finish
+            // before this slot can be handed to a bot.
+            if (playerData.returnState == GamePlayerReturnState.Reconnecting &&
+                (gameSessionData.gamePlayController?.HasPendingCheckAnimation(playerData.userId) == true ||
+                 playerData.isRiskDecisionPending))
+            {
+                continue;
+            }
+
+            if (playerData.returnState == GamePlayerReturnState.Reconnecting)
+            {
+                changed |= GameBotManager.FreezePlayerAwaitingReturn(
+                    gameSessionData,
+                    playerData.userId);
             }
 
             changed |= GameBotManager.HandleFrozenPlayerThreshold(

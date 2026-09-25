@@ -698,7 +698,6 @@ public class GamePlayController
         isRiskTimerExpiredAwaitingChecks = false;
         ballTimer?.Stop();
         riskTimer?.Stop();
-        Debug.Log("[GamePlayController] Game is over.");
         return true;
     }
 }

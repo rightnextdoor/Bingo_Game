@@ -20,6 +20,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
     private bool isEnteringGame;
     private bool isLeavingGame;
     private bool isReportingGameSceneReady;
+    private bool isStartingRiskSubmitAfterLoading;
     private bool isGameSessionSyncPending;
     private bool isGameSimulationCreationPending;
     private float nextGameSessionSyncTime;
@@ -34,6 +35,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
     private string handledCompletedGameId = string.Empty;
     private bool isDeferredNetworkCleanupPending;
     private float nextDeferredNetworkCleanupTime;
+    private bool lastConnectionRestoreFoundEndedGame;
 
     public string CurrentGameId => currentGameSession?.gameId ?? string.Empty;
     public string CurrentLobbyId => currentGameSession?.lobbyId ?? pendingLobbyId;
@@ -41,8 +43,10 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
     public GameSessionEntryState EntryState => entryState;
     public GameSessionData CurrentGameSession => currentGameSession;
     public GameSessionResult LastEntryResult => lastEntryResult;
+    public bool LastConnectionRestoreFoundEndedGame => lastConnectionRestoreFoundEndedGame;
     public bool IsEnteringGame => isEnteringGame;
     public bool IsLeavingGame => isLeavingGame;
+    public bool IsGameSimulationCreationPending => isGameSimulationCreationPending;
     public bool HasEnteredGame => entryState == GameSessionEntryState.Completed && currentGameSession != null;
     public bool HasSavedSoloGameForCurrentUser =>
         savedSoloGameData?.IsValidFor(UserManager.instance?.UserId) == true;
@@ -388,6 +392,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
     public void ClearCurrentGame(bool clearLastGameId)
     {
         SessionPauseManager.SetGameplayPaused(false);
+        lastConnectionRestoreFoundEndedGame = false;
         entryAttemptVersion++;
         isEnteringGame = false;
         pendingGameId = string.Empty;
@@ -848,6 +853,140 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
         return result;
     }
 
+    public async Task<bool> RestoreCurrentNetworkGameAsync()
+    {
+        lastConnectionRestoreFoundEndedGame = false;
+
+        if (runtimeType != SessionRuntimeType.Network ||
+            NetworkBootstrap.instance?.IsConnected != true)
+        {
+            return false;
+        }
+
+        string gameId = CurrentGameId;
+
+        if (string.IsNullOrWhiteSpace(gameId))
+        {
+            gameId = UserManager.instance?.CurrentUser?.lastGameId;
+        }
+
+        UserData userData = UserManager.instance?.CurrentUser;
+        NetworkGameSessionService service = NetworkGameSessionService.instance;
+
+        if (string.IsNullOrWhiteSpace(gameId) || userData == null ||
+            service == null || !service.IsReady)
+        {
+            return false;
+        }
+
+        GameSessionResult result = await service.RejoinGameAsync(gameId, userData);
+
+        if (result?.success != true || result.gameSessionData == null)
+        {
+            GameScoreAuthority.PersistFinalScoreResult(result?.finalScoreResult);
+            lastConnectionRestoreFoundEndedGame =
+                result?.failureType == GameSessionFailureType.GameNotFound ||
+                result?.failureType == GameSessionFailureType.PlayerNotFound ||
+                result?.failureType == GameSessionFailureType.PlayerNotEligible;
+            return false;
+        }
+
+        ApplyAuthoritativeGameSessionSnapshot(result.gameSessionData);
+        GameSessionResult sceneReadyResult =
+            await service.SetGameSceneReadyAsync(gameId, userData);
+
+        if (sceneReadyResult?.success != true)
+        {
+            GameScoreAuthority.PersistFinalScoreResult(sceneReadyResult?.finalScoreResult);
+            lastConnectionRestoreFoundEndedGame =
+                sceneReadyResult?.failureType == GameSessionFailureType.GameNotFound ||
+                sceneReadyResult?.failureType == GameSessionFailureType.PlayerNotFound ||
+                sceneReadyResult?.failureType == GameSessionFailureType.PlayerNotEligible;
+            return false;
+        }
+
+        if (sceneReadyResult.gameSessionData != null)
+        {
+            ApplyAuthoritativeGameSessionSnapshot(sceneReadyResult.gameSessionData);
+        }
+
+        return true;
+    }
+
+    public async Task<bool> StartPendingRiskSubmitAfterLoadingAsync()
+    {
+        GameSceneManager sceneManager = GameSceneManager.instance;
+
+        if (isStartingRiskSubmitAfterLoading || runtimeType != SessionRuntimeType.Network ||
+            !HasEnteredGame || sceneManager?.CurrentSceneType != GameSceneType.Game ||
+            sceneManager.IsLoadingScene || NetworkBootstrap.instance?.IsConnected != true)
+        {
+            return false;
+        }
+
+        GamePlayerData playerData = GetCurrentPlayer();
+
+        if (!RiskGameplayAuthority.IsRiskGame(currentGameSession) ||
+            playerData?.controlType != GamePlayerControlType.Human ||
+            !playerData.isRiskSubmitReconnectGrace || playerData.isSubmitTimerActive)
+        {
+            return false;
+        }
+
+        isStartingRiskSubmitAfterLoading = true;
+        string gameId = CurrentGameId;
+
+        try
+        {
+            // The first scene-ready request can still be finishing after the fade.
+            while (isReportingGameSceneReady && string.Equals(gameId, CurrentGameId, StringComparison.Ordinal))
+            {
+                await Task.Yield();
+            }
+
+            if (!string.Equals(gameId, CurrentGameId, StringComparison.Ordinal) ||
+                GameSceneManager.instance?.CurrentSceneType != GameSceneType.Game ||
+                GameSceneManager.instance.IsLoadingScene ||
+                NetworkBootstrap.instance?.IsConnected != true ||
+                GetCurrentPlayer()?.isRiskSubmitReconnectGrace != true)
+            {
+                return false;
+            }
+
+            NetworkGameSessionService service = NetworkGameSessionService.instance;
+
+            if (service?.IsReady != true)
+            {
+                return false;
+            }
+
+            GameSessionResult result = await service.SetGameSceneReadyAsync(
+                gameId, UserManager.instance?.CurrentUser);
+
+            if (!string.Equals(gameId, CurrentGameId, StringComparison.Ordinal) ||
+                result?.success != true)
+            {
+                return false;
+            }
+
+            if (result.gameSessionData != null)
+            {
+                ApplyAuthoritativeGameSessionSnapshot(result.gameSessionData);
+            }
+
+            return true;
+        }
+        catch (Exception exception)
+        {
+            Debug.LogWarning($"[GameSessionManager] Could not start the Risk submit window after loading: {exception.Message}");
+            return false;
+        }
+        finally
+        {
+            isStartingRiskSubmitAfterLoading = false;
+        }
+    }
+
     private void TryProcessDeferredNetworkCleanup()
     {
         string pendingGameId = UserManager.instance?.CurrentUser?.pendingNetworkGameCleanupId;
@@ -969,6 +1108,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
     {
         if (!HasEnteredGame ||
             SessionPauseManager.IsPaused ||
+            ConnectionRecoveryManager.instance?.IsRecoveringInScene == true ||
             GetCurrentPlayer()?.isAutomaticBoardEnabled == true ||
             currentGameSession.gamePlayController?.IsPlayerInputClosed == true)
         {
@@ -1004,7 +1144,8 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
         LobbyBoardData boardData,
         IReadOnlyList<int> markedCellIndices)
     {
-        if (!HasEnteredGame || boardData == null || SessionPauseManager.IsPaused)
+        if (!HasEnteredGame || boardData == null || SessionPauseManager.IsPaused ||
+            ConnectionRecoveryManager.instance?.IsRecoveringInScene == true)
         {
             return false;
         }
@@ -1041,7 +1182,8 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
 
     public bool CompleteCurrentPlayerBingoCheckAnimation()
     {
-        if (!HasEnteredGame || SessionPauseManager.IsPaused)
+        if (!HasEnteredGame || SessionPauseManager.IsPaused ||
+            ConnectionRecoveryManager.instance?.IsRecoveringInScene == true)
         {
             return false;
         }
@@ -1060,7 +1202,8 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
 
     public bool ResolveCurrentPlayerRiskDecision(bool endPlayerGame)
     {
-        if (!HasEnteredGame || SessionPauseManager.IsPaused)
+        if (!HasEnteredGame || SessionPauseManager.IsPaused ||
+            ConnectionRecoveryManager.instance?.IsRecoveringInScene == true)
         {
             return false;
         }
@@ -1456,6 +1599,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
         playerData.isScorePersisted = updateData.isScorePersisted;
         playerData.isSubmitTimerActive = updateData.isSubmitTimerActive;
         playerData.submitTimerEndTime = updateData.submitTimerEndTime;
+        playerData.isRiskSubmitReconnectGrace = updateData.isRiskSubmitReconnectGrace;
         playerData.isRiskDecisionPending = updateData.isRiskDecisionPending;
         playerData.queuedRiskPatterns = BingoPatternIdentityList.Clone(updateData.queuedRiskPatterns);
         playerData.activeRiskSubmitPatterns = BingoPatternIdentityList.Clone(updateData.activeRiskSubmitPatterns);
@@ -1487,6 +1631,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
         playerData.isScorePersisted = updateData.isScorePersisted;
         playerData.isSubmitTimerActive = updateData.isSubmitTimerActive;
         playerData.submitTimerEndTime = updateData.submitTimerEndTime;
+        playerData.isRiskSubmitReconnectGrace = updateData.isRiskSubmitReconnectGrace;
         playerData.isRiskDecisionPending = updateData.isRiskDecisionPending;
     }
 
@@ -1786,6 +1931,8 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
 
         gameSceneManager.SceneReadyForFadeOut -= OnSceneReadyForFadeOut;
         gameSceneManager.SceneReadyForFadeOut += OnSceneReadyForFadeOut;
+        gameSceneManager.SceneReadyToStart -= OnSceneReadyToStart;
+        gameSceneManager.SceneReadyToStart += OnSceneReadyToStart;
         isSubscribedToGameSceneManager = true;
         return true;
     }
@@ -1818,6 +1965,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
         if (isSubscribedToGameSceneManager && gameSceneManager != null)
         {
             gameSceneManager.SceneReadyForFadeOut -= OnSceneReadyForFadeOut;
+            gameSceneManager.SceneReadyToStart -= OnSceneReadyToStart;
         }
 
         if (isSceneReadyCheckRegistered && SceneReadyController.instance != null)
@@ -1889,6 +2037,14 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
     private void OnNetworkGameSessionUpdated(GameSessionData gameSessionData)
     {
         ApplyGameSessionUpdate(gameSessionData);
+    }
+
+    private void OnSceneReadyToStart(GameSceneType sceneType)
+    {
+        if (sceneType == GameSceneType.Game)
+        {
+            _ = StartPendingRiskSubmitAfterLoadingAsync();
+        }
     }
 
     private void OnNetworkGamePlayStateChanged(GamePlayStateChangedData updateData)

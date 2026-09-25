@@ -23,6 +23,9 @@ public class NetworkLobbyManager : MonoBehaviour
     private readonly HashSet<ulong> initialSyncClientIds = new HashSet<ulong>();
     private readonly Dictionary<string, long> lobbyRevisions = new Dictionary<string, long>();
     private readonly Dictionary<string, double> pendingJoinStartedTimeByUserId = new Dictionary<string, double>();
+    private readonly Dictionary<string, float> reconnectingLobbyPlayers =
+        new Dictionary<string, float>(StringComparer.Ordinal);
+    private const float LobbyReconnectGraceSeconds = 90f;
 
     private bool isReady;
     private bool isSubscribedToConnectionRegistry;
@@ -244,6 +247,99 @@ public class NetworkLobbyManager : MonoBehaviour
             "The network Game simulation lobby mode is not valid.");
     }
 
+#endif
+
+    private void Update()
+    {
+        if (networkBootstrap == null || !networkBootstrap.IsAuthority)
+        {
+            return;
+        }
+
+#if UNITY_EDITOR
+        CloseAbandonedSimulationHostLobbies();
+#endif
+
+        if (reconnectingLobbyPlayers.Count == 0)
+        {
+            return;
+        }
+
+        List<string> finished = null;
+
+        foreach (KeyValuePair<string, float> entry in reconnectingLobbyPlayers)
+        {
+            Lobby lobby = FindUserLobby(entry.Key);
+            bool expired = Time.realtimeSinceStartup - entry.Value >= LobbyReconnectGraceSeconds;
+
+            if (lobby == null || lobby.lobbyState != LobbyState.Open || expired)
+            {
+                finished ??= new List<string>();
+                finished.Add(entry.Key);
+            }
+        }
+
+        if (finished != null)
+        {
+            for (int i = 0; i < finished.Count; i++)
+            {
+                string userId = finished[i];
+                reconnectingLobbyPlayers.Remove(userId);
+
+                Lobby lobby = FindUserLobby(userId);
+
+                if (lobby != null &&
+                    NetworkGameSessionManager.instance?.HasGameForLobby(
+                        lobby.GetLobbyId()) != true)
+                {
+                    RemovePlayerFromLobby(userId, LobbyPlayerExitReason.Disconnected);
+                }
+            }
+        }
+    }
+
+#if UNITY_EDITOR
+    private void CloseAbandonedSimulationHostLobbies()
+    {
+        for (int lobbyIndex = lobbies.Count - 1; lobbyIndex >= 0; lobbyIndex--)
+        {
+            Lobby lobby = lobbies[lobbyIndex];
+
+            if (lobby?.playMode != MainMenuPlayMode.Custom || lobby.Controller?.Players == null)
+            {
+                continue;
+            }
+
+            IReadOnlyList<LobbyPlayerData> players = lobby.Controller.Players;
+
+            for (int playerIndex = 0; playerIndex < players.Count; playerIndex++)
+            {
+                LobbyPlayerData player = players[playerIndex];
+                string userId = player?.userData?.userId;
+
+                if (player?.isHost != true || string.IsNullOrWhiteSpace(userId) ||
+                    !MultiplayerConnectionSimulation.TryConsumeLobbyRecoveryAbandoned(
+                        userId, lobby.GetLobbyId()))
+                {
+                    continue;
+                }
+
+                if (ShouldCloseCustomLobbyForHostDeparture(lobby.GetLobbyId(), userId))
+                {
+                    CloseAndDeleteLobby(lobby, LobbyCloseReason.HostLeft);
+                }
+                else if (NetworkGameSessionManager.instance?.HasGameForLobby(lobby.GetLobbyId()) != true)
+                {
+                    RemovePlayerFromLobby(userId, LobbyPlayerExitReason.Disconnected);
+                }
+
+                break;
+            }
+        }
+    }
+#endif
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
     private Lobby FindOpenGameSimulationLobby()
     {
         for (int i = 0; i < lobbies.Count; i++)
@@ -336,6 +432,16 @@ public class NetworkLobbyManager : MonoBehaviour
 
         Lobby lobby = FindUserLobby(userId);
 
+        if (reconnectingLobbyPlayers.ContainsKey(userId) &&
+            lobby != null && lobby.lobbyState != LobbyState.Open &&
+            NetworkGameSessionManager.instance?.HasGameForLobby(lobby.GetLobbyId()) != true)
+        {
+            RemovePlayerFromLobby(userId, LobbyPlayerExitReason.Disconnected);
+            return;
+        }
+
+        reconnectingLobbyPlayers.Remove(userId);
+
         if (lobby?.Controller == null)
         {
             return;
@@ -362,6 +468,16 @@ public class NetworkLobbyManager : MonoBehaviour
 
         Lobby lobby = FindUserLobby(userId);
 
+        if (reconnectingLobbyPlayers.ContainsKey(userId) &&
+            lobby != null && lobby.lobbyState != LobbyState.Open &&
+            NetworkGameSessionManager.instance?.HasGameForLobby(lobby.GetLobbyId()) != true)
+        {
+            RemovePlayerFromLobby(userId, LobbyPlayerExitReason.Disconnected);
+            return;
+        }
+
+        reconnectingLobbyPlayers.Remove(userId);
+
         if (lobby?.Controller == null)
         {
             return;
@@ -373,6 +489,7 @@ public class NetworkLobbyManager : MonoBehaviour
     private LobbyExitResult RemovePlayerFromLobby(string userId, LobbyPlayerExitReason exitReason)
     {
         pendingJoinStartedTimeByUserId.Remove(userId);
+        reconnectingLobbyPlayers.Remove(userId);
 
         Lobby lobby = FindUserLobby(userId);
 
@@ -443,6 +560,61 @@ public class NetworkLobbyManager : MonoBehaviour
 
         LobbyClosed?.Invoke(lobby, closeReason);
         DeleteLobby(lobby);
+    }
+
+    public bool ShouldCloseCustomLobbyForHostDeparture(string lobbyId, string userId)
+    {
+        if (string.IsNullOrWhiteSpace(lobbyId) || string.IsNullOrWhiteSpace(userId))
+        {
+            return false;
+        }
+
+        Lobby lobby = null;
+
+        for (int i = 0; i < lobbies.Count; i++)
+        {
+            if (lobbies[i] != null &&
+                string.Equals(lobbies[i].GetLobbyId(), lobbyId, StringComparison.Ordinal))
+            {
+                lobby = lobbies[i];
+                break;
+            }
+        }
+
+        return lobby?.playMode == MainMenuPlayMode.Custom &&
+               lobby.Controller?.GetPlayer(userId)?.isHost == true &&
+               (lobby.lobbyState == LobbyState.FinalCountdown ||
+                (lobby.lobbyState == LobbyState.InGame &&
+                 NetworkGameSessionManager.instance?.HaveAllRealPlayersEnteredLinkedGame(lobbyId) != true));
+    }
+
+    public void ProcessAuthorityHostLobbyRecoveryAbandoned(string lobbyId, string userId)
+    {
+        if (networkBootstrap?.IsAuthority != true ||
+            string.IsNullOrWhiteSpace(lobbyId) ||
+            string.IsNullOrWhiteSpace(userId))
+        {
+            return;
+        }
+
+        Lobby lobby = FindUserLobby(userId);
+
+        if (lobby == null ||
+            !string.Equals(lobby.GetLobbyId(), lobbyId, StringComparison.Ordinal) ||
+            lobby.playMode != MainMenuPlayMode.Custom ||
+            lobby.Controller?.GetPlayer(userId)?.isHost != true)
+        {
+            return;
+        }
+
+        if (ShouldCloseCustomLobbyForHostDeparture(lobbyId, userId))
+        {
+            CloseAndDeleteLobby(lobby, LobbyCloseReason.HostLeft);
+        }
+        else if (lobby.lobbyState == LobbyState.Open)
+        {
+            RemovePlayerFromLobby(userId, LobbyPlayerExitReason.Disconnected);
+        }
     }
 
     private void DeleteLobby(Lobby lobby)
@@ -2192,11 +2364,28 @@ public class NetworkLobbyManager : MonoBehaviour
 
         Lobby activeLobby = FindUserLobby(userId);
 
-        // Keep the lobby slot while its game is running so a frozen player can return.
         if (activeLobby != null &&
-            NetworkGameSessionManager.instance?.HasPlayerEnteredLinkedGame(
-                activeLobby.GetLobbyId(), userId) == true)
+            ShouldCloseCustomLobbyForHostDeparture(activeLobby.GetLobbyId(), userId))
         {
+            CloseAndDeleteLobby(activeLobby, LobbyCloseReason.HostLeft);
+            return;
+        }
+
+        // Once the Game exists, keep the slot even if this player disconnects
+        // during the Game loading screen. The other players may still enter.
+        if (activeLobby != null &&
+            NetworkGameSessionManager.instance?.HasGameForLobby(
+                activeLobby.GetLobbyId()) == true)
+        {
+            return;
+        }
+
+        if (activeLobby?.lobbyState == LobbyState.Open)
+        {
+            // Do not close a Custom lobby merely because its host disconnected.
+            // A restored connection clears this entry; failed recovery or the
+            // authority fallback finishes the exit later.
+            reconnectingLobbyPlayers[userId] = Time.realtimeSinceStartup;
             return;
         }
 

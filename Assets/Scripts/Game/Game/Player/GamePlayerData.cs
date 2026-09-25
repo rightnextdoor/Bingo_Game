@@ -31,6 +31,7 @@ public class GamePlayerData
     public bool isScorePersisted;
     public bool isSubmitTimerActive;
     public double submitTimerEndTime;
+    public bool isRiskSubmitReconnectGrace;
     public bool isRiskDecisionPending;
     public List<int> markedCellIndices;
 
@@ -83,6 +84,7 @@ public class GamePlayerData
         isScorePersisted = false;
         isSubmitTimerActive = false;
         submitTimerEndTime = 0d;
+        isRiskSubmitReconnectGrace = false;
         isRiskDecisionPending = false;
         markedCellIndices = new List<int>();
         automaticBoardLastProcessedBallCallId = 0;
@@ -157,6 +159,7 @@ public class GamePlayerData
         isScorePersisted = playerData.isScorePersisted;
         isSubmitTimerActive = playerData.isSubmitTimerActive;
         submitTimerEndTime = playerData.submitTimerEndTime;
+        isRiskSubmitReconnectGrace = playerData.isRiskSubmitReconnectGrace;
         isRiskDecisionPending = playerData.isRiskDecisionPending;
         markedCellIndices = playerData.markedCellIndices != null
             ? new List<int>(playerData.markedCellIndices)

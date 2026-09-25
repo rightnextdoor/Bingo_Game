@@ -217,6 +217,24 @@ public static class GameBotManager
         return changed;
     }
 
+    public static bool MarkPlayerReconnecting(GameSessionData gameSessionData, string userId)
+    {
+        GamePlayerData playerData = gameSessionData?.GetPlayer(userId);
+
+        if (playerData == null || playerData.userTag != UserTag.Player ||
+            playerData.returnState == GamePlayerReturnState.DeclinedReturn ||
+            !playerData.canRejoin)
+        {
+            return false;
+        }
+
+        playerData.isConnected = false;
+        playerData.returnState = GamePlayerReturnState.Reconnecting;
+        // Keep the board's existing manual/automatic control. In particular,
+        // Death continues marking without converting the human to a bot.
+        return true;
+    }
+
     public static bool RestorePlayerControl(
         GameSessionData gameSessionData,
         string userId,
@@ -287,6 +305,10 @@ public static class GameBotManager
         playerData.isGameSceneReady = true;
         playerData.canRejoin = true;
         GameAutomaticBoardAuthority.PreparePlayerTakeover(gameSessionData, playerData);
+        if (playerData.isRiskSubmitReconnectGrace)
+        {
+            RiskGameplayAuthority.ResumeSubmitAfterReconnect(gameSessionData, playerData);
+        }
         return true;
     }
 

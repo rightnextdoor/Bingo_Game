@@ -29,6 +29,20 @@ public class OnlineStatusFooterController : MonoBehaviour
         BindConnectionManager();
     }
 
+    private void Update()
+    {
+        if (connectionManager != OnlineConnectionManager.instance)
+        {
+            BindConnectionManager();
+            return;
+        }
+
+        if (connectionManager != null)
+        {
+            ApplyState(connectionManager.ConnectionState);
+        }
+    }
+
     private void OnDisable()
     {
         UnbindConnectionManager();
@@ -80,6 +94,11 @@ public class OnlineStatusFooterController : MonoBehaviour
 
     private void ApplyState(OnlineConnectionState state)
     {
+        if (state == OnlineConnectionState.Online && connectionManager?.IsOnline != true)
+        {
+            state = OnlineConnectionState.Offline;
+        }
+
         switch (state)
         {
             case OnlineConnectionState.Connecting:

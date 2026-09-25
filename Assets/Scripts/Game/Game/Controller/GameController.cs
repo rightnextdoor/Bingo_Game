@@ -135,6 +135,11 @@ public class GameController : MonoBehaviour
 
     public void DisplayGameInfo(GameSessionData gameSessionData)
     {
+        if (ConnectionRecoveryManager.instance?.IsRecoveringInScene == true)
+        {
+            return;
+        }
+
         if (gameSessionData == null)
         {
             ClearDisplay();
@@ -188,6 +193,22 @@ public class GameController : MonoBehaviour
         ShowRiskSubmitNotificationIfNeeded(gameSessionData);
         CloseRiskDecisionPopupIfResolved(gameSessionData);
         TryOpenGameOverPopup(gameSessionData);
+    }
+
+    public void RefreshAfterConnectionRecovery(GameSessionData gameSessionData)
+    {
+        bingoCheckAnimationController?.StopAndClear();
+        StopAutomaticMarkPresentation();
+        isBingoCheckPending = false;
+        ResetRankedManualCheckPresentation();
+        ResetDeathCheckPresentation();
+
+        if (PopupManager.instance?.ActivePopupId == PopupId.RiskDecision)
+        {
+            PopupManager.instance.CloseActivePopup();
+        }
+
+        DisplayGameInfo(gameSessionData);
     }
 
     public void SetTimerSeconds(float remainingSeconds)
@@ -1378,7 +1399,8 @@ public class GameController : MonoBehaviour
 
     private void UpdateRiskTimeNotifications()
     {
-        if (SessionPauseManager.IsPaused)
+        if (SessionPauseManager.IsPaused ||
+            ConnectionRecoveryManager.instance?.IsRecoveringInScene == true)
         {
             return;
         }

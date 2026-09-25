@@ -29,6 +29,7 @@ public class MainMenuController : MonoBehaviour
     private MainMenuPlayMode selectedMode = MainMenuPlayMode.None;
     private bool isStartingSelectedMode;
     private bool isCheckingPreviousGame;
+    private bool connectionRecoveredOnPlay;
 
     private UserManager userManager;
     private PopupManager popupManager;
@@ -217,6 +218,7 @@ public class MainMenuController : MonoBehaviour
             return;
         }
 
+        connectionRecoveredOnPlay = false;
         CacheManagers();
 
         UserData currentUser = userManager?.CurrentUser;
@@ -230,18 +232,42 @@ public class MainMenuController : MonoBehaviour
         {
             string previousGameId = currentUser.lastGameId;
 
-            if (NetworkBootstrap.instance?.IsConnected != true)
-            {
-                userManager.DeferNetworkGameCleanup(previousGameId);
-                ShowModeSelectScreen();
-                return;
-            }
-
             isCheckingPreviousGame = true;
             if (landingPlayButton != null)
             {
                 landingPlayButton.interactable = false;
             }
+
+            ConnectionRecoveryResult previousConnection =
+                ConnectionRecoveryManager.instance != null
+                    ? await ConnectionRecoveryManager.instance.RecoverAsync(true)
+                    : ConnectionRecoveryResult.MultiplayerUnavailable;
+
+            // The simulation switch can be restored just as the final attempt
+            // completes. Give that newly available connection one fresh cycle.
+            if (previousConnection != ConnectionRecoveryResult.Connected &&
+                OnlineConnectionManager.instance?.IsConnectionAvailableForTesting == true &&
+                NetworkBootstrap.instance?.IsConnectionAvailableForTesting == true &&
+                ConnectionRecoveryManager.instance != null)
+            {
+                previousConnection = await ConnectionRecoveryManager.instance.RecoverAsync(true);
+            }
+
+            if (previousConnection != ConnectionRecoveryResult.Connected)
+            {
+                isCheckingPreviousGame = false;
+                if (landingPlayButton != null)
+                {
+                    landingPlayButton.interactable = true;
+                }
+
+                // An unavailable connection does not prove the previous game ended.
+                // Keep its ID so the player can try Rejoin again when service returns.
+                ShowModeSelectScreen();
+                return;
+            }
+
+            connectionRecoveredOnPlay = true;
 
             GameSessionResult rejoinCheck;
 
@@ -250,6 +276,19 @@ public class MainMenuController : MonoBehaviour
                 rejoinCheck = GameSessionManager.instance != null
                     ? await GameSessionManager.instance.CheckNetworkRejoinAsync(previousGameId)
                     : null;
+
+                if (rejoinCheck?.success != true &&
+                    NetworkBootstrap.instance?.IsConnected == true &&
+                    (rejoinCheck == null ||
+                     rejoinCheck.failureType == GameSessionFailureType.ServiceUnavailable ||
+                     rejoinCheck.failureType == GameSessionFailureType.NetworkConnectionFailed ||
+                     rejoinCheck.failureType == GameSessionFailureType.NetworkGameConnectionUnavailable))
+                {
+                    await System.Threading.Tasks.Task.Delay(500);
+                    rejoinCheck = GameSessionManager.instance != null
+                        ? await GameSessionManager.instance.CheckNetworkRejoinAsync(previousGameId)
+                        : null;
+                }
             }
             finally
             {
@@ -264,7 +303,6 @@ public class MainMenuController : MonoBehaviour
             {
                 if (NetworkBootstrap.instance?.IsConnected != true)
                 {
-                    userManager.DeferNetworkGameCleanup(previousGameId);
                     ShowModeSelectScreen();
                     return;
                 }
@@ -273,9 +311,23 @@ public class MainMenuController : MonoBehaviour
                     rejoinCheck?.failureType == GameSessionFailureType.PlayerNotFound ||
                     rejoinCheck?.failureType == GameSessionFailureType.PlayerNotEligible)
                 {
+                    GameSessionData previousSession = GameSessionManager.instance?.CurrentGameSession;
+                    bool cancelledBeforeStart = previousSession != null &&
+                        string.Equals(previousSession.gameId, previousGameId, System.StringComparison.Ordinal) &&
+                        previousSession.gameState == GameSessionState.Created;
+
+                    if (GameSessionManager.instance != null)
+                    {
+                        await GameSessionManager.instance.ClearPreviousSessionForFreshLobbyEntryAsync();
+                    }
+
                     userManager.ClearLastGameId();
+
                     ShowModeSelectScreen();
-                    popupManager?.OpenFailurePopup("This game has ended and can no longer be rejoined.");
+                    if (!cancelledBeforeStart)
+                    {
+                        popupManager?.OpenFailurePopup("This game has ended and can no longer be rejoined.");
+                    }
                     return;
                 }
 
@@ -291,6 +343,33 @@ public class MainMenuController : MonoBehaviour
 
             popupManager.OpenGameRejoinPopup();
             return;
+        }
+
+        if (OnlineConnectionManager.instance?.IsOnline == false &&
+            ConnectionRecoveryManager.instance != null)
+        {
+            isCheckingPreviousGame = true;
+
+            if (landingPlayButton != null)
+            {
+                landingPlayButton.interactable = false;
+            }
+
+            try
+            {
+                connectionRecoveredOnPlay =
+                    await ConnectionRecoveryManager.instance.RecoverAsync(false) ==
+                    ConnectionRecoveryResult.Connected;
+            }
+            finally
+            {
+                isCheckingPreviousGame = false;
+
+                if (landingPlayButton != null)
+                {
+                    landingPlayButton.interactable = true;
+                }
+            }
         }
 
         ShowModeSelectScreen();
@@ -708,17 +787,39 @@ public class MainMenuController : MonoBehaviour
             return;
         }
 
-        if (selectedMode != MainMenuPlayMode.Solo &&
-            NetworkBootstrap.instance?.IsConnected != true)
-        {
-            popupManager?.OpenFailurePopup("A network connection is required for Online and Custom games.");
-            return;
-        }
-
         isStartingSelectedMode = true;
 
         try
         {
+            if (selectedMode != MainMenuPlayMode.Solo)
+            {
+                ConnectionRecoveryResult connectionResult =
+                    ConnectionRecoveryManager.instance != null
+                        ? connectionRecoveredOnPlay &&
+                          OnlineConnectionManager.instance?.IsOnline == true &&
+                          NetworkBootstrap.instance?.IsConnectionAvailableForTesting == true
+                            ? await ConnectionRecoveryManager.instance.PrepareLobbyAfterPlayRecoveryAsync(lobbySetupData)
+                            : await ConnectionRecoveryManager.instance.RecoverAsync(true, lobbySetupData)
+                        : ConnectionRecoveryResult.MultiplayerUnavailable;
+
+                if (connectionResult != ConnectionRecoveryResult.Connected ||
+                    OnlineConnectionManager.instance?.IsOnline != true ||
+                    NetworkBootstrap.instance?.IsConnected != true ||
+                    NetworkLobbyConnection.GetLocalConnection() == null)
+                {
+                    popupManager?.OpenFailurePopup(
+                        connectionResult == ConnectionRecoveryResult.OnlineUnavailable ||
+                        OnlineConnectionManager.instance?.IsOnline != true
+                            ? "Online services are unavailable. Check your connection and try again."
+                            : "The lobby and game connection is unavailable. Please try again.");
+                    return;
+                }
+            }
+
+            ConnectionRecoveryManager.instance?.SetExpectingNetworkLobbyLoading(
+                selectedMode != MainMenuPlayMode.Solo);
+            gameSceneManager.LoadLobbyScene();
+
             if (GameSessionManager.instance?.HasSavedSoloGameForCurrentUser == true)
             {
                 await GameSessionManager.instance.DeclineSavedSoloGameAsync();
@@ -734,16 +835,46 @@ public class MainMenuController : MonoBehaviour
                 userManager.ClearLastGameId();
             }
 
+            if (gameSceneManager.CurrentSceneType != GameSceneType.Lobby ||
+                (selectedMode != MainMenuPlayMode.Solo &&
+                 (OnlineConnectionManager.instance?.IsOnline != true ||
+                  NetworkBootstrap.instance?.IsConnected != true)))
+            {
+                if (selectedMode != MainMenuPlayMode.Solo &&
+                    gameSceneManager.CurrentSceneType == GameSceneType.Lobby)
+                {
+                    bool onlineLost = OnlineConnectionManager.instance?.IsOnline != true;
+                    FailureManager.instance?.ReportFailure(
+                        onlineLost
+                            ? "The connection to online services was lost while loading the lobby."
+                            : "The lobby and game connection was lost while loading.",
+                        onlineLost ? FailurePrecedence.Online : FailurePrecedence.SessionConnection,
+                        FailureDisplayMode.WaitForMain);
+                    gameSceneManager.ReturnToMainSceneAfterFailure();
+                }
+
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(userManager.CurrentUser.pendingNetworkGameCleanupId))
+            {
+                FailureManager.instance?.ShowFailureOnMain(
+                    "The previous game could not be cleared. Please try again.",
+                    FailurePrecedence.SessionConnection);
+                gameSceneManager.ReturnToMainSceneAfterFailure();
+                return;
+            }
+
             lobbySetupData.startFreshEntry = true;
             lobbyManager.SetPendingLobbySetupData(
                 lobbySetupData);
 
-            gameSceneManager.LoadLobbyScene();
-
             lobbyManager.BeginPendingLobbyEntry();
+            ConnectionRecoveryManager.instance?.SetExpectingNetworkLobbyLoading(false);
         }
         finally
         {
+            ConnectionRecoveryManager.instance?.SetExpectingNetworkLobbyLoading(false);
             isStartingSelectedMode = false;
         }
     }

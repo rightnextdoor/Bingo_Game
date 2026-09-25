@@ -266,7 +266,9 @@ public class GameSessionData
                playerData.gameStatus == GamePlayerStatus.Eligible &&
                !playerData.hasRiskCashedOut &&
                playerData.returnState != GamePlayerReturnState.FrozenAwaitingReturn &&
-               (playerData.controlType == GamePlayerControlType.Bot || playerData.isConnected);
+               (playerData.controlType == GamePlayerControlType.Bot ||
+                playerData.isConnected ||
+                playerData.returnState == GamePlayerReturnState.Reconnecting);
     }
 
     public int GetRemainingRealHumanCount(string excludedUserId = "")
@@ -289,7 +291,8 @@ public class GameSessionData
                 !playerData.canRejoin ||
                 (!playerData.isConnected &&
                  (playerData.controlType != GamePlayerControlType.Human ||
-                  playerData.returnState != GamePlayerReturnState.FrozenAwaitingReturn)))
+                  (playerData.returnState != GamePlayerReturnState.FrozenAwaitingReturn &&
+                   playerData.returnState != GamePlayerReturnState.Reconnecting))))
             {
                 continue;
             }
@@ -547,6 +550,7 @@ public class GamePlayerMatchStateData
     public bool isScorePersisted;
     public bool isSubmitTimerActive;
     public double submitTimerEndTime;
+    public bool isRiskSubmitReconnectGrace;
     public bool isRiskDecisionPending;
 
     public GamePlayerMatchStateData()
@@ -582,6 +586,7 @@ public class GamePlayerMatchStateData
         isScorePersisted = playerData.isScorePersisted;
         isSubmitTimerActive = playerData.isSubmitTimerActive;
         submitTimerEndTime = playerData.submitTimerEndTime;
+        isRiskSubmitReconnectGrace = playerData.isRiskSubmitReconnectGrace;
         isRiskDecisionPending = playerData.isRiskDecisionPending;
     }
 }
@@ -726,6 +731,7 @@ public class GamePlayStateChangedBatchData
                     isScorePersisted = playerState.isScorePersisted,
                     isSubmitTimerActive = playerState.isSubmitTimerActive,
                     submitTimerEndTime = playerState.submitTimerEndTime,
+                    isRiskSubmitReconnectGrace = playerState.isRiskSubmitReconnectGrace,
                     isRiskDecisionPending = playerState.isRiskDecisionPending
                 });
             }
@@ -790,6 +796,7 @@ public class GamePlayerStateChangedData
     public bool isScorePersisted;
     public bool isSubmitTimerActive;
     public double submitTimerEndTime;
+    public bool isRiskSubmitReconnectGrace;
     public bool isRiskDecisionPending;
     public List<BingoPatternIdentity> queuedRiskPatterns;
     public List<BingoPatternIdentity> activeRiskSubmitPatterns;
@@ -839,6 +846,7 @@ public class GamePlayerStateChangedData
         isScorePersisted = playerData.isScorePersisted;
         isSubmitTimerActive = playerData.isSubmitTimerActive;
         submitTimerEndTime = playerData.submitTimerEndTime;
+        isRiskSubmitReconnectGrace = playerData.isRiskSubmitReconnectGrace;
         isRiskDecisionPending = playerData.isRiskDecisionPending;
         queuedRiskPatterns = BingoPatternIdentityList.Clone(playerData.queuedRiskPatterns);
         activeRiskSubmitPatterns = BingoPatternIdentityList.Clone(playerData.activeRiskSubmitPatterns);

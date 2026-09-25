@@ -36,8 +36,6 @@ public class LobbyManager : MonoBehaviour
     private bool returnToMainSceneOnEntryFailure = true;
     private int entryAttemptVersion;
 
-    private MultiplayerSessionLifecycle multiplayerSessionLifecycle;
-    private bool isSubscribedToMultiplayerSessionLifecycle;
     private GameSceneManager gameSceneManager;
     private bool isSubscribedToGameSceneManager;
     private bool isSubscribedToPlayerProfiles;
@@ -887,47 +885,73 @@ public class LobbyManager : MonoBehaviour
         lobbyService.RequestLobbyResync();
     }
 
-    private void OnMultiplayerConnectionLost(NetworkConnectionState _)
+    public async Task<bool> RestoreCurrentNetworkLobbyAsync()
     {
-        HandleMultiplayerConnectionLost();
+        if (runtimeType != SessionRuntimeType.Network ||
+            !lobbyClientState.HasLobby ||
+            NetworkBootstrap.instance?.IsConnected != true)
+        {
+            return false;
+        }
+
+        string lobbyId = lobbyClientState.LobbyId;
+        bool snapshotReceived = false;
+        void OnRestoredView(LobbyViewData view)
+        {
+            snapshotReceived = view != null &&
+                               string.Equals(view.lobbyId, lobbyId, StringComparison.Ordinal);
+        }
+
+        LobbyViewUpdated += OnRestoredView;
+
+        try
+        {
+            networkLobbyService ??= NetworkLobbyService.instance;
+            float deadline = Time.realtimeSinceStartup + 8f;
+
+            while (NetworkLobbyConnection.GetLocalConnection() == null &&
+                   Time.realtimeSinceStartup < deadline &&
+                   NetworkBootstrap.instance?.IsConnected == true)
+            {
+                await Task.Yield();
+            }
+
+            if (NetworkLobbyConnection.GetLocalConnection() == null)
+            {
+                return false;
+            }
+
+            networkLobbyService?.RequestLobbyInitialSync();
+
+            while (!snapshotReceived && Time.realtimeSinceStartup < deadline &&
+                   NetworkBootstrap.instance?.IsConnected == true)
+            {
+                await Task.Yield();
+            }
+
+            return snapshotReceived &&
+                   lobbyClientState.ViewData?.lobbyState == LobbyState.Open;
+        }
+        finally
+        {
+            LobbyViewUpdated -= OnRestoredView;
+        }
     }
 
-    public void HandleMultiplayerConnectionLost()
+    public void ClearLocalLobbyAfterConnectionLoss()
     {
-        if (runtimeType != SessionRuntimeType.Network || isLeavingLobby)
+        if (runtimeType != SessionRuntimeType.Network)
         {
             return;
         }
 
         entryAttemptVersion++;
-
-        if (lobbyClientState.HasLobby)
-        {
-            HandleForcedLobbyExit(LobbyExitNotification.ConnectionLost(lobbyClientState.LobbyId));
-            return;
-        }
-
-        if (!isEnteringLobby && entryState != LobbyEntryState.Connecting &&
-            entryState != LobbyEntryState.Searching &&
-            entryState != LobbyEntryState.Joining &&
-            entryState != LobbyEntryState.AddingPlayer)
-        {
-            return;
-        }
-
         isEnteringLobby = false;
         pendingLobbySetupData = null;
         pendingNetworkLobbyViewData = null;
         activeLobbyService = null;
-
-        LobbyEntryResult failureResult = LobbyEntryResult.Failed(
-            LobbyEntryFailureType.ConnectionLost,
-            "The multiplayer connection was lost.");
-
-        lastEntryResult = failureResult;
-        SetEntryState(LobbyEntryState.Failed);
-        LobbyEntryFailed?.Invoke(failureResult);
-        ReturnToMainScene();
+        ClearCurrentLobby();
+        SetEntryState(LobbyEntryState.Idle);
     }
 
     private void HandleForcedLobbyExit(LobbyExitNotification notification)
@@ -991,6 +1015,18 @@ public class LobbyManager : MonoBehaviour
             {
                 UserManager.instance?.ClearLastGameId();
             }
+        }
+
+        else if (notification.closeReason == LobbyCloseReason.HostLeft &&
+                 gameSessionManager?.CurrentGameSession != null &&
+                 string.Equals(
+                     gameSessionManager.CurrentGameSession.lobbyId,
+                     notification.lobbyId,
+                     StringComparison.Ordinal))
+        {
+            // A Game can already exist while the lobby's final countdown is
+            // running. Host-left closes that lobby and cancels the Game.
+            gameSessionManager.ClearCurrentGame(true);
         }
 
         if (lobbyClientState.HasLobby)
@@ -1196,23 +1232,6 @@ public class LobbyManager : MonoBehaviour
         NetworkLobbyConnection.LocalLobbySyncSnapshotReceived -= OnLocalLobbySyncSnapshotReceived;
         NetworkLobbyConnection.LocalLobbySyncSnapshotReceived += OnLocalLobbySyncSnapshotReceived;
 
-        if (isSubscribedToMultiplayerSessionLifecycle)
-        {
-            return;
-        }
-
-        if (multiplayerSessionLifecycle == null)
-        {
-            multiplayerSessionLifecycle = MultiplayerSessionLifecycle.instance;
-        }
-
-        if (multiplayerSessionLifecycle == null)
-        {
-            return;
-        }
-
-        multiplayerSessionLifecycle.ConnectionLost += OnMultiplayerConnectionLost;
-        isSubscribedToMultiplayerSessionLifecycle = true;
     }
 
     private void UnsubscribeFromNetworkEvents()
@@ -1230,12 +1249,6 @@ public class LobbyManager : MonoBehaviour
         NetworkLobbyConnection.LocalLobbyStateChangedReceived -= OnLocalLobbyStateChangedReceived;
         NetworkLobbyConnection.LocalLobbySyncSnapshotReceived -= OnLocalLobbySyncSnapshotReceived;
 
-        if (isSubscribedToMultiplayerSessionLifecycle && multiplayerSessionLifecycle != null)
-        {
-            multiplayerSessionLifecycle.ConnectionLost -= OnMultiplayerConnectionLost;
-        }
-
-        isSubscribedToMultiplayerSessionLifecycle = false;
     }
 
     #endregion

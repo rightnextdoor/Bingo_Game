@@ -13,6 +13,9 @@ public class NetworkGameSessionManager : MonoBehaviour
     private readonly List<GameSessionData> gameSessions = new List<GameSessionData>();
     private readonly Dictionary<string, GameFinalScoreResultData> completedScoreResults =
         new Dictionary<string, GameFinalScoreResultData>(StringComparer.Ordinal);
+    private readonly Dictionary<string, float> reconnectStartedAt =
+        new Dictionary<string, float>(StringComparer.Ordinal);
+    private const float InterruptedCheckCompletionSeconds = 2f;
 
     private bool isReady;
     private NetworkRoot networkRoot;
@@ -86,6 +89,14 @@ public class NetworkGameSessionManager : MonoBehaviour
         for (int i = 0; i < gameSessions.Count; i++)
         {
             GameSessionData gameSessionData = gameSessions[i];
+
+            UpdateDisconnectedPlayers(gameSessionData);
+
+            if (!gameSessions.Contains(gameSessionData))
+            {
+                i--;
+                continue;
+            }
 
             if (GameBingoCheckAuthority.UpdateSessionLoop(gameSessionData))
             {
@@ -269,6 +280,27 @@ public class NetworkGameSessionManager : MonoBehaviour
                 gameSessionData.lobbyId);
         }
 
+        bool wasReconnecting = playerData.returnState == GamePlayerReturnState.Reconnecting;
+
+        if (wasReconnecting)
+        {
+            CompleteInterruptedCheck(gameSessionData, playerData);
+        }
+
+        if (gameSessionData.gameState == GameSessionState.Completed)
+        {
+            reconnectStartedAt.Remove(userId);
+            return GameSessionResult.Failed(
+                GameSessionOperationType.Rejoin,
+                GameSessionFailureType.PlayerNotEligible,
+                "The game ended while this player was reconnecting.",
+                gameId,
+                gameSessionData.lobbyId).WithFinalScore(
+                    GameScoreAuthority.CreateFinalScoreResult(gameSessionData, playerData));
+        }
+
+        reconnectStartedAt.Remove(userId);
+
         if (!playerData.isConnected || playerData.isGameSceneReady)
         {
             if (playerData.controlType == GamePlayerControlType.Bot)
@@ -390,6 +422,8 @@ public class NetworkGameSessionManager : MonoBehaviour
                 gameSessionData.lobbyId);
         }
 
+        bool wasGameSceneReady = playerData.isGameSceneReady;
+
         if (!playerData.isConnected || !playerData.isGameSceneReady)
         {
             if (playerData.controlType == GamePlayerControlType.Bot)
@@ -400,6 +434,17 @@ public class NetworkGameSessionManager : MonoBehaviour
             {
                 GameBotManager.RestorePlayerControl(gameSessionData, userId, true);
             }
+            gameSessionData.revision++;
+            BroadcastGamePlayerStateChanged(gameSessionData, playerData);
+        }
+
+        // Rejoining first marks the scene ready behind the loading fade. The
+        // second ready signal arrives after that player's loading screen ends.
+        if (wasGameSceneReady &&
+            playerData.controlType == GamePlayerControlType.Human &&
+            playerData.isRiskSubmitReconnectGrace &&
+            RiskGameplayAuthority.ResumeSubmitAfterReconnect(gameSessionData, playerData))
+        {
             gameSessionData.revision++;
             BroadcastGamePlayerStateChanged(gameSessionData, playerData);
         }
@@ -567,6 +612,92 @@ public class NetworkGameSessionManager : MonoBehaviour
     {
         GameSessionData gameSessionData = FindGameByPlayerId(userId);
         GamePlayerData playerData = gameSessionData?.GetPlayer(userId);
+
+        // The lobby owns a custom host departure until every real player has
+        // entered the Game scene. Its pre-created Game must be discarded, not
+        // processed as a scored player loss.
+        if (gameSessionData != null &&
+            NetworkLobbyManager.instance?.ShouldCloseCustomLobbyForHostDeparture(
+                gameSessionData.lobbyId, userId) == true)
+        {
+            return false;
+        }
+
+        if (gameSessionData?.gameState == GameSessionState.InProgress &&
+            playerData?.isGameSceneReady == true &&
+            GameBotManager.MarkPlayerReconnecting(gameSessionData, userId))
+        {
+            reconnectStartedAt[userId] = Time.realtimeSinceStartup;
+            RiskGameplayAuthority.PauseSubmitForReconnect(gameSessionData, playerData);
+            gameSessionData.revision++;
+            BroadcastGamePlayerStateChanged(gameSessionData, playerData);
+            return true;
+        }
+
+        return FreezeDisconnectedPlayer(gameSessionData, playerData, userId);
+    }
+
+    private void UpdateDisconnectedPlayers(GameSessionData gameSessionData)
+    {
+        if (gameSessionData?.players == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < gameSessionData.players.Count; i++)
+        {
+            GamePlayerData playerData = gameSessionData.players[i];
+
+            if (playerData == null ||
+                !reconnectStartedAt.TryGetValue(playerData.userId, out float startedAt))
+            {
+                continue;
+            }
+
+            if (playerData.returnState != GamePlayerReturnState.Reconnecting)
+            {
+                reconnectStartedAt.Remove(playerData.userId);
+                continue;
+            }
+
+            float elapsed = Time.realtimeSinceStartup - startedAt;
+
+            if (elapsed >= InterruptedCheckCompletionSeconds)
+            {
+                CompleteInterruptedCheck(gameSessionData, playerData);
+                reconnectStartedAt.Remove(playerData.userId);
+            }
+        }
+    }
+
+    private void CompleteInterruptedCheck(
+        GameSessionData gameSessionData,
+        GamePlayerData playerData)
+    {
+        if (gameSessionData?.gamePlayController?.HasPendingCheckAnimation(playerData.userId) == true &&
+            GameBingoCheckAuthority.CompleteBingoCheckAnimation(gameSessionData, playerData.userId))
+        {
+            gameSessionData.revision++;
+            BroadcastGamePlayStateChanged(gameSessionData);
+        }
+
+        if (playerData.isRiskDecisionPending &&
+            GameBingoCheckAuthority.ResolveRiskDecision(gameSessionData, playerData.userId, true))
+        {
+            gameSessionData.revision++;
+            BroadcastGamePlayStateChanged(gameSessionData);
+        }
+    }
+
+    private bool FreezeDisconnectedPlayer(
+        GameSessionData gameSessionData,
+        GamePlayerData playerData,
+        string userId)
+    {
+        if (gameSessionData == null || playerData == null)
+        {
+            return false;
+        }
 
         if (!GameBotManager.FreezePlayerAwaitingReturn(gameSessionData, userId))
         {
@@ -745,6 +876,17 @@ public class NetworkGameSessionManager : MonoBehaviour
             return false;
         }
 
+        if (gameSessionData.players != null)
+        {
+            for (int i = 0; i < gameSessionData.players.Count; i++)
+            {
+                if (gameSessionData.players[i] != null)
+                {
+                    reconnectStartedAt.Remove(gameSessionData.players[i].userId);
+                }
+            }
+        }
+
         CacheCompletedScores(gameSessionData);
 
         MultiplayerNetworkScheduler.instance?.ClearSession(gameSessionData.gameId);
@@ -813,6 +955,38 @@ public class NetworkGameSessionManager : MonoBehaviour
     public bool HasGameForLobby(string lobbyId)
     {
         return FindGameByLobbyId(lobbyId) != null;
+    }
+
+    public bool HaveAllRealPlayersEnteredLinkedGame(string lobbyId)
+    {
+        GameSessionData gameSessionData = FindGameByLobbyId(lobbyId);
+
+        if (gameSessionData?.players == null ||
+            gameSessionData.gameState != GameSessionState.InProgress)
+        {
+            return false;
+        }
+
+        bool foundRealPlayer = false;
+
+        for (int i = 0; i < gameSessionData.players.Count; i++)
+        {
+            GamePlayerData playerData = gameSessionData.players[i];
+
+            if (playerData?.userTag != UserTag.Player)
+            {
+                continue;
+            }
+
+            foundRealPlayer = true;
+
+            if (!playerData.isGameSceneReady)
+            {
+                return false;
+            }
+        }
+
+        return foundRealPlayer;
     }
 
     public bool HasPlayerEnteredLinkedGame(string lobbyId, string userId)

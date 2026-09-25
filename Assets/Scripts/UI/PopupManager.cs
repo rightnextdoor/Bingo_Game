@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 
 public enum PopupId
@@ -16,7 +17,8 @@ public enum PopupId
     GameRejoin,
     RiskDecision,
     SoloLeave,
-    GameOver
+    GameOver,
+    Reconnecting
 }
 
 [Serializable]
@@ -41,6 +43,7 @@ public class PopupManager : MonoBehaviour
     private PopupId activePopupId = PopupId.None;
     private PopupId createUserAfterCreatePopupId = PopupId.None;
     private Action createUserAfterCreateAction;
+    [SerializeField] private TMP_Text reconnectMessageText;
 
     public PopupId ActivePopupId => activePopupId;
     public bool HasOpenPopup => activePopupId != PopupId.None;
@@ -196,6 +199,27 @@ public class PopupManager : MonoBehaviour
     public void OpenRiskDecisionPopup()
     {
         OpenPopup(PopupId.RiskDecision);
+    }
+
+    public void OpenReconnectPopup(string message)
+    {
+        if (reconnectMessageText != null)
+        {
+            reconnectMessageText.text = message;
+        }
+
+        if (activePopupId != PopupId.Reconnecting)
+        {
+            OpenPopup(PopupId.Reconnecting);
+        }
+    }
+
+    public void CloseReconnectPopup()
+    {
+        if (activePopupId == PopupId.Reconnecting)
+        {
+            CloseActivePopup();
+        }
     }
 
     public void OpenAfterUserCreatedPopup()
@@ -363,4 +387,5 @@ public class PopupManager : MonoBehaviour
 
         return null;
     }
+
 }

@@ -31,12 +31,26 @@ public class NetworkBootstrap : MonoBehaviour
     private NetworkConnectionMode connectionMode = NetworkConnectionMode.Offline;
     private NetworkConnectionState connectionState = NetworkConnectionState.Offline;
     private string relayJoinCode = string.Empty;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    private bool connectionAvailableForTesting = true;
+#endif
 
     public bool IsReady => isReady;
     public NetworkConnectionMode ConnectionMode => connectionMode;
     public NetworkConnectionState ConnectionState => connectionState;
     public string RelayJoinCode => relayJoinCode;
-    public bool IsConnected => networkManager != null && networkManager.IsListening && connectionState == NetworkConnectionState.Connected;
+    public bool IsConnected => IsConnectionAvailableForTesting && networkManager != null && networkManager.IsListening && connectionState == NetworkConnectionState.Connected;
+    public bool IsConnectionAvailableForTesting
+    {
+        get
+        {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            return connectionAvailableForTesting;
+#else
+            return true;
+#endif
+        }
+    }
     public bool IsAuthority => networkManager != null && networkManager.IsListening && networkManager.IsServer;
     public bool IsHost => networkManager != null && networkManager.IsListening && networkManager.IsHost;
     public bool IsClient => networkManager != null && networkManager.IsListening && networkManager.IsClient;
@@ -481,6 +495,21 @@ public class NetworkBootstrap : MonoBehaviour
     #region Development Testing
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
+    public void SetConnectionAvailableForTesting(bool available)
+    {
+        if (connectionAvailableForTesting == available)
+        {
+            return;
+        }
+
+        connectionAvailableForTesting = available;
+
+        if (!available)
+        {
+            SimulateUnexpectedClientDisconnectForTesting();
+        }
+    }
+
     public bool SimulateUnexpectedClientDisconnectForTesting()
     {
         if (!isReady || networkManager == null || !networkManager.IsListening || !networkManager.IsClient || networkManager.IsHost)
@@ -501,7 +530,7 @@ public class NetworkBootstrap : MonoBehaviour
 
     private bool CanStartConnection()
     {
-        if (!isReady)
+        if (!isReady || !IsConnectionAvailableForTesting)
         {
             Debug.LogWarning("Cannot start network connection because NetworkBootstrap is not ready.");
             return false;

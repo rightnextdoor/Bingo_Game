@@ -26,6 +26,8 @@ public static class RiskGameplayAuthority
             gameSessionData.lastRiskPatternScanBallCallCount = ballCallCount;
         }
 
+        changed |= UpdateReconnectSubmitWindows(gameSessionData);
+
         if (ballCallCount > 0 &&
             playController.Phase == GamePlayPhase.NextBallCountdown &&
             playController.BallTimer?.IsActive == true &&
@@ -105,6 +107,7 @@ public static class RiskGameplayAuthority
         }
 
         if (playerData.isSubmitTimerActive &&
+            playerData.returnState != GamePlayerReturnState.Reconnecting &&
             playerData.submitTimerEndTime <= GamePlayTimer.GetCurrentTime())
         {
             changed |= ExpireUnsubmittedActivePatterns(playerData);
@@ -118,6 +121,8 @@ public static class RiskGameplayAuthority
             int ballCallCount = playController.BallCallRequestCount;
 
             if (playerData.queuedRiskPatterns.Count > 0 &&
+                playerData.returnState != GamePlayerReturnState.Reconnecting &&
+                !playerData.isRiskSubmitReconnectGrace &&
                 ballCallCount > 0 &&
                 gameSessionData.lastRiskSubmitCutoffBallCallCount >= ballCallCount &&
                 playController.Phase == GamePlayPhase.NextBallCountdown &&
@@ -195,6 +200,55 @@ public static class RiskGameplayAuthority
         return changed;
     }
 
+    public static bool PauseSubmitForReconnect(
+        GameSessionData gameSessionData,
+        GamePlayerData playerData)
+    {
+        if (!IsRiskGame(gameSessionData) || playerData == null ||
+            playerData.gameStatus != GamePlayerStatus.Eligible)
+        {
+            return false;
+        }
+
+        bool changed = playerData.isSubmitTimerActive ||
+                       playerData.submitTimerEndTime > 0d ||
+                       !playerData.isRiskSubmitReconnectGrace;
+        playerData.isSubmitTimerActive = false;
+        playerData.submitTimerEndTime = 0d;
+        playerData.isRiskSubmitReconnectGrace = true;
+        return changed;
+    }
+
+    public static bool ResumeSubmitAfterReconnect(
+        GameSessionData gameSessionData,
+        GamePlayerData playerData)
+    {
+        if (!IsRiskGame(gameSessionData) || playerData == null ||
+            playerData.gameStatus != GamePlayerStatus.Eligible ||
+            gameSessionData.gameState != GameSessionState.InProgress)
+        {
+            return false;
+        }
+
+        EnsureCollections(playerData);
+        bool hasPendingPatterns = playerData.isSubmitTimerActive ||
+                                  playerData.activeRiskSubmitPatterns.Count > 0 ||
+                                  playerData.queuedRiskPatterns.Count > 0;
+        if (!hasPendingPatterns)
+        {
+            bool changed = playerData.isRiskSubmitReconnectGrace;
+            playerData.isRiskSubmitReconnectGrace = false;
+            return changed;
+        }
+
+        MergeQueuedIntoActive(playerData);
+        playerData.isSubmitTimerActive = true;
+        playerData.isRiskSubmitReconnectGrace = true;
+        playerData.submitTimerEndTime = GamePlayTimer.GetCurrentTime() +
+            System.Math.Max(1d, gameSessionData.gamePlayController.NextBallCountdownSeconds);
+        return true;
+    }
+
     private static bool ScanForNewPatterns(GameSessionData gameSessionData)
     {
         if (gameSessionData.players == null)
@@ -212,7 +266,6 @@ public static class RiskGameplayAuthority
             if (playerData == null ||
                 playerData.gameStatus != GamePlayerStatus.Eligible ||
                 playerData.hasRiskCashedOut ||
-                !playerData.isAutomaticBoardEnabled ||
                 playerData.boardData == null)
             {
                 continue;
@@ -260,13 +313,22 @@ public static class RiskGameplayAuthority
 
             if (playerData == null ||
                 playerData.gameStatus != GamePlayerStatus.Eligible ||
-                playerData.hasRiskCashedOut ||
-                !playerData.isAutomaticBoardEnabled)
+                playerData.hasRiskCashedOut)
             {
                 continue;
             }
 
             EnsureCollections(playerData);
+
+            if (playerData.returnState == GamePlayerReturnState.Reconnecting)
+            {
+                continue;
+            }
+
+            if (playerData.isRiskSubmitReconnectGrace)
+            {
+                continue;
+            }
 
             if (playerData.isSubmitTimerActive)
             {
@@ -278,6 +340,45 @@ public static class RiskGameplayAuthority
                 playerData.queuedRiskPatterns.Count > 0)
             {
                 changed |= StartNextSubmitWindow(gameSessionData, playerData);
+            }
+        }
+
+        return changed;
+    }
+
+    private static bool UpdateReconnectSubmitWindows(GameSessionData gameSessionData)
+    {
+        if (gameSessionData?.players == null)
+        {
+            return false;
+        }
+
+        bool changed = false;
+
+        for (int i = 0; i < gameSessionData.players.Count; i++)
+        {
+            GamePlayerData playerData = gameSessionData.players[i];
+
+            if (playerData == null ||
+                playerData.returnState == GamePlayerReturnState.Reconnecting ||
+                !playerData.isRiskSubmitReconnectGrace ||
+                playerData.gameStatus != GamePlayerStatus.Eligible)
+            {
+                continue;
+            }
+
+            EnsureCollections(playerData);
+
+            if (playerData.queuedRiskPatterns.Count > 0)
+            {
+                MergeQueuedIntoActive(playerData);
+                changed = true;
+            }
+
+            if (playerData.isSubmitTimerActive &&
+                playerData.submitTimerEndTime <= GamePlayTimer.GetCurrentTime())
+            {
+                changed |= ExpireUnsubmittedActivePatterns(playerData);
             }
         }
 
@@ -318,14 +419,7 @@ public static class RiskGameplayAuthority
     {
         GamePlayController playController = gameSessionData.gamePlayController;
 
-        for (int i = 0; i < playerData.queuedRiskPatterns.Count; i++)
-        {
-            BingoPatternIdentityList.AddUnique(
-                playerData.activeRiskSubmitPatterns,
-                playerData.queuedRiskPatterns[i]);
-        }
-
-        playerData.queuedRiskPatterns.Clear();
+        MergeQueuedIntoActive(playerData);
         playerData.isSubmitTimerActive = true;
 
         double nextCutoffTime =
@@ -352,7 +446,20 @@ public static class RiskGameplayAuthority
 
         playerData.isSubmitTimerActive = false;
         playerData.submitTimerEndTime = 0d;
+        playerData.isRiskSubmitReconnectGrace = false;
         return true;
+    }
+
+    private static void MergeQueuedIntoActive(GamePlayerData playerData)
+    {
+        for (int i = 0; i < playerData.queuedRiskPatterns.Count; i++)
+        {
+            BingoPatternIdentityList.AddUnique(
+                playerData.activeRiskSubmitPatterns,
+                playerData.queuedRiskPatterns[i]);
+        }
+
+        playerData.queuedRiskPatterns.Clear();
     }
 
     private static bool ClearPlayerRiskState(
@@ -375,6 +482,7 @@ public static class RiskGameplayAuthority
 
         playerData.isSubmitTimerActive = false;
         playerData.submitTimerEndTime = 0d;
+        playerData.isRiskSubmitReconnectGrace = false;
         playerData.isRiskDecisionPending = false;
         playerData.queuedRiskPatterns.Clear();
         playerData.activeRiskSubmitPatterns.Clear();

@@ -259,6 +259,24 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
 
     #region Network Connection
 
+    public async Task<bool> PrepareConnectionForEntryAsync(LobbySetupData lobbySetupData)
+    {
+        if (!isReady || !IsValidNetworkSetup(lobbySetupData))
+        {
+            return false;
+        }
+
+        string relayJoinCode = string.Empty;
+
+        if (!HasUsableNetworkConnection() &&
+            !TryPrepareCustomLobbySearch(lobbySetupData, out relayJoinCode, out _))
+        {
+            return false;
+        }
+
+        return await EnsureNetworkConnectionAsync(lobbySetupData, relayJoinCode);
+    }
+
     private bool HasUsableNetworkConnection()
     {
         return networkBootstrap != null && networkBootstrap.IsConnected && NetworkLobbyConnection.GetLocalConnection() != null;

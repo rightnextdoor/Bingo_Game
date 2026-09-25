@@ -49,6 +49,11 @@ public class GameHeaderController : MonoBehaviour
 
     private void Update()
     {
+        if (ConnectionRecoveryManager.instance?.IsRecoveringInScene == true)
+        {
+            return;
+        }
+
         RefreshTimersAndStatus();
     }
 

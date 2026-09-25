@@ -49,6 +49,8 @@ public class GameSceneManager : MonoBehaviour
 
     public bool IsLoadingScene => isLoadingScene;
     public GameSceneType CurrentSceneType => currentSceneType;
+    public bool IsActiveScene(GameSceneType sceneType) =>
+        string.Equals(UnitySceneManager.GetActiveScene().name, GetSceneName(sceneType), StringComparison.Ordinal);
 
     #endregion
 
@@ -71,6 +73,9 @@ public class GameSceneManager : MonoBehaviour
         instance = this;
         DontDestroyOnLoad(gameObject);
 
+        // Connection callbacks can arrive before Start begins the loading routine.
+        // Resolve the scene now so a direct Lobby or Game launch is not treated as Main.
+        currentSceneType = ResolveStartingSceneType();
         ResolveReferences();
     }
 
@@ -135,6 +140,13 @@ public class GameSceneManager : MonoBehaviour
 
     public void ReturnToMainSceneAfterFailure()
     {
+        // A temporary disconnect can fail an in-flight network request. The
+        // recovery manager owns the decision to leave after its retries end.
+        if (ConnectionRecoveryManager.instance?.IsRecoveringInScene == true)
+        {
+            return;
+        }
+
         if (isLoadingScene)
         {
             pendingLoadingRedirectSceneType = GameSceneType.Main;

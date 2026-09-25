@@ -41,6 +41,13 @@ public class GameSimulationController : MonoBehaviour
     public static bool IsNetworkSimulationStartActive()
     {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
+        // The Development object can also exist in Main Menu. Only a direct
+        // Game-scene simulation should own the initial network connection.
+        if (GameSceneManager.instance?.IsActiveScene(GameSceneType.Game) != true)
+        {
+            return false;
+        }
+
         GameSimulationController controller = FindFirstObjectByType<GameSimulationController>();
         bool isSimulationFollower = MultiplayerPlayModeTestContext.IsActive &&
                                     MultiplayerPlayModeTestContext.PlayerNumber > 1;

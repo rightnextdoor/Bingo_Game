@@ -15,6 +15,11 @@ public class GameHeaderController : MonoBehaviour
     [SerializeField] private TMP_Text riskTimerText;
     [SerializeField] private TMP_Text localScoreStatusText;
 
+    [Header("Text Fitting")]
+    [Tooltip("Smallest allowed size relative to each label's original font size. Long text is truncated with an ellipsis if it still cannot fit.")]
+    [Range(0.5f, 1f)]
+    [SerializeField] private float minimumFontSizeRatio = 0.75f;
+
     [Header("Buttons")]
     [SerializeField] private Button leaveButton;
 
@@ -28,6 +33,7 @@ public class GameHeaderController : MonoBehaviour
 
     private void Awake()
     {
+        ConfigureTextFitting();
         ClearHeader();
     }
 
@@ -147,6 +153,46 @@ public class GameHeaderController : MonoBehaviour
     #endregion
 
     #region Helpers
+
+    private void ConfigureTextFitting()
+    {
+        ConfigureTextFitting(gameTitleText);
+        ConfigureTextFitting(gameTimerText);
+        ConfigureTextFitting(submitTimerText, 2);
+        ConfigureTextFitting(riskTimerText, 2);
+        ConfigureTextFitting(localScoreStatusText, 2);
+
+        if (leaveButton != null)
+        {
+            foreach (TMP_Text buttonText in leaveButton.GetComponentsInChildren<TMP_Text>(true))
+            {
+                ConfigureTextFitting(buttonText);
+            }
+        }
+    }
+
+    private void ConfigureTextFitting(TMP_Text text, int maximumLines = 1)
+    {
+        if (text == null)
+        {
+            return;
+        }
+
+        // An already auto-sized label may have shrunk in the Editor preview;
+        // its configured maximum still holds the authored default size.
+        // TMP refits when either the content or the layout-provided rectangle changes,
+        // and grows back up to this size when more space becomes available.
+        float defaultFontSize = Mathf.Max(1f, text.enableAutoSizing ? text.fontSizeMax : text.fontSize);
+        text.fontSizeMax = defaultFontSize;
+        text.fontSizeMin = Mathf.Max(1f, defaultFontSize * Mathf.Clamp(minimumFontSizeRatio, 0.5f, 1f));
+        text.textWrappingMode = maximumLines > 1
+            ? TextWrappingModes.Normal
+            : TextWrappingModes.NoWrap;
+        text.overflowMode = TextOverflowModes.Ellipsis;
+        text.maxVisibleLines = maximumLines;
+        text.characterWidthAdjustment = 0f;
+        text.enableAutoSizing = true;
+    }
 
     private void RefreshTimersAndStatus()
     {

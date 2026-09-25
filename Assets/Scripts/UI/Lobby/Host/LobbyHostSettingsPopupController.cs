@@ -44,8 +44,6 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
     [SerializeField] private TMP_InputField playerCountInput;
 
     [Header("Bots")]
-    [SerializeField] private Toggle addBotsToggle;
-    [SerializeField] private GameObject botCountRow;
     [SerializeField] private TMP_InputField botCountInput;
 
     [Header("Messages")]
@@ -63,7 +61,6 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
 
     private bool isUiReady;
     private bool isLoadingUi;
-    private bool botCountChanged;
 
     public LobbyHostSettingsData WorkingData => workingData;
     public bool IsUiReady => isUiReady;
@@ -111,7 +108,6 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
 
         isUiReady = false;
         isLoadingUi = false;
-        botCountChanged = false;
     }
 
     #endregion
@@ -262,13 +258,9 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
             playerCountInput.SetTextWithoutNotify(playerCountValue.ToString());
         }
 
-        if (addBotsToggle != null)
-        {
-            addBotsToggle.SetIsOnWithoutNotify(workingData.addBots);
-        }
-
+        // This field requests additional bots, so reopening must not repeat a prior request.
+        workingData.addBots = false;
         workingData.botCount = 0;
-        botCountChanged = false;
 
         if (botCountInput != null)
         {
@@ -278,7 +270,6 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
         ApplyRankState();
         ApplyPatternState();
         ApplyMaxPlayersState();
-        ApplyAddBotsState();
         RefreshPatternInteractableState();
 
         ClearError();
@@ -668,12 +659,6 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
             playerCountInput.onValueChanged.AddListener(OnPlayerCountChanged);
         }
 
-        if (addBotsToggle != null)
-        {
-            addBotsToggle.onValueChanged.RemoveListener(OnAddBotsChanged);
-            addBotsToggle.onValueChanged.AddListener(OnAddBotsChanged);
-        }
-
         if (botCountInput != null)
         {
             botCountInput.onValueChanged.RemoveListener(OnBotCountChanged);
@@ -727,11 +712,6 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
         if (playerCountInput != null)
         {
             playerCountInput.onValueChanged.RemoveListener(OnPlayerCountChanged);
-        }
-
-        if (addBotsToggle != null)
-        {
-            addBotsToggle.onValueChanged.RemoveListener(OnAddBotsChanged);
         }
 
         if (botCountInput != null)
@@ -876,38 +856,17 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
         }
     }
 
-    private void OnAddBotsChanged(bool isOn)
+    private void OnBotCountChanged(string value)
     {
         if (isLoadingUi)
         {
             return;
         }
 
-        workingData.addBots = isOn;
-        workingData.botCount = 0;
-        botCountChanged = false;
-
-        if (botCountInput != null)
-        {
-            botCountInput.SetTextWithoutNotify(string.Empty);
-        }
-
-        ClearError();
-        ApplyAddBotsState();
-    }
-
-    private void OnBotCountChanged(string value)
-    {
-        if (isLoadingUi || !workingData.addBots)
-        {
-            return;
-        }
-
-        botCountChanged = true;
-
         if (TryGetBotCountValue(false, out int botCount))
         {
             workingData.botCount = botCount;
+            workingData.addBots = botCount > 0;
 
             if (HasError())
             {
@@ -917,6 +876,7 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
             return;
         }
 
+        workingData.addBots = false;
         workingData.botCount = 0;
     }
 
@@ -961,20 +921,6 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
             : workingData.usesDefaultPatterns;
 
         SetActive(patternSection, !useDefaultPatterns);
-
-        RefreshLayout();
-    }
-
-    private void ApplyAddBotsState()
-    {
-        bool addBots = addBotsToggle != null && addBotsToggle.isOn;
-
-        SetActive(botCountRow, addBots);
-
-        if (botCountInput != null)
-        {
-            botCountInput.interactable = addBots;
-        }
 
         RefreshLayout();
     }
@@ -1055,10 +1001,7 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
             return false;
         }
 
-        bool addBots = addBotsToggle != null && addBotsToggle.isOn;
-        int botCount = 0;
-
-        if (addBots && botCountChanged && !TryGetBotCountValue(true, out botCount))
+        if (!TryGetBotCountValue(true, out int botCount))
         {
             return false;
         }
@@ -1076,7 +1019,7 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
             usesDefaultPatterns = usesDefaultPatterns,
             maxPlayers = maxPlayers,
             maxPlayer = maxPlayer,
-            addBots = addBots,
+            addBots = botCount > 0,
             botCount = botCount
         };
 
@@ -1225,12 +1168,7 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
 
         if (string.IsNullOrWhiteSpace(value))
         {
-            if (showError)
-            {
-                ShowError("Bot count must be at least 1.");
-            }
-
-            return false;
+            return true;
         }
 
         if (!int.TryParse(value, out int parsedBotCount))
@@ -1243,11 +1181,11 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
             return false;
         }
 
-        if (parsedBotCount < 1)
+        if (parsedBotCount < 0)
         {
             if (showError)
             {
-                ShowError("Bot count must be at least 1.");
+                ShowError("Bot count cannot be negative.");
             }
 
             return false;

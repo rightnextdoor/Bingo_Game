@@ -9,6 +9,10 @@ public class LobbyHeaderController : MonoBehaviour
     [Header("Text")]
     [SerializeField] private TMP_Text lobbyTitleText;
     [SerializeField] private TMP_Text lobbyTimerText;
+    [SerializeField] private TMP_Text lobbyIdText;
+    [Tooltip("Maximum internal lobby ID characters shown in the header. Set to 0 to show the full ID.")]
+    [Min(0)]
+    [SerializeField] private int lobbyIdDisplayLength = 8;
 
     [Header("Buttons")]
     [SerializeField] private Button leaveButton;
@@ -20,6 +24,23 @@ public class LobbyHeaderController : MonoBehaviour
     public event Action LeaveRequested;
     public event Action StartRequested;
     public event Action HostSettingsRequested;
+
+    private void Awake()
+    {
+        if (lobbyIdText == null)
+        {
+            return;
+        }
+
+        float defaultSize = lobbyIdText.enableAutoSizing ? lobbyIdText.fontSizeMax : lobbyIdText.fontSize;
+        lobbyIdText.fontSizeMax = Mathf.Max(1f, defaultSize);
+        lobbyIdText.fontSizeMin = Mathf.Max(1f, defaultSize * 0.75f);
+        lobbyIdText.textWrappingMode = TextWrappingModes.Normal;
+        lobbyIdText.maxVisibleLines = 2;
+        lobbyIdText.overflowMode = TextOverflowModes.Ellipsis;
+        lobbyIdText.enableAutoSizing = true;
+        SetLobbyId(null);
+    }
 
     private void OnEnable()
     {
@@ -69,6 +90,7 @@ public class LobbyHeaderController : MonoBehaviour
     {
         if (lobbyViewData == null)
         {
+            SetLobbyId(null);
             return;
         }
 
@@ -78,6 +100,7 @@ public class LobbyHeaderController : MonoBehaviour
             lobbyViewData.lobbyState == LobbyState.Open;
 
         SetLobbyTitle(lobbyViewData);
+        SetLobbyId(lobbyViewData.lobbyId);
         SetLeaveInteractable(controlsInteractable);
         SetStartVisible(canStartLobby);
         SetHostSettingsVisible(canOpenHostSettings);
@@ -119,6 +142,24 @@ public class LobbyHeaderController : MonoBehaviour
         {
             lobbyTimerText.gameObject.SetActive(false);
         }
+    }
+
+    private void SetLobbyId(string lobbyId)
+    {
+        if (lobbyIdText == null)
+        {
+            return;
+        }
+
+        bool hasId = !string.IsNullOrWhiteSpace(lobbyId);
+        string displayId = hasId ? lobbyId.Trim() : string.Empty;
+        if (lobbyIdDisplayLength > 0 && displayId.Length > lobbyIdDisplayLength)
+        {
+            displayId = displayId.Substring(0, lobbyIdDisplayLength);
+        }
+
+        lobbyIdText.text = hasId ? $"Lobby {displayId}" : string.Empty;
+        lobbyIdText.gameObject.SetActive(hasId);
     }
 
     private void SetLobbyTitle(LobbyViewData lobbyViewData)

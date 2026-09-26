@@ -47,6 +47,7 @@ public class SoloLobbySetupData
 
     public bool maxPlayers = false;
     public int maxPlayer = 6;
+    public int botCount = 6;
 
     public SoloLobbySetupData()
     {
@@ -63,6 +64,7 @@ public class SoloLobbySetupData
 
         maxPlayers = false;
         maxPlayer = 6;
+        botCount = 6;
     }
 }
 

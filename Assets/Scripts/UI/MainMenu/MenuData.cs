@@ -3,7 +3,7 @@ using System;
 [Serializable]
 public class MenuData
 {
-    public int menuVersion = 1;
+    public int menuVersion = 2;
 
     public SoloMenuData soloMenuData = new SoloMenuData();
     public OnlineMenuData onlineMenuData = new OnlineMenuData();
@@ -11,7 +11,7 @@ public class MenuData
 
     public MenuData()
     {
-        menuVersion = 1;
+        menuVersion = 2;
 
         soloMenuData = new SoloMenuData();
         onlineMenuData = new OnlineMenuData();
@@ -24,11 +24,13 @@ public class SoloMenuData
 {
     public bool maxPlayers = false;
     public int lobbySize = 6;
+    public int botCount = 6;
 
     public SoloMenuData()
     {
         maxPlayers = false;
         lobbySize = 6;
+        botCount = 6;
     }
 }
 

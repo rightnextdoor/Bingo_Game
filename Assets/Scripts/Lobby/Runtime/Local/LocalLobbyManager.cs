@@ -171,7 +171,7 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
             return LobbyEntryResult.Failed(LobbyEntryFailureType.LobbyJoinFailed, "The player could not be added to the Solo lobby.");
         }
 
-        selectedLobby.Controller.FillBotsToMinimumPlayers();
+        selectedLobby.Controller.QueueRequestedBots(lobbySetupData.soloSetupData.botCount);
         return LobbyEntryResult.SucceededLocal(selectedLobby);
     }
 

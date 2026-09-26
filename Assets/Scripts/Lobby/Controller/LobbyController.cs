@@ -734,6 +734,14 @@ public class LobbyController
 
     #region Bots
 
+    public int QueueRequestedBots(int requestedCount)
+    {
+        addBots = requestedCount > 0;
+        int queuedCount = QueueRandomBotsInternal(requestedCount, int.MaxValue);
+        pendingViewRefresh = true;
+        return queuedCount;
+    }
+
     public int FillBotsToMinimumPlayers()
     {
         int botsNeeded = Mathf.Max(0, GetMinimumPlayers() - PlayerCount);

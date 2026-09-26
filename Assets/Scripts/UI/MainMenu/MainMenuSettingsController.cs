@@ -25,6 +25,8 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
     [SerializeField] private GameObject customSettingsGroup;
 
     [Header("Solo Settings")]
+    [SerializeField] private TMP_InputField soloBotCountInput;
+    [SerializeField] private GameObject soloLobbySizeRow;
     [SerializeField] private TMP_InputField soloLobbySizeInput;
     [SerializeField] private Toggle soloMaxToggle;
     [SerializeField] private TMP_Text soloErrorText;
@@ -43,6 +45,7 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
     [SerializeField] private TMP_Text customErrorText;
 
     [Header("Custom Host Settings")]
+    [SerializeField] private GameObject customHostLobbySizeRow;
     [SerializeField] private TMP_InputField customHostLobbyNameInput;
     [SerializeField] private TMP_InputField customHostPasswordInput;
     [SerializeField] private Button customHostShowPasswordButton;
@@ -271,6 +274,12 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
             menuData.soloMenuData = new SoloMenuData();
         }
 
+        if (menuData.menuVersion < 2)
+        {
+            menuData.soloMenuData.botCount = 6;
+            menuData.menuVersion = 2;
+        }
+
         if (menuData.onlineMenuData == null)
         {
             menuData.onlineMenuData = new OnlineMenuData();
@@ -349,6 +358,11 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 
     private void RegisterSoloListeners()
     {
+        if (soloBotCountInput != null)
+        {
+            soloBotCountInput.onValueChanged.RemoveListener(OnSoloBotCountChanged);
+            soloBotCountInput.onValueChanged.AddListener(OnSoloBotCountChanged);
+        }
         if (soloLobbySizeInput != null)
         {
             soloLobbySizeInput.onValueChanged.RemoveListener(OnSoloLobbySizeChanged);
@@ -364,6 +378,10 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 
     private void UnregisterSoloListeners()
     {
+        if (soloBotCountInput != null)
+        {
+            soloBotCountInput.onValueChanged.RemoveListener(OnSoloBotCountChanged);
+        }
         if (soloLobbySizeInput != null)
         {
             soloLobbySizeInput.onValueChanged.RemoveListener(OnSoloLobbySizeChanged);
@@ -373,6 +391,33 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         {
             soloMaxToggle.onValueChanged.RemoveListener(OnSoloMaxChanged);
         }
+    }
+
+    private void OnSoloBotCountChanged(string value)
+    {
+        if (HasError(soloErrorText) && TryGetSoloBotCount(false, out _))
+        {
+            ClearError(soloErrorText);
+        }
+    }
+
+    private bool TryGetSoloBotCount(bool showError, out int botCount)
+    {
+        botCount = 0;
+        if (soloBotCountInput != null)
+        {
+            string text = soloBotCountInput.text;
+            if (string.IsNullOrWhiteSpace(text) || (int.TryParse(text, out botCount) && botCount >= 0))
+            {
+                return true;
+            }
+        }
+
+        if (showError)
+        {
+            ShowError(soloErrorText, "Add Bots must be a whole number of 0 or more.");
+        }
+        return false;
     }
 
     private void OnSoloLobbySizeChanged(string value)
@@ -416,6 +461,11 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
             soloMenuData = new SoloMenuData();
         }
 
+        if (soloBotCountInput != null)
+        {
+            soloBotCountInput.SetTextWithoutNotify(Mathf.Max(0, soloMenuData.botCount).ToString());
+        }
+
         int lobbySize = ClampLobbySizeToAllowedRange(soloMenuData.lobbySize);
 
         if (soloLobbySizeInput != null)
@@ -438,6 +488,11 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         {
             ApplySoloDefaults(new SoloMenuData());
             return;
+        }
+
+        if (soloBotCountInput != null)
+        {
+            soloBotCountInput.SetTextWithoutNotify(Mathf.Max(0, soloMenuData.botCount).ToString());
         }
 
         int lobbySize = ClampLobbySizeToAllowedRange(soloMenuData.lobbySize);
@@ -467,6 +522,11 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 
         soloMenuData.maxPlayers = maxPlayers;
 
+        if (TryGetSoloBotCount(false, out int botCount))
+        {
+            soloMenuData.botCount = botCount;
+        }
+
         if (maxPlayers)
         {
             soloMenuData.lobbySize = GetDefaultSoloLobbySize();
@@ -489,6 +549,12 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         {
             return false;
         }
+
+        if (!TryGetSoloBotCount(true, out int botCount))
+        {
+            return false;
+        }
+        lobbySetupData.soloSetupData.botCount = botCount;
 
         bool maxPlayers = soloMaxToggle != null && soloMaxToggle.isOn;
 
@@ -525,6 +591,8 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         }
 
         soloLobbySizeInput.interactable = !soloMaxToggle.isOn;
+        SetActive(soloLobbySizeRow, !soloMaxToggle.isOn);
+        NotifySettingsLayoutChanged();
     }
 
     #endregion
@@ -1340,6 +1408,8 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         }
 
         customHostLobbySizeInput.interactable = !customHostMaxToggle.isOn;
+        SetActive(customHostLobbySizeRow, !customHostMaxToggle.isOn);
+        NotifySettingsLayoutChanged();
     }
 
     private void ToggleCustomHostPasswordVisibility()

@@ -218,16 +218,16 @@ public class UI_ToolTip : MonoBehaviour
     Sprite customImage,
     string message)
     {
-        UIMessageVisualStyle style = UIMessageCatalog.ResolveVisualStyle(
-            imageMode, customImage, fontSize, textColor, backgroundColor);
-
         if (backgroundImage != null)
         {
             backgroundImage.gameObject.SetActive(true);
-            backgroundImage.color = style.BackgroundColor;
+            backgroundImage.color = backgroundColor;
             backgroundImage.raycastTarget = false;
 
-            backgroundImage.sprite = style.BackgroundImage;
+            ApplyBackgroundImage(
+                imageMode,
+                customImage
+            );
         }
 
         if (messageText != null)
@@ -245,9 +245,43 @@ public class UI_ToolTip : MonoBehaviour
                 messageText.font = fontAsset;
             }
 
-            messageText.fontSize = style.FontSize;
-            messageText.color = style.TextColor;
+            messageText.fontSize = fontSize;
+            messageText.color = textColor;
             messageText.text = message;
+        }
+    }
+
+    private void ApplyBackgroundImage(
+    TooltipImageMode imageMode,
+    Sprite customImage)
+    {
+        if (backgroundImage == null)
+        {
+            return;
+        }
+
+        UIMessageDefaultStyle defaultMessage = UIMessageCatalog.instance != null
+            ? UIMessageCatalog.instance.GetDefaultMessage()
+            : null;
+        Sprite defaultBackgroundImage = defaultMessage != null ? defaultMessage.BackgroundImage : null;
+
+        switch (imageMode)
+        {
+            case TooltipImageMode.Default:
+                backgroundImage.sprite =
+                    defaultBackgroundImage;
+                break;
+
+            case TooltipImageMode.Custom:
+                backgroundImage.sprite =
+                    customImage != null
+                        ? customImage
+                        : defaultBackgroundImage;
+                break;
+
+            case TooltipImageMode.None:
+                backgroundImage.sprite = null;
+                break;
         }
     }
 

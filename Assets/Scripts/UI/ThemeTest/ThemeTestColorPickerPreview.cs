@@ -1,10 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-/// <summary>
-/// Keeps color picker copies open inside the theme test popup Content.
-/// The original controller still owns textures, input, and color updates.
-/// </summary>
 [ExecuteAlways]
 [DisallowMultipleComponent]
 public sealed class ThemeTestColorPickerPreview : MonoBehaviour
@@ -16,7 +12,6 @@ public sealed class ThemeTestColorPickerPreview : MonoBehaviour
 
     private void Start()
     {
-        // Start runs after scene Awake calls, including the picker's initial hide.
         RefreshPreviews();
     }
 
@@ -32,7 +27,6 @@ public sealed class ThemeTestColorPickerPreview : MonoBehaviour
 
         foreach (ColorPickerController picker in pickers)
         {
-            // Only direct popup children belong to this preview row.
             if (picker == null || picker.transform.parent != transform || !picker.enabled)
                 continue;
 
@@ -48,8 +42,6 @@ public sealed class ThemeTestColorPickerPreview : MonoBehaviour
                 continue;
 
             Color color = firstOpen ? startingColor : picker.CurrentColor;
-            // An initially inactive controller runs Awake on first activation.
-            // Awake hides it again; call Open only after that initialization returns.
             if (!picker.gameObject.activeSelf)
                 picker.gameObject.SetActive(true);
 

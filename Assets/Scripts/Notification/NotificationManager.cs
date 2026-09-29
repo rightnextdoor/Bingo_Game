@@ -191,17 +191,13 @@ public class NotificationManager : MonoBehaviour
 
     private void ApplyNotificationVisuals(UIMessageData messageData, string messageOverride)
     {
-        UIMessageVisualStyle style = UIMessageCatalog.ResolveVisualStyle(
-            messageData.ImageMode, messageData.CustomImage, messageData.FontSize,
-            messageData.TextColor, messageData.BackgroundColor);
-
         if (notificationBackground != null)
         {
             notificationBackground.gameObject.SetActive(true);
-            notificationBackground.color = style.BackgroundColor;
+            notificationBackground.color = messageData.BackgroundColor;
             notificationBackground.raycastTarget = false;
 
-            notificationBackground.sprite = style.BackgroundImage;
+            ApplyBackgroundImage(messageData.ImageMode, messageData.CustomImage);
         }
 
         if (notificationText == null)
@@ -219,13 +215,13 @@ public class NotificationManager : MonoBehaviour
             notificationText.font = messageData.FontAsset;
         }
 
-        notificationText.color = style.TextColor;
+        notificationText.color = messageData.TextColor;
         notificationText.enableAutoSizing = false;
         notificationText.alignment = TextAlignmentOptions.Center;
         notificationText.overflowMode = TextOverflowModes.Ellipsis;
         notificationText.text = message;
 
-        FitNotificationToMessage(message, style.FontSize);
+        FitNotificationToMessage(message, messageData.FontSize);
     }
 
     private void FitNotificationToMessage(string message, int requestedFontSize)
@@ -294,6 +290,34 @@ public class NotificationManager : MonoBehaviour
     {
         return preferredSize.x <= availableWidth + SizeFitTolerance &&
                preferredSize.y <= availableHeight + SizeFitTolerance;
+    }
+
+    private void ApplyBackgroundImage(TooltipImageMode imageMode, Sprite customImage)
+    {
+        if (notificationBackground == null)
+        {
+            return;
+        }
+
+        UIMessageDefaultStyle defaultMessage = UIMessageCatalog.instance != null
+            ? UIMessageCatalog.instance.GetDefaultMessage()
+            : null;
+        Sprite defaultBackgroundImage = defaultMessage != null ? defaultMessage.BackgroundImage : null;
+
+        switch (imageMode)
+        {
+            case TooltipImageMode.Default:
+                notificationBackground.sprite = defaultBackgroundImage;
+                break;
+
+            case TooltipImageMode.Custom:
+                notificationBackground.sprite = customImage != null ? customImage : defaultBackgroundImage;
+                break;
+
+            case TooltipImageMode.None:
+                notificationBackground.sprite = null;
+                break;
+        }
     }
 
     #endregion

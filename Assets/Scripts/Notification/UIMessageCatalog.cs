@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 [DisallowMultipleComponent]
 public class UIMessageCatalog : MonoBehaviour
@@ -9,11 +10,8 @@ public class UIMessageCatalog : MonoBehaviour
     #region Fields
 
     [SerializeField] private List<UIMessageData> messages = new List<UIMessageData>();
-    [SerializeField] private UIMessageDefaultStyle defaultStyle;
-
-    public UIMessageDefaultStyle DefaultStyle => defaultStyle;
-
-    private static bool warnedAboutMissingDefault;
+    [FormerlySerializedAs("defaultStyle")]
+    [SerializeField] private UIMessageDefaultStyle defaultMessage;
 
     #endregion
 
@@ -23,7 +21,6 @@ public class UIMessageCatalog : MonoBehaviour
     private static void ResetStaticState()
     {
         instance = null;
-        warnedAboutMissingDefault = false;
     }
 
     private void Awake()
@@ -49,40 +46,11 @@ public class UIMessageCatalog : MonoBehaviour
 
     #region Messages
 
-    /// <summary>
-    /// Shared visual resolution for notifications, tooltips, and preview cards.
-    /// None selects the complete catalog default; Default selects its image only.
-    /// </summary>
-    public static UIMessageVisualStyle ResolveVisualStyle(
-        TooltipImageMode imageMode, Sprite customImage, int fontSize,
-        Color textColor, Color backgroundColor)
+    public IReadOnlyList<UIMessageData> Messages => messages;
+
+    public UIMessageDefaultStyle GetDefaultMessage()
     {
-        UIMessageDefaultStyle fallback = instance != null ? instance.defaultStyle : null;
-        bool needsDefault = imageMode != TooltipImageMode.Custom || customImage == null;
-        if (fallback == null && needsDefault && !warnedAboutMissingDefault)
-        {
-            Debug.LogWarning("Assign a UIMessageDefaultStyle to UIMessageCatalog. " +
-                "Messages will use a plain background until a default style is available.");
-            warnedAboutMissingDefault = true;
-        }
-        else if (fallback != null)
-        {
-            warnedAboutMissingDefault = false;
-        }
-
-        Sprite image = fallback != null ? fallback.BackgroundImage : null;
-        if (imageMode == TooltipImageMode.Custom && customImage != null)
-            image = customImage;
-
-        if (imageMode == TooltipImageMode.None)
-        {
-            // Deterministic defaults if setup is incomplete; never reuse prefab or previous-message styling.
-            fontSize = fallback != null ? fallback.FontSize : 24;
-            textColor = fallback != null ? fallback.TextColor : new Color32(241, 243, 245, 255);
-            backgroundColor = fallback != null ? fallback.BackgroundColor : new Color32(58, 66, 80, 255);
-        }
-
-        return new UIMessageVisualStyle(Mathf.Max(1, fontSize), textColor, backgroundColor, image);
+        return defaultMessage;
     }
 
     public UIMessageData GetMessage(UIMessageType messageType)
@@ -107,20 +75,4 @@ public class UIMessageCatalog : MonoBehaviour
     }
 
     #endregion
-}
-
-public readonly struct UIMessageVisualStyle
-{
-    public int FontSize { get; }
-    public Color TextColor { get; }
-    public Color BackgroundColor { get; }
-    public Sprite BackgroundImage { get; }
-
-    public UIMessageVisualStyle(int fontSize, Color textColor, Color backgroundColor, Sprite backgroundImage)
-    {
-        FontSize = fontSize;
-        TextColor = textColor;
-        BackgroundColor = backgroundColor;
-        BackgroundImage = backgroundImage;
-    }
 }

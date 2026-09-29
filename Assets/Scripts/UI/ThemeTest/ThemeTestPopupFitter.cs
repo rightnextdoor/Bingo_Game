@@ -1,10 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
 
-/// <summary>
-/// Fits direct popup children by height without changing their authored rectangles.
-/// Add to the Content of the theme test's horizontal popup ScrollRect.
-/// </summary>
 [ExecuteAlways]
 [DisallowMultipleComponent]
 [RequireComponent(typeof(RectTransform))]
@@ -27,7 +23,6 @@ public sealed class ThemeTestPopupFitter : MonoBehaviour
         content = (RectTransform)transform;
         layoutGroup = GetComponent<HorizontalLayoutGroup>();
 
-        // Ensure Unity's layout pass subscribes before our measurement callback.
         _ = CanvasUpdateRegistry.instance;
         Canvas.preWillRenderCanvases += PreparePopupRoots;
         Canvas.willRenderCanvases += FitPopups;
@@ -44,9 +39,6 @@ public sealed class ThemeTestPopupFitter : MonoBehaviour
         if (!isActiveAndEnabled || content == null)
             return;
 
-        // Full-screen popup wrappers can acquire negative sizeDelta when moved
-        // into a layout group. Give them the size of their fixed inner panel.
-        // Include inactive roots so opening one cannot corrupt the row's width.
         for (int i = 0; i < content.childCount; i++)
         {
             if (!(content.GetChild(i) is RectTransform popup))
@@ -79,8 +71,6 @@ public sealed class ThemeTestPopupFitter : MonoBehaviour
         for (int i = 0; i < corners.Length; i++)
             bounds.Encapsulate(root.InverseTransformPoint(corners[i]));
 
-        // Content beyond a nested scroll viewport is intentionally clipped.
-        // Counting its entire scrollable content would make the popup too small.
         if ((rect.TryGetComponent(out RectMask2D rectMask) && rectMask.isActiveAndEnabled)
             || (rect.TryGetComponent(out Mask mask) && mask.isActiveAndEnabled))
             return;
@@ -114,7 +104,6 @@ public sealed class ThemeTestPopupFitter : MonoBehaviour
         if (layoutGroup == null)
             layoutGroup = GetComponent<HorizontalLayoutGroup>();
 
-        // Measure in Content coordinates, including any ancestor scaling.
         Vector3 viewportHeight = viewport.TransformVector(Vector3.up * viewport.rect.height);
         float availableHeight = content.InverseTransformVector(viewportHeight).magnitude;
         if (layoutGroup != null && layoutGroup.isActiveAndEnabled)
@@ -140,15 +129,12 @@ public sealed class ThemeTestPopupFitter : MonoBehaviour
                 Bounds bounds = new Bounds(popup.rect.center, popup.rect.size);
                 EncapsulateVisibleRects(popup, popup, ref bounds);
 
-                // The layout centers the root rectangle, not its overflowing children.
-                // Reserve enough space on both sides of that center for the visible UI.
                 float height = 2f * Mathf.Max(
                     bounds.max.y - popup.rect.center.y,
                     popup.rect.center.y - bounds.min.y);
                 if (height <= 0f || float.IsNaN(height) || float.IsInfinity(height))
                     continue;
 
-                // rect.height is unscaled, so fitting cannot accumulate shrinkage.
                 float scale = Mathf.Min(1f, availableHeight / height);
                 Vector3 current = popup.localScale;
                 if (Mathf.Approximately(current.x, scale) && Mathf.Approximately(current.y, scale))
@@ -163,8 +149,6 @@ public sealed class ThemeTestPopupFitter : MonoBehaviour
             fitting = false;
         }
 
-        // Recalculate positions and scroll width using the new child scales.
-        // Only enqueue when a scale actually changed; never force a recursive canvas pass.
         if (changed)
             LayoutRebuilder.MarkLayoutForRebuild(content);
     }

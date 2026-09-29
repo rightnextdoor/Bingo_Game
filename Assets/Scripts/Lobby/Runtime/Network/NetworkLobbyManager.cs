@@ -1165,6 +1165,27 @@ public class NetworkLobbyManager : MonoBehaviour
             return;
         }
 
+        if (NotificationService.instance != null)
+        {
+            IReadOnlyList<LobbyPlayerData> players = controller.Players;
+            List<string> userIds = new List<string>();
+
+            for (int i = 0; i < players.Count; i++)
+            {
+                LobbyPlayerData playerData = players[i];
+                string userId = playerData?.userData?.userId;
+
+                if (string.IsNullOrWhiteSpace(userId) || playerData.userData.userTag == UserTag.Bot)
+                {
+                    continue;
+                }
+
+                userIds.Add(userId);
+            }
+
+            NotificationService.instance.SendToUsers(userIds, UIMessageType.GameAboutToStart);
+        }
+
         if (GameSessionManager.instance != null &&
             LobbyManager.instance != null &&
             string.Equals(LobbyManager.instance.CurrentLobbyId, lobby.GetLobbyId(), StringComparison.Ordinal))

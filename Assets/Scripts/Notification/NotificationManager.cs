@@ -35,7 +35,6 @@ public class NotificationManager : MonoBehaviour
     [SerializeField] private CanvasGroup notificationAreaCanvasGroup;
     [SerializeField] private Image notificationBackground;
     [SerializeField] private TMP_Text notificationText;
-    private Sprite defaultBackgroundImage;
 
     [Header("Queue Timing")]
     [SerializeField] private float delayBetweenMessages = 0.35f;
@@ -69,16 +68,7 @@ public class NotificationManager : MonoBehaviour
 
         notificationAreaRect = notificationAreaCanvasGroup != null ? notificationAreaCanvasGroup.transform as RectTransform : null;
 
-        SaveDefaultBackgroundImage();
         HideNotificationInstant();
-    }
-
-    private void SaveDefaultBackgroundImage()
-    {
-        if (notificationBackground != null)
-        {
-            defaultBackgroundImage = notificationBackground.sprite;
-        }
     }
 
     private void OnDestroy()
@@ -201,13 +191,17 @@ public class NotificationManager : MonoBehaviour
 
     private void ApplyNotificationVisuals(UIMessageData messageData, string messageOverride)
     {
+        UIMessageVisualStyle style = UIMessageCatalog.ResolveVisualStyle(
+            messageData.ImageMode, messageData.CustomImage, messageData.FontSize,
+            messageData.TextColor, messageData.BackgroundColor);
+
         if (notificationBackground != null)
         {
             notificationBackground.gameObject.SetActive(true);
-            notificationBackground.color = messageData.BackgroundColor;
+            notificationBackground.color = style.BackgroundColor;
             notificationBackground.raycastTarget = false;
 
-            ApplyBackgroundImage(messageData.ImageMode, messageData.CustomImage);
+            notificationBackground.sprite = style.BackgroundImage;
         }
 
         if (notificationText == null)
@@ -225,13 +219,13 @@ public class NotificationManager : MonoBehaviour
             notificationText.font = messageData.FontAsset;
         }
 
-        notificationText.color = messageData.TextColor;
+        notificationText.color = style.TextColor;
         notificationText.enableAutoSizing = false;
         notificationText.alignment = TextAlignmentOptions.Center;
         notificationText.overflowMode = TextOverflowModes.Ellipsis;
         notificationText.text = message;
 
-        FitNotificationToMessage(message, messageData.FontSize);
+        FitNotificationToMessage(message, style.FontSize);
     }
 
     private void FitNotificationToMessage(string message, int requestedFontSize)
@@ -300,29 +294,6 @@ public class NotificationManager : MonoBehaviour
     {
         return preferredSize.x <= availableWidth + SizeFitTolerance &&
                preferredSize.y <= availableHeight + SizeFitTolerance;
-    }
-
-    private void ApplyBackgroundImage(TooltipImageMode imageMode, Sprite customImage)
-    {
-        if (notificationBackground == null)
-        {
-            return;
-        }
-
-        switch (imageMode)
-        {
-            case TooltipImageMode.Default:
-                notificationBackground.sprite = defaultBackgroundImage;
-                break;
-
-            case TooltipImageMode.Custom:
-                notificationBackground.sprite = customImage != null ? customImage : defaultBackgroundImage;
-                break;
-
-            case TooltipImageMode.None:
-                notificationBackground.sprite = null;
-                break;
-        }
     }
 
     #endregion

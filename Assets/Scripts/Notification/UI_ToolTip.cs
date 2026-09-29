@@ -33,22 +33,12 @@ public class UI_ToolTip : MonoBehaviour
 
     private RectTransform parentRect;
     private Canvas parentCanvas;
-    private Sprite defaultBackgroundImage;
 
     private readonly Vector3[] targetWorldCorners = new Vector3[4];
 
     private void Awake()
     {
         FindMissingReferences();
-        SaveDefaultBackgroundImage();
-    }
-
-    private void SaveDefaultBackgroundImage()
-    {
-        if (backgroundImage != null)
-        {
-            defaultBackgroundImage = backgroundImage.sprite;
-        }
     }
 
     public void ShowNearTarget(
@@ -228,16 +218,16 @@ public class UI_ToolTip : MonoBehaviour
     Sprite customImage,
     string message)
     {
+        UIMessageVisualStyle style = UIMessageCatalog.ResolveVisualStyle(
+            imageMode, customImage, fontSize, textColor, backgroundColor);
+
         if (backgroundImage != null)
         {
             backgroundImage.gameObject.SetActive(true);
-            backgroundImage.color = backgroundColor;
+            backgroundImage.color = style.BackgroundColor;
             backgroundImage.raycastTarget = false;
 
-            ApplyBackgroundImage(
-                imageMode,
-                customImage
-            );
+            backgroundImage.sprite = style.BackgroundImage;
         }
 
         if (messageText != null)
@@ -255,38 +245,9 @@ public class UI_ToolTip : MonoBehaviour
                 messageText.font = fontAsset;
             }
 
-            messageText.fontSize = fontSize;
-            messageText.color = textColor;
+            messageText.fontSize = style.FontSize;
+            messageText.color = style.TextColor;
             messageText.text = message;
-        }
-    }
-
-    private void ApplyBackgroundImage(
-    TooltipImageMode imageMode,
-    Sprite customImage)
-    {
-        if (backgroundImage == null)
-        {
-            return;
-        }
-
-        switch (imageMode)
-        {
-            case TooltipImageMode.Default:
-                backgroundImage.sprite =
-                    defaultBackgroundImage;
-                break;
-
-            case TooltipImageMode.Custom:
-                backgroundImage.sprite =
-                    customImage != null
-                        ? customImage
-                        : defaultBackgroundImage;
-                break;
-
-            case TooltipImageMode.None:
-                backgroundImage.sprite = null;
-                break;
         }
     }
 

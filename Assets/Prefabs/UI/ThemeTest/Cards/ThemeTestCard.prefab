@@ -3971,6 +3971,7 @@ GameObject:
   - component: {fileID: 4645485720834659375}
   - component: {fileID: 6601291010360873111}
   - component: {fileID: 7158459944352652173}
+  - component: {fileID: 4589807304166707597}
   m_Layer: 5
   m_Name: ThemeTestCard
   m_TagString: Untagged
@@ -4058,6 +4059,29 @@ MonoBehaviour:
   m_FlexibleWidth: 0
   m_FlexibleHeight: 0
   m_LayoutPriority: 1
+--- !u!114 &4589807304166707597
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6884544490816084206}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 578f58a679b3f7b498c685345a29b050, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoGame.UI.ThemeTest.ThemeTestCardController
+  cardTitle: {fileID: 3793239378146984819}
+  backgroundDropdown: {fileID: 5208348152547150514}
+  previewBackground: {fileID: 8117850059900021922}
+  imagePreview: {fileID: 2556840434404652824}
+  buttonPreview: {fileID: 5285013553604497793}
+  textPreview: {fileID: 5915803817951060923}
+  inputPreview: {fileID: 2681413147753071856}
+  dropdownPreview: {fileID: 4594722841910236775}
+  scrollPreview: {fileID: 6298004818376979546}
+  sliderPreview: {fileID: 1650360622446293636}
+  togglePreview: {fileID: 8379212225629620740}
 --- !u!1 &7035303945350972660
 GameObject:
   m_ObjectHideFlags: 0
@@ -4281,6 +4305,7 @@ GameObject:
   - component: {fileID: 5592394763646577}
   - component: {fileID: 2836983018364379905}
   - component: {fileID: 3248110124053452319}
+  - component: {fileID: 8117850059900021922}
   m_Layer: 5
   m_Name: PreviewBackground
   m_TagString: Untagged
@@ -4345,6 +4370,20 @@ MonoBehaviour:
   m_FillOrigin: 0
   m_UseSpriteMesh: 0
   m_PixelsPerUnitMultiplier: 1
+--- !u!114 &8117850059900021922
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7071595066594360464}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6fe01e88f7923374da8f6cf6c1bd5dde, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIThemeBackground
+  backgroundType: 0
+  backgroundImage: {fileID: 3248110124053452319}
 --- !u!1 &7230209979125611090
 GameObject:
   m_ObjectHideFlags: 0

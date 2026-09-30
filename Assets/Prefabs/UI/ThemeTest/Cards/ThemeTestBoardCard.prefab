@@ -727,6 +727,8 @@ GameObject:
   - component: {fileID: 4744468415499301658}
   - component: {fileID: 3377779469159049616}
   - component: {fileID: 1196172187165680878}
+  - component: {fileID: 3616316187199508098}
+  - component: {fileID: 1631945803883606476}
   m_Layer: 5
   m_Name: ThemeTestBoardCard
   m_TagString: Untagged
@@ -814,6 +816,49 @@ MonoBehaviour:
   m_FlexibleWidth: 0
   m_FlexibleHeight: 0
   m_LayoutPriority: 1
+--- !u!114 &3616316187199508098
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1666289660468536607}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 255366b30345d0c40ac00b15fac04e21, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoGame.UI.ThemeTest.ThemeTestBoardHighlightPreview
+  cellRoot: {fileID: 5299086055150341043}
+  patterns:
+  - {fileID: 11400000, guid: 6ee6d0fcbba4a81429dfcc117b3f8897, type: 2}
+  - {fileID: 11400000, guid: 4da9ad8f48ddde74a8da01abdc9c8b37, type: 2}
+  - {fileID: 11400000, guid: b0d7470275deaa04c9a96aad659a92e4, type: 2}
+  - {fileID: 11400000, guid: cce8190a323f9b24fb2839b43a0b100e, type: 2}
+  - {fileID: 11400000, guid: 080b0d25fb7b5e74a8311b66676ef0e5, type: 2}
+  - {fileID: 11400000, guid: 5c7be7d87e3638840a875104f4d957c4, type: 2}
+  - {fileID: 11400000, guid: fea783843cbdd8044af84c203c4812e3, type: 2}
+  - {fileID: 11400000, guid: 29183c4735543774dbb602f5cebd6182, type: 2}
+  cellCheckSeconds: 0.3
+  resultSeconds: 2
+  failureColor: {r: 1, g: 0, b: 0, a: 1}
+--- !u!114 &1631945803883606476
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1666289660468536607}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ebe64a408f02ac8439e3fad9c30ae7d8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoGame.UI.ThemeTest.ThemeTestBoardCardController
+  cardTitle: {fileID: 8340550858548395504}
+  backgroundDropdown: {fileID: 7452508394403988847}
+  previewBackground: {fileID: 458322316034317073}
+  boardPreview: {fileID: 6648804292937694211}
+  playHighlightsToggle: {fileID: 5484089818725483269}
+  highlightPreview: {fileID: 3616316187199508098}
 --- !u!1 &1899793225099876286
 GameObject:
   m_ObjectHideFlags: 0
@@ -922,6 +967,7 @@ GameObject:
   - component: {fileID: 3765206063767233025}
   - component: {fileID: 6177584307091438614}
   - component: {fileID: 4850569957888455660}
+  - component: {fileID: 458322316034317073}
   m_Layer: 5
   m_Name: PreviewBackground
   m_TagString: Untagged
@@ -986,6 +1032,20 @@ MonoBehaviour:
   m_FillOrigin: 0
   m_UseSpriteMesh: 0
   m_PixelsPerUnitMultiplier: 1
+--- !u!114 &458322316034317073
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1910643845897983103}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6fe01e88f7923374da8f6cf6c1bd5dde, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIThemeBackground
+  backgroundType: 0
+  backgroundImage: {fileID: 4850569957888455660}
 --- !u!1 &2020080081036027268
 GameObject:
   m_ObjectHideFlags: 0

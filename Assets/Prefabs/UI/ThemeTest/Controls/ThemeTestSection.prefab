@@ -211,6 +211,8 @@ GameObject:
   - component: {fileID: 292486662472525304}
   - component: {fileID: 3124740603875564701}
   - component: {fileID: 8193593344098127703}
+  - component: {fileID: 7007060091870855850}
+  - component: {fileID: 6457641252071326884}
   m_Layer: 5
   m_Name: ThemeTestSection
   m_TagString: Untagged
@@ -297,6 +299,35 @@ MonoBehaviour:
   m_FlexibleWidth: -1
   m_FlexibleHeight: 0
   m_LayoutPriority: 1
+--- !u!114 &7007060091870855850
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4217917765840096589}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bed4bd89effb5394587101f0be208962, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoGame.UI.ThemeTest.ThemeTestSectionController
+  sectionTitle: {fileID: 7869998521975276832}
+  itemsContent: {fileID: 9119828093903208997}
+  cardManager: {fileID: 6457641252071326884}
+--- !u!114 &6457641252071326884
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4217917765840096589}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a9beb64720a3f3149b6976d0a237215b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoGame.UI.ThemeTest.ThemeTestSectionCardManager
+  cardPrefab: {fileID: 4589807304166707597, guid: d2df32a9bb5b0de44b0cc6ba0d0e12e1, type: 3}
+  boardCardPrefab: {fileID: 1631945803883606476, guid: 5a0f6710e50171147a798004aeb88e98, type: 3}
 --- !u!1 &5537839914653155452
 GameObject:
   m_ObjectHideFlags: 0

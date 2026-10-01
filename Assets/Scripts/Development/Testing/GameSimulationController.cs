@@ -38,38 +38,59 @@ public class GameSimulationController : MonoBehaviour
     private bool isEndingSimulation;
     private bool networkGameStartRequested;
 
-    public static bool IsNetworkSimulationStartActive()
+    private void Awake()
+    {
+#if UNITY_EDITOR
+        BingoGame.Development.MultiplayerTesting.SimulationStartupSettings.Apply(this);
+#endif
+    }
+
+    public static bool IsSoloSimulationStartActive()
     {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-        // The Development object can also exist in Main Menu. Only a direct
-        // Game-scene simulation should own the initial network connection.
-        if (GameSceneManager.instance?.IsActiveScene(GameSceneType.Game) != true)
-        {
-            return false;
-        }
-
-        GameSimulationController controller = FindFirstObjectByType<GameSimulationController>();
-        bool isSimulationFollower = MultiplayerPlayModeTestContext.IsActive &&
-                                    MultiplayerPlayModeTestContext.PlayerNumber > 1;
-        return controller != null &&
-               controller.isActiveAndEnabled &&
-               controller.simulateOnStart &&
-               !controller.isEndingSimulation &&
-               (isSimulationFollower ||
-                controller.playMode == MainMenuPlayMode.Online ||
-                controller.playMode == MainMenuPlayMode.Custom);
+        GameSimulationController controller = GetActiveSimulationController();
+        return controller != null && controller.playMode == MainMenuPlayMode.Solo;
 #else
         return false;
 #endif
     }
 
-    private IEnumerator Start()
+    public static bool IsNetworkSimulationStartActive()
     {
-        if (!simulateOnStart)
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        GameSimulationController controller = GetActiveSimulationController();
+        return controller != null && controller.UsesNetworkSimulationRuntime();
+#else
+        return false;
+#endif
+    }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    private static GameSimulationController GetActiveSimulationController()
+    {
+        if (GameSceneManager.instance?.IsActiveScene(GameSceneType.Game) != true)
         {
-            yield break;
+            return null;
         }
 
+        GameSimulationController controller = FindFirstObjectByType<GameSimulationController>();
+#if UNITY_EDITOR
+        if (controller != null)
+        {
+            BingoGame.Development.MultiplayerTesting.SimulationStartupSettings.Apply(controller);
+        }
+#endif
+        return controller != null &&
+               controller.isActiveAndEnabled &&
+               controller.simulateOnStart &&
+               !controller.isEndingSimulation
+            ? controller
+            : null;
+    }
+#endif
+
+    private IEnumerator Start()
+    {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         while (GameSceneManager.instance == null)
         {
@@ -84,6 +105,14 @@ public class GameSimulationController : MonoBehaviour
         }
 
         yield return WaitForStartupReady();
+
+#if UNITY_EDITOR
+        BingoGame.Development.MultiplayerTesting.SimulationStartupSettings.Apply(this);
+#endif
+        if (!simulateOnStart || !isActiveAndEnabled)
+        {
+            yield break;
+        }
 
         if (!CanStartSimulation())
         {
@@ -111,7 +140,7 @@ public class GameSimulationController : MonoBehaviour
 
     private bool CanStartSimulation()
     {
-        if (playMode == MainMenuPlayMode.None && !IsSimulationFollower())
+        if (playMode == MainMenuPlayMode.None)
         {
             Debug.LogWarning("[GameSimulation] Select Solo, Online, or Custom.");
             return false;
@@ -148,8 +177,13 @@ public class GameSimulationController : MonoBehaviour
 
         if (lobbyManager == null || !lobbyManager.HasEnteredLobby)
         {
+            string failureMessage = lobbyManager?.LastEntryResult?.failureMessage;
             yield return ReturnSimulationPlayerToMain(
-                "The test player could not connect to Player 1's Game simulation lobby before the timeout.");
+                !string.IsNullOrWhiteSpace(failureMessage)
+                    ? failureMessage
+                    : playMode == MainMenuPlayMode.Solo
+                        ? "The player's local Solo simulation lobby could not be created before the timeout."
+                        : "The test player could not connect to Player 1's Game simulation lobby before the timeout.");
             yield break;
         }
 
@@ -240,12 +274,9 @@ public class GameSimulationController : MonoBehaviour
     {
         BingoGameModeType selectedGameModeType = GetSelectedGameModeType();
         int simulationPlayerNumber = GetSimulationPlayerNumber();
-        MainMenuPlayMode requestedPlayMode = simulationPlayerNumber > 1
-            ? MainMenuPlayMode.Online
-            : playMode;
         LobbySetupData setupData = new LobbySetupData
         {
-            playMode = requestedPlayMode,
+            playMode = playMode,
             startFreshEntry = false,
             isGameSimulation = true,
             gameSimulationPlayerNumber = simulationPlayerNumber,
@@ -254,7 +285,7 @@ public class GameSimulationController : MonoBehaviour
 
         int validRoomSize = GetValidRoomSize();
 
-        switch (requestedPlayMode)
+        switch (playMode)
         {
             case MainMenuPlayMode.Solo:
                 setupData.soloSetupData.gameModeType = selectedGameModeType;
@@ -322,15 +353,9 @@ public class GameSimulationController : MonoBehaviour
             : 1;
     }
 
-    private bool IsSimulationFollower()
-    {
-        return GetSimulationPlayerNumber() > 1;
-    }
-
     private bool UsesNetworkSimulationRuntime()
     {
-        return IsSimulationFollower() ||
-               playMode == MainMenuPlayMode.Online ||
+        return playMode == MainMenuPlayMode.Online ||
                playMode == MainMenuPlayMode.Custom;
     }
 
@@ -483,10 +508,17 @@ public class GameSimulationController : MonoBehaviour
 
     private List<string> BuildExpectedTestUserIds(out bool hasExactActivePlayerList)
     {
-        List<int> activePlayerNumbers = new List<int>();
-        hasExactActivePlayerList = MultiplayerPlayModeTestContext.TryGetActiveTestPlayerNumbers(activePlayerNumbers);
         List<string> expectedUserIds = new List<string>();
         AddExpectedUserId(expectedUserIds, UserManager.instance.UserId);
+
+        if (!MultiplayerPlayModeTestContext.IsActive)
+        {
+            hasExactActivePlayerList = true;
+            return expectedUserIds;
+        }
+
+        List<int> activePlayerNumbers = new List<int>();
+        hasExactActivePlayerList = MultiplayerPlayModeTestContext.TryGetActiveTestPlayerNumbers(activePlayerNumbers);
 
         if (hasExactActivePlayerList)
         {

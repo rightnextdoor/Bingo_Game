@@ -51,7 +51,9 @@ public class ChatActivitySimulation : MonoBehaviour
     private readonly HashSet<int> blockedReadyOrdinals = new HashSet<int>();
     private readonly Dictionary<ChatSimulationFilterType, int> filterCounts = new Dictionary<ChatSimulationFilterType, int>();
     private readonly List<Task> playerActivityTasks = new List<Task>();
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
     private readonly Queue<QueuedSyntheticMessage> outboundMessages = new Queue<QueuedSyntheticMessage>();
+#endif
 
     private ChatManager chatManager;
 
@@ -482,7 +484,9 @@ public class ChatActivitySimulation : MonoBehaviour
 
         string targetUserId = MultiplayerPlayModeTestContext.IsActive
             ? MultiplayerPlayModeTestContext.GetUserId((int)targetPlayer)
-            : UserManager.instance != null && UserManager.instance.HasUser ? UserManager.instance.UserId : string.Empty;
+            : targetPlayer == MultiplayerStressTargetPlayer.Player1 && UserManager.instance != null && UserManager.instance.HasUser
+                ? UserManager.instance.UserId
+                : string.Empty;
 
         if (string.IsNullOrWhiteSpace(targetUserId))
         {

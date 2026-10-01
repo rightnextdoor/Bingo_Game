@@ -18,6 +18,29 @@ public class LobbySimulationController : MonoBehaviour
 
     #region Unity Methods
 
+    private void Awake()
+    {
+#if UNITY_EDITOR
+        BingoGame.Development.MultiplayerTesting.SimulationStartupSettings.Apply(this);
+#endif
+    }
+
+    public static bool IsSoloSimulationStartActive()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (GameSceneManager.instance?.IsActiveScene(GameSceneType.Lobby) != true)
+        {
+            return false;
+        }
+
+        LobbySimulationController controller = FindFirstObjectByType<LobbySimulationController>();
+        return controller != null && controller.isActiveAndEnabled &&
+               controller.simulateOnStart && controller.playMode == MainMenuPlayMode.Solo;
+#else
+        return false;
+#endif
+    }
+
     private IEnumerator Start()
     {
         if (!simulateOnStart)

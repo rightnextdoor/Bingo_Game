@@ -29,6 +29,7 @@ public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
 
     [Header("Status")]
     [SerializeField] private TMP_Text gameplayStatusText;
+    [Tooltip("Shared image for the host badge or bot icon. The host badge takes priority.")]
     [SerializeField] private Image botIconImage;
     [SerializeField] private Image readyCheckmarkImage;
 
@@ -95,7 +96,10 @@ public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
             boardPreviewController?.DisplayBoard(playerData.boardData, playerData.markedCellIndices);
         }
 
-        SetStatusIcon(botIconImage, UIIconType.Bot, playerData.showBotIcon);
+        SetStatusIcon(
+            botIconImage,
+            playerData.isHost ? UIIconType.LobbyHost : UIIconType.Bot,
+            playerData.isHost || playerData.showBotIcon);
         SetStatusIcon(readyCheckmarkImage, UIIconType.LobbyCheckmark, playerData.showReadyIcon && playerData.isReady);
         SetKickButtonState(playerData.canKick);
         SetGameplayStatus(playerData.gameplayStatusText);

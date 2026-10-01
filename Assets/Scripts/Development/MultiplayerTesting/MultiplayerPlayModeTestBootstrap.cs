@@ -20,13 +20,6 @@ public class MultiplayerPlayModeTestBootstrap : MonoBehaviour
 
     private IEnumerator Start()
     {
-        bool isNetworkGameSimulation = GameSimulationController.IsNetworkSimulationStartActive();
-
-        if (!MultiplayerPlayModeTestContext.IsActive && !isNetworkGameSimulation)
-        {
-            yield break;
-        }
-
         NetworkRoot networkRoot = GetComponentInParent<NetworkRoot>();
 
         if (networkRoot == null || !networkRoot.IsPrimaryInstance)
@@ -40,6 +33,19 @@ public class MultiplayerPlayModeTestBootstrap : MonoBehaviour
                !UserManager.instance.IsReady)
         {
             yield return null;
+        }
+
+        if (LobbySimulationController.IsSoloSimulationStartActive() ||
+            GameSimulationController.IsSoloSimulationStartActive())
+        {
+            yield break;
+        }
+
+        bool isNetworkGameSimulation = GameSimulationController.IsNetworkSimulationStartActive();
+
+        if (!MultiplayerPlayModeTestContext.IsActive && !isNetworkGameSimulation)
+        {
+            yield break;
         }
 
         if (!PrepareNetworkManagerForTesting(networkRoot))

@@ -488,7 +488,11 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
             return false;
         }
 
-        string userId = MultiplayerPlayModeTestContext.GetUserId((int)targetPlayer);
+        string userId = MultiplayerPlayModeTestContext.IsActive
+            ? MultiplayerPlayModeTestContext.GetUserId((int)targetPlayer)
+            : targetPlayer == MultiplayerStressTargetPlayer.Player1 && UserManager.instance != null && UserManager.instance.HasUser
+                ? UserManager.instance.UserId
+                : string.Empty;
 
         if (string.IsNullOrWhiteSpace(userId))
         {

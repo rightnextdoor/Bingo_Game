@@ -556,7 +556,7 @@ MonoBehaviour:
   m_HandleRect: {fileID: 1857784510}
   m_Direction: 0
   m_Value: 0
-  m_Size: 0.14579353
+  m_Size: 0.1097274
   m_NumberOfSteps: 0
   m_OnValueChanged:
     m_PersistentCalls:
@@ -5483,6 +5483,9 @@ GameObject:
   - component: {fileID: 737993680}
   - component: {fileID: 737993679}
   - component: {fileID: 737993678}
+  - component: {fileID: 737993682}
+  - component: {fileID: 737993681}
+  - component: {fileID: 737993683}
   m_Layer: 0
   m_Name: ThemeTestManagers
   m_TagString: Untagged
@@ -5502,7 +5505,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 617ebaa9f6b7b7649acf04829cf00872, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ThemeTestMessageSectionManager
-  catalog: {fileID: 737993679}
   cardPrefab: {fileID: 4410979166668034658, guid: 7a5efd42b5c76f643ba3ed327f84e560, type: 3}
   content: {fileID: 1778368527}
   refreshInterval: 0.25
@@ -5535,7 +5537,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 5bec5c43d31197540a4171061924b568, type: 2}
   - {fileID: 11400000, guid: 46218c28a6bb0be4b87cec7b9e12859a, type: 2}
   - {fileID: 11400000, guid: 0bc73dc7f3109bc41af89f03d9dc1393, type: 2}
-  defaultStyle: {fileID: 11400000, guid: e9ee8b3cd435c764495291a724b4bc0f, type: 2}
+  defaultMessage: {fileID: 11400000, guid: e9ee8b3cd435c764495291a724b4bc0f, type: 2}
 --- !u!4 &737993680
 Transform:
   m_ObjectHideFlags: 0
@@ -5551,6 +5553,55 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &737993681
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 737993677}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 23a94d27e49958b4dba434e83b7a3ba0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoGame.UI.ThemeTest.ThemeTestSelectorSectionManager
+  selectorPrefab: {fileID: 6620852725254672507, guid: c427126696fbe34418511991d78436ff, type: 3}
+  content: {fileID: 2046472454}
+  toggleGroup: {fileID: 2046472457}
+--- !u!114 &737993682
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 737993677}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1fc6577f2ba91264791fadab3402338f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIThemeManager
+  selectedThemeType: 0
+  themeDataList:
+  - {fileID: 11400000, guid: de72173ef7371424abaa3f2f2e5b0922, type: 2}
+  - {fileID: 11400000, guid: 46aef112127568349930f415d2b63bf8, type: 2}
+  - {fileID: 11400000, guid: 87a650de68d344a4e98d92fb09739c3d, type: 2}
+  - {fileID: 11400000, guid: 74ff837a293aef946832caac3c2a046a, type: 2}
+  - {fileID: 11400000, guid: cc973006ac4201d42bd55ad707a9faa3, type: 2}
+--- !u!114 &737993683
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 737993677}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9f9efc5fc9934504db8ecbfed209601a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BingoGame.UI.ThemeTest.ThemeTestSectionManager
+  sectionPrefab: {fileID: 7007060091870855850, guid: 0a00a7727992e6f4594feb7c482e19ea, type: 3}
+  content: {fileID: 1068808042}
+  refreshInterval: 0.25
 --- !u!1 &757193906
 GameObject:
   m_ObjectHideFlags: 0
@@ -11317,7 +11368,7 @@ MonoBehaviour:
   m_HandleRect: {fileID: 1779025905}
   m_Direction: 0
   m_Value: 0
-  m_Size: 0.7525352
+  m_Size: 0.57572746
   m_NumberOfSteps: 0
   m_OnValueChanged:
     m_PersistentCalls:
@@ -15587,6 +15638,7 @@ GameObject:
   - component: {fileID: 2046472454}
   - component: {fileID: 2046472456}
   - component: {fileID: 2046472455}
+  - component: {fileID: 2046472457}
   m_Layer: 5
   m_Name: Content
   m_TagString: Untagged
@@ -15658,6 +15710,19 @@ MonoBehaviour:
   m_ChildScaleWidth: 0
   m_ChildScaleHeight: 0
   m_ReverseArrangement: 0
+--- !u!114 &2046472457
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2046472453}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2fafe2cfe61f6974895a912c3755e8f1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.ToggleGroup
+  m_AllowSwitchOff: 0
 --- !u!224 &2057592704 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 1194080352851836797, guid: c427126696fbe34418511991d78436ff, type: 3}
@@ -47023,7 +47088,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 7454036940470896746}
   m_HandleRect: {fileID: 5393230927703845609}
   m_Direction: 0
-  m_Value: 0
+  m_Value: 1
   m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:
@@ -59112,7 +59177,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 5730838032752775882}
   m_HandleRect: {fileID: 4108304292535481736}
   m_Direction: 0
-  m_Value: 0.9736842
+  m_Value: 0.13157895
   m_Size: 0.99999833
   m_NumberOfSteps: 0
   m_OnValueChanged:

@@ -81,11 +81,6 @@ public static class MultiplayerPlayModeTestContext
 
                     int activePlayerNumber = ResolveTaggedPlayerNumber(player);
 
-                    if (activePlayerNumber == 0 && index == 0)
-                    {
-                        activePlayerNumber = 1;
-                    }
-
                     if (IsValidPlayerNumber(activePlayerNumber) && !activePlayerNumbers.Contains(activePlayerNumber))
                     {
                         activePlayerNumbers.Add(activePlayerNumber);
@@ -273,11 +268,6 @@ public static class MultiplayerPlayModeTestContext
             }
         }
 
-        if (CurrentPlayer.IsMainEditor)
-        {
-            playerNumber = 1;
-            isResolved = true;
-        }
 #endif
     }
 

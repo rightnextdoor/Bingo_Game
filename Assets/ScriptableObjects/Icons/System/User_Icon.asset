@@ -14,4 +14,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::UserIconData
   iconId: ea2fb9c7699c4d64f8223aca4d7c8017
   iconType: 1
-  iconSprite: {fileID: -1144630816, guid: bdeaeacf91e805f449e7fa66d480d644, type: 3}
+  iconSprite: {fileID: 21300000, guid: f6537676170c32143b23c1bb99e33e65, type: 3}

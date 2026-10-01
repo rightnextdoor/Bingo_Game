@@ -197,8 +197,8 @@ MonoBehaviour:
   selectedThemeType: 0
   themeDataList:
   - {fileID: 11400000, guid: 87a650de68d344a4e98d92fb09739c3d, type: 2}
-  - {fileID: 11400000, guid: c94131688c52b9b429d686f587ba1478, type: 2}
-  - {fileID: 11400000, guid: dc7130d7bff34e043957535235bb1e33, type: 2}
+  - {fileID: 11400000, guid: de72173ef7371424abaa3f2f2e5b0922, type: 2}
+  - {fileID: 11400000, guid: 46aef112127568349930f415d2b63bf8, type: 2}
 --- !u!114 &343345014485353269
 MonoBehaviour:
   m_ObjectHideFlags: 0

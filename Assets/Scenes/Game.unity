@@ -2515,7 +2515,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 492654806}
   m_HandleRect: {fileID: 492654805}
   m_Direction: 0
-  m_Value: 0
+  m_Value: 1
   m_Size: 0.9999999
   m_NumberOfSteps: 0
   m_OnValueChanged:
@@ -8898,7 +8898,7 @@ MonoBehaviour:
   m_charWidthMaxAdj: 0
   m_TextWrappingMode: 0
   m_wordWrappingRatios: 0.4
-  m_overflowMode: 1
+  m_overflowMode: 3
   m_linkedTextComponent: {fileID: 0}
   parentLinkedComponent: {fileID: 0}
   m_enableKerning: 0
@@ -15199,7 +15199,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6207814632284159071, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
       propertyPath: gameModeType
-      value: 2
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6207814632284159071, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
       propertyPath: ballCountType
@@ -16744,7 +16744,7 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 32.6
+  m_fontSize: 38
   m_fontSizeBase: 38
   m_fontWeight: 400
   m_enableAutoSizing: 1
@@ -17048,7 +17048,7 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 31.4
+  m_fontSize: 32.6
   m_fontSizeBase: 38
   m_fontWeight: 400
   m_enableAutoSizing: 1

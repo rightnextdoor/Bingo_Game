@@ -64,7 +64,8 @@ public enum UIThemeTextType
     ChatCurrentUser,
     ChatOtherUser,
     ChatPrivate,
-    Winner
+    Winner,
+    PlayerListCell
 }
 
 public enum UIThemeInputType

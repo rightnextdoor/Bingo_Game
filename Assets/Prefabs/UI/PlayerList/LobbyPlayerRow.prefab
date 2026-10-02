@@ -2887,7 +2887,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 095b1392aeec0ee4da7ca08d43b5197b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::UIThemeText
-  textType: 6
+  textType: 12
   text: {fileID: 6508010559824345866}
 --- !u!1 &2343918719360302842
 GameObject:
@@ -4876,7 +4876,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 095b1392aeec0ee4da7ca08d43b5197b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::UIThemeText
-  textType: 0
+  textType: 12
   text: {fileID: 2007157816500131634}
 --- !u!114 &7114272727796462352
 MonoBehaviour:
@@ -6374,7 +6374,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 095b1392aeec0ee4da7ca08d43b5197b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::UIThemeText
-  textType: 6
+  textType: 12
   text: {fileID: 4134719174117620548}
 --- !u!1 &5573468046955298901
 GameObject:

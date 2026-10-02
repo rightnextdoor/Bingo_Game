@@ -174,9 +174,8 @@ public class MainMenuPatternInfoItem : MonoBehaviour,
 
         if (backgroundStyle != null)
         {
-            visualStyle.SetBackgroundColor(
-                backgroundStyle.Color
-            );
+            visualStyle.SetBackgroundColor(backgroundStyle.Color);
+            visualStyle.SetImage(backgroundStyle.SourceImage);
         }
 
         UIThemeStyle textStyle =

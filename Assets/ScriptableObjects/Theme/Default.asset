@@ -16,8 +16,8 @@ MonoBehaviour:
   backgroundStyles:
   - backgroundType: 0
     style:
-      sourceImage: {fileID: 0}
-      color: {r: 0.07058824, g: 0.09411765, b: 0.14901961, a: 1}
+      sourceImage: {fileID: -809804992619026284, guid: 824ef42ffa7e91945918c30dd0998eba, type: 3}
+      color: {r: 1, g: 1, b: 1, a: 1}
       material: {fileID: 0}
       raycastTarget: 0
       transition: 0
@@ -35,8 +35,8 @@ MonoBehaviour:
       textRaycastTarget: 0
   - backgroundType: 1
     style:
-      sourceImage: {fileID: 0}
-      color: {r: 0.12156863, g: 0.16470589, b: 0.26666668, a: 1}
+      sourceImage: {fileID: 7303528380627309444, guid: 824ef42ffa7e91945918c30dd0998eba, type: 3}
+      color: {r: 1, g: 1, b: 1, a: 1}
       material: {fileID: 0}
       raycastTarget: 0
       transition: 0
@@ -54,8 +54,8 @@ MonoBehaviour:
       textRaycastTarget: 0
   - backgroundType: 2
     style:
-      sourceImage: {fileID: 0}
-      color: {r: 0.14509805, g: 0.19215687, b: 0.30980393, a: 1}
+      sourceImage: {fileID: 6841100256711490664, guid: d472a20ddbd00c24b911265d148d0ac2, type: 3}
+      color: {r: 1, g: 1, b: 1, a: 1}
       material: {fileID: 0}
       raycastTarget: 0
       transition: 0
@@ -73,8 +73,8 @@ MonoBehaviour:
       textRaycastTarget: 0
   - backgroundType: 3
     style:
-      sourceImage: {fileID: 0}
-      color: {r: 0.14117648, g: 0.22745098, b: 0.36862746, a: 1}
+      sourceImage: {fileID: -1322464374932762594, guid: d472a20ddbd00c24b911265d148d0ac2, type: 3}
+      color: {r: 1, g: 1, b: 1, a: 1}
       material: {fileID: 0}
       raycastTarget: 0
       transition: 1
@@ -92,8 +92,8 @@ MonoBehaviour:
       textRaycastTarget: 1
   - backgroundType: 4
     style:
-      sourceImage: {fileID: 0}
-      color: {r: 0.23137255, g: 0.50980395, b: 0.9647059, a: 0.6666667}
+      sourceImage: {fileID: -4441273924919490741, guid: d472a20ddbd00c24b911265d148d0ac2, type: 3}
+      color: {r: 1, g: 1, b: 1, a: 0.6666667}
       material: {fileID: 0}
       raycastTarget: 0
       transition: 1
@@ -111,8 +111,8 @@ MonoBehaviour:
       textRaycastTarget: 1
   - backgroundType: 5
     style:
-      sourceImage: {fileID: 0}
-      color: {r: 0.14117648, g: 0.22745098, b: 0.36862746, a: 1}
+      sourceImage: {fileID: 21300000, guid: e1704b4f49d87ac4e9a30fe0e3989c75, type: 3}
+      color: {r: 1, g: 1, b: 1, a: 1}
       material: {fileID: 0}
       raycastTarget: 1
       transition: 1
@@ -130,8 +130,8 @@ MonoBehaviour:
       textRaycastTarget: 1
   - backgroundType: 6
     style:
-      sourceImage: {fileID: 0}
-      color: {r: 0.23137255, g: 0.50980395, b: 0.9647059, a: 0.6666667}
+      sourceImage: {fileID: -4441273924919490741, guid: d472a20ddbd00c24b911265d148d0ac2, type: 3}
+      color: {r: 1, g: 1, b: 1, a: 0.6666667}
       material: {fileID: 0}
       raycastTarget: 1
       transition: 1
@@ -149,8 +149,8 @@ MonoBehaviour:
       textRaycastTarget: 1
   - backgroundType: 7
     style:
-      sourceImage: {fileID: 0}
-      color: {r: 0.22352941, g: 0.3019608, b: 0.43529412, a: 1}
+      sourceImage: {fileID: 21300000, guid: e1704b4f49d87ac4e9a30fe0e3989c75, type: 3}
+      color: {r: 1, g: 1, b: 1, a: 1}
       material: {fileID: 0}
       raycastTarget: 1
       transition: 1
@@ -168,8 +168,8 @@ MonoBehaviour:
       textRaycastTarget: 1
   - backgroundType: 8
     style:
-      sourceImage: {fileID: 0}
-      color: {r: 0.14117648, g: 0.22745098, b: 0.36862746, a: 1}
+      sourceImage: {fileID: 32978900350387816, guid: d472a20ddbd00c24b911265d148d0ac2, type: 3}
+      color: {r: 1, g: 1, b: 1, a: 1}
       material: {fileID: 0}
       raycastTarget: 1
       transition: 1
@@ -187,8 +187,8 @@ MonoBehaviour:
       textRaycastTarget: 1
   - backgroundType: 9
     style:
-      sourceImage: {fileID: 0}
-      color: {r: 0.23137255, g: 0.50980395, b: 0.9647059, a: 0.6666667}
+      sourceImage: {fileID: 21300000, guid: ce82592a638c8244fb60b4716c6b415f, type: 3}
+      color: {r: 1, g: 1, b: 1, a: 0.6666667}
       material: {fileID: 0}
       raycastTarget: 0
       transition: 1
@@ -225,7 +225,7 @@ MonoBehaviour:
       textRaycastTarget: 1
   - backgroundType: 11
     style:
-      sourceImage: {fileID: -761764346, guid: 9c7355b0cb8a5024bba44738f70d9e74, type: 3}
+      sourceImage: {fileID: 21300000, guid: 72f58f5e2310e394da0ad7e50143ec34, type: 3}
       color: {r: 1, g: 1, b: 1, a: 1}
       material: {fileID: 0}
       raycastTarget: 0
@@ -244,8 +244,8 @@ MonoBehaviour:
       textRaycastTarget: 1
   - backgroundType: 12
     style:
-      sourceImage: {fileID: 0}
-      color: {r: 0.14117648, g: 0.22745098, b: 0.36862746, a: 1}
+      sourceImage: {fileID: -2989345837320457496, guid: d472a20ddbd00c24b911265d148d0ac2, type: 3}
+      color: {r: 1, g: 1, b: 1, a: 1}
       material: {fileID: 0}
       raycastTarget: 0
       transition: 1
@@ -263,8 +263,8 @@ MonoBehaviour:
       textRaycastTarget: 1
   - backgroundType: 13
     style:
-      sourceImage: {fileID: 0}
-      color: {r: 0.23137255, g: 0.50980395, b: 0.9647059, a: 0.6666667}
+      sourceImage: {fileID: 21300000, guid: 6c3dec426ef0c1046b711492a61e70f0, type: 3}
+      color: {r: 1, g: 1, b: 1, a: 0.69411767}
       material: {fileID: 0}
       raycastTarget: 0
       transition: 1
@@ -282,8 +282,8 @@ MonoBehaviour:
       textRaycastTarget: 1
   - backgroundType: 14
     style:
-      sourceImage: {fileID: 0}
-      color: {r: 0.14117648, g: 0.22745098, b: 0.36862746, a: 1}
+      sourceImage: {fileID: 6841100256711490664, guid: d472a20ddbd00c24b911265d148d0ac2, type: 3}
+      color: {r: 0.9892183, g: 0.9892183, b: 0.9892183, a: 1}
       material: {fileID: 0}
       raycastTarget: 0
       transition: 1
@@ -301,8 +301,8 @@ MonoBehaviour:
       textRaycastTarget: 1
   - backgroundType: 15
     style:
-      sourceImage: {fileID: 0}
-      color: {r: 0.23137255, g: 0.50980395, b: 0.9647059, a: 0.6666667}
+      sourceImage: {fileID: -2989345837320457496, guid: d472a20ddbd00c24b911265d148d0ac2, type: 3}
+      color: {r: 1, g: 1, b: 1, a: 0.6666667}
       material: {fileID: 0}
       raycastTarget: 0
       transition: 1
@@ -583,7 +583,7 @@ MonoBehaviour:
       fadeDuration: 0.1
       fontAsset: {fileID: 0}
       textMaterial: {fileID: 0}
-      vertexColor: {r: 0.94509804, g: 0.9607843, b: 0.9764706, a: 1}
+      vertexColor: {r: 0, g: 0, b: 0, a: 1}
       colorGradient: {fileID: 0}
       textRaycastTarget: 0
   - textType: 7
@@ -681,6 +681,25 @@ MonoBehaviour:
       vertexColor: {r: 1, g: 0.8352941, b: 0.2901961, a: 1}
       colorGradient: {fileID: 0}
       textRaycastTarget: 0
+  - textType: 12
+    style:
+      sourceImage: {fileID: 0}
+      color: {r: 1, g: 1, b: 1, a: 1}
+      material: {fileID: 0}
+      raycastTarget: 1
+      transition: 1
+      normalColor: {r: 1, g: 1, b: 1, a: 1}
+      highlightedColor: {r: 1, g: 1, b: 1, a: 1}
+      pressedColor: {r: 0.5019608, g: 0.5019608, b: 0.5019608, a: 1}
+      selectedColor: {r: 1, g: 1, b: 1, a: 1}
+      disabledColor: {r: 0.5019608, g: 0.5019608, b: 0.5019608, a: 1}
+      colorMultiplier: 1
+      fadeDuration: 0.1
+      fontAsset: {fileID: 0}
+      textMaterial: {fileID: 0}
+      vertexColor: {r: 1, g: 1, b: 1, a: 1}
+      colorGradient: {fileID: 0}
+      textRaycastTarget: 1
   inputStyles:
   - inputType: 0
     fieldImage:

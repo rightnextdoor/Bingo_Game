@@ -801,7 +801,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 1832984458}
   m_HandleRect: {fileID: 1832984457}
   m_Direction: 0
-  m_Value: 0
+  m_Value: 1
   m_Size: 0.9999999
   m_NumberOfSteps: 0
   m_OnValueChanged:
@@ -12192,7 +12192,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 633853011194982010, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
       propertyPath: playMode
-      value: 1
+      value: 3
       objectReference: {fileID: 0}
     - target: {fileID: 1290380241951259866, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
       propertyPath: m_LocalPosition.x

@@ -14,15 +14,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::UIMessageData
   messageType: 6
   messageText: Chat Help
-  imageMode: 2
-  customImage: {fileID: 0}
+  imageMode: 1
+  customImage: {fileID: 21300000, guid: e1704b4f49d87ac4e9a30fe0e3989c75, type: 3}
   fontAsset: {fileID: 0}
   fontSize: 24
-  textColor: {r: 0.94509804, g: 0.9529412, b: 0.9607843, a: 1}
-  numberColor: {r: 0.078431375, g: 0.078431375, b: 0.078431375, a: 1}
-  backgroundColor: {r: 0.22745098, g: 0.25882354, b: 0.3137255, a: 1}
+  textColor: {r: 0.9191374, g: 0.9191374, b: 0.9191374, a: 1}
+  numberColor: {r: 1, g: 1, b: 1, a: 1}
+  backgroundColor: {r: 1, g: 1, b: 1, a: 1}
   displaySeconds: 1.5
   fadeOutSeconds: 0.35
+  priority: 0
+  canBeCleared: 0
+  clearPendingClearableMessages: 0
   tooltipOpenDelay: 2
   tooltipMinimumWidth: 120
   tooltipMaximumWidth: 900

@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -699,7 +700,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
         nextGameSessionSyncTime = 0f;
     }
 
-    public async Task ClearPreviousSessionForFreshLobbyEntryAsync()
+    public async Task ClearPreviousSessionForFreshLobbyEntryAsync(bool _keepNetworkConnection = false)
     {
         if (isLeavingGame)
         {
@@ -773,9 +774,16 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
 
         LobbyManager lobbyManager = LobbyManager.instance;
 
-        if (lobbyManager != null)
+        try
         {
-            await lobbyManager.ClearPreviousLobbyMembershipAsync(userData);
+            if (lobbyManager != null)
+            {
+                await lobbyManager.ClearPreviousLobbyMembershipAsync(userData, _keepNetworkConnection);
+            }
+        }
+        finally
+        {
+            isLeavingGame = false;
         }
 
         ClearCurrentGame(true);
@@ -1001,6 +1009,31 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
         }
 
         _ = ProcessDeferredNetworkCleanupAsync(pendingGameId);
+    }
+
+    public async Task<bool> CompleteDeferredNetworkCleanupAsync(CancellationToken _cancellationToken)
+    {
+        while (isDeferredNetworkCleanupPending)
+        {
+            _cancellationToken.ThrowIfCancellationRequested();
+            await Task.Yield();
+        }
+
+        _cancellationToken.ThrowIfCancellationRequested();
+        string gameId = UserManager.instance?.CurrentUser?.pendingNetworkGameCleanupId;
+        if (string.IsNullOrWhiteSpace(gameId))
+        {
+            return true;
+        }
+
+        if (NetworkBootstrap.instance?.IsConnected != true || NetworkGameSessionService.instance?.IsReady != true)
+        {
+            return false;
+        }
+
+        await ProcessDeferredNetworkCleanupAsync(gameId);
+        _cancellationToken.ThrowIfCancellationRequested();
+        return string.IsNullOrWhiteSpace(UserManager.instance?.CurrentUser?.pendingNetworkGameCleanupId);
     }
 
     private async Task ProcessDeferredNetworkCleanupAsync(string gameId)

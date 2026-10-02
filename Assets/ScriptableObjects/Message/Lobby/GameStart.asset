@@ -14,13 +14,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::UIMessageData
   messageType: 5
   messageText: Game is about to start!
-  imageMode: 2
-  customImage: {fileID: 0}
+  imageMode: 1
+  customImage: {fileID: 21300000, guid: e1704b4f49d87ac4e9a30fe0e3989c75, type: 3}
   fontAsset: {fileID: 0}
   fontSize: 40
-  textColor: {r: 0.832884, g: 0.832884, b: 0.832884, a: 1}
+  textColor: {r: 0.008086145, g: 0.008086145, b: 0.008086145, a: 1}
   numberColor: {r: 0.078431375, g: 0.078431375, b: 0.078431375, a: 1}
-  backgroundColor: {r: 0.22745098, g: 0.25882354, b: 0.3137255, a: 1}
+  backgroundColor: {r: 1, g: 1, b: 1, a: 1}
   displaySeconds: 3
   fadeOutSeconds: 0.35
   priority: 0

@@ -14,13 +14,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::UIMessageData
   messageType: 12
   messageText: Game ending - final Bingo checks are in progress.
-  imageMode: 2
-  customImage: {fileID: 0}
+  imageMode: 1
+  customImage: {fileID: 21300000, guid: af745548b8e8c0f41a78ac0ec898efc3, type: 3}
   fontAsset: {fileID: 0}
   fontSize: 40
-  textColor: {r: 0, g: 0, b: 0, a: 1}
+  textColor: {r: 0.9946091, g: 0.9946091, b: 0.9946091, a: 1}
   numberColor: {r: 0.078431375, g: 0.078431375, b: 0.078431375, a: 1}
-  backgroundColor: {r: 0.96226406, g: 0.96226406, b: 0.96226406, a: 0.14117648}
+  backgroundColor: {r: 0.96226406, g: 0.96226406, b: 0.96226406, a: 1}
   displaySeconds: 3
   fadeOutSeconds: 0.35
   priority: 2

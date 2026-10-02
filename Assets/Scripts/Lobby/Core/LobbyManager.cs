@@ -1,6 +1,8 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 [DisallowMultipleComponent]
 public class LobbyManager : MonoBehaviour
@@ -35,6 +37,8 @@ public class LobbyManager : MonoBehaviour
     private bool isLobbyResyncPending;
     private bool returnToMainSceneOnEntryFailure = true;
     private int entryAttemptVersion;
+    private CancellationTokenSource entryCancellation;
+    private GameSceneType entrySceneType;
 
     private GameSceneManager gameSceneManager;
     private bool isSubscribedToGameSceneManager;
@@ -89,6 +93,7 @@ public class LobbyManager : MonoBehaviour
 
     private void OnEnable()
     {
+        SceneManager.activeSceneChanged += OnActiveSceneChanged;
         SubscribeToNetworkEvents();
         SubscribeToSceneEvents();
         SubscribeToPlayerProfiles();
@@ -103,6 +108,8 @@ public class LobbyManager : MonoBehaviour
 
     private void OnDisable()
     {
+        SceneManager.activeSceneChanged -= OnActiveSceneChanged;
+        CancelPendingLobbyEntry();
         UnsubscribeFromNetworkEvents();
         UnsubscribeFromSceneEvents();
         UnsubscribeFromPlayerProfiles();
@@ -110,6 +117,7 @@ public class LobbyManager : MonoBehaviour
 
     private void OnDestroy()
     {
+        entryCancellation?.Cancel();
         UnsubscribeFromNetworkEvents();
         UnsubscribeFromSceneEvents();
         UnsubscribeFromPlayerProfiles();
@@ -155,11 +163,12 @@ public class LobbyManager : MonoBehaviour
 
     public void CancelPendingLobbyEntry()
     {
-        if (!isEnteringLobby)
+        if (!isEnteringLobby && pendingLobbySetupData == null)
         {
             return;
         }
 
+        entryCancellation?.Cancel();
         entryAttemptVersion++;
         isEnteringLobby = false;
         pendingLobbySetupData = null;
@@ -174,6 +183,7 @@ public class LobbyManager : MonoBehaviour
 
     public void ResetForFreshApplicationStart()
     {
+        entryCancellation?.Cancel();
         entryAttemptVersion++;
         isEnteringLobby = false;
         isLeavingLobby = false;
@@ -201,7 +211,50 @@ public class LobbyManager : MonoBehaviour
         lastEntryResult = null;
 
         int currentEntryAttemptVersion = ++entryAttemptVersion;
+        entrySceneType = GameSceneManager.instance != null ? GameSceneManager.instance.CurrentSceneType : GameSceneType.Lobby;
+        entryCancellation?.Cancel();
+        CancellationTokenSource cancellation = new CancellationTokenSource();
+        entryCancellation = cancellation;
+        try
+        {
+            await EnterPendingLobbyAsync(currentEntryAttemptVersion, cancellation.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            if (currentEntryAttemptVersion == entryAttemptVersion)
+            {
+                CancelPendingLobbyEntry();
+            }
+        }
+        catch (Exception exception)
+        {
+            if (currentEntryAttemptVersion == entryAttemptVersion)
+            {
+                Debug.LogException(exception);
+                CompleteLobbyEntryFailure(LobbyEntryResult.Failed(LobbyEntryFailureType.Unknown, "An unexpected error occurred while entering the lobby."));
+            }
+        }
+        finally
+        {
+            if (entryCancellation == cancellation)
+            {
+                entryCancellation = null;
+            }
 
+            cancellation.Dispose();
+        }
+    }
+
+    private void OnActiveSceneChanged(Scene _previous, Scene _current)
+    {
+        if (isEnteringLobby && GameSceneManager.instance != null && !GameSceneManager.instance.IsActiveScene(entrySceneType))
+        {
+            CancelPendingLobbyEntry();
+        }
+    }
+
+    private async Task EnterPendingLobbyAsync(int currentEntryAttemptVersion, CancellationToken _cancellationToken)
+    {
         if (!TryValidatePendingSetupData(out LobbyEntryResult validationFailure))
         {
             CompleteLobbyEntryFailure(validationFailure);
@@ -213,7 +266,9 @@ public class LobbyManager : MonoBehaviour
 
         SetEntryState(LobbyEntryState.WaitingForService);
 
-        if (runtimeType == SessionRuntimeType.Network && !await EnsureRequiredOnlineConnectionAsync())
+        bool onlineReady = runtimeType != SessionRuntimeType.Network || await EnsureRequiredOnlineConnectionAsync();
+        _cancellationToken.ThrowIfCancellationRequested();
+        if (!onlineReady)
         {
             CompleteLobbyEntryFailure(
                 LobbyEntryResult.Failed(
@@ -228,14 +283,15 @@ public class LobbyManager : MonoBehaviour
             return;
         }
 
-        activeLobbyService =
-            await WaitForLobbyServiceAsync(runtimeType);
+        ILobbyService lobbyService = await WaitForLobbyServiceAsync(runtimeType);
+        _cancellationToken.ThrowIfCancellationRequested();
 
         if (currentEntryAttemptVersion != entryAttemptVersion)
         {
             return;
         }
 
+        activeLobbyService = lobbyService;
         if (activeLobbyService == null)
         {
             CompleteLobbyEntryFailure(
@@ -252,9 +308,13 @@ public class LobbyManager : MonoBehaviour
 
         try
         {
-            result =
-                await activeLobbyService
-                    .EnterLobbyAsync(pendingLobbySetupData);
+            result = activeLobbyService is NetworkLobbyService service
+                ? await service.EnterLobbyAsync(pendingLobbySetupData, _cancellationToken)
+                : await activeLobbyService.EnterLobbyAsync(pendingLobbySetupData);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception exception)
         {
@@ -452,13 +512,14 @@ public class LobbyManager : MonoBehaviour
 
     #region Lobby Exit
 
-    public async Task ClearPreviousLobbyMembershipAsync(UserData userData)
+    public async Task ClearPreviousLobbyMembershipAsync(UserData userData, bool _keepNetworkConnection = false)
     {
         if (userData == null || !userData.HasUser)
         {
             return;
         }
 
+        entryCancellation?.Cancel();
         entryAttemptVersion++;
         isEnteringLobby = false;
         pendingLobbySetupData = null;
@@ -489,7 +550,9 @@ public class LobbyManager : MonoBehaviour
         {
             try
             {
-                LobbyExitResult result = await previousLobbyService.LeaveLobbyAsync(userId);
+                LobbyExitResult result = previousLobbyService is NetworkLobbyService service
+                    ? await service.LeaveLobbyAsync(userId, _keepNetworkConnection)
+                    : await previousLobbyService.LeaveLobbyAsync(userId);
 
                 if (result == null || !result.success)
                 {
@@ -505,7 +568,14 @@ public class LobbyManager : MonoBehaviour
         {
             if (LocalLobbyManager.instance != null && LocalLobbyManager.instance.IsReady)
             {
-                await LocalLobbyManager.instance.LeaveLobbyAsync(userId);
+                try
+                {
+                    await LocalLobbyManager.instance.LeaveLobbyAsync(userId);
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogWarning($"[LobbyManager] Untracked local lobby cleanup failed: {exception.Message}");
+                }
             }
 
             NetworkBootstrap networkBootstrap = NetworkBootstrap.instance;
@@ -516,7 +586,7 @@ public class LobbyManager : MonoBehaviour
             {
                 try
                 {
-                    await networkService.LeaveLobbyAsync(userId);
+                    await networkService.LeaveLobbyAsync(userId, _keepNetworkConnection);
                 }
                 catch (Exception exception)
                 {

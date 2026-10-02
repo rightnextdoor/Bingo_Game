@@ -1,6 +1,8 @@
 using System;
 using System.Collections;
+using System.Threading;
 using System.Threading.Tasks;
+using Unity.Netcode;
 using UnityEngine;
 
 [DisallowMultipleComponent]
@@ -16,6 +18,7 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
 
     private bool isReady;
     private NetworkBootstrap networkBootstrap;
+    private readonly SemaphoreSlim operationGate = new SemaphoreSlim(1, 1);
 
     public SessionRuntimeType RuntimeType => SessionRuntimeType.Network;
     public bool IsReady => isReady;
@@ -67,6 +70,54 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
 
     public async Task<LobbyEntryResult> EnterLobbyAsync(LobbySetupData lobbySetupData)
     {
+        return await EnterLobbyAsync(lobbySetupData, CancellationToken.None);
+    }
+
+    public async Task<LobbyEntryResult> EnterLobbyAsync(LobbySetupData _lobbySetupData, CancellationToken _cancellationToken)
+    {
+        await operationGate.WaitAsync(_cancellationToken);
+        try
+        {
+            LobbyEntryResult preparation = await PrepareConnectionCoreAsync(_lobbySetupData, _cancellationToken);
+            if (!preparation.success)
+            {
+                return preparation;
+            }
+
+            _cancellationToken.ThrowIfCancellationRequested();
+            NetworkLobbyConnection connection = NetworkLobbyConnection.GetLocalConnection();
+            if (connection == null)
+            {
+                return LobbyEntryResult.Failed(LobbyEntryFailureType.NetworkLobbyConnectionUnavailable, "The network lobby connection was not available.");
+            }
+
+            LobbyEntryResult result;
+            try
+            {
+                result = await connection.RequestEnterLobbyAsync(_lobbySetupData);
+            }
+            catch
+            {
+                await TryRollbackFailedLobbyEntryAsync(connection);
+                throw;
+            }
+            if (_cancellationToken.IsCancellationRequested || result == null || !result.success)
+            {
+                await TryRollbackFailedLobbyEntryAsync(connection);
+            }
+
+            _cancellationToken.ThrowIfCancellationRequested();
+            return result ?? LobbyEntryResult.Failed(LobbyEntryFailureType.Unknown, "The network lobby did not return a result.");
+        }
+        finally
+        {
+            operationGate.Release();
+        }
+    }
+
+    private async Task<LobbyEntryResult> PrepareConnectionCoreAsync(LobbySetupData lobbySetupData, CancellationToken _cancellationToken)
+    {
+        _cancellationToken.ThrowIfCancellationRequested();
         if (!isReady)
         {
             return LobbyEntryResult.Failed(LobbyEntryFailureType.ServiceUnavailable, "The network lobby service is not ready.");
@@ -84,31 +135,20 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
             return customSearchFailure;
         }
 
-        if (!await EnsureNetworkConnectionAsync(lobbySetupData, relayJoinCode))
+        if (!await EnsureNetworkConnectionAsync(lobbySetupData, relayJoinCode, _cancellationToken))
         {
             return LobbyEntryResult.Failed(LobbyEntryFailureType.NetworkConnectionFailed, "The network connection could not be created.");
         }
 
-        NetworkLobbyConnection lobbyConnection = await WaitForLocalLobbyConnectionAsync();
+        _cancellationToken.ThrowIfCancellationRequested();
+        NetworkLobbyConnection lobbyConnection = await WaitForLocalLobbyConnectionAsync(_cancellationToken);
 
         if (lobbyConnection == null)
         {
             return LobbyEntryResult.Failed(LobbyEntryFailureType.NetworkLobbyConnectionUnavailable, "The network lobby connection was not available.");
         }
 
-        LobbyEntryResult result = await lobbyConnection.RequestEnterLobbyAsync(lobbySetupData);
-
-        if (result == null)
-        {
-            return LobbyEntryResult.Failed(LobbyEntryFailureType.Unknown, "The network lobby did not return a result.");
-        }
-
-        if (!result.success)
-        {
-            _ = TryRollbackFailedLobbyEntryAsync();
-        }
-
-        return result;
+        return new LobbyEntryResult { success = true, failureType = LobbyEntryFailureType.None };
     }
 
     private bool TryPrepareCustomLobbySearch(LobbySetupData lobbySetupData, out string relayJoinCode, out LobbyEntryResult failureResult)
@@ -134,18 +174,17 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
         return lobbyManager.TryPrepareCustomLobbySearch(lobbySetupData, out relayJoinCode, out failureResult);
     }
 
-    private async Task TryRollbackFailedLobbyEntryAsync()
+    private async Task TryRollbackFailedLobbyEntryAsync(NetworkLobbyConnection _connection)
     {
-        NetworkLobbyConnection lobbyConnection = NetworkLobbyConnection.GetLocalConnection();
-
-        if (lobbyConnection == null || networkBootstrap == null || !networkBootstrap.IsConnected)
+        if (_connection == null || _connection != NetworkLobbyConnection.GetLocalConnection() ||
+            networkBootstrap == null || !networkBootstrap.IsConnected)
         {
             return;
         }
 
         try
         {
-            await lobbyConnection.RequestLeaveLobbyAsync();
+            await _connection.RequestLeaveLobbyAsync();
         }
         catch (Exception exception)
         {
@@ -158,6 +197,24 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
     #region Lobby Exit
 
     public async Task<LobbyExitResult> LeaveLobbyAsync(string userId)
+    {
+        return await LeaveLobbyAsync(userId, false);
+    }
+
+    public async Task<LobbyExitResult> LeaveLobbyAsync(string _userId, bool _keepConnection)
+    {
+        await operationGate.WaitAsync();
+        try
+        {
+            return await LeaveLobbyCoreAsync(_userId, _keepConnection);
+        }
+        finally
+        {
+            operationGate.Release();
+        }
+    }
+
+    private async Task<LobbyExitResult> LeaveLobbyCoreAsync(string userId, bool _keepConnection)
     {
         if (!isReady)
         {
@@ -173,9 +230,9 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
 
         LobbyExitResult result = await lobbyConnection.RequestLeaveLobbyAsync();
 
-        if (result != null && result.success)
+        if (result != null && result.success && !_keepConnection)
         {
-            await ShutdownLocalNetworkAfterExitIfPossible();
+            await ShutdownLocalNetworkAfterExitIfPossible(lobbyConnection);
         }
 
         return result ?? LobbyExitResult.Failed(userId, LobbyPlayerExitReason.VoluntaryLeave, "The network lobby did not return a leave result.");
@@ -193,14 +250,15 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
         return await lobbyConnection.RequestKickPlayerAsync(targetUserId);
     }
 
-    private async Task ShutdownLocalNetworkAfterExitIfPossible()
+    private async Task ShutdownLocalNetworkAfterExitIfPossible(NetworkLobbyConnection _connection)
     {
-        if (MultiplayerPlayModeTestContext.IsActive || networkBootstrap == null || !networkBootstrap.IsConnected)
+        if (MultiplayerPlayModeTestContext.IsActive || networkBootstrap == null || !networkBootstrap.IsConnected ||
+            _connection == null || _connection != NetworkLobbyConnection.GetLocalConnection())
         {
             return;
         }
 
-        if (networkBootstrap.IsAuthority && NetworkLobbyManager.instance != null && NetworkLobbyManager.instance.HasActiveLobbies)
+        if (HasAuthorityWork())
         {
             return;
         }
@@ -212,7 +270,27 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
             await Task.Yield();
         }
 
+        if (networkBootstrap == null || !networkBootstrap.IsConnected ||
+            _connection == null || _connection != NetworkLobbyConnection.GetLocalConnection() ||
+            HasAuthorityWork())
+        {
+            return;
+        }
+
         await networkBootstrap.ShutdownAsync();
+    }
+
+    private bool HasAuthorityWork()
+    {
+        if (networkBootstrap == null || !networkBootstrap.IsAuthority)
+        {
+            return false;
+        }
+
+        return NetworkLobbyManager.instance?.HasActiveLobbies == true ||
+               NetworkGameSessionManager.instance?.GameSessions.Count > 0 ||
+               (NetworkManager.Singleton != null &&
+                NetworkManager.Singleton.ConnectedClientsIds.Count > (networkBootstrap.IsHost ? 1 : 0));
     }
 
     #endregion
@@ -261,20 +339,40 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
 
     public async Task<bool> PrepareConnectionForEntryAsync(LobbySetupData lobbySetupData)
     {
-        if (!isReady || !IsValidNetworkSetup(lobbySetupData))
+        await operationGate.WaitAsync();
+        try
         {
-            return false;
+            if (!isReady || !IsValidNetworkSetup(lobbySetupData))
+            {
+                return false;
+            }
+
+            string relayJoinCode = string.Empty;
+            if (!HasUsableNetworkConnection() && !TryPrepareCustomLobbySearch(lobbySetupData, out relayJoinCode, out _))
+            {
+                return false;
+            }
+
+            return await EnsureNetworkConnectionAsync(lobbySetupData, relayJoinCode, CancellationToken.None);
         }
-
-        string relayJoinCode = string.Empty;
-
-        if (!HasUsableNetworkConnection() &&
-            !TryPrepareCustomLobbySearch(lobbySetupData, out relayJoinCode, out _))
+        finally
         {
-            return false;
+            operationGate.Release();
         }
+    }
 
-        return await EnsureNetworkConnectionAsync(lobbySetupData, relayJoinCode);
+    public async Task<LobbyEntryResult> PrepareConnectionForEntryResultAsync(
+        LobbySetupData _lobbySetupData, CancellationToken _cancellationToken)
+    {
+        await operationGate.WaitAsync(_cancellationToken);
+        try
+        {
+            return await PrepareConnectionCoreAsync(_lobbySetupData, _cancellationToken);
+        }
+        finally
+        {
+            operationGate.Release();
+        }
     }
 
     private bool HasUsableNetworkConnection()
@@ -282,8 +380,9 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
         return networkBootstrap != null && networkBootstrap.IsConnected && NetworkLobbyConnection.GetLocalConnection() != null;
     }
 
-    private async Task<bool> EnsureNetworkConnectionAsync(LobbySetupData lobbySetupData, string customRelayJoinCode)
+    private async Task<bool> EnsureNetworkConnectionAsync(LobbySetupData lobbySetupData, string customRelayJoinCode, CancellationToken _cancellationToken)
     {
+        _cancellationToken.ThrowIfCancellationRequested();
         if (networkBootstrap == null || !networkBootstrap.IsReady)
         {
             return false;
@@ -293,12 +392,12 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
         {
             return await EnsureDirectTestConnectionAsync(
                 lobbySetupData.userData.userId,
-                lobbySetupData.gameSimulationPlayerNumber == 1);
+                lobbySetupData.gameSimulationPlayerNumber == 1, _cancellationToken);
         }
 
         if (MultiplayerPlayModeTestContext.IsActive)
         {
-            return await EnsureMultiplayerPlayModeConnectionAsync(lobbySetupData.userData.userId);
+            return await EnsureMultiplayerPlayModeConnectionAsync(lobbySetupData.userData.userId, _cancellationToken);
         }
 
         if (networkBootstrap.IsConnected)
@@ -308,7 +407,7 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
                 return true;
             }
 
-            if (networkBootstrap.IsAuthority && NetworkLobbyManager.instance != null && NetworkLobbyManager.instance.HasActiveLobbies)
+            if (HasAuthorityWork())
             {
                 Debug.LogWarning("[NetworkLobbyService] The network is connected, but the local lobby connection is missing while authority lobbies are still active.");
                 return false;
@@ -320,6 +419,7 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
             }
         }
 
+        _cancellationToken.ThrowIfCancellationRequested();
         string userId = lobbySetupData.userData.userId;
         bool started;
 
@@ -366,6 +466,7 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
 
         while (!networkBootstrap.IsConnected)
         {
+            _cancellationToken.ThrowIfCancellationRequested();
             if (networkBootstrap.ConnectionState == NetworkConnectionState.Failed || networkBootstrap.ConnectionState == NetworkConnectionState.Disconnected)
             {
                 return false;
@@ -382,12 +483,12 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
         return true;
     }
 
-    private async Task<bool> EnsureMultiplayerPlayModeConnectionAsync(string userId)
+    private async Task<bool> EnsureMultiplayerPlayModeConnectionAsync(string userId, CancellationToken _cancellationToken)
     {
-        return await EnsureDirectTestConnectionAsync(userId, MultiplayerPlayModeTestContext.IsHost);
+        return await EnsureDirectTestConnectionAsync(userId, MultiplayerPlayModeTestContext.IsHost, _cancellationToken);
     }
 
-    private async Task<bool> EnsureDirectTestConnectionAsync(string userId, bool shouldHost)
+    private async Task<bool> EnsureDirectTestConnectionAsync(string userId, bool shouldHost, CancellationToken _cancellationToken)
     {
         if (HasUsableNetworkConnection())
         {
@@ -402,6 +503,7 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
 
             while (!HasUsableNetworkConnection() && Time.realtimeSinceStartup < existingConnectionTimeout)
             {
+                _cancellationToken.ThrowIfCancellationRequested();
                 if (networkBootstrap.ConnectionState == NetworkConnectionState.Failed || networkBootstrap.ConnectionState == NetworkConnectionState.Disconnected)
                 {
                     break;
@@ -416,10 +518,7 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
             }
         }
 
-        if (shouldHost &&
-            networkBootstrap.IsAuthority &&
-            NetworkLobbyManager.instance != null &&
-            NetworkLobbyManager.instance.HasActiveLobbies)
+        if (shouldHost && HasAuthorityWork())
         {
             return false;
         }
@@ -434,6 +533,7 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
             await Task.Yield();
         }
 
+        _cancellationToken.ThrowIfCancellationRequested();
         bool started = shouldHost
             ? networkBootstrap.StartDirectHost(userId)
             : networkBootstrap.StartDirectClient(userId, MultiplayerPlayModeTestContext.DirectAddress);
@@ -447,6 +547,7 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
 
         while (!HasUsableNetworkConnection())
         {
+            _cancellationToken.ThrowIfCancellationRequested();
             if (networkBootstrap.ConnectionState == NetworkConnectionState.Failed || networkBootstrap.ConnectionState == NetworkConnectionState.Disconnected)
             {
                 return false;
@@ -463,12 +564,13 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
         return true;
     }
 
-    private async Task<NetworkLobbyConnection> WaitForLocalLobbyConnectionAsync()
+    private async Task<NetworkLobbyConnection> WaitForLocalLobbyConnectionAsync(CancellationToken _cancellationToken)
     {
         float timeoutTime = Time.realtimeSinceStartup + LobbyConnectionTimeoutSeconds;
 
         while (Time.realtimeSinceStartup < timeoutTime)
         {
+            _cancellationToken.ThrowIfCancellationRequested();
             NetworkLobbyConnection lobbyConnection = NetworkLobbyConnection.GetLocalConnection();
 
             if (lobbyConnection != null)

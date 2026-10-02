@@ -1,3 +1,5 @@
+using System;
+using System.Threading;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -29,7 +31,7 @@ public class MainMenuController : MonoBehaviour
     private MainMenuPlayMode selectedMode = MainMenuPlayMode.None;
     private bool isStartingSelectedMode;
     private bool isCheckingPreviousGame;
-    private bool connectionRecoveredOnPlay;
+    private CancellationTokenSource lobbyEntryCancellation;
 
     private UserManager userManager;
     private PopupManager popupManager;
@@ -51,6 +53,7 @@ public class MainMenuController : MonoBehaviour
 
     private void OnDisable()
     {
+        lobbyEntryCancellation?.Cancel();
         UnregisterButtonListeners();
     }
     private void CacheManagers()
@@ -218,7 +221,6 @@ public class MainMenuController : MonoBehaviour
             return;
         }
 
-        connectionRecoveredOnPlay = false;
         CacheManagers();
 
         UserData currentUser = userManager?.CurrentUser;
@@ -266,8 +268,6 @@ public class MainMenuController : MonoBehaviour
                 ShowModeSelectScreen();
                 return;
             }
-
-            connectionRecoveredOnPlay = true;
 
             GameSessionResult rejoinCheck;
 
@@ -345,7 +345,7 @@ public class MainMenuController : MonoBehaviour
             return;
         }
 
-        if (OnlineConnectionManager.instance?.IsOnline == false &&
+        if (OnlineConnectionManager.instance?.ConnectionState == OnlineConnectionState.Offline &&
             ConnectionRecoveryManager.instance != null)
         {
             isCheckingPreviousGame = true;
@@ -357,9 +357,7 @@ public class MainMenuController : MonoBehaviour
 
             try
             {
-                connectionRecoveredOnPlay =
-                    await ConnectionRecoveryManager.instance.RecoverAsync(false) ==
-                    ConnectionRecoveryResult.Connected;
+                await ConnectionRecoveryManager.instance.RecoverAsync(false);
             }
             finally
             {
@@ -712,7 +710,7 @@ public class MainMenuController : MonoBehaviour
     {
         CacheManagers();
 
-        if (isStartingSelectedMode)
+        if (isStartingSelectedMode || isCheckingPreviousGame)
         {
             return;
         }
@@ -787,95 +785,141 @@ public class MainMenuController : MonoBehaviour
             return;
         }
 
+        if (gameSceneManager.CurrentSceneType != GameSceneType.Main || gameSceneManager.IsLoadingScene ||
+            lobbyManager.IsEnteringLobby || lobbyManager.IsLeavingLobby || GameSessionManager.instance?.IsLeavingGame == true)
+        {
+            return;
+        }
+
         isStartingSelectedMode = true;
+        bool requiresNetwork = lobbySetupData.playMode != MainMenuPlayMode.Solo;
+        string entryUserId = lobbySetupData.userData.userId;
+        CancellationTokenSource cancellation = new CancellationTokenSource();
+        lobbyEntryCancellation = cancellation;
+        CancellationToken cancellationToken = cancellation.Token;
+        LoadingFaderManager loader = LoadingFaderManager.instance;
+        bool ownsLoadingOverlay = loader != null && !loader.IsShowing;
+        bool handedOff = false;
+        if (ownsLoadingOverlay)
+        {
+            loader.ShowLoading();
+        }
 
         try
         {
-            if (selectedMode != MainMenuPlayMode.Solo)
+            if (GameSessionManager.instance != null)
             {
-                ConnectionRecoveryResult connectionResult =
-                    ConnectionRecoveryManager.instance != null
-                        ? connectionRecoveredOnPlay &&
-                          OnlineConnectionManager.instance?.IsOnline == true &&
-                          NetworkBootstrap.instance?.IsConnectionAvailableForTesting == true
-                            ? await ConnectionRecoveryManager.instance.PrepareLobbyAfterPlayRecoveryAsync(lobbySetupData)
-                            : await ConnectionRecoveryManager.instance.RecoverAsync(true, lobbySetupData)
-                        : ConnectionRecoveryResult.MultiplayerUnavailable;
+                await GameSessionManager.instance.ClearPreviousSessionForFreshLobbyEntryAsync(requiresNetwork);
+            }
+            else
+            {
+                await lobbyManager.ClearPreviousLobbyMembershipAsync(userManager.CurrentUser, requiresNetwork);
+                ThrowIfLobbyEntryAbandoned(cancellationToken, entryUserId);
+                userManager.ClearLastGameId();
+            }
 
-                if (connectionResult != ConnectionRecoveryResult.Connected ||
-                    OnlineConnectionManager.instance?.IsOnline != true ||
-                    NetworkBootstrap.instance?.IsConnected != true ||
-                    NetworkLobbyConnection.GetLocalConnection() == null)
+            ThrowIfLobbyEntryAbandoned(cancellationToken, entryUserId);
+
+            if (requiresNetwork)
+            {
+                OnlineConnectionManager online = OnlineConnectionManager.instance;
+                bool onlineReady = online != null && await online.EnsureConnectedAsync();
+                ThrowIfLobbyEntryAbandoned(cancellationToken, entryUserId);
+                if (!onlineReady)
                 {
-                    popupManager?.OpenFailurePopup(
-                        connectionResult == ConnectionRecoveryResult.OnlineUnavailable ||
-                        OnlineConnectionManager.instance?.IsOnline != true
-                            ? "Online services are unavailable. Check your connection and try again."
-                            : "The lobby and game connection is unavailable. Please try again.");
+                    popupManager?.OpenFailurePopup("Online services are unavailable. Check your connection and try again.");
+                    return;
+                }
+
+                NetworkLobbyService service = NetworkLobbyService.instance;
+                LobbyEntryResult preparation = service != null
+                    ? await service.PrepareConnectionForEntryResultAsync(lobbySetupData, cancellationToken)
+                    : LobbyEntryResult.Failed(LobbyEntryFailureType.ServiceUnavailable, "The network lobby service is not ready.");
+                ThrowIfLobbyEntryAbandoned(cancellationToken, entryUserId);
+                if (!preparation.success)
+                {
+                    popupManager?.OpenFailurePopup(preparation.failureMessage);
                     return;
                 }
             }
 
-            ConnectionRecoveryManager.instance?.SetExpectingNetworkLobbyLoading(
-                selectedMode != MainMenuPlayMode.Solo);
-            gameSceneManager.LoadLobbyScene();
-
-            if (GameSessionManager.instance?.HasSavedSoloGameForCurrentUser == true)
-            {
-                await GameSessionManager.instance.DeclineSavedSoloGameAsync();
-            }
-
             if (GameSessionManager.instance != null)
             {
-                await GameSessionManager.instance.ClearPreviousSessionForFreshLobbyEntryAsync();
-            }
-            else
-            {
-                await lobbyManager.ClearPreviousLobbyMembershipAsync(userManager.CurrentUser);
-                userManager.ClearLastGameId();
-            }
-
-            if (gameSceneManager.CurrentSceneType != GameSceneType.Lobby ||
-                (selectedMode != MainMenuPlayMode.Solo &&
-                 (OnlineConnectionManager.instance?.IsOnline != true ||
-                  NetworkBootstrap.instance?.IsConnected != true)))
-            {
-                if (selectedMode != MainMenuPlayMode.Solo &&
-                    gameSceneManager.CurrentSceneType == GameSceneType.Lobby)
-                {
-                    bool onlineLost = OnlineConnectionManager.instance?.IsOnline != true;
-                    FailureManager.instance?.ReportFailure(
-                        onlineLost
-                            ? "The connection to online services was lost while loading the lobby."
-                            : "The lobby and game connection was lost while loading.",
-                        onlineLost ? FailurePrecedence.Online : FailurePrecedence.SessionConnection,
-                        FailureDisplayMode.WaitForMain);
-                    gameSceneManager.ReturnToMainSceneAfterFailure();
-                }
-
-                return;
+                await GameSessionManager.instance.CompleteDeferredNetworkCleanupAsync(cancellationToken);
+                ThrowIfLobbyEntryAbandoned(cancellationToken, entryUserId);
             }
 
             if (!string.IsNullOrWhiteSpace(userManager.CurrentUser.pendingNetworkGameCleanupId))
             {
-                FailureManager.instance?.ShowFailureOnMain(
-                    "The previous game could not be cleared. Please try again.",
-                    FailurePrecedence.SessionConnection);
-                gameSceneManager.ReturnToMainSceneAfterFailure();
+                popupManager?.OpenFailurePopup("The previous game could not be cleared. Please try again.");
                 return;
             }
 
-            lobbySetupData.startFreshEntry = true;
-            lobbyManager.SetPendingLobbySetupData(
-                lobbySetupData);
+            if (requiresNetwork && (OnlineConnectionManager.instance?.IsOnline != true ||
+                NetworkBootstrap.instance?.IsConnected != true || NetworkLobbyConnection.GetLocalConnection() == null))
+            {
+                popupManager?.OpenFailurePopup(OnlineConnectionManager.instance?.IsOnline != true
+                    ? "Online services are unavailable. Check your connection and try again."
+                    : "The lobby and game connection is unavailable. Please try again.");
+                return;
+            }
 
+            if (GameSessionManager.instance?.HasSavedSoloGameForCurrentUser == true)
+            {
+                await GameSessionManager.instance.DeclineSavedSoloGameAsync();
+                ThrowIfLobbyEntryAbandoned(cancellationToken, entryUserId);
+            }
+
+            lobbySetupData.startFreshEntry = true;
+            lobbyManager.SetPendingLobbySetupData(lobbySetupData);
+            ConnectionRecoveryManager.instance?.SetExpectingNetworkLobbyLoading(requiresNetwork);
+            gameSceneManager.LoadLobbyScene();
+            handedOff = true;
             lobbyManager.BeginPendingLobbyEntry();
-            ConnectionRecoveryManager.instance?.SetExpectingNetworkLobbyLoading(false);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception exception)
+        {
+            Debug.LogException(exception);
+            if (this != null && !cancellationToken.IsCancellationRequested &&
+                gameSceneManager != null && gameSceneManager.CurrentSceneType == GameSceneType.Main)
+            {
+                popupManager?.OpenFailurePopup("The lobby could not be opened. Please try again.");
+            }
         }
         finally
         {
-            ConnectionRecoveryManager.instance?.SetExpectingNetworkLobbyLoading(false);
+            if (handedOff)
+            {
+                ConnectionRecoveryManager.instance?.SetExpectingNetworkLobbyLoading(false);
+            }
+
+            if (!handedOff && ownsLoadingOverlay && loader != null &&
+                gameSceneManager != null && !gameSceneManager.IsLoadingScene)
+            {
+                loader.HideInstant();
+            }
+
+            if (lobbyEntryCancellation == cancellation)
+            {
+                lobbyEntryCancellation = null;
+            }
+
+            cancellation.Dispose();
             isStartingSelectedMode = false;
+        }
+    }
+
+    private void ThrowIfLobbyEntryAbandoned(CancellationToken _cancellationToken, string _userId)
+    {
+        _cancellationToken.ThrowIfCancellationRequested();
+        if (this == null || !isActiveAndEnabled || gameSceneManager == null ||
+            gameSceneManager.CurrentSceneType != GameSceneType.Main || gameSceneManager.IsLoadingScene ||
+            userManager == null || !string.Equals(userManager.UserId, _userId, StringComparison.Ordinal))
+        {
+            throw new OperationCanceledException();
         }
     }
 

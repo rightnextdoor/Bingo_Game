@@ -15,9 +15,17 @@ public class ChatActivitySimulation : MonoBehaviour
     private const float MaximumLeaveDelaySeconds = 2.5f;
     private const float MessageSettleSeconds = 0.25f;
 
+    [Header("Simulation Controls")]
+    [Tooltip("Start chat activity only when no other stress test is running or cleaning up.")]
+    [SerializeField] private bool runSimulation;
+    [Tooltip("Stop this simulation's active test.")]
+    [SerializeField] private bool stopSimulation;
+
+    [Space]
     [Header("Target Lobby")]
     [SerializeField] private MultiplayerStressTargetPlayer targetPlayer = MultiplayerStressTargetPlayer.Player1;
 
+    [Space]
     [Header("Fake Player Join")]
     [SerializeField] private bool useMaxLobbySize;
     [SerializeField, Min(1)] private int playersToAdd = 50;
@@ -28,6 +36,7 @@ public class ChatActivitySimulation : MonoBehaviour
     [SerializeField, Min(0f)] private float minimumLoadDelaySeconds = 0.5f;
     [SerializeField, Min(0f)] private float maximumLoadDelaySeconds = 4f;
 
+    [Space]
     [Header("Chat Activity")]
     [SerializeField, Min(1)] private int minimumMessagesPerPlayer = 3;
     [SerializeField, Min(1)] private int maximumMessagesPerPlayer = 12;
@@ -35,14 +44,14 @@ public class ChatActivitySimulation : MonoBehaviour
     [SerializeField, Min(0f)] private float maximumMessageDelaySeconds = 2f;
     [SerializeField, Min(0)] private int blockedPlayers = 5;
 
+    [Space]
     [Header("Synthetic Message Queue")]
     [SerializeField, Min(0.1f)] private float maximumMessagesPerSecond = 8f;
     [SerializeField, Min(1f)] private float maximumBytesPerSecond = 750f;
 
+    [Space]
     [Header("Run Control")]
     [SerializeField, Min(5f)] private float maximumRunSeconds = 180f;
-    [SerializeField] private bool runSimulation;
-    [SerializeField] private bool stopSimulation;
 
     private readonly HashSet<string> simulatedUserIds = new HashSet<string>(StringComparer.Ordinal);
     private readonly HashSet<string> startedActivityUserIds = new HashSet<string>(StringComparer.Ordinal);
@@ -97,6 +106,17 @@ public class ChatActivitySimulation : MonoBehaviour
     private void Update()
     {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (!CanOperate())
+        {
+            if (isRunning)
+            {
+                CancelImmediately("The Lobby scene or required simulation services are no longer available.");
+            }
+            runSimulation = false;
+            stopSimulation = false;
+            return;
+        }
+
         ProcessStopTrigger();
         ProcessRunTrigger();
         TryApplyPendingBlocks();
@@ -120,6 +140,22 @@ public class ChatActivitySimulation : MonoBehaviour
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
 
+    private bool CanOperate()
+    {
+        return this != null && isActiveAndEnabled && GameSceneManager.instance != null &&
+               GameSceneManager.instance.CurrentSceneType == GameSceneType.Lobby &&
+               GameSceneManager.instance.IsActiveScene(GameSceneType.Lobby) &&
+               !GameSceneManager.instance.IsLoadingScene &&
+               NetworkBootstrap.instance != null && NetworkBootstrap.instance.IsReady &&
+               NetworkBootstrap.instance.IsConnected && NetworkBootstrap.instance.IsAuthority &&
+               NetworkLobbyManager.instance != null && NetworkLobbyManager.instance.IsReady &&
+               StressFakePlayerManager.instance != null && StressSimulationCoordinator.instance != null &&
+               StressHealthReporter.instance != null && ChatManager.instance != null && ChatManager.instance.IsReady &&
+               (string.IsNullOrWhiteSpace(activeLobbyId) ||
+                (NetworkLobbyManager.instance.TryGetStressLobby(activeLobbyId, out Lobby lobby) &&
+                 lobby != null && lobby.Controller != null && lobby.lobbyState != LobbyState.InGame));
+    }
+
     private void ProcessRunTrigger()
     {
         if (!runSimulation || isRunning)
@@ -128,7 +164,13 @@ public class ChatActivitySimulation : MonoBehaviour
         }
 
         runSimulation = false;
-        _ = RunSimulationAsync(++runToken);
+        if (StressSimulationCoordinator.instance != null && StressSimulationCoordinator.instance.IsRunActive)
+        {
+            return;
+        }
+
+        Task runTask = RunSimulationAsync(++runToken);
+        StressSimulationCoordinator.instance?.TrackActivity(stressRunId, runTask);
     }
 
     private void ProcessStopTrigger()
@@ -500,7 +542,8 @@ public class ChatActivitySimulation : MonoBehaviour
             return false;
         }
 
-        if (lobby.playMode != MainMenuPlayMode.Online && lobby.playMode != MainMenuPlayMode.Custom)
+        if (lobby.lobbyState == LobbyState.InGame ||
+            (lobby.playMode != MainMenuPlayMode.Online && lobby.playMode != MainMenuPlayMode.Custom))
         {
             failureReason = "Chat stress simulations require an Online or Custom Lobby.";
             lobby = null;
@@ -544,6 +587,7 @@ public class ChatActivitySimulation : MonoBehaviour
         };
 
         joinOperationId = StressFakePlayerManager.instance.StartJoinWave(request);
+        StressSimulationCoordinator.instance.TrackJoinWave(stressRunId, joinOperationId);
 
         if (joinOperationId > 0)
         {
@@ -636,7 +680,9 @@ public class ChatActivitySimulation : MonoBehaviour
                 ApplyBlock(record);
             }
 
-            playerActivityTasks.Add(RunPlayerActivityAsync(record, token));
+            Task activityTask = RunPlayerActivityAsync(record, token);
+            playerActivityTasks.Add(activityTask);
+            StressSimulationCoordinator.instance.TrackActivity(stressRunId, activityTask);
         }
     }
 
@@ -1031,7 +1077,7 @@ public class ChatActivitySimulation : MonoBehaviour
 
     private bool IsCurrentRun(int token)
     {
-        return isRunning && token == runToken;
+        return isRunning && token == runToken && CanOperate();
     }
 
     private bool ShouldCancel()

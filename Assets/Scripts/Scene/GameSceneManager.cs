@@ -38,6 +38,8 @@ public class GameSceneManager : MonoBehaviour
 
     private Coroutine loadingRoutine;
     private GameSceneType currentSceneType;
+    private GameSceneType initialSceneType;
+    private int initialSceneHandle;
     private bool isLoadingScene;
 
     private bool hasPendingLoadingRedirect;
@@ -51,6 +53,10 @@ public class GameSceneManager : MonoBehaviour
     public GameSceneType CurrentSceneType => currentSceneType;
     public bool IsActiveScene(GameSceneType sceneType) =>
         string.Equals(UnitySceneManager.GetActiveScene().name, GetSceneName(sceneType), StringComparison.Ordinal);
+
+    public bool IsInitialScene(GameSceneType _sceneType) =>
+        initialSceneType == _sceneType && currentSceneType == _sceneType &&
+        UnitySceneManager.GetActiveScene().handle == initialSceneHandle && IsActiveScene(_sceneType);
 
     #endregion
 
@@ -76,6 +82,8 @@ public class GameSceneManager : MonoBehaviour
         // Connection callbacks can arrive before Start begins the loading routine.
         // Resolve the scene now so a direct Lobby or Game launch is not treated as Main.
         currentSceneType = ResolveStartingSceneType();
+        initialSceneType = currentSceneType;
+        initialSceneHandle = UnitySceneManager.GetActiveScene().handle;
         ResolveReferences();
     }
 

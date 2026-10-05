@@ -7,9 +7,23 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
 {
     #region Fields
 
+    [Header("Simulation Controls")]
+    [Tooltip("Reroll existing bots and synthetic players. If none are ready, add up to five synthetic players first.")]
+    [SerializeField] private bool runRerolls;
+    [Tooltip("Stop rerolling, including its automatic player setup.")]
+    [SerializeField] private bool stopRerolling;
+    [Tooltip("Add synthetic players using the Fake Player Join settings.")]
+    [SerializeField] private bool addPlayers;
+    [Tooltip("Stop the manual Add Players operation.")]
+    [SerializeField] private bool stopAddingPlayers;
+    [Tooltip("Stop whichever operation this simulation is running.")]
+    [SerializeField] private bool stopSimulation;
+
+    [Space]
     [Header("Target Lobby")]
     [SerializeField] private MultiplayerStressTargetPlayer targetPlayer = MultiplayerStressTargetPlayer.Player1;
 
+    [Space]
     [Header("Fake Player Join")]
     [SerializeField] private bool useMaxLobbySize;
     [SerializeField, Min(1)] private int playersToAdd = 50;
@@ -19,18 +33,12 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
     [SerializeField, Min(0f)] private float maximumJoinDelaySeconds = 1.5f;
     [SerializeField, Min(0f)] private float minimumLoadDelaySeconds = 0.5f;
     [SerializeField, Min(0f)] private float maximumLoadDelaySeconds = 4f;
-    [SerializeField] private bool addPlayers;
-    [SerializeField] private bool stopAddingPlayers;
 
+    [Space]
     [Header("Board Reroll Stress")]
     [SerializeField, Min(1)] private int rerollsPerPlayer = 20;
     [SerializeField, Min(0f)] private float minimumRerollDelaySeconds = 0.2f;
     [SerializeField, Min(0f)] private float maximumRerollDelaySeconds = 2f;
-    [SerializeField] private bool runRerolls;
-    [SerializeField] private bool stopRerolling;
-
-    [Header("Run Control")]
-    [SerializeField] private bool stopSimulation;
 
     private readonly List<RerollPlayerState> rerollPlayers = new List<RerollPlayerState>();
 
@@ -38,6 +46,7 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
     private int joinStressRunId;
     private int activeJoinRequestedPlayers;
     private int rerollStressRunId;
+    private int rerollJoinOperationId;
     private string activeJoinLobbyId = string.Empty;
     private string activeRerollLobbyId = string.Empty;
     private int totalRerollsRequested;
@@ -48,6 +57,7 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
     [SerializeField, HideInInspector] private int inspectorDefaultsVersion;
 
     private const int CurrentInspectorDefaultsVersion = 1;
+    private const int AutomaticRerollPlayerCount = 5;
 
     #endregion
 
@@ -69,6 +79,24 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
     private void Update()
     {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (!CanOperate())
+        {
+            CancelSimulation();
+            return;
+        }
+
+        if (StressSimulationCoordinator.instance.IsRunActive)
+        {
+            if (joinOperationId == 0)
+            {
+                addPlayers = false;
+            }
+            if (!rerollRunning)
+            {
+                runRerolls = false;
+            }
+        }
+
         ProcessStopSimulation();
         ProcessJoinTrigger();
         ProcessRerollTrigger();
@@ -79,6 +107,34 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
     private void OnDisable()
     {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
+        CancelSimulation();
+#endif
+    }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    private bool CanOperate()
+    {
+        return GameSceneManager.instance != null &&
+               GameSceneManager.instance.CurrentSceneType == GameSceneType.Lobby &&
+               GameSceneManager.instance.IsActiveScene(GameSceneType.Lobby) &&
+               !GameSceneManager.instance.IsLoadingScene &&
+               NetworkBootstrap.instance != null && NetworkBootstrap.instance.IsReady &&
+               NetworkBootstrap.instance.IsConnected && NetworkBootstrap.instance.IsAuthority &&
+               NetworkLobbyManager.instance != null && NetworkLobbyManager.instance.IsReady &&
+               StressFakePlayerManager.instance != null && StressSimulationCoordinator.instance != null &&
+               StressHealthReporter.instance != null &&
+               IsLobbyAvailable(activeJoinLobbyId) && IsLobbyAvailable(activeRerollLobbyId);
+    }
+
+    private bool IsLobbyAvailable(string _lobbyId)
+    {
+        return string.IsNullOrWhiteSpace(_lobbyId) ||
+               (NetworkLobbyManager.instance.TryGetStressLobby(_lobbyId, out Lobby lobby) &&
+                lobby != null && lobby.Controller != null && lobby.lobbyState != LobbyState.InGame);
+    }
+
+    private void CancelSimulation()
+    {
         if (joinOperationId > 0)
         {
             StressFakePlayerJoinResult result = null;
@@ -96,8 +152,13 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
         {
             FinishRerollStress(StressTestResult.Cancelled, "The board reroll stress simulation was disabled before completion.");
         }
-#endif
+        addPlayers = false;
+        stopAddingPlayers = false;
+        runRerolls = false;
+        stopRerolling = false;
+        stopSimulation = false;
     }
+#endif
 
     #endregion
 
@@ -193,6 +254,7 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
         };
 
         joinOperationId = StressFakePlayerManager.instance.StartJoinWave(request);
+        StressSimulationCoordinator.instance.TrackJoinWave(joinStressRunId, joinOperationId);
 
         if (joinOperationId <= 0)
         {
@@ -257,6 +319,12 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
             return;
         }
 
+        runRerolls = false;
+        if (StressSimulationCoordinator.instance != null && StressSimulationCoordinator.instance.IsRunActive)
+        {
+            return;
+        }
+
         if (!TryResolveTargetLobby(out Lobby lobby, out string failureReason))
         {
             runRerolls = false;
@@ -271,16 +339,28 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
             return;
         }
 
-        List<StressFakePlayerRecord> fakePlayers = StressFakePlayerManager.instance.GetSceneReadyPlayersForLobby(lobby.GetLobbyId());
-
-        if (fakePlayers.Count == 0)
+        if (lobby.lobbyState != LobbyState.Open)
         {
-            runRerolls = false;
-            StressHealthReporter.instance?.ReportTestNotStarted("Board Reroll Stress", StressSimulationCoordinator.instance.ActiveRunName, "The target Lobby does not contain any scene-ready fake players.");
+            StressHealthReporter.instance.ReportTestNotStarted("Board Reroll Stress", string.Empty, "The target Lobby must be open to reroll boards.");
             return;
         }
 
-        string setupSummary = BuildRerollSetupSummary(lobby, fakePlayers.Count);
+        CollectRerollPlayers(lobby);
+        int playersToJoin = rerollPlayers.Count == 0
+            ? Mathf.Min(AutomaticRerollPlayerCount, Mathf.Max(0, lobby.Controller.MaxPlayer - lobby.Controller.ReservedPlayerCount))
+            : 0;
+
+        if (rerollPlayers.Count == 0 && playersToJoin == 0)
+        {
+            StressHealthReporter.instance.ReportTestNotStarted("Board Reroll Stress", string.Empty, "The target Lobby has no eligible bots or synthetic players and no room to add any.");
+            return;
+        }
+
+        string setupSummary = BuildRerollSetupSummary(lobby, rerollPlayers.Count);
+        if (playersToJoin > 0)
+        {
+            setupSummary += $"\nAutomatic Synthetic Players To Add: {playersToJoin}";
+        }
 
         if (!StressSimulationCoordinator.instance.TryBeginRun("Board Reroll Stress", setupSummary, out rerollStressRunId, out _))
         {
@@ -288,27 +368,62 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
             return;
         }
 
-        rerollPlayers.Clear();
         stopRerolling = false;
         stopSimulation = false;
         activeRerollLobbyId = lobby.GetLobbyId();
-        totalRerollsRequested = fakePlayers.Count * Mathf.Max(1, rerollsPerPlayer);
+        totalRerollsRequested = rerollPlayers.Count * Mathf.Max(1, rerollsPerPlayer);
         totalRerollsCompleted = 0;
         failedRerolls = 0;
+        rerollRunning = true;
+        runRerolls = true;
 
+        if (playersToJoin > 0)
+        {
+            rerollJoinOperationId = StressFakePlayerManager.instance.StartJoinWave(new StressFakePlayerJoinRequest
+            {
+                lobbyId = activeRerollLobbyId,
+                playerCount = playersToJoin,
+                minimumJoinBatch = minimumJoinBatch,
+                maximumJoinBatch = maximumJoinBatch,
+                minimumJoinDelaySeconds = minimumJoinDelaySeconds,
+                maximumJoinDelaySeconds = maximumJoinDelaySeconds,
+                minimumLoadDelaySeconds = minimumLoadDelaySeconds,
+                maximumLoadDelaySeconds = maximumLoadDelaySeconds,
+                firstPlayerIsHost = false,
+                limitToAvailableLobbyCapacity = true
+            });
+            StressSimulationCoordinator.instance.TrackJoinWave(rerollStressRunId, rerollJoinOperationId);
+
+            if (rerollJoinOperationId <= 0)
+            {
+                FinishRerollStress(StressTestResult.Failed, "The automatic fake-player join wave could not start.");
+            }
+        }
+    }
+
+    private void CollectRerollPlayers(Lobby _lobby)
+    {
+        rerollPlayers.Clear();
+        IReadOnlyList<LobbyPlayerData> players = _lobby.Controller.Players;
         double now = Time.unscaledTimeAsDouble;
 
-        for (int i = 0; i < fakePlayers.Count; i++)
+        for (int i = 0; i < players.Count; i++)
         {
+            LobbyPlayerData player = players[i];
+            if (player == null || !player.HasValidUser || !player.isLobbySceneReady ||
+                (player.userData.userTag != UserTag.Bot &&
+                 !StressFakePlayerManager.instance.IsSyntheticPlayer(player.userData.userId)))
+            {
+                continue;
+            }
+
             rerollPlayers.Add(new RerollPlayerState
             {
-                userId = fakePlayers[i].userId,
+                userId = player.userData.userId,
                 remainingRerolls = Mathf.Max(1, rerollsPerPlayer),
                 nextRerollTime = now + GetRandomRerollDelay()
             });
         }
-
-        rerollRunning = true;
     }
 
     private void ProcessRerolls()
@@ -336,6 +451,40 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
         {
             FinishRerollStress(StressTestResult.Failed, "The target Lobby became unavailable during board reroll stress.");
             return;
+        }
+
+        if (lobby.lobbyState != LobbyState.Open)
+        {
+            FinishRerollStress(StressTestResult.Cancelled, "The target Lobby is no longer open for board rerolls.");
+            return;
+        }
+
+        if (rerollJoinOperationId > 0)
+        {
+            if (!StressFakePlayerManager.instance.TryGetJoinWaveResult(rerollJoinOperationId, out StressFakePlayerJoinResult result))
+            {
+                FinishRerollStress(StressTestResult.Failed, "The automatic join result is no longer available.");
+                return;
+            }
+            if (!result.completed)
+            {
+                return;
+            }
+
+            rerollJoinOperationId = 0;
+            if (result.outcome == StressFakePlayerJoinOutcome.Cancelled || result.outcome == StressFakePlayerJoinOutcome.Failed)
+            {
+                FinishRerollStress(result.outcome == StressFakePlayerJoinOutcome.Cancelled ? StressTestResult.Cancelled : StressTestResult.Failed, result.failureReason);
+                return;
+            }
+
+            CollectRerollPlayers(lobby);
+            if (rerollPlayers.Count == 0)
+            {
+                FinishRerollStress(StressTestResult.Failed, "No bots or synthetic players became ready for board rerolls.");
+                return;
+            }
+            totalRerollsRequested = rerollPlayers.Count * Mathf.Max(1, rerollsPerPlayer);
         }
 
         double now = Time.unscaledTimeAsDouble;
@@ -372,7 +521,7 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
 
         if (!hasRemainingWork)
         {
-            FinishRerollStress(failedRerolls == 0 ? StressTestResult.Passed : StressTestResult.Failed, failedRerolls == 0 ? string.Empty : "One or more fake-player board rerolls failed.");
+            FinishRerollStress(failedRerolls == 0 ? StressTestResult.Passed : StressTestResult.Failed, failedRerolls == 0 ? string.Empty : "One or more bot or synthetic-player board rerolls failed.");
         }
     }
 
@@ -382,7 +531,7 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
 
         StringBuilder summary = new StringBuilder();
         summary.AppendLine($"Lobby: {activeRerollLobbyId}");
-        summary.AppendLine($"Synthetic Players: {rerollPlayers.Count}");
+        summary.AppendLine($"Bots And Synthetic Players: {rerollPlayers.Count}");
         summary.AppendLine($"Rerolls Per Player: {Mathf.Max(1, rerollsPerPlayer)}");
         summary.AppendLine($"Requested Rerolls: {totalRerollsRequested}");
         summary.AppendLine($"Completed Rerolls: {totalRerollsCompleted}");
@@ -404,6 +553,7 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
         totalRerollsCompleted = 0;
         failedRerolls = 0;
         rerollStressRunId = 0;
+        rerollJoinOperationId = 0;
         rerollRunning = false;
         runRerolls = false;
         stopRerolling = false;
@@ -506,7 +656,8 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
             return false;
         }
 
-        if (lobby.playMode != MainMenuPlayMode.Online && lobby.playMode != MainMenuPlayMode.Custom)
+        if (lobby.lobbyState == LobbyState.InGame ||
+            (lobby.playMode != MainMenuPlayMode.Online && lobby.playMode != MainMenuPlayMode.Custom))
         {
             failureReason = $"{targetPlayer} must be in an Online or Custom Lobby.";
             lobby = null;
@@ -553,12 +704,12 @@ public class LobbyBoardRerollStressSimulation : MonoBehaviour
         return builder.ToString();
     }
 
-    private string BuildRerollSetupSummary(Lobby lobby, int syntheticPlayerCount)
+    private string BuildRerollSetupSummary(Lobby lobby, int _eligiblePlayerCount)
     {
         StringBuilder builder = new StringBuilder();
         builder.AppendLine($"Target Player: {targetPlayer}");
         builder.AppendLine($"Lobby: {lobby.GetLobbyId()}");
-        builder.AppendLine($"Synthetic Players: {syntheticPlayerCount}");
+        builder.AppendLine($"Bots And Synthetic Players: {_eligiblePlayerCount}");
         builder.AppendLine($"Rerolls Per Player: {Mathf.Max(1, rerollsPerPlayer)}");
         builder.Append($"Reroll Delay: {Mathf.Max(0f, minimumRerollDelaySeconds):F2}s - {Mathf.Max(0f, maximumRerollDelaySeconds):F2}s");
         return builder.ToString();

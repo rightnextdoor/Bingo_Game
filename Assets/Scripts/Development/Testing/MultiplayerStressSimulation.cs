@@ -24,18 +24,27 @@ public class MultiplayerStressSimulation : MonoBehaviour
 {
     #region Fields
 
+    [Header("Simulation Controls")]
+    [Tooltip("Start a stress test only when no other stress test is running or cleaning up.")]
+    [SerializeField] private bool runStress;
+    [Tooltip("Stop this simulation's active test.")]
+    [SerializeField] private bool stopSimulation;
+
+    [Space]
     [Header("Stress Setup")]
     [SerializeField] private MultiplayerStressLobbyMode lobbyMode = MultiplayerStressLobbyMode.Random;
     [SerializeField, Min(1)] private int lobbyCount = 4;
     [SerializeField] private bool useMaxLobbySize;
     [SerializeField] private List<MultiplayerStressLobbyPreset> presetLobbies = new List<MultiplayerStressLobbyPreset>();
 
+    [Space]
     [Header("Random Lobby Setup")]
     [SerializeField, Min(1)] private int minimumPlayersPerLobby = 25;
     [SerializeField, Min(1)] private int maximumPlayersPerLobby = 100;
     [SerializeField] private bool includeOnlineLobbies = true;
     [SerializeField] private bool includeCustomLobbies = true;
 
+    [Space]
     [Header("Fake Player Join Wave")]
     [SerializeField, Min(1)] private int minimumJoinBatch = 1;
     [SerializeField, Min(1)] private int maximumJoinBatch = 8;
@@ -44,10 +53,9 @@ public class MultiplayerStressSimulation : MonoBehaviour
     [SerializeField, Min(0f)] private float minimumLoadDelaySeconds = 0.5f;
     [SerializeField, Min(0f)] private float maximumLoadDelaySeconds = 4f;
 
+    [Space]
     [Header("Run")]
     [SerializeField, Min(5f)] private float maximumRunSeconds = 420f;
-    [SerializeField] private bool runStress;
-    [SerializeField] private bool stopSimulation;
 
     private readonly List<ActiveStressLobby> activeLobbies = new List<ActiveStressLobby>();
 
@@ -80,6 +88,17 @@ public class MultiplayerStressSimulation : MonoBehaviour
     private void Update()
     {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (!CanOperate())
+        {
+            if (isRunning)
+            {
+                FinishStressRun(StressTestResult.Cancelled, "The Lobby scene or required simulation services are no longer available.");
+            }
+            runStress = false;
+            stopSimulation = false;
+            return;
+        }
+
         if (!isRunning)
         {
             if (stopSimulation)
@@ -122,6 +141,12 @@ public class MultiplayerStressSimulation : MonoBehaviour
 
     private void StartStressRun()
     {
+        if (StressSimulationCoordinator.instance != null && StressSimulationCoordinator.instance.IsRunActive)
+        {
+            runStress = false;
+            return;
+        }
+
         if (!CanRun(out string failureReason))
         {
             runStress = false;
@@ -154,6 +179,19 @@ public class MultiplayerStressSimulation : MonoBehaviour
 
             activeLobbies.Add(activeLobby);
         }
+    }
+
+    private bool CanOperate()
+    {
+        return GameSceneManager.instance != null &&
+               GameSceneManager.instance.CurrentSceneType == GameSceneType.Lobby &&
+               GameSceneManager.instance.IsActiveScene(GameSceneType.Lobby) &&
+               !GameSceneManager.instance.IsLoadingScene &&
+               NetworkBootstrap.instance != null && NetworkBootstrap.instance.IsReady &&
+               NetworkBootstrap.instance.IsConnected && NetworkBootstrap.instance.IsAuthority &&
+               NetworkLobbyManager.instance != null && NetworkLobbyManager.instance.IsReady &&
+               StressFakePlayerManager.instance != null && StressSimulationCoordinator.instance != null &&
+               StressHealthReporter.instance != null;
     }
 
     private void MonitorStressRun()
@@ -355,6 +393,7 @@ public class MultiplayerStressSimulation : MonoBehaviour
 
         StressFakePlayerJoinRequest joinRequest = BuildJoinRequest(lobby.GetLobbyId(), requestedPlayerCount, definition.playMode == MainMenuPlayMode.Custom);
         int operationId = StressFakePlayerManager.instance.StartJoinWave(joinRequest);
+        StressSimulationCoordinator.instance.TrackJoinWave(stressRunId, operationId);
 
         if (operationId <= 0)
         {

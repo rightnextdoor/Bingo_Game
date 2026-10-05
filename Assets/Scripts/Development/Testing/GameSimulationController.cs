@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
+using BingoGame.Development.Testing;
 
 [DisallowMultipleComponent]
 public class GameSimulationController : MonoBehaviour
@@ -21,22 +22,30 @@ public class GameSimulationController : MonoBehaviour
     private const float LobbyWorkTimeoutSeconds = 15f;
     private const float FailureCleanupTimeoutSeconds = 5f;
 
-    [Header("Simulation")]
+    [Header("Simulation Controls")]
     [SerializeField] private bool simulateOnStart = true;
-    [SerializeField] private MainMenuPlayMode playMode = MainMenuPlayMode.Solo;
 
+    [Space]
     [Header("Game Setup")]
+    [Tooltip("Mode to create when Play starts directly in this Game scene.")]
+    [SerializeField] private SimulationPlayMode playMode = SimulationPlayMode.Solo;
     [SerializeField] private SimulationGameModeType gameModeType = SimulationGameModeType.Traditional;
     [SerializeField] private BingoBallCountType ballCountType = BingoBallCountType.Ball75;
     [SerializeField] private bool useFreeCell = true;
     [SerializeField] private bool useRank;
 
+    [Space]
     [Header("Room Setup")]
     [SerializeField, Min(1)] private int roomSize = 9;
     [SerializeField, Min(0)] private int botCount = 5;
 
     private bool isEndingSimulation;
     private bool networkGameStartRequested;
+    private bool isSimulationRunning;
+    private bool ownsSimulationCreation;
+    private LobbyManager simulationLobbyManager;
+    private GameSessionManager simulationGameManager;
+    private LobbySetupData simulationSetupData;
 
     private void Awake()
     {
@@ -49,7 +58,7 @@ public class GameSimulationController : MonoBehaviour
     {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         GameSimulationController controller = GetActiveSimulationController();
-        return controller != null && controller.playMode == MainMenuPlayMode.Solo;
+        return controller != null && controller.playMode == SimulationPlayMode.Solo;
 #else
         return false;
 #endif
@@ -68,7 +77,7 @@ public class GameSimulationController : MonoBehaviour
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
     private static GameSimulationController GetActiveSimulationController()
     {
-        if (GameSceneManager.instance?.IsActiveScene(GameSceneType.Game) != true)
+        if (GameSceneManager.instance == null || !GameSceneManager.instance.IsInitialScene(GameSceneType.Game))
         {
             return null;
         }
@@ -99,11 +108,12 @@ public class GameSimulationController : MonoBehaviour
 
         yield return null;
 
-        if (GameSceneManager.instance.CurrentSceneType != GameSceneType.Game)
+        if (!CanRunInCurrentScene())
         {
             yield break;
         }
 
+        isSimulationRunning = true;
         yield return WaitForStartupReady();
 
 #if UNITY_EDITOR
@@ -111,16 +121,67 @@ public class GameSimulationController : MonoBehaviour
 #endif
         if (!simulateOnStart || !isActiveAndEnabled)
         {
+            isSimulationRunning = false;
             yield break;
         }
 
         if (!CanStartSimulation())
         {
+            isSimulationRunning = false;
             yield break;
         }
 
         yield return CreateLinkedLobbyAndGame();
 #endif
+        yield break;
+    }
+
+    private void Update()
+    {
+        if (ownsSimulationCreation && simulationGameManager != null && simulationGameManager.HasEnteredGame)
+        {
+            StopAllCoroutines();
+            ownsSimulationCreation = false;
+            isSimulationRunning = false;
+            simulationSetupData = null;
+        }
+
+        if (isSimulationRunning && (!CanRunInCurrentScene() ||
+            (ownsSimulationCreation && (simulationLobbyManager == null || simulationGameManager == null ||
+                UserManager.instance == null || !UserManager.instance.HasUser || LobbySettings.instance == null)) ||
+            (simulationLobbyManager != null && simulationLobbyManager.PendingLobbySetupData != null &&
+                simulationLobbyManager.PendingLobbySetupData != simulationSetupData)))
+        {
+            StopSimulation();
+        }
+    }
+
+    private void OnDisable()
+    {
+        StopSimulation();
+    }
+
+    private bool CanRunInCurrentScene()
+    {
+        return isActiveAndEnabled && simulateOnStart && GameSceneManager.instance != null &&
+               GameSceneManager.instance.IsInitialScene(GameSceneType.Game);
+    }
+
+    private void StopSimulation()
+    {
+        StopAllCoroutines();
+        isSimulationRunning = false;
+        if (simulationLobbyManager != null && simulationSetupData != null &&
+            simulationLobbyManager.PendingLobbySetupData == simulationSetupData)
+        {
+            simulationLobbyManager.CancelPendingLobbyEntry();
+        }
+        if (ownsSimulationCreation && simulationGameManager != null)
+        {
+            simulationGameManager.SetGameSimulationCreationPending(false);
+        }
+        ownsSimulationCreation = false;
+        simulationSetupData = null;
     }
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
@@ -140,15 +201,19 @@ public class GameSimulationController : MonoBehaviour
 
     private bool CanStartSimulation()
     {
-        if (playMode == MainMenuPlayMode.None)
+        if (!CanRunInCurrentScene() || GameSessionManager.instance == null ||
+            LobbyManager.instance == null || UserManager.instance == null)
         {
-            Debug.LogWarning("[GameSimulation] Select Solo, Online, or Custom.");
+            return false;
+        }
+
+        if (playMode != SimulationPlayMode.Solo && playMode != SimulationPlayMode.Online && playMode != SimulationPlayMode.Custom)
+        {
             return false;
         }
 
         if (!UserManager.instance.HasUser)
         {
-            Debug.LogWarning("[GameSimulation] A current user is required to create a simulated Game.");
             return false;
         }
 
@@ -169,9 +234,17 @@ public class GameSimulationController : MonoBehaviour
 
     private IEnumerator CreateLinkedLobbyAndGame()
     {
-        GameSessionManager.instance.SetGameSimulationCreationPending(true);
+        simulationLobbyManager = LobbyManager.instance;
+        simulationGameManager = GameSessionManager.instance;
+        ownsSimulationCreation = true;
+        simulationGameManager.SetGameSimulationCreationPending(true);
 
         yield return EnterSimulatedLobby();
+
+        if (!CanRunInCurrentScene())
+        {
+            yield break;
+        }
 
         LobbyManager lobbyManager = LobbyManager.instance;
 
@@ -181,13 +254,13 @@ public class GameSimulationController : MonoBehaviour
             yield return ReturnSimulationPlayerToMain(
                 !string.IsNullOrWhiteSpace(failureMessage)
                     ? failureMessage
-                    : playMode == MainMenuPlayMode.Solo
+                    : playMode == SimulationPlayMode.Solo
                         ? "The player's local Solo simulation lobby could not be created before the timeout."
                         : "The test player could not connect to Player 1's Game simulation lobby before the timeout.");
             yield break;
         }
 
-        MainMenuPlayMode enteredPlayMode = lobbyManager.CurrentLobbyViewData?.playMode ?? playMode;
+        MainMenuPlayMode enteredPlayMode = lobbyManager.CurrentLobbyViewData?.playMode ?? (MainMenuPlayMode)playMode;
 
         if (enteredPlayMode == MainMenuPlayMode.Solo)
         {
@@ -221,6 +294,11 @@ public class GameSimulationController : MonoBehaviour
         {
             yield return StartNetworkGame(lobbyManager.CurrentLobbyId);
 
+            if (!CanRunInCurrentScene())
+            {
+                yield break;
+            }
+
             if (!networkGameStartRequested)
             {
                 yield return ReturnSimulationPlayerToMain("Player 1 could not start the simulated Game.");
@@ -240,6 +318,7 @@ public class GameSimulationController : MonoBehaviour
                Time.realtimeSinceStartup < timeoutTime)
         {
             LobbySetupData setupData = BuildLobbySetupData();
+            simulationSetupData = setupData;
             lobbyManager.SetPendingLobbySetupData(setupData, false);
             lobbyManager.BeginPendingLobbyEntry(false);
 
@@ -276,7 +355,7 @@ public class GameSimulationController : MonoBehaviour
         int simulationPlayerNumber = GetSimulationPlayerNumber();
         LobbySetupData setupData = new LobbySetupData
         {
-            playMode = playMode,
+            playMode = (MainMenuPlayMode)playMode,
             startFreshEntry = false,
             isGameSimulation = true,
             gameSimulationPlayerNumber = simulationPlayerNumber,
@@ -287,7 +366,7 @@ public class GameSimulationController : MonoBehaviour
 
         switch (playMode)
         {
-            case MainMenuPlayMode.Solo:
+            case SimulationPlayMode.Solo:
                 setupData.soloSetupData.gameModeType = selectedGameModeType;
                 setupData.soloSetupData.ballCountType = ballCountType;
                 setupData.soloSetupData.useFreeCell = useFreeCell;
@@ -297,7 +376,7 @@ public class GameSimulationController : MonoBehaviour
                 setupData.soloSetupData.maxPlayer = validRoomSize;
                 break;
 
-            case MainMenuPlayMode.Online:
+            case SimulationPlayMode.Online:
                 setupData.onlineSetupData.gameModeType = selectedGameModeType;
                 setupData.onlineSetupData.ballCountType = ballCountType;
                 setupData.onlineSetupData.useFreeCell = useFreeCell;
@@ -307,7 +386,7 @@ public class GameSimulationController : MonoBehaviour
                 setupData.onlineSetupData.maxPlayer = validRoomSize;
                 break;
 
-            case MainMenuPlayMode.Custom:
+            case SimulationPlayMode.Custom:
                 bool shouldHost = setupData.gameSimulationPlayerNumber == 1;
                 setupData.customSetupData.actionType = shouldHost
                     ? CustomLobbyActionType.HostLobby
@@ -355,8 +434,8 @@ public class GameSimulationController : MonoBehaviour
 
     private bool UsesNetworkSimulationRuntime()
     {
-        return playMode == MainMenuPlayMode.Online ||
-               playMode == MainMenuPlayMode.Custom;
+        return playMode == SimulationPlayMode.Online ||
+               playMode == SimulationPlayMode.Custom;
     }
 
     private IEnumerator StartLocalGame(LobbyManager lobbyManager)
@@ -428,6 +507,11 @@ public class GameSimulationController : MonoBehaviour
             expectedTestUserIds,
             hasExactActivePlayerList);
 
+        if (!CanRunInCurrentScene() || networkLobbyManager == null || !networkLobbyManager.IsReady)
+        {
+            yield break;
+        }
+
         if (!CanAddNetworkSimulationBots(networkLobbyManager, lobbyId, out int currentPlayerCount))
         {
             yield break;
@@ -450,6 +534,11 @@ public class GameSimulationController : MonoBehaviour
 
         while (Time.realtimeSinceStartup < timeoutTime)
         {
+            if (!CanRunInCurrentScene() || networkLobbyManager == null || !networkLobbyManager.IsReady)
+            {
+                yield break;
+            }
+
             if (networkLobbyManager.TryGetSimulationLobbyState(
                     lobbyId,
                     out _,
@@ -578,6 +667,11 @@ public class GameSimulationController : MonoBehaviour
 
         while (Time.realtimeSinceStartup < timeoutTime)
         {
+            if (!CanRunInCurrentScene() || networkLobbyManager == null || !networkLobbyManager.IsReady)
+            {
+                yield break;
+            }
+
             if (!networkLobbyManager.TryGetSimulationLobbyState(
                     lobbyId,
                     out _,
@@ -658,7 +752,7 @@ public class GameSimulationController : MonoBehaviour
 
     private IEnumerator ReturnSimulationPlayerToMain(string failureMessage)
     {
-        if (isEndingSimulation)
+        if (isEndingSimulation || !CanRunInCurrentScene())
         {
             yield break;
         }
@@ -687,6 +781,11 @@ public class GameSimulationController : MonoBehaviour
             lobbyManager?.ClearPendingLobbySetupData();
         }
 
+        if (!CanRunInCurrentScene())
+        {
+            yield break;
+        }
+
         NetworkBootstrap networkBootstrap = NetworkBootstrap.instance;
 
         if (networkBootstrap != null &&
@@ -704,7 +803,10 @@ public class GameSimulationController : MonoBehaviour
             }
         }
 
-        GameSceneManager.instance?.ReturnToMainSceneAfterFailure();
+        if (CanRunInCurrentScene())
+        {
+            GameSceneManager.instance.ReturnToMainSceneAfterFailure();
+        }
     }
 
     private bool CanAddNetworkSimulationBots(NetworkLobbyManager networkLobbyManager, string lobbyId, out int playerCount)

@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Threading.Tasks;
 using UnityEngine;
 
 [DisallowMultipleComponent]
@@ -11,6 +13,12 @@ public class StressSimulationCoordinator : MonoBehaviour
     private string activeRunName = string.Empty;
     private bool stopRequested;
     private string stopReason = string.Empty;
+    private readonly List<TrackedJoinWave> joinWaves = new List<TrackedJoinWave>();
+    private readonly List<Task> activityTasks = new List<Task>();
+    private bool isFinishing;
+    private StressTestResult pendingResult;
+    private string pendingSummary = string.Empty;
+    private string pendingReason = string.Empty;
 
     public bool IsRunActive => activeRunId > 0;
     public int ActiveRunId => activeRunId;
@@ -54,6 +62,16 @@ public class StressSimulationCoordinator : MonoBehaviour
         {
             instance = null;
         }
+    }
+
+    private void Update()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (isFinishing)
+        {
+            TryFinishRun();
+        }
+#endif
     }
 
     #endregion
@@ -121,30 +139,41 @@ public class StressSimulationCoordinator : MonoBehaviour
         return IsRunActive && runId == activeRunId && stopRequested;
     }
 
-    public void CompleteRun(int runId, bool success, string summary, string failureReason = "")
+    public void TrackJoinWave(int _runId, int _operationId)
     {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-        if (!IsRunActive || runId != activeRunId)
+        StressFakePlayerManager playerManager = StressFakePlayerManager.instance;
+        if (!IsRunActive || _runId != activeRunId || isFinishing || _operationId <= 0 || playerManager == null)
         {
             return;
         }
 
-        StressHealthReporter.instance?.CompleteRun(runId, success ? StressTestResult.Passed : StressTestResult.Failed, summary, failureReason);
-        ClearActiveRun();
+        joinWaves.Add(new TrackedJoinWave { manager = playerManager, operationId = _operationId });
+#endif
+    }
+
+    public void TrackActivity(int _runId, Task _task)
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (IsRunActive && _runId == activeRunId && !isFinishing && _task != null && !_task.IsCompleted)
+        {
+            activityTasks.Add(_task);
+        }
+#endif
+    }
+
+    public void CompleteRun(int runId, bool success, string summary, string failureReason = "")
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        BeginFinishRun(runId, success ? StressTestResult.Passed : StressTestResult.Failed, summary, failureReason);
 #endif
     }
 
     public void CancelRun(int runId, string summary, string reason = "User stopped the simulation.")
     {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-        if (!IsRunActive || runId != activeRunId)
-        {
-            return;
-        }
-
         string resolvedReason = string.IsNullOrWhiteSpace(reason) ? "User stopped the simulation." : reason.Trim();
-        StressHealthReporter.instance?.CompleteRun(runId, StressTestResult.Cancelled, summary, resolvedReason);
-        ClearActiveRun();
+        BeginFinishRun(runId, StressTestResult.Cancelled, summary, resolvedReason);
 #endif
     }
 
@@ -152,12 +181,75 @@ public class StressSimulationCoordinator : MonoBehaviour
 
     #region Helpers
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    private void BeginFinishRun(int _runId, StressTestResult _result, string _summary, string _reason)
+    {
+        if (!IsRunActive || _runId != activeRunId || isFinishing)
+        {
+            return;
+        }
+
+        isFinishing = true;
+        pendingResult = _result;
+        pendingSummary = _summary;
+        pendingReason = _reason;
+
+        if (_result != StressTestResult.Passed)
+        {
+            for (int i = 0; i < joinWaves.Count; i++)
+            {
+                TrackedJoinWave wave = joinWaves[i];
+                if (wave.manager != null)
+                {
+                    wave.manager.CancelJoinWave(wave.operationId, _reason);
+                }
+            }
+        }
+
+        TryFinishRun();
+    }
+
+    private void TryFinishRun()
+    {
+        for (int i = 0; i < joinWaves.Count; i++)
+        {
+            TrackedJoinWave wave = joinWaves[i];
+            if (wave.manager != null && wave.manager.IsJoinWaveRunning(wave.operationId))
+            {
+                return;
+            }
+        }
+
+        for (int i = 0; i < activityTasks.Count; i++)
+        {
+            if (!activityTasks[i].IsCompleted)
+            {
+                return;
+            }
+        }
+
+        StressHealthReporter.instance?.CompleteRun(activeRunId, pendingResult, pendingSummary, pendingReason);
+        ClearActiveRun();
+    }
+#endif
+
     private void ClearActiveRun()
     {
         activeRunId = 0;
         activeRunName = string.Empty;
         stopRequested = false;
         stopReason = string.Empty;
+        joinWaves.Clear();
+        activityTasks.Clear();
+        isFinishing = false;
+        pendingSummary = string.Empty;
+        pendingReason = string.Empty;
+    }
+
+    private struct TrackedJoinWave
+    {
+        public StressFakePlayerManager manager;
+        public int operationId;
     }
 
     #endregion

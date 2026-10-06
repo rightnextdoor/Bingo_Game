@@ -690,43 +690,48 @@ public class NetworkLobbyManager : MonoBehaviour
             return true;
         }
 
-        CustomSearchLobbySetupData searchSetupData =
-            lobbySetupData.customSetupData.searchSetupData;
+        return TryResolveCustomLobbyConnection(lobbySetupData.customSetupData.searchSetupData, out relayJoinCode, out failureResult);
+    }
 
-        Lobby lobby = FindCustomLobby(searchSetupData?.lobbyCode);
+    public bool TryResolveCustomLobbyConnection(CustomSearchLobbySetupData _searchSetupData, out string _relayJoinCode, out LobbyEntryResult _failureResult)
+    {
+        _relayJoinCode = string.Empty;
+        _failureResult = null;
+
+        Lobby lobby = FindCustomLobby(_searchSetupData?.lobbyCode);
 
         if (lobby?.Controller == null)
         {
-            failureResult = LobbyEntryResult.Failed(LobbyEntryFailureType.LobbyNotFound, "The Custom lobby could not be found.");
+            _failureResult = LobbyEntryResult.Failed(LobbyEntryFailureType.LobbyNotFound, "The Custom lobby could not be found.");
 
             return false;
         }
 
         LobbyController controller = lobby.Controller;
 
-        if (!controller.IsPasswordValid(searchSetupData?.password))
+        if (!controller.IsPasswordValid(_searchSetupData?.password))
         {
-            failureResult = LobbyEntryResult.Failed(LobbyEntryFailureType.InvalidPassword, "The Custom lobby password is incorrect.");
+            _failureResult = LobbyEntryResult.Failed(LobbyEntryFailureType.InvalidPassword, "The Custom lobby password is incorrect.");
 
             return false;
         }
 
         if (controller.IsJoinLocked)
         {
-            failureResult = LobbyEntryResult.Failed(LobbyEntryFailureType.LobbyStarted, "The lobby has already started.");
+            _failureResult = LobbyEntryResult.Failed(LobbyEntryFailureType.LobbyStarted, "The lobby has already started.");
             return false;
         }
 
         if (controller.IsFull)
         {
-            failureResult = LobbyEntryResult.Failed(LobbyEntryFailureType.LobbyFull, "The Custom lobby is full.");
+            _failureResult = LobbyEntryResult.Failed(LobbyEntryFailureType.LobbyFull, "The Custom lobby is full.");
 
             return false;
         }
 
-        if (!TryGetRelayJoinCode(lobby, out relayJoinCode))
+        if (!TryGetRelayJoinCode(lobby, out _relayJoinCode))
         {
-            failureResult = LobbyEntryResult.Failed(
+            _failureResult = LobbyEntryResult.Failed(
                 LobbyEntryFailureType.NetworkConnectionFailed,
                 "The Custom lobby connection information was not available.");
 

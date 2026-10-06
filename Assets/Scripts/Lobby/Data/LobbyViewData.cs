@@ -11,6 +11,7 @@ public class LobbyViewData
     public string lobbyId;
     public MainMenuPlayMode playMode;
     public LobbyState lobbyState;
+    public bool usesSimulationSettings;
 
     public bool isTimerActive;
     public double timerEndTime;

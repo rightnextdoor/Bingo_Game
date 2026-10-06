@@ -10,6 +10,9 @@ public class GameSessionData
     public string lobbyId;
     public SessionRuntimeType runtimeType;
     public MainMenuPlayMode playMode;
+    public bool usesSimulationSettings;
+    public bool lobbyMaxPlayers;
+    public int lobbyMaxPlayer;
     public GameSessionState gameState;
     public GamePlayController gamePlayController;
 
@@ -95,6 +98,9 @@ public class GameSessionData
         lobbyId = setupData.lobbyId ?? string.Empty;
         runtimeType = setupData.runtimeType;
         playMode = setupData.playMode;
+        usesSimulationSettings = setupData.usesSimulationSettings;
+        lobbyMaxPlayers = setupData.lobbyMaxPlayers;
+        lobbyMaxPlayer = setupData.lobbyMaxPlayer;
         lobbyName = setupData.lobbyName ?? string.Empty;
         roomCode = setupData.roomCode ?? string.Empty;
         hasPassword = setupData.hasPassword;
@@ -156,6 +162,9 @@ public class GameSessionData
         lobbyId = gameSessionData.lobbyId ?? string.Empty;
         runtimeType = gameSessionData.runtimeType;
         playMode = gameSessionData.playMode;
+        usesSimulationSettings = gameSessionData.usesSimulationSettings;
+        lobbyMaxPlayers = gameSessionData.lobbyMaxPlayers;
+        lobbyMaxPlayer = gameSessionData.lobbyMaxPlayer;
         gameState = gameSessionData.gameState;
         gamePlayController = new GamePlayController(gameSessionData.gamePlayController);
         lobbyName = gameSessionData.lobbyName ?? string.Empty;

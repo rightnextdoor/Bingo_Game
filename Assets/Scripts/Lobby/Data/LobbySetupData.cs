@@ -8,6 +8,7 @@ public class LobbySetupData
 
     public bool startFreshEntry;
     public bool isGameSimulation;
+    public bool usesSimulationSettings;
     public int gameSimulationPlayerNumber;
 
     public UserData userData = new UserData();

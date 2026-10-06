@@ -74,6 +74,7 @@ public class OnlineConnectionManager : MonoBehaviour
 
     private void OnDestroy()
     {
+        isReady = false;
         UnregisterAuthenticationEvents();
 
         if (instance == this)
@@ -119,6 +120,8 @@ public class OnlineConnectionManager : MonoBehaviour
 
         if (HasAuthorizedSession())
         {
+            RegisterAuthenticationEvents();
+            lastConnectionError = string.Empty;
             SetConnectionState(OnlineConnectionState.Online);
             return true;
         }
@@ -156,11 +159,28 @@ public class OnlineConnectionManager : MonoBehaviour
                 await UnityServices.InitializeAsync();
             }
 
+            if (this == null || !isReady)
+            {
+                return false;
+            }
+
             RegisterAuthenticationEvents();
 
-            if (!AuthenticationService.Instance.IsAuthorized || !IsConnectionAvailableForTesting)
+            if (!IsConnectionAvailableForTesting)
+            {
+                lastConnectionError = "Online services are unavailable in the connection simulation.";
+                SetConnectionState(OnlineConnectionState.Offline);
+                return false;
+            }
+
+            if (!AuthenticationService.Instance.IsAuthorized)
             {
                 await AuthenticationService.Instance.SignInAnonymouslyAsync();
+            }
+
+            if (this == null || !isReady)
+            {
+                return false;
             }
 
             if (!AuthenticationService.Instance.IsAuthorized || !IsConnectionAvailableForTesting)
@@ -177,6 +197,11 @@ public class OnlineConnectionManager : MonoBehaviour
         }
         catch (Exception exception)
         {
+            if (this == null || !isReady)
+            {
+                return false;
+            }
+
             lastConnectionError = exception.Message;
             SetConnectionState(OnlineConnectionState.Offline);
             return false;

@@ -8,6 +8,9 @@ public class GameSessionSetupData
     public string lobbyId;
     public SessionRuntimeType runtimeType;
     public MainMenuPlayMode playMode;
+    public bool usesSimulationSettings;
+    public bool lobbyMaxPlayers;
+    public int lobbyMaxPlayer;
 
     public string lobbyName;
     public string roomCode;
@@ -63,6 +66,9 @@ public class GameSessionSetupData
         lobbyId = setupData.lobbyId ?? string.Empty;
         runtimeType = setupData.runtimeType;
         playMode = setupData.playMode;
+        usesSimulationSettings = setupData.usesSimulationSettings;
+        lobbyMaxPlayers = setupData.lobbyMaxPlayers;
+        lobbyMaxPlayer = setupData.lobbyMaxPlayer;
         lobbyName = setupData.lobbyName ?? string.Empty;
         roomCode = setupData.roomCode ?? string.Empty;
         hasPassword = setupData.hasPassword;
@@ -109,6 +115,9 @@ public class GameSessionSetupData
                 ? SessionRuntimeType.Local
                 : SessionRuntimeType.Network,
             playMode = lobby.playMode,
+            usesSimulationSettings = lobby.usesSimulationSettings,
+            lobbyMaxPlayers = controller.MaxPlayers,
+            lobbyMaxPlayer = controller.MaxPlayer,
             lobbyName = lobbyViewData?.lobbyName ?? controller.LobbyName,
             roomCode = lobbyViewData?.roomCode ?? controller.RoomCode,
             hasPassword = lobbyViewData?.hasPassword ?? controller.HasPassword,

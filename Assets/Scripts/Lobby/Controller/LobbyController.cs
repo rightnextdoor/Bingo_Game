@@ -1759,6 +1759,7 @@ public class LobbyController
             lobbyId = lobby != null ? lobby.GetLobbyId() : string.Empty,
             playMode = lobby != null ? lobby.playMode : MainMenuPlayMode.None,
             lobbyState = lobby != null ? lobby.lobbyState : LobbyState.Open,
+            usesSimulationSettings = lobby != null && lobby.usesSimulationSettings,
             isTimerActive = IsTimerActive,
             timerEndTime = TimerEndTime,
             lobbyName = lobbyName,

@@ -128,14 +128,12 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
             return LobbyEntryResult.Failed(LobbyEntryFailureType.InvalidSetupData, "The network lobby setup data is invalid.");
         }
 
-        string relayJoinCode = string.Empty;
-
-        if (!HasUsableNetworkConnection() && !TryPrepareCustomLobbySearch(lobbySetupData, out relayJoinCode, out LobbyEntryResult customSearchFailure))
+        if (!TryResolveConnectionTarget(lobbySetupData, out ConnectionTarget target, out LobbyEntryResult lookupFailure))
         {
-            return customSearchFailure;
+            return lookupFailure;
         }
 
-        if (!await EnsureNetworkConnectionAsync(lobbySetupData, relayJoinCode, _cancellationToken))
+        if (!await EnsureNetworkConnectionAsync(target, _cancellationToken))
         {
             return LobbyEntryResult.Failed(LobbyEntryFailureType.NetworkConnectionFailed, "The network connection could not be created.");
         }
@@ -151,27 +149,47 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
         return new LobbyEntryResult { success = true, failureType = LobbyEntryFailureType.None };
     }
 
-    private bool TryPrepareCustomLobbySearch(LobbySetupData lobbySetupData, out string relayJoinCode, out LobbyEntryResult failureResult)
+    private bool TryResolveConnectionTarget(LobbySetupData _setupData, out ConnectionTarget _target, out LobbyEntryResult _failureResult)
     {
-        relayJoinCode = string.Empty;
-        failureResult = null;
+        _target = default;
+        _failureResult = null;
+        string userId = _setupData.userData.userId;
 
-        if (!IsCustomLobbySearch(lobbySetupData) ||
-            lobbySetupData.isGameSimulation ||
-            MultiplayerPlayModeTestContext.IsActive)
+        if (_setupData.isGameSimulation || MultiplayerPlayModeTestContext.IsActive)
         {
+            bool shouldHost = _setupData.isGameSimulation
+                ? _setupData.gameSimulationPlayerNumber == 1
+                : MultiplayerPlayModeTestContext.IsHost;
+            _target = new ConnectionTarget(shouldHost ? NetworkConnectionMode.DirectHost : NetworkConnectionMode.DirectClient,
+                userId, string.Empty, MultiplayerPlayModeTestContext.DirectAddress);
             return true;
         }
 
-        NetworkLobbyManager lobbyManager = NetworkLobbyManager.instance;
-
-        if (lobbyManager == null || !lobbyManager.IsReady)
+        if (_setupData.playMode == MainMenuPlayMode.Online ||
+            _setupData.customSetupData.actionType == CustomLobbyActionType.HostLobby)
         {
-            failureResult = LobbyEntryResult.Failed(LobbyEntryFailureType.ServiceUnavailable, "The authoritative network lobby manager is not ready.");
-            return false;
+            _target = new ConnectionTarget(NetworkConnectionMode.RelayHost, userId);
+            return true;
         }
 
-        return lobbyManager.TryPrepareCustomLobbySearch(lobbySetupData, out relayJoinCode, out failureResult);
+        string relayJoinCode = string.Empty;
+        if (!HasUsableNetworkConnection() && IsCustomLobbySearch(_setupData))
+        {
+            NetworkLobbyManager lobbyManager = NetworkLobbyManager.instance;
+            if (lobbyManager == null || !lobbyManager.IsReady)
+            {
+                _failureResult = LobbyEntryResult.Failed(LobbyEntryFailureType.ServiceUnavailable, "The authoritative network lobby manager is not ready.");
+                return false;
+            }
+
+            if (!lobbyManager.TryResolveCustomLobbyConnection(_setupData.customSetupData.searchSetupData, out relayJoinCode, out _failureResult))
+            {
+                return false;
+            }
+        }
+
+        _target = new ConnectionTarget(NetworkConnectionMode.RelayClient, userId, relayJoinCode);
+        return true;
     }
 
     private async Task TryRollbackFailedLobbyEntryAsync(NetworkLobbyConnection _connection)
@@ -347,13 +365,12 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
                 return false;
             }
 
-            string relayJoinCode = string.Empty;
-            if (!HasUsableNetworkConnection() && !TryPrepareCustomLobbySearch(lobbySetupData, out relayJoinCode, out _))
+            if (!TryResolveConnectionTarget(lobbySetupData, out ConnectionTarget target, out _))
             {
                 return false;
             }
 
-            return await EnsureNetworkConnectionAsync(lobbySetupData, relayJoinCode, CancellationToken.None);
+            return await EnsureNetworkConnectionAsync(target, CancellationToken.None);
         }
         finally
         {
@@ -380,7 +397,7 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
         return networkBootstrap != null && networkBootstrap.IsConnected && NetworkLobbyConnection.GetLocalConnection() != null;
     }
 
-    private async Task<bool> EnsureNetworkConnectionAsync(LobbySetupData lobbySetupData, string customRelayJoinCode, CancellationToken _cancellationToken)
+    private async Task<bool> EnsureNetworkConnectionAsync(ConnectionTarget _target, CancellationToken _cancellationToken)
     {
         _cancellationToken.ThrowIfCancellationRequested();
         if (networkBootstrap == null || !networkBootstrap.IsReady)
@@ -388,16 +405,10 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
             return false;
         }
 
-        if (lobbySetupData.isGameSimulation)
+        if (_target.Mode == NetworkConnectionMode.DirectHost || _target.Mode == NetworkConnectionMode.DirectClient)
         {
             return await EnsureDirectTestConnectionAsync(
-                lobbySetupData.userData.userId,
-                lobbySetupData.gameSimulationPlayerNumber == 1, _cancellationToken);
-        }
-
-        if (MultiplayerPlayModeTestContext.IsActive)
-        {
-            return await EnsureMultiplayerPlayModeConnectionAsync(lobbySetupData.userData.userId, _cancellationToken);
+                _target.UserId, _target.Mode == NetworkConnectionMode.DirectHost, _target.DirectAddress, _cancellationToken);
         }
 
         if (networkBootstrap.IsConnected)
@@ -420,37 +431,21 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
         }
 
         _cancellationToken.ThrowIfCancellationRequested();
-        string userId = lobbySetupData.userData.userId;
         bool started;
 
-        switch (lobbySetupData.playMode)
+        switch (_target.Mode)
         {
-            case MainMenuPlayMode.Online:
-                started = await networkBootstrap.StartRelayHostAsync(userId);
+            case NetworkConnectionMode.RelayHost:
+                started = await networkBootstrap.StartRelayHostAsync(_target.UserId);
                 break;
 
-            case MainMenuPlayMode.Custom:
-                CustomLobbySetupData customSetupData = lobbySetupData.customSetupData;
-
-                if (customSetupData == null)
+            case NetworkConnectionMode.RelayClient:
+                if (string.IsNullOrWhiteSpace(_target.RelayJoinCode))
                 {
                     return false;
                 }
 
-                if (customSetupData.actionType == CustomLobbyActionType.HostLobby)
-                {
-                    started = await networkBootstrap.StartRelayHostAsync(userId);
-                }
-                else
-                {
-                    if (string.IsNullOrWhiteSpace(customRelayJoinCode))
-                    {
-                        return false;
-                    }
-
-                    started = await networkBootstrap.StartRelayClientAsync(userId, customRelayJoinCode);
-                }
-
+                started = await networkBootstrap.StartRelayClientAsync(_target.UserId, _target.RelayJoinCode);
                 break;
 
             default:
@@ -483,12 +478,7 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
         return true;
     }
 
-    private async Task<bool> EnsureMultiplayerPlayModeConnectionAsync(string userId, CancellationToken _cancellationToken)
-    {
-        return await EnsureDirectTestConnectionAsync(userId, MultiplayerPlayModeTestContext.IsHost, _cancellationToken);
-    }
-
-    private async Task<bool> EnsureDirectTestConnectionAsync(string userId, bool shouldHost, CancellationToken _cancellationToken)
+    private async Task<bool> EnsureDirectTestConnectionAsync(string userId, bool shouldHost, string _directAddress, CancellationToken _cancellationToken)
     {
         if (HasUsableNetworkConnection())
         {
@@ -536,7 +526,7 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
         _cancellationToken.ThrowIfCancellationRequested();
         bool started = shouldHost
             ? networkBootstrap.StartDirectHost(userId)
-            : networkBootstrap.StartDirectClient(userId, MultiplayerPlayModeTestContext.DirectAddress);
+            : networkBootstrap.StartDirectClient(userId, _directAddress);
 
         if (!started)
         {
@@ -587,6 +577,22 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
     #endregion
 
     #region Validation
+
+    private readonly struct ConnectionTarget
+    {
+        public NetworkConnectionMode Mode { get; }
+        public string UserId { get; }
+        public string RelayJoinCode { get; }
+        public string DirectAddress { get; }
+
+        public ConnectionTarget(NetworkConnectionMode _mode, string _userId, string _relayJoinCode = "", string _directAddress = "")
+        {
+            Mode = _mode;
+            UserId = _userId;
+            RelayJoinCode = _relayJoinCode;
+            DirectAddress = _directAddress;
+        }
+    }
 
     private bool CanInitialize()
     {

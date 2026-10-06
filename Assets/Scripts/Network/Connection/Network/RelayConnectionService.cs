@@ -1,8 +1,6 @@
 using System;
 using System.Threading.Tasks;
 using Unity.Networking.Transport.Relay;
-using Unity.Services.Authentication;
-using Unity.Services.Core;
 using Unity.Services.Relay;
 using Unity.Services.Relay.Models;
 using UnityEngine;
@@ -18,7 +16,6 @@ public class RelayConnectionService : MonoBehaviour
     private bool isReady;
     private NetworkRoot networkRoot;
     private NetworkRuntimeConfigData runtimeConfig;
-    private Task servicesInitializationTask;
 
     public bool IsReady => isReady;
 
@@ -137,37 +134,23 @@ public class RelayConnectionService : MonoBehaviour
 
     private async Task EnsureServicesReadyAsync()
     {
-        if (UnityServices.State == ServicesInitializationState.Initialized && AuthenticationService.Instance.IsSignedIn)
+        OnlineConnectionManager connectionManager = OnlineConnectionManager.instance;
+        if (connectionManager == null || !connectionManager.IsReady)
         {
-            return;
+            throw new InvalidOperationException("The online connection manager is not ready.");
         }
 
-        if (servicesInitializationTask == null || servicesInitializationTask.IsCompleted)
+        bool connected = await connectionManager.EnsureConnectedAsync();
+        if (connectionManager == null || !connectionManager.IsReady)
         {
-            servicesInitializationTask = InitializeServicesAsync();
+            throw new InvalidOperationException("The online connection manager is no longer available.");
         }
 
-        try
+        if (!connected || !connectionManager.IsOnline)
         {
-            await servicesInitializationTask;
-        }
-        catch
-        {
-            servicesInitializationTask = null;
-            throw;
-        }
-    }
-
-    private async Task InitializeServicesAsync()
-    {
-        if (UnityServices.State != ServicesInitializationState.Initialized)
-        {
-            await UnityServices.InitializeAsync();
-        }
-
-        if (!AuthenticationService.Instance.IsSignedIn)
-        {
-            await AuthenticationService.Instance.SignInAnonymouslyAsync();
+            throw new InvalidOperationException(string.IsNullOrWhiteSpace(connectionManager.LastConnectionError)
+                ? "Online services are unavailable."
+                : connectionManager.LastConnectionError);
         }
     }
 

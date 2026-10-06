@@ -29,11 +29,43 @@ public class MultiplayerPlayModeTestBootstrap : MonoBehaviour
 
         while (NetworkBootstrap.instance == null ||
                !NetworkBootstrap.instance.IsReady ||
+               GameSceneManager.instance == null ||
                UserManager.instance == null ||
                !UserManager.instance.IsReady)
         {
             yield return null;
         }
+
+#if UNITY_EDITOR
+        if (GameSceneManager.instance != null && GameSceneManager.instance.IsInitialScene(GameSceneType.Lobby))
+        {
+            LobbySimulationController controller = FindFirstObjectByType<LobbySimulationController>();
+
+            if (controller != null && controller.isActiveAndEnabled)
+            {
+                yield return BingoGame.Development.MultiplayerTesting.SimulationStartupSettings.WaitForSettings(controller);
+
+                if (!BingoGame.Development.MultiplayerTesting.SimulationStartupSettings.Apply(controller))
+                {
+                    yield break;
+                }
+            }
+        }
+        else if (GameSceneManager.instance != null && GameSceneManager.instance.IsInitialScene(GameSceneType.Game))
+        {
+            GameSimulationController controller = FindFirstObjectByType<GameSimulationController>();
+
+            if (controller != null && controller.isActiveAndEnabled)
+            {
+                yield return BingoGame.Development.MultiplayerTesting.SimulationStartupSettings.WaitForSettings(controller);
+
+                if (!BingoGame.Development.MultiplayerTesting.SimulationStartupSettings.Apply(controller))
+                {
+                    yield break;
+                }
+            }
+        }
+#endif
 
         if (LobbySimulationController.IsSoloSimulationStartActive() ||
             GameSimulationController.IsSoloSimulationStartActive())

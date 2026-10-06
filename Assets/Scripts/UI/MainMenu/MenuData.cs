@@ -3,7 +3,7 @@ using System;
 [Serializable]
 public class MenuData
 {
-    public int menuVersion = 2;
+    public int menuVersion = 3;
 
     public SoloMenuData soloMenuData = new SoloMenuData();
     public OnlineMenuData onlineMenuData = new OnlineMenuData();
@@ -11,7 +11,7 @@ public class MenuData
 
     public MenuData()
     {
-        menuVersion = 2;
+        menuVersion = 3;
 
         soloMenuData = new SoloMenuData();
         onlineMenuData = new OnlineMenuData();
@@ -53,9 +53,13 @@ public class OnlineMenuData
 public class CustomMenuData
 {
     public CustomLobbyActionType actionType = CustomLobbyActionType.HostLobby;
+    public bool maxPlayers;
+    public int lobbySize = 6;
 
     public CustomMenuData()
     {
         actionType = CustomLobbyActionType.HostLobby;
+        maxPlayers = false;
+        lobbySize = 6;
     }
 }

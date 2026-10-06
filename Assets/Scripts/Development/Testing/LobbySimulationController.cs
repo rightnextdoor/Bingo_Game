@@ -1,10 +1,19 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using BingoGame.Development.Testing;
 
 [DisallowMultipleComponent]
 public class LobbySimulationController : MonoBehaviour
 {
+    private enum SimulationGameModeType
+    {
+        Traditional = (int)BingoGameModeType.Traditional,
+        Blackout = (int)BingoGameModeType.Blackout,
+        Risk = (int)BingoGameModeType.Risk,
+        Death = (int)BingoGameModeType.Death
+    }
+
     #region Fields
 
     [Header("Simulation Controls")]
@@ -14,8 +23,19 @@ public class LobbySimulationController : MonoBehaviour
     [Header("Game Setup")]
     [Tooltip("Mode to create when Play starts directly in this Lobby scene.")]
     [SerializeField] private SimulationPlayMode playMode = SimulationPlayMode.Solo;
-    [SerializeField] private BingoGameModeType gameModeType = BingoGameModeType.Traditional;
+    [SerializeField] private SimulationGameModeType gameModeType = SimulationGameModeType.Traditional;
     [SerializeField] private BingoBallCountType ballCountType = BingoBallCountType.Ball75;
+    [Tooltip("Include the free center cell on simulated boards.")]
+    [SerializeField] private bool useFreeCell = true;
+    [Tooltip("Use ranking instead of the selected game mode's default rank setting.")]
+    [SerializeField] private bool useRank;
+
+    [Space]
+    [Header("Room Setup")]
+    [Tooltip("Room capacity, limited by Lobby Settings.")]
+    [SerializeField, Min(1)] private int roomSize = 9;
+    [Tooltip("Total bots to add, limited by available bots and room capacity.")]
+    [SerializeField, Min(0)] private int botCount = 5;
 
     private bool isSimulationRunning;
     private LobbyManager simulationLobbyManager;
@@ -56,11 +76,6 @@ public class LobbySimulationController : MonoBehaviour
 
     private IEnumerator Start()
     {
-        if (!simulateOnStart)
-        {
-            yield break;
-        }
-
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         while (GameSceneManager.instance == null)
         {
@@ -68,6 +83,15 @@ public class LobbySimulationController : MonoBehaviour
         }
 
         yield return null;
+
+        if (!GameSceneManager.instance.IsInitialScene(GameSceneType.Lobby))
+        {
+            yield break;
+        }
+
+#if UNITY_EDITOR
+        yield return BingoGame.Development.MultiplayerTesting.SimulationStartupSettings.WaitForSettings(this);
+#endif
 
         if (!CanRunInCurrentScene())
         {
@@ -132,6 +156,7 @@ public class LobbySimulationController : MonoBehaviour
         while (GameManager.instance == null ||
                !GameManager.instance.HasCompletedSessionStartupCleanup ||
                LobbyManager.instance == null ||
+               LobbySettings.instance == null ||
                UserManager.instance == null ||
                !UserManager.instance.IsReady ||
                SceneReadyController.instance == null || !SceneReadyController.instance.AreAllReady())
@@ -189,6 +214,7 @@ public class LobbySimulationController : MonoBehaviour
         LobbySetupData lobbySetupData = new LobbySetupData
         {
             playMode = (MainMenuPlayMode)playMode,
+            usesSimulationSettings = true,
             userData = UserManager.instance.CurrentUser
         };
 
@@ -222,8 +248,14 @@ public class LobbySimulationController : MonoBehaviour
             return;
         }
 
-        soloSetupData.gameModeType = gameModeType;
+        soloSetupData.gameModeType = GetSelectedGameModeType();
         soloSetupData.ballCountType = ballCountType;
+        soloSetupData.useFreeCell = useFreeCell;
+        soloSetupData.usesDefaultRank = false;
+        soloSetupData.useRank = useRank;
+        soloSetupData.maxPlayers = false;
+        soloSetupData.maxPlayer = GetValidRoomSize();
+        soloSetupData.botCount = Mathf.Clamp(botCount, 0, soloSetupData.maxPlayer - 1);
     }
 
     private void ConfigureOnlineSetup(OnlineLobbySetupData onlineSetupData)
@@ -233,8 +265,13 @@ public class LobbySimulationController : MonoBehaviour
             return;
         }
 
-        onlineSetupData.gameModeType = gameModeType;
+        onlineSetupData.gameModeType = GetSelectedGameModeType();
         onlineSetupData.ballCountType = ballCountType;
+        onlineSetupData.useFreeCell = useFreeCell;
+        onlineSetupData.hasUseRankOverride = true;
+        onlineSetupData.useRank = useRank;
+        onlineSetupData.maxPlayers = false;
+        onlineSetupData.maxPlayer = GetValidRoomSize();
     }
 
     private void ConfigureCustomSetup(CustomLobbySetupData customSetupData, bool shouldHost)
@@ -251,8 +288,30 @@ public class LobbySimulationController : MonoBehaviour
             return;
         }
 
-        customSetupData.hostSetupData.gameModeType = gameModeType;
+        customSetupData.hostSetupData.gameModeType = GetSelectedGameModeType();
         customSetupData.hostSetupData.ballCountType = ballCountType;
+        customSetupData.hostSetupData.useFreeCell = useFreeCell;
+        customSetupData.hostSetupData.usesDefaultRank = false;
+        customSetupData.hostSetupData.useRank = useRank;
+        customSetupData.hostSetupData.maxPlayers = false;
+        customSetupData.hostSetupData.maxPlayer = GetValidRoomSize();
+    }
+
+    private BingoGameModeType GetSelectedGameModeType()
+    {
+        return gameModeType switch
+        {
+            SimulationGameModeType.Blackout => BingoGameModeType.Blackout,
+            SimulationGameModeType.Risk => BingoGameModeType.Risk,
+            SimulationGameModeType.Death => BingoGameModeType.Death,
+            _ => BingoGameModeType.Traditional
+        };
+    }
+
+    private int GetValidRoomSize()
+    {
+        LobbySettings settings = LobbySettings.instance;
+        return Mathf.Clamp(roomSize, settings.MinimumPlayers, settings.MaxPlayerCount);
     }
 
     #endregion
@@ -285,7 +344,87 @@ public class LobbySimulationController : MonoBehaviour
         }
 
         lobbyService.NotifyLobbySceneReady();
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        yield return ApplyNetworkBots();
+#endif
     }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    private IEnumerator ApplyNetworkBots()
+    {
+        if (MultiplayerPlayModeTestContext.IsActive && !MultiplayerPlayModeTestContext.IsHost)
+        {
+            yield break;
+        }
+
+        NetworkLobbyManager networkLobbyManager = NetworkLobbyManager.instance;
+        string lobbyId = simulationLobbyManager.CurrentLobbyId;
+
+        if (networkLobbyManager == null || !networkLobbyManager.IsReady ||
+            !networkLobbyManager.TryGetStressLobby(lobbyId, out Lobby lobby) ||
+            !lobby.usesSimulationSettings)
+        {
+            yield break;
+        }
+
+        List<string> expectedUserIds = new List<string> { UserManager.instance.UserId };
+
+        if (MultiplayerPlayModeTestContext.IsActive)
+        {
+            List<int> activePlayerNumbers = new List<int>();
+
+            if (!MultiplayerPlayModeTestContext.TryGetActiveTestPlayerNumbers(activePlayerNumbers))
+            {
+                activePlayerNumbers.Clear();
+                activePlayerNumbers.AddRange(new[] { 1, 2, 3, 4 });
+            }
+
+            for (int i = 0; i < activePlayerNumbers.Count; i++)
+            {
+                string userId = MultiplayerPlayModeTestContext.GetUserId(activePlayerNumbers[i]);
+
+                if (!string.IsNullOrWhiteSpace(userId) && !expectedUserIds.Contains(userId))
+                {
+                    expectedUserIds.Add(userId);
+                }
+            }
+        }
+
+        float timeoutTime = Time.realtimeSinceStartup + 35f;
+
+        while (CanRunInCurrentScene() && simulationLobbyManager != null &&
+               simulationLobbyManager.HasEnteredLobby && simulationLobbyManager.CurrentLobbyId == lobbyId &&
+               networkLobbyManager != null && networkLobbyManager.IsReady && lobby.lobbyState == LobbyState.Open)
+        {
+            bool playersReady = networkLobbyManager.TryGetRunningSimulationTestPlayerState(
+                lobbyId, expectedUserIds, out int connectedPlayers, out int joinedPlayers, out int readyPlayers) &&
+                connectedPlayers >= expectedUserIds.Count && joinedPlayers >= expectedUserIds.Count &&
+                readyPlayers >= expectedUserIds.Count;
+
+            if (playersReady || Time.realtimeSinceStartup >= timeoutTime)
+            {
+                LobbyController controller = lobby.Controller;
+
+                if (!controller.HasPendingWork && controller.SceneReadyPlayerCount >= controller.PlayerCount)
+                {
+                    int humanPlayerCount = controller.PlayerCount - controller.BotCount;
+                    int availableBotSlots = Mathf.Max(0, controller.MaxPlayer - humanPlayerCount);
+                    int requestedBotCount = Mathf.Clamp(botCount, 0, availableBotSlots);
+                    networkLobbyManager.TrySetSimulationBotCount(lobbyId, requestedBotCount, out _, out _);
+                    yield break;
+                }
+
+                if (Time.realtimeSinceStartup >= timeoutTime)
+                {
+                    yield break;
+                }
+            }
+
+            yield return null;
+        }
+    }
+#endif
 
     #endregion
 }

@@ -801,8 +801,8 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 1832984458}
   m_HandleRect: {fileID: 1832984457}
   m_Direction: 0
-  m_Value: 1
-  m_Size: 1
+  m_Value: 0
+  m_Size: 0.9999999
   m_NumberOfSteps: 0
   m_OnValueChanged:
     m_PersistentCalls:
@@ -1975,7 +1975,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 1427665239}
   m_HandleRect: {fileID: 1427665238}
   m_Direction: 2
-  m_Value: 1
+  m_Value: 0
   m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:
@@ -12195,28 +12195,8 @@ PrefabInstance:
       value: 5
       objectReference: {fileID: 0}
     - target: {fileID: 633853011194982010, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
-      propertyPath: useRank
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 633853011194982010, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
-      propertyPath: botCount
-      value: 100
-      objectReference: {fileID: 0}
-    - target: {fileID: 633853011194982010, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
       propertyPath: playMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 633853011194982010, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
-      propertyPath: roomSize
-      value: 60
-      objectReference: {fileID: 0}
-    - target: {fileID: 633853011194982010, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
-      propertyPath: gameModeType
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 633853011194982010, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
-      propertyPath: ballCountType
-      value: 30
+      value: 3
       objectReference: {fileID: 0}
     - target: {fileID: 1290380241951259866, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
       propertyPath: m_LocalPosition.x
@@ -13714,6 +13694,18 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5677004156811625341, guid: d8846def5de6d9949b26f6c0de0f962b, type: 3}
       propertyPath: m_AnchoredPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5773194749076097041, guid: d8846def5de6d9949b26f6c0de0f962b, type: 3}
+      propertyPath: m_fontColor.b
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5773194749076097041, guid: d8846def5de6d9949b26f6c0de0f962b, type: 3}
+      propertyPath: m_fontColor.g
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5773194749076097041, guid: d8846def5de6d9949b26f6c0de0f962b, type: 3}
+      propertyPath: m_fontColor.r
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 5773194749076097041, guid: d8846def5de6d9949b26f6c0de0f962b, type: 3}

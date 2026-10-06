@@ -108,6 +108,15 @@ public class GameSimulationController : MonoBehaviour
 
         yield return null;
 
+        if (!GameSceneManager.instance.IsInitialScene(GameSceneType.Game))
+        {
+            yield break;
+        }
+
+#if UNITY_EDITOR
+        yield return BingoGame.Development.MultiplayerTesting.SimulationStartupSettings.WaitForSettings(this);
+#endif
+
         if (!CanRunInCurrentScene())
         {
             yield break;
@@ -358,6 +367,7 @@ public class GameSimulationController : MonoBehaviour
             playMode = (MainMenuPlayMode)playMode,
             startFreshEntry = false,
             isGameSimulation = true,
+            usesSimulationSettings = true,
             gameSimulationPlayerNumber = simulationPlayerNumber,
             userData = UserManager.instance.CurrentUser
         };

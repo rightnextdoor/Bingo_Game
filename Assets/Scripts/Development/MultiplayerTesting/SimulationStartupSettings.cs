@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using Unity.Multiplayer.PlayMode;
@@ -28,7 +29,7 @@ namespace BingoGame.Development.MultiplayerTesting
         }
 
         private static Snapshot snapshot;
-        private static bool hasReadSnapshot;
+        private static double nextSnapshotReadTime;
 
         [InitializeOnLoadMethod]
         private static void Initialize()
@@ -41,7 +42,7 @@ namespace BingoGame.Development.MultiplayerTesting
         private static void ResetState()
         {
             snapshot = null;
-            hasReadSnapshot = false;
+            nextSnapshotReadTime = 0d;
         }
 
         private static void OnPlayModeStateChanged(PlayModeStateChange _state)
@@ -52,12 +53,20 @@ namespace BingoGame.Development.MultiplayerTesting
             }
 
             Snapshot nextSnapshot = new Snapshot();
-            foreach (string tag in CurrentPlayer.Tags)
+            List<int> activePlayerNumbers = new List<int>();
+            if (MultiplayerPlayModeTestContext.TryGetActiveTestPlayerNumbers(activePlayerNumbers))
             {
-                if (tag == "BingoTestPlayer1")
+                nextSnapshot.useTestPlayers = activePlayerNumbers.Contains(1);
+            }
+            else
+            {
+                foreach (string tag in CurrentPlayer.Tags)
                 {
-                    nextSnapshot.useTestPlayers = true;
-                    break;
+                    if (tag == "BingoTestPlayer1")
+                    {
+                        nextSnapshot.useTestPlayers = true;
+                        break;
+                    }
                 }
             }
 
@@ -110,16 +119,43 @@ namespace BingoGame.Development.MultiplayerTesting
             }
         }
 
-        internal static void Apply(MonoBehaviour _controller)
+        internal static IEnumerator WaitForSettings(MonoBehaviour _controller)
         {
-            if (CurrentPlayer.IsMainEditor || !MultiplayerPlayModeTestContext.IsActive)
+            double timeoutTime = EditorApplication.timeSinceStartup + 10d;
+
+            while (_controller != null && _controller.isActiveAndEnabled && !Apply(_controller))
             {
-                return;
+                if (EditorApplication.timeSinceStartup >= timeoutTime)
+                {
+                    Debug.LogWarning($"[SimulationStartupSettings] {_controller.GetType().Name} could not load Player 1's simulation settings. The simulation will not start with the saved scene settings.");
+                    _controller.enabled = false;
+                    yield break;
+                }
+
+                yield return null;
+            }
+        }
+
+        internal static bool Apply(MonoBehaviour _controller)
+        {
+            if (_controller == null)
+            {
+                return false;
             }
 
-            if (!hasReadSnapshot)
+            if (CurrentPlayer.IsMainEditor)
             {
-                hasReadSnapshot = true;
+                return true;
+            }
+
+            if (!MultiplayerPlayModeTestContext.IsActive)
+            {
+                return false;
+            }
+
+            if (snapshot == null && EditorApplication.timeSinceStartup >= nextSnapshotReadTime)
+            {
+                nextSnapshotReadTime = EditorApplication.timeSinceStartup + 0.1d;
                 try
                 {
                     string path = GetSnapshotPath();
@@ -132,13 +168,14 @@ namespace BingoGame.Development.MultiplayerTesting
                                                   exception is UnauthorizedAccessException ||
                                                   exception is ArgumentException)
                 {
-                    Debug.LogWarning($"[SimulationStartupSettings] Could not read the simulation settings: {exception.Message}");
+                    snapshot = null;
                 }
             }
 
             if (snapshot == null || !snapshot.useTestPlayers)
             {
-                return;
+                snapshot = null;
+                return false;
             }
 
             string objectPath = GetObjectPath(_controller.transform);
@@ -153,8 +190,11 @@ namespace BingoGame.Development.MultiplayerTesting
 
                 JsonUtility.FromJsonOverwrite(entry.settings, _controller);
                 _controller.enabled = entry.enabled;
-                return;
+                return true;
             }
+
+            snapshot = null;
+            return false;
         }
 
         private static string GetObjectPath(Transform _transform)

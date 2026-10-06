@@ -14,6 +14,7 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
     private const int WorkBatchSize = 10;
 
     private readonly List<Lobby> lobbies = new List<Lobby>();
+    private readonly HashSet<Lobby> pendingBotCountSaves = new HashSet<Lobby>();
     private bool isReady;
 
     public SessionRuntimeType RuntimeType => SessionRuntimeType.Local;
@@ -68,6 +69,12 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
             if (controller != null && controller.HasPendingWork)
             {
                 controller.ProcessPendingWorkBatch(WorkBatchSize, out _);
+                pendingBotCountSaves.Add(lobby);
+            }
+
+            if (controller != null && !controller.HasPendingWork && pendingBotCountSaves.Remove(lobby))
+            {
+                LobbySaveDataService.SaveSoloBotCount(lobby);
             }
 
             if (lobby != null &&
@@ -172,6 +179,7 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
         }
 
         selectedLobby.Controller.QueueRequestedBots(lobbySetupData.soloSetupData.botCount);
+        pendingBotCountSaves.Add(selectedLobby);
         return LobbyEntryResult.SucceededLocal(selectedLobby);
     }
 
@@ -231,12 +239,14 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
         }
 
         lobbies.Remove(lobby);
+        pendingBotCountSaves.Remove(lobby);
     }
 
     public void ResetForFreshApplicationStart()
     {
         UnsubscribeFromAllLobbyControllers();
         lobbies.Clear();
+        pendingBotCountSaves.Clear();
     }
 
     #endregion
@@ -371,7 +381,7 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
 
     private void OnLobbyPlayerExitProcessed(LobbyController controller, LobbyExitResult exitResult)
     {
-        if (controller == null || exitResult == null || !exitResult.success || !exitResult.shouldCloseLobby)
+        if (controller == null || exitResult == null || !exitResult.success)
         {
             return;
         }
@@ -380,6 +390,12 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
 
         if (lobby == null)
         {
+            return;
+        }
+
+        if (!exitResult.shouldCloseLobby)
+        {
+            pendingBotCountSaves.Add(lobby);
             return;
         }
 

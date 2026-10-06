@@ -1583,10 +1583,24 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
         GameSessionData gameSessionData,
         UserData userData)
     {
+        int botCount = 0;
+
+        if (gameSessionData.players != null)
+        {
+            for (int i = 0; i < gameSessionData.players.Count; i++)
+            {
+                if (gameSessionData.players[i] != null && gameSessionData.players[i].userTag == UserTag.Bot)
+                {
+                    botCount++;
+                }
+            }
+        }
+
         return new LobbySetupData
         {
             playMode = MainMenuPlayMode.Solo,
             startFreshEntry = true,
+            usesSimulationSettings = gameSessionData.usesSimulationSettings,
             userData = userData,
             soloSetupData = new SoloLobbySetupData
             {
@@ -1602,8 +1616,11 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
                 patternTypes = gameSessionData.patternTypes != null
                     ? new List<BingoPatternType>(gameSessionData.patternTypes)
                     : new List<BingoPatternType>(),
-                maxPlayers = true,
-                maxPlayer = Math.Max(1, gameSessionData.players?.Count ?? 1)
+                maxPlayers = gameSessionData.lobbyMaxPlayer <= 0 || gameSessionData.lobbyMaxPlayers,
+                maxPlayer = gameSessionData.lobbyMaxPlayer > 0
+                    ? gameSessionData.lobbyMaxPlayer
+                    : Math.Max(1, gameSessionData.players?.Count ?? 1),
+                botCount = botCount
             }
         };
     }

@@ -289,6 +289,13 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         {
             menuData.customMenuData = new CustomMenuData();
         }
+
+        if (menuData.menuVersion < 3)
+        {
+            menuData.customMenuData.lobbySize = LobbySettings.instance != null ? LobbySettings.instance.MinimumPlayers : 6;
+            menuData.customMenuData.maxPlayers = false;
+            menuData.menuVersion = 3;
+        }
     }
 
     private void ApplyAllDefaults()
@@ -525,12 +532,6 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         if (TryGetSoloBotCount(false, out int botCount))
         {
             soloMenuData.botCount = botCount;
-        }
-
-        if (maxPlayers)
-        {
-            soloMenuData.lobbySize = GetDefaultSoloLobbySize();
-            return;
         }
 
         if (TryGetLobbySizeValue(soloLobbySizeInput, false, soloErrorText, out int lobbySize))
@@ -1267,12 +1268,12 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
 
         if (customHostLobbySizeInput != null)
         {
-            customHostLobbySizeInput.SetTextWithoutNotify(GetDefaultSoloLobbySize().ToString());
+            customHostLobbySizeInput.SetTextWithoutNotify(ClampLobbySizeToAllowedRange(customMenuData.lobbySize).ToString());
         }
 
         if (customHostMaxToggle != null)
         {
-            customHostMaxToggle.SetIsOnWithoutNotify(false);
+            customHostMaxToggle.SetIsOnWithoutNotify(customMenuData.maxPlayers);
         }
 
         if (customSearchLobbyCodeInput != null)
@@ -1303,6 +1304,13 @@ public class MainMenuSettingsController : MonoBehaviour, ISaveManager, ISceneRea
         if (TryGetSelectedDropdownValue(customActionDropdown, customActionOptions, out CustomLobbyActionType selectedActionType))
         {
             customMenuData.actionType = selectedActionType;
+        }
+
+        customMenuData.maxPlayers = customHostMaxToggle != null && customHostMaxToggle.isOn;
+
+        if (TryGetLobbySizeValue(customHostLobbySizeInput, false, customErrorText, out int lobbySize))
+        {
+            customMenuData.lobbySize = lobbySize;
         }
     }
 

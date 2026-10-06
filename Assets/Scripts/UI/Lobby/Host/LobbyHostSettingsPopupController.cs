@@ -1082,12 +1082,9 @@ public class LobbyHostSettingsPopupController : MonoBehaviour
         workingData = settingsData;
 
         LobbyViewData currentLobbyViewData = GetCurrentLobbyViewData();
-        MainMenuPlayMode playMode = currentLobbyViewData != null
-            ? currentLobbyViewData.playMode
-            : MainMenuPlayMode.None;
 
         ClosePopup();
-        LobbySaveDataService.SaveHostSettings(playMode, settingsData);
+        LobbySaveDataService.SaveHostSettings(currentLobbyViewData, settingsData);
     }
 
     #endregion

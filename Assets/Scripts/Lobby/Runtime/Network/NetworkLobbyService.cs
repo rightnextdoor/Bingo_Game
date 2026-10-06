@@ -355,9 +355,9 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
 
     #region Network Connection
 
-    public async Task<bool> PrepareConnectionForEntryAsync(LobbySetupData lobbySetupData)
+    public async Task<bool> PrepareConnectionForEntryAsync(LobbySetupData lobbySetupData, CancellationToken _cancellationToken = default)
     {
-        await operationGate.WaitAsync();
+        await operationGate.WaitAsync(_cancellationToken);
         try
         {
             if (!isReady || !IsValidNetworkSetup(lobbySetupData))
@@ -370,7 +370,7 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
                 return false;
             }
 
-            return await EnsureNetworkConnectionAsync(target, CancellationToken.None);
+            return await EnsureNetworkConnectionAsync(target, _cancellationToken);
         }
         finally
         {
@@ -445,7 +445,7 @@ public class NetworkLobbyService : MonoBehaviour, ILobbyService
                     return false;
                 }
 
-                started = await networkBootstrap.StartRelayClientAsync(_target.UserId, _target.RelayJoinCode);
+                started = await networkBootstrap.StartRelayClientAsync(_target.UserId, _target.RelayJoinCode, _cancellationToken);
                 break;
 
             default:

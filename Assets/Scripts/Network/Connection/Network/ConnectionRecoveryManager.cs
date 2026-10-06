@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -21,9 +22,14 @@ public class ConnectionRecoveryManager : MonoBehaviour
     private const float MinimumPopupSeconds = 3f;
     private const float AttemptSpacingSeconds = 1f;
     private const float MultiplayerConnectTimeoutSeconds = 10f;
+    private const float RecoveryAttemptTimeoutSeconds = 10f;
+    private const float RecoveryTimeoutSeconds = MaximumAttempts * RecoveryAttemptTimeoutSeconds +
+                                                 (MaximumAttempts - 1) * AttemptSpacingSeconds;
 
     private NetworkConnectionMode lastClientMode = NetworkConnectionMode.Offline;
     private string lastRelayJoinCode = string.Empty;
+    private string lastDirectAddress;
+    private int lastDirectPort = -1;
     private Task<ConnectionRecoveryResult> activeRecovery;
     private bool recoveringMainMenu;
     private bool observedSimulationAvailability;
@@ -95,6 +101,8 @@ public class ConnectionRecoveryManager : MonoBehaviour
         {
             lastClientMode = bootstrap.ConnectionMode;
             lastRelayJoinCode = bootstrap.RelayJoinCode;
+            lastDirectAddress = bootstrap.DirectClientAddress;
+            lastDirectPort = bootstrap.DirectClientPort;
         }
 
         if (recoveringInScene && recoveringScene == GameSceneType.Lobby &&
@@ -139,6 +147,8 @@ public class ConnectionRecoveryManager : MonoBehaviour
         {
             lastClientMode = bootstrap.ConnectionMode;
             lastRelayJoinCode = bootstrap.RelayJoinCode;
+            lastDirectAddress = bootstrap.DirectClientAddress;
+            lastDirectPort = bootstrap.DirectClientPort;
             bootstrap.Shutdown();
         }
 
@@ -155,6 +165,8 @@ public class ConnectionRecoveryManager : MonoBehaviour
         {
             lastClientMode = bootstrap.ConnectionMode;
             lastRelayJoinCode = bootstrap.RelayJoinCode;
+            lastDirectAddress = bootstrap.DirectClientAddress;
+            lastDirectPort = bootstrap.DirectClientPort;
         }
 
         HandleSceneConnectionLost(false);
@@ -332,7 +344,7 @@ public class ConnectionRecoveryManager : MonoBehaviour
 
         try
         {
-            result = await RecoverAsync(true);
+            result = await RecoverTrackedAsync(true, null, false, scene);
         }
         catch (Exception exception)
         {
@@ -340,31 +352,22 @@ public class ConnectionRecoveryManager : MonoBehaviour
             result = ConnectionRecoveryResult.MultiplayerUnavailable;
         }
 
-        if (abortForFinalCountdown ||
-            GameSceneManager.instance?.CurrentSceneType != scene ||
-            GameSceneManager.instance?.IsLoadingScene == true)
+        if (this == null)
         {
-            recoveringInScene = false;
-            RestoreLocalPresentation();
-            FinishSceneConnectionLoss(scene);
             return;
         }
 
-        bool restored = false;
-
-        if (result == ConnectionRecoveryResult.Connected)
+        if (GameSceneManager.instance?.CurrentSceneType != scene ||
+            GameSceneManager.instance?.IsLoadingScene == true ||
+            (scene == GameSceneType.Lobby ? LobbyManager.instance?.IsLeavingLobby == true : GameSessionManager.instance?.IsLeavingGame == true))
         {
-            try
-            {
-                restored = scene == GameSceneType.Game
-                    ? await (GameSessionManager.instance?.RestoreCurrentNetworkGameAsync() ?? Task.FromResult(false))
-                    : await (LobbyManager.instance?.RestoreCurrentNetworkLobbyAsync() ?? Task.FromResult(false));
-            }
-            catch (Exception exception)
-            {
-                Debug.LogWarning($"Could not restore the current scene: {exception.Message}");
-            }
+            recoveringInScene = false;
+            RestoreLocalPresentation();
+            PopupManager.instance?.CloseReconnectPopup();
+            return;
         }
+
+        bool restored = result == ConnectionRecoveryResult.Connected && !abortForFinalCountdown;
 
         recoveringInScene = false;
         RestoreLocalPresentation();
@@ -507,15 +510,16 @@ public class ConnectionRecoveryManager : MonoBehaviour
     private Task<ConnectionRecoveryResult> RecoverTrackedAsync(
         bool requireMultiplayer,
         LobbySetupData lobbySetupData,
-        bool allowIdleMultiplayer)
+        bool allowIdleMultiplayer,
+        GameSceneType? _restoreScene = null)
     {
         if (activeRecovery != null && !activeRecovery.IsCompleted)
         {
             return RecoverAfterActiveAsync(activeRecovery, requireMultiplayer,
-                lobbySetupData, allowIdleMultiplayer);
+                lobbySetupData, allowIdleMultiplayer, _restoreScene);
         }
 
-        activeRecovery = RecoverCoreAsync(requireMultiplayer, lobbySetupData, allowIdleMultiplayer);
+        activeRecovery = RecoverCoreAsync(requireMultiplayer, lobbySetupData, allowIdleMultiplayer, _restoreScene);
         return activeRecovery;
     }
 
@@ -523,117 +527,245 @@ public class ConnectionRecoveryManager : MonoBehaviour
         Task<ConnectionRecoveryResult> previous,
         bool requireMultiplayer,
         LobbySetupData lobbySetupData,
-        bool allowIdleMultiplayer)
+        bool allowIdleMultiplayer,
+        GameSceneType? _restoreScene)
     {
         await previous;
-        if (HasRequiredConnections(requireMultiplayer, lobbySetupData, allowIdleMultiplayer))
+        if (!_restoreScene.HasValue && HasRequiredConnections(requireMultiplayer, lobbySetupData, allowIdleMultiplayer))
         {
             return ConnectionRecoveryResult.Connected;
         }
 
-        return await RecoverTrackedAsync(requireMultiplayer, lobbySetupData, allowIdleMultiplayer);
+        return await RecoverTrackedAsync(requireMultiplayer, lobbySetupData, allowIdleMultiplayer, _restoreScene);
     }
 
     private async Task<ConnectionRecoveryResult> RecoverCoreAsync(
         bool requireMultiplayer,
         LobbySetupData lobbySetupData,
-        bool allowIdleMultiplayer)
+        bool allowIdleMultiplayer,
+        GameSceneType? _restoreScene)
     {
-        if (HasRequiredConnections(requireMultiplayer, lobbySetupData, allowIdleMultiplayer))
+        await Task.Yield();
+
+        if (!_restoreScene.HasValue && !recoveringInScene)
+        {
+            abortForFinalCountdown = false;
+        }
+
+        if (!_restoreScene.HasValue && HasRequiredConnections(requireMultiplayer, lobbySetupData, allowIdleMultiplayer))
         {
             return ConnectionRecoveryResult.Connected;
         }
 
         float openedAt = Time.realtimeSinceStartup;
+        float deadline = openedAt + RecoveryTimeoutSeconds;
         ConnectionRecoveryResult result = ConnectionRecoveryResult.OnlineUnavailable;
 
-        for (int attempt = 1; attempt <= MaximumAttempts; attempt++)
+        try
         {
-            if (abortForFinalCountdown)
+            for (int attempt = 1; attempt <= MaximumAttempts && CanContinueRecovery(deadline, _restoreScene); attempt++)
+            {
+                float attemptDeadline = Mathf.Min(deadline, Time.realtimeSinceStartup + RecoveryAttemptTimeoutSeconds);
+                using CancellationTokenSource cancellation = new CancellationTokenSource();
+                bool onlineMissing = OnlineConnectionManager.instance?.IsOnline != true;
+                PopupManager.instance?.OpenReconnectPopup(
+                    onlineMissing
+                        ? $"Reconnecting to online services... ({attempt}/{MaximumAttempts})"
+                        : $"Reconnecting to multiplayer... ({attempt}/{MaximumAttempts})");
+
+                bool gameEnded = false;
+                try
+                {
+                    while (CanContinueRecovery(attemptDeadline, _restoreScene))
+                    {
+                        try
+                        {
+                            bool ready = await WaitForRecoveryReadyAsync(
+                                requireMultiplayer, attemptDeadline, _restoreScene, cancellation);
+                            OnlineConnectionManager online = OnlineConnectionManager.instance;
+                            bool onlineReady = ready && online != null && (online.IsOnline ||
+                                await WaitForRecoveryOperationAsync(online.EnsureConnectedAsync(), attemptDeadline, _restoreScene, cancellation));
+
+                            bool connected = onlineReady && (!requireMultiplayer ||
+                                (allowIdleMultiplayer && NetworkBootstrap.instance?.IsReady == true &&
+                                 NetworkBootstrap.instance.IsConnectionAvailableForTesting) ||
+                                await WaitForRecoveryOperationAsync(
+                                    EnsureMultiplayerAsync(lobbySetupData, cancellation.Token), attemptDeadline, _restoreScene, cancellation));
+
+                            connected &= HasRequiredConnections(requireMultiplayer, lobbySetupData, allowIdleMultiplayer);
+                            result = onlineReady ? ConnectionRecoveryResult.MultiplayerUnavailable : ConnectionRecoveryResult.OnlineUnavailable;
+
+                            if (connected)
+                            {
+                                bool restored = !_restoreScene.HasValue || await WaitForRecoveryOperationAsync(
+                                    _restoreScene == GameSceneType.Game
+                                        ? GameSessionManager.instance?.RestoreCurrentNetworkGameAsync(cancellation.Token) ?? Task.FromResult(false)
+                                        : LobbyManager.instance?.RestoreCurrentNetworkLobbyAsync(attemptDeadline, cancellation.Token) ?? Task.FromResult(false),
+                                    attemptDeadline, _restoreScene, cancellation);
+
+                                if (restored && HasRequiredConnections(requireMultiplayer, lobbySetupData, allowIdleMultiplayer))
+                                {
+                                    while (Time.realtimeSinceStartup - openedAt < MinimumPopupSeconds &&
+                                           CanContinueRecovery(attemptDeadline, _restoreScene))
+                                    {
+                                        await Task.Yield();
+                                    }
+
+                                    if (HasRequiredConnections(requireMultiplayer, lobbySetupData, allowIdleMultiplayer))
+                                    {
+                                        result = ConnectionRecoveryResult.Connected;
+                                        break;
+                                    }
+                                }
+
+                                gameEnded = _restoreScene == GameSceneType.Game &&
+                                            GameSessionManager.instance?.LastConnectionRestoreFoundEndedGame == true;
+                                if (gameEnded)
+                                {
+                                    break;
+                                }
+                            }
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            break;
+                        }
+                        catch (Exception exception)
+                        {
+                            Debug.LogWarning($"Connection retry {attempt} failed: {exception.Message}");
+                            break;
+                        }
+
+                        float retryAt = Mathf.Min(attemptDeadline, Time.realtimeSinceStartup + AttemptSpacingSeconds);
+                        while (Time.realtimeSinceStartup < retryAt && CanContinueRecovery(attemptDeadline, _restoreScene))
+                        {
+                            await Task.Yield();
+                        }
+                    }
+                }
+                finally
+                {
+                    cancellation.Cancel();
+                    NetworkBootstrap bootstrap = NetworkBootstrap.instance;
+                    if (result != ConnectionRecoveryResult.Connected && bootstrap != null &&
+                        !bootstrap.IsAuthority && bootstrap.IsConnectionStarting)
+                    {
+                        bootstrap.Shutdown();
+                    }
+                }
+
+                if (result == ConnectionRecoveryResult.Connected || gameEnded ||
+                    !CanContinueRecovery(deadline, _restoreScene))
+                {
+                    break;
+                }
+
+                if (attempt < MaximumAttempts)
+                {
+                    float nextAttemptAt = Mathf.Min(deadline, Time.realtimeSinceStartup + AttemptSpacingSeconds);
+                    while (Time.realtimeSinceStartup < nextAttemptAt && CanContinueRecovery(deadline, _restoreScene))
+                    {
+                        await Task.Yield();
+                    }
+                }
+            }
+
+            while (Time.realtimeSinceStartup - openedAt < MinimumPopupSeconds && CanContinueRecovery(deadline, _restoreScene))
+            {
+                await Task.Yield();
+            }
+
+            if (!CanContinueRecovery(float.PositiveInfinity, _restoreScene))
             {
                 result = ConnectionRecoveryResult.Cancelled;
-                break;
             }
-
-            bool onlineMissing = OnlineConnectionManager.instance?.IsOnline != true;
-            PopupManager.instance?.OpenReconnectPopup(
-                onlineMissing
-                    ? $"Reconnecting to online services... ({attempt}/{MaximumAttempts})"
-                    : $"Reconnecting to multiplayer... ({attempt}/{MaximumAttempts})");
-
-            try
+            else if (!HasRequiredConnections(requireMultiplayer, lobbySetupData, allowIdleMultiplayer))
             {
-                OnlineConnectionManager online = OnlineConnectionManager.instance;
-                bool onlineReady = online != null &&
-                                   (online.IsOnline || await online.EnsureConnectedAsync());
-
-                if (!onlineReady)
-                {
-                    result = ConnectionRecoveryResult.OnlineUnavailable;
-                }
-                else if (!requireMultiplayer && online.IsOnline)
-                {
-                    result = ConnectionRecoveryResult.Connected;
-                    break;
-                }
-                else if (allowIdleMultiplayer &&
-                         NetworkBootstrap.instance?.IsReady == true &&
-                         NetworkBootstrap.instance.IsConnectionAvailableForTesting)
-                {
-                    result = ConnectionRecoveryResult.Connected;
-                    break;
-                }
-                else if (await EnsureMultiplayerAsync(lobbySetupData) &&
-                         HasRequiredConnections(true, lobbySetupData, false))
-                {
-                    result = ConnectionRecoveryResult.Connected;
-                    break;
-                }
-                else
-                {
-                    result = ConnectionRecoveryResult.MultiplayerUnavailable;
-                }
-            }
-            catch (Exception exception)
-            {
-                Debug.LogWarning($"Connection retry {attempt} failed: {exception.Message}");
                 result = OnlineConnectionManager.instance?.IsOnline == true
                     ? ConnectionRecoveryResult.MultiplayerUnavailable
                     : ConnectionRecoveryResult.OnlineUnavailable;
             }
-
-            if (attempt < MaximumAttempts)
+            else if (!_restoreScene.HasValue)
             {
-                float nextAttemptAt = Time.realtimeSinceStartup + AttemptSpacingSeconds;
-                while (Time.realtimeSinceStartup < nextAttemptAt && !abortForFinalCountdown)
-                {
-                    await Task.Yield();
-                }
+                result = ConnectionRecoveryResult.Connected;
+            }
+
+            return result;
+        }
+        finally
+        {
+            if (!recoveringInScene)
+            {
+                PopupManager.instance?.CloseReconnectPopup();
+            }
+        }
+    }
+
+    private bool CanContinueRecovery(float _deadline, GameSceneType? _scene)
+    {
+        return this != null && !abortForFinalCountdown && Time.realtimeSinceStartup < _deadline &&
+               (!_scene.HasValue || (GameSceneManager.instance != null &&
+                GameSceneManager.instance.CurrentSceneType == _scene.Value && !GameSceneManager.instance.IsLoadingScene &&
+                (_scene == GameSceneType.Lobby ? LobbyManager.instance?.IsLeavingLobby != true : GameSessionManager.instance?.IsLeavingGame != true)));
+    }
+
+    private async Task<bool> WaitForRecoveryReadyAsync(
+        bool _requireMultiplayer, float _deadline, GameSceneType? _scene, CancellationTokenSource _cancellation)
+    {
+        NetworkBootstrap bootstrap = NetworkBootstrap.instance;
+        if (_requireMultiplayer && bootstrap != null && !bootstrap.IsAuthority &&
+            (bootstrap.IsShuttingDown || (!bootstrap.IsConnected && !bootstrap.IsConnectionStarting && bootstrap.IsClient)))
+        {
+            if (!await WaitForRecoveryOperationAsync(bootstrap.ShutdownAsync(), _deadline, _scene, _cancellation))
+            {
+                return false;
             }
         }
 
-        if (!abortForFinalCountdown)
+        while (CanContinueRecovery(_deadline, _scene))
         {
-            while (Time.realtimeSinceStartup - openedAt < MinimumPopupSeconds)
+            OnlineConnectionManager online = OnlineConnectionManager.instance;
+            bootstrap = NetworkBootstrap.instance;
+            if (online != null && online.IsReady &&
+                (!_requireMultiplayer || (bootstrap != null && bootstrap.IsReady &&
+                 !bootstrap.IsShuttingDown)))
             {
-                await Task.Yield();
+                return true;
             }
+
+            await Task.Yield();
         }
 
-        if (result == ConnectionRecoveryResult.Connected &&
-            !HasRequiredConnections(requireMultiplayer, lobbySetupData, allowIdleMultiplayer))
+        return false;
+    }
+
+    private async Task<T> WaitForRecoveryOperationAsync<T>(
+        Task<T> _operation, float _deadline, GameSceneType? _scene, CancellationTokenSource _cancellation)
+    {
+        while (!_operation.IsCompleted && CanContinueRecovery(_deadline, _scene))
         {
-            result = OnlineConnectionManager.instance?.IsOnline == true
-                ? ConnectionRecoveryResult.MultiplayerUnavailable
-                : ConnectionRecoveryResult.OnlineUnavailable;
+            await Task.Yield();
         }
 
-        if (!recoveringInScene)
+        if (!CanContinueRecovery(float.PositiveInfinity, _scene) || !_operation.IsCompleted)
         {
-            PopupManager.instance?.CloseReconnectPopup();
+            _cancellation.Cancel();
+            _ = ObserveRecoveryOperationAsync(_operation);
+            throw new OperationCanceledException();
         }
 
-        return result;
+        return await _operation;
+    }
+
+    private static async Task ObserveRecoveryOperationAsync(Task _operation)
+    {
+        try
+        {
+            await _operation;
+        }
+        catch (Exception)
+        {
+        }
     }
 
     private static bool HasRequiredConnections(
@@ -666,8 +798,9 @@ public class ConnectionRecoveryManager : MonoBehaviour
                (lobbySetupData == null || NetworkLobbyConnection.GetLocalConnection() != null);
     }
 
-    private async Task<bool> EnsureMultiplayerAsync(LobbySetupData lobbySetupData)
+    private async Task<bool> EnsureMultiplayerAsync(LobbySetupData lobbySetupData, CancellationToken _cancellationToken = default)
     {
+        _cancellationToken.ThrowIfCancellationRequested();
         NetworkBootstrap bootstrap = NetworkBootstrap.instance;
 
         if (bootstrap == null || !bootstrap.IsReady || !bootstrap.IsConnectionAvailableForTesting)
@@ -681,10 +814,35 @@ public class ConnectionRecoveryManager : MonoBehaviour
             return true;
         }
 
+        if (bootstrap.IsShuttingDown && !await bootstrap.ShutdownAsync())
+        {
+            return false;
+        }
+
+        float existingAttemptDeadline = Time.realtimeSinceStartup + MultiplayerConnectTimeoutSeconds;
+        while (bootstrap != null && bootstrap.IsConnectionStarting &&
+               Time.realtimeSinceStartup < existingAttemptDeadline && !abortForFinalCountdown)
+        {
+            _cancellationToken.ThrowIfCancellationRequested();
+            await Task.Yield();
+        }
+
+        _cancellationToken.ThrowIfCancellationRequested();
+
+        if (bootstrap == null || !bootstrap.IsConnectionAvailableForTesting || abortForFinalCountdown)
+        {
+            return false;
+        }
+
+        if (bootstrap.IsConnected && (lobbySetupData == null || NetworkLobbyConnection.GetLocalConnection() != null))
+        {
+            return true;
+        }
+
         if (lobbySetupData != null)
         {
             if (NetworkLobbyService.instance == null ||
-                !await NetworkLobbyService.instance.PrepareConnectionForEntryAsync(lobbySetupData))
+                !await NetworkLobbyService.instance.PrepareConnectionForEntryAsync(lobbySetupData, _cancellationToken))
             {
                 return false;
             }
@@ -692,6 +850,7 @@ public class ConnectionRecoveryManager : MonoBehaviour
             float lobbyConnectionDeadline = Time.realtimeSinceStartup + MultiplayerConnectTimeoutSeconds;
             while (Time.realtimeSinceStartup < lobbyConnectionDeadline && !abortForFinalCountdown)
             {
+                _cancellationToken.ThrowIfCancellationRequested();
                 if (!bootstrap.IsConnectionAvailableForTesting ||
                     OnlineConnectionManager.instance?.IsOnline != true)
                 {
@@ -720,10 +879,17 @@ public class ConnectionRecoveryManager : MonoBehaviour
             return false;
         }
 
+        _cancellationToken.ThrowIfCancellationRequested();
+
+        if (!bootstrap.IsConnectionAvailableForTesting || OnlineConnectionManager.instance?.IsOnline != true)
+        {
+            return false;
+        }
+
         string userId = UserManager.instance?.UserId;
         bool started = lastClientMode == NetworkConnectionMode.DirectClient
-            ? bootstrap.StartDirectClient(userId, MultiplayerPlayModeTestContext.DirectAddress)
-            : await bootstrap.StartRelayClientAsync(userId, lastRelayJoinCode);
+            ? bootstrap.StartDirectClient(userId, lastDirectAddress, lastDirectPort)
+            : await bootstrap.StartRelayClientAsync(userId, lastRelayJoinCode, _cancellationToken);
 
         if (!started)
         {
@@ -733,6 +899,7 @@ public class ConnectionRecoveryManager : MonoBehaviour
         float deadline = Time.realtimeSinceStartup + MultiplayerConnectTimeoutSeconds;
         while (Time.realtimeSinceStartup < deadline && !abortForFinalCountdown)
         {
+            _cancellationToken.ThrowIfCancellationRequested();
             if (bootstrap.IsConnected)
             {
                 return true;
@@ -747,6 +914,6 @@ public class ConnectionRecoveryManager : MonoBehaviour
             await Task.Yield();
         }
 
-        return false;
+        return bootstrap != null && bootstrap.IsConnected;
     }
 }

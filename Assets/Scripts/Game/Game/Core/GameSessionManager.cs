@@ -861,8 +861,9 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
         return result;
     }
 
-    public async Task<bool> RestoreCurrentNetworkGameAsync()
+    public async Task<bool> RestoreCurrentNetworkGameAsync(CancellationToken _cancellationToken = default)
     {
+        _cancellationToken.ThrowIfCancellationRequested();
         lastConnectionRestoreFoundEndedGame = false;
 
         if (runtimeType != SessionRuntimeType.Network ||
@@ -887,7 +888,14 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
             return false;
         }
 
-        GameSessionResult result = await service.RejoinGameAsync(gameId, userData);
+        GameSessionResult result = await service.RejoinGameAsync(gameId, userData, _cancellationToken);
+
+        _cancellationToken.ThrowIfCancellationRequested();
+
+        if (this == null || NetworkBootstrap.instance?.IsConnected != true)
+        {
+            return false;
+        }
 
         if (result?.success != true || result.gameSessionData == null)
         {
@@ -901,7 +909,14 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
 
         ApplyAuthoritativeGameSessionSnapshot(result.gameSessionData);
         GameSessionResult sceneReadyResult =
-            await service.SetGameSceneReadyAsync(gameId, userData);
+            await service.SetGameSceneReadyAsync(gameId, userData, _cancellationToken);
+
+        _cancellationToken.ThrowIfCancellationRequested();
+
+        if (this == null || NetworkBootstrap.instance?.IsConnected != true)
+        {
+            return false;
+        }
 
         if (sceneReadyResult?.success != true)
         {

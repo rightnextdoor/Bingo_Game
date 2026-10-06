@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Threading;
 using System.Threading.Tasks;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
@@ -18,6 +19,7 @@ public class NetworkBootstrap : MonoBehaviour
 
     private bool isReady;
     private bool isManualShutdown;
+    private int connectionOperationVersion;
 
     private NetworkRoot networkRoot;
     private NetworkManager networkManager;
@@ -39,7 +41,11 @@ public class NetworkBootstrap : MonoBehaviour
     public NetworkConnectionMode ConnectionMode => connectionMode;
     public NetworkConnectionState ConnectionState => connectionState;
     public string RelayJoinCode => relayJoinCode;
-    public bool IsConnected => IsConnectionAvailableForTesting && networkManager != null && networkManager.IsListening && connectionState == NetworkConnectionState.Connected;
+    public string DirectClientAddress { get; private set; }
+    public int DirectClientPort { get; private set; } = -1;
+    public bool IsShuttingDown => shutdownRoutine != null || (networkManager != null && networkManager.ShutdownInProgress) || connectionState == NetworkConnectionState.Disconnecting;
+    public bool IsConnectionStarting => connectionState == NetworkConnectionState.Initializing || connectionState == NetworkConnectionState.Connecting;
+    public bool IsConnected => IsConnectionAvailableForTesting && !IsShuttingDown && networkManager != null && networkManager.IsListening && connectionState == NetworkConnectionState.Connected;
     public bool IsConnectionAvailableForTesting
     {
         get
@@ -103,6 +109,7 @@ public class NetworkBootstrap : MonoBehaviour
 
     private void OnDestroy()
     {
+        connectionOperationVersion++;
         UnregisterNetworkCallbacks();
 
         if (instance == this)
@@ -236,6 +243,8 @@ public class NetworkBootstrap : MonoBehaviour
 
         string resolvedAddress = ResolveDirectAddress(address);
         ushort resolvedPort = ResolvePort(port);
+        DirectClientAddress = resolvedAddress;
+        DirectClientPort = resolvedPort;
 
         unityTransport.SetConnectionData(resolvedAddress, resolvedPort);
 
@@ -264,12 +273,18 @@ public class NetworkBootstrap : MonoBehaviour
             return false;
         }
 
+        int operationVersion = ++connectionOperationVersion;
         SetConnectionMode(NetworkConnectionMode.RelayHost);
         SetConnectionState(NetworkConnectionState.Initializing);
 
         try
         {
             RelayHostConnectionData connectionData = await relayConnectionService.CreateHostConnectionAsync();
+
+            if (this == null || operationVersion != connectionOperationVersion || IsShuttingDown)
+            {
+                return false;
+            }
 
             unityTransport.SetRelayServerData(connectionData.ServerData);
 
@@ -287,6 +302,11 @@ public class NetworkBootstrap : MonoBehaviour
         }
         catch (Exception exception)
         {
+            if (this == null || operationVersion != connectionOperationVersion)
+            {
+                return false;
+            }
+
             Debug.LogException(exception);
             SetRelayJoinCode(string.Empty);
             SetConnectionState(NetworkConnectionState.Failed);
@@ -294,8 +314,9 @@ public class NetworkBootstrap : MonoBehaviour
         }
     }
 
-    public async Task<bool> StartRelayClientAsync(string bingoUserId, string joinCode)
+    public async Task<bool> StartRelayClientAsync(string bingoUserId, string joinCode, CancellationToken _cancellationToken = default)
     {
+        _cancellationToken.ThrowIfCancellationRequested();
         if (!CanStartConnection() || !CanUseRelay() || !TryPrepareConnectionPayload(bingoUserId))
         {
             return false;
@@ -307,12 +328,19 @@ public class NetworkBootstrap : MonoBehaviour
             return false;
         }
 
+        int operationVersion = ++connectionOperationVersion;
         SetConnectionMode(NetworkConnectionMode.RelayClient);
         SetConnectionState(NetworkConnectionState.Initializing);
 
         try
         {
             RelayServerData relayServerData = await relayConnectionService.JoinConnectionAsync(joinCode);
+
+            if (this == null || operationVersion != connectionOperationVersion ||
+                _cancellationToken.IsCancellationRequested || IsShuttingDown || !IsConnectionAvailableForTesting)
+            {
+                return false;
+            }
 
             unityTransport.SetRelayServerData(relayServerData);
 
@@ -330,6 +358,11 @@ public class NetworkBootstrap : MonoBehaviour
         }
         catch (Exception exception)
         {
+            if (this == null || operationVersion != connectionOperationVersion || _cancellationToken.IsCancellationRequested)
+            {
+                return false;
+            }
+
             Debug.LogException(exception);
             SetRelayJoinCode(string.Empty);
             SetConnectionState(NetworkConnectionState.Failed);
@@ -373,6 +406,8 @@ public class NetworkBootstrap : MonoBehaviour
             return;
         }
 
+        connectionOperationVersion++;
+
         if (networkManager == null)
         {
             CompleteShutdown();
@@ -402,6 +437,8 @@ public class NetworkBootstrap : MonoBehaviour
 
     private IEnumerator WaitForShutdown()
     {
+        yield return null;
+
         while (networkManager != null && (networkManager.IsListening || networkManager.ShutdownInProgress))
         {
             yield return null;
@@ -456,7 +493,7 @@ public class NetworkBootstrap : MonoBehaviour
 
     private void OnClientConnected(ulong clientId)
     {
-        if (networkManager == null)
+        if (networkManager == null || IsShuttingDown)
         {
             return;
         }
@@ -517,8 +554,9 @@ public class NetworkBootstrap : MonoBehaviour
             return false;
         }
 
-        SetConnectionState(NetworkConnectionState.Disconnected);
+        connectionOperationVersion++;
         networkManager.Shutdown(true);
+        SetConnectionState(NetworkConnectionState.Disconnected);
 
         return true;
     }

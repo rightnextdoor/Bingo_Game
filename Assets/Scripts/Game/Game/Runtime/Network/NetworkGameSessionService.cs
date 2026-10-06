@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -53,8 +54,14 @@ public class NetworkGameSessionService : MonoBehaviour, IGameSessionService
         }
     }
 
-    public async Task<GameSessionResult> RejoinGameAsync(string gameId, UserData userData)
+    public Task<GameSessionResult> RejoinGameAsync(string gameId, UserData userData)
     {
+        return RejoinGameAsync(gameId, userData, CancellationToken.None);
+    }
+
+    public async Task<GameSessionResult> RejoinGameAsync(string gameId, UserData userData, CancellationToken _cancellationToken)
+    {
+        _cancellationToken.ThrowIfCancellationRequested();
         if (!isReady)
         {
             return GameSessionResult.Failed(
@@ -73,7 +80,8 @@ public class NetworkGameSessionService : MonoBehaviour, IGameSessionService
                 gameId);
         }
 
-        NetworkGameSessionConnection connection = await WaitForLocalGameConnectionAsync();
+        NetworkGameSessionConnection connection = await WaitForLocalGameConnectionAsync(_cancellationToken);
+        _cancellationToken.ThrowIfCancellationRequested();
 
         if (connection == null)
         {
@@ -87,8 +95,14 @@ public class NetworkGameSessionService : MonoBehaviour, IGameSessionService
         return await connection.RequestRejoinGameAsync(gameId);
     }
 
-    public async Task<GameSessionResult> SetGameSceneReadyAsync(string gameId, UserData userData)
+    public Task<GameSessionResult> SetGameSceneReadyAsync(string gameId, UserData userData)
     {
+        return SetGameSceneReadyAsync(gameId, userData, CancellationToken.None);
+    }
+
+    public async Task<GameSessionResult> SetGameSceneReadyAsync(string gameId, UserData userData, CancellationToken _cancellationToken)
+    {
+        _cancellationToken.ThrowIfCancellationRequested();
         if (!isReady)
         {
             return GameSessionResult.Failed(
@@ -107,7 +121,8 @@ public class NetworkGameSessionService : MonoBehaviour, IGameSessionService
                 gameId);
         }
 
-        NetworkGameSessionConnection connection = await WaitForLocalGameConnectionAsync();
+        NetworkGameSessionConnection connection = await WaitForLocalGameConnectionAsync(_cancellationToken);
+        _cancellationToken.ThrowIfCancellationRequested();
 
         if (connection == null)
         {
@@ -300,12 +315,13 @@ public class NetworkGameSessionService : MonoBehaviour, IGameSessionService
                connection.RequestHostKick(gameId, targetUserId);
     }
 
-    private async Task<NetworkGameSessionConnection> WaitForLocalGameConnectionAsync()
+    private async Task<NetworkGameSessionConnection> WaitForLocalGameConnectionAsync(CancellationToken _cancellationToken = default)
     {
         float timeoutTime = Time.realtimeSinceStartup + GameConnectionTimeoutSeconds;
 
         while (Time.realtimeSinceStartup < timeoutTime)
         {
+            _cancellationToken.ThrowIfCancellationRequested();
             NetworkGameSessionConnection connection = NetworkGameSessionConnection.GetLocalConnection();
 
             if (connection != null)

@@ -35,6 +35,8 @@ public class LobbyManager : MonoBehaviour
     private bool isEnteringLobby;
     private bool isLeavingLobby;
     private bool isLobbyResyncPending;
+    private long completedInitialSyncVersion;
+    private bool isInitialSyncInProgress;
     private bool returnToMainSceneOnEntryFailure = true;
     private int entryAttemptVersion;
     private CancellationTokenSource entryCancellation;
@@ -827,9 +829,16 @@ public class LobbyManager : MonoBehaviour
             return;
         }
 
+        if (data.resetState)
+        {
+            isInitialSyncInProgress = true;
+        }
+
         if (data.isFinalBatch)
         {
             isLobbyResyncPending = false;
+            isInitialSyncInProgress = false;
+            completedInitialSyncVersion++;
         }
 
         PublishCurrentLobbyView();
@@ -916,6 +925,8 @@ public class LobbyManager : MonoBehaviour
         }
 
         isLobbyResyncPending = false;
+        isInitialSyncInProgress = false;
+        completedInitialSyncVersion++;
         PublishCurrentLobbyView();
     }
 
@@ -955,7 +966,9 @@ public class LobbyManager : MonoBehaviour
         lobbyService.RequestLobbyResync();
     }
 
-    public async Task<bool> RestoreCurrentNetworkLobbyAsync()
+    public async Task<bool> RestoreCurrentNetworkLobbyAsync(
+        float _recoveryDeadline = float.PositiveInfinity,
+        CancellationToken _cancellationToken = default)
     {
         if (runtimeType != SessionRuntimeType.Network ||
             !lobbyClientState.HasLobby ||
@@ -965,47 +978,43 @@ public class LobbyManager : MonoBehaviour
         }
 
         string lobbyId = lobbyClientState.LobbyId;
-        bool snapshotReceived = false;
-        void OnRestoredView(LobbyViewData view)
+        float deadline = Mathf.Min(_recoveryDeadline, Time.realtimeSinceStartup + 15f);
+
+        while (!_cancellationToken.IsCancellationRequested && this != null &&
+               lobbyClientState.IsCurrentLobby(lobbyId) && NetworkBootstrap.instance?.IsConnected == true &&
+               NetworkLobbyConnection.GetLocalConnection() == null && Time.realtimeSinceStartup < deadline)
         {
-            snapshotReceived = view != null &&
-                               string.Equals(view.lobbyId, lobbyId, StringComparison.Ordinal);
+            await Task.Yield();
         }
 
-        LobbyViewUpdated += OnRestoredView;
+        NetworkLobbyConnection connection = NetworkLobbyConnection.GetLocalConnection();
 
-        try
+        if (_cancellationToken.IsCancellationRequested || this == null || connection == null ||
+            !lobbyClientState.IsCurrentLobby(lobbyId) || NetworkBootstrap.instance?.IsConnected != true ||
+            Time.realtimeSinceStartup >= _recoveryDeadline)
         {
-            networkLobbyService ??= NetworkLobbyService.instance;
-            float deadline = Time.realtimeSinceStartup + 8f;
-
-            while (NetworkLobbyConnection.GetLocalConnection() == null &&
-                   Time.realtimeSinceStartup < deadline &&
-                   NetworkBootstrap.instance?.IsConnected == true)
-            {
-                await Task.Yield();
-            }
-
-            if (NetworkLobbyConnection.GetLocalConnection() == null)
-            {
-                return false;
-            }
-
-            networkLobbyService?.RequestLobbyInitialSync();
-
-            while (!snapshotReceived && Time.realtimeSinceStartup < deadline &&
-                   NetworkBootstrap.instance?.IsConnected == true)
-            {
-                await Task.Yield();
-            }
-
-            return snapshotReceived &&
-                   lobbyClientState.ViewData?.lobbyState == LobbyState.Open;
+            return false;
         }
-        finally
+
+        long previousSyncVersion = completedInitialSyncVersion;
+        connection.RequestLobbyInitialSync();
+        deadline = Mathf.Min(_recoveryDeadline, Time.realtimeSinceStartup + 15f);
+
+        while (!_cancellationToken.IsCancellationRequested && this != null &&
+               lobbyClientState.IsCurrentLobby(lobbyId) && NetworkBootstrap.instance?.IsConnected == true &&
+               NetworkLobbyConnection.GetLocalConnection() == connection &&
+               (completedInitialSyncVersion == previousSyncVersion || isInitialSyncInProgress) && Time.realtimeSinceStartup < deadline)
         {
-            LobbyViewUpdated -= OnRestoredView;
+            await Task.Yield();
         }
+
+        return !_cancellationToken.IsCancellationRequested && this != null &&
+               lobbyClientState.IsCurrentLobby(lobbyId) && NetworkBootstrap.instance?.IsConnected == true &&
+               NetworkLobbyConnection.GetLocalConnection() == connection &&
+               completedInitialSyncVersion > previousSyncVersion &&
+               !isInitialSyncInProgress &&
+               lobbyClientState.ViewData?.lobbyState == LobbyState.Open &&
+               lobbyClientState.HasPlayer(currentUserId) && lobbyClientState.GetPlayerBoard(currentUserId) != null;
     }
 
     public void ClearLocalLobbyAfterConnectionLoss()
@@ -1119,6 +1128,7 @@ public class LobbyManager : MonoBehaviour
         lobbyClientState.Clear();
         pendingNetworkLobbyViewData = null;
         isLobbyResyncPending = false;
+        isInitialSyncInProgress = false;
         currentUserId = string.Empty;
         activeLobbyService = null;
         lastEntryResult = null;

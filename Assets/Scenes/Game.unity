@@ -2515,8 +2515,8 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 492654806}
   m_HandleRect: {fileID: 492654805}
   m_Direction: 0
-  m_Value: 1
-  m_Size: 0.9999999
+  m_Value: 0
+  m_Size: 0.9999997
   m_NumberOfSteps: 0
   m_OnValueChanged:
     m_PersistentCalls:
@@ -2814,7 +2814,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 816743780}
   m_HandleRect: {fileID: 816743779}
   m_Direction: 2
-  m_Value: 1
+  m_Value: 0
   m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:
@@ -9772,6 +9772,22 @@ PrefabInstance:
       propertyPath: m_AnchoredPosition.y
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 5773194749076097041, guid: d8846def5de6d9949b26f6c0de0f962b, type: 3}
+      propertyPath: m_fontColor.b
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5773194749076097041, guid: d8846def5de6d9949b26f6c0de0f962b, type: 3}
+      propertyPath: m_fontColor.g
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5773194749076097041, guid: d8846def5de6d9949b26f6c0de0f962b, type: 3}
+      propertyPath: m_fontColor.r
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5773194749076097041, guid: d8846def5de6d9949b26f6c0de0f962b, type: 3}
+      propertyPath: m_fontColor32.rgba
+      value: 4278190080
+      objectReference: {fileID: 0}
     - target: {fileID: 5804876515646258444, guid: d8846def5de6d9949b26f6c0de0f962b, type: 3}
       propertyPath: m_AnchorMax.y
       value: 0
@@ -11563,14 +11579,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0.14509805, g: 0.19215687, b: 0.30980393, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 0}
+  m_Sprite: {fileID: 6841100256711490664, guid: d472a20ddbd00c24b911265d148d0ac2, type: 3}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
@@ -12105,14 +12121,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0.14509805, g: 0.19215687, b: 0.30980393, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 0}
+  m_Sprite: {fileID: 6841100256711490664, guid: d472a20ddbd00c24b911265d148d0ac2, type: 3}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
@@ -12604,14 +12620,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0.12156863, g: 0.16470589, b: 0.26666668, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 0}
+  m_Sprite: {fileID: 7303528380627309444, guid: 824ef42ffa7e91945918c30dd0998eba, type: 3}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
@@ -12926,14 +12942,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0.07058824, g: 0.09411765, b: 0.14901961, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 0}
+  m_Sprite: {fileID: -809804992619026284, guid: 824ef42ffa7e91945918c30dd0998eba, type: 3}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
@@ -13145,6 +13161,10 @@ PrefabInstance:
     - target: {fileID: 1122387465010203044, guid: f7e0f34e7bbfde64d932d6d233ff8e28, type: 3}
       propertyPath: deathFrozenPlayerOutEligibleCount
       value: 5
+      objectReference: {fileID: 0}
+    - target: {fileID: 1122387465010203044, guid: f7e0f34e7bbfde64d932d6d233ff8e28, type: 3}
+      propertyPath: riskMatchDurations.Array.data[0].durationMinutes
+      value: 6
       objectReference: {fileID: 0}
     - target: {fileID: 1854102416727074944, guid: f7e0f34e7bbfde64d932d6d233ff8e28, type: 3}
       propertyPath: m_LocalPosition.x
@@ -15183,15 +15203,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6207814632284159071, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
       propertyPath: botCount
-      value: 10
+      value: 100
       objectReference: {fileID: 0}
     - target: {fileID: 6207814632284159071, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
       propertyPath: playMode
-      value: 2
+      value: 3
       objectReference: {fileID: 0}
     - target: {fileID: 6207814632284159071, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
       propertyPath: roomSize
-      value: 10
+      value: 100
       objectReference: {fileID: 0}
     - target: {fileID: 6207814632284159071, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
       propertyPath: useFreeCell
@@ -15199,7 +15219,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6207814632284159071, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
       propertyPath: gameModeType
-      value: 0
+      value: 2
       objectReference: {fileID: 0}
     - target: {fileID: 6207814632284159071, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
       propertyPath: ballCountType
@@ -15436,14 +15456,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0.07058824, g: 0.09411765, b: 0.14901961, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 0}
+  m_Sprite: {fileID: -809804992619026284, guid: 824ef42ffa7e91945918c30dd0998eba, type: 3}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
@@ -16896,7 +16916,7 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 32.6
+  m_fontSize: 36.3
   m_fontSizeBase: 38
   m_fontWeight: 400
   m_enableAutoSizing: 1

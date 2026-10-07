@@ -1296,6 +1296,16 @@ public class LobbyController
 
     public bool ResetAfterGameCreationFailure()
     {
+        return ResetForLobby(false);
+    }
+
+    public bool ResetAfterCompletedGame()
+    {
+        return ResetForLobby(true);
+    }
+
+    private bool ResetForLobby(bool _regenerateBoards)
+    {
         if (lobby == null ||
             (lobby.lobbyState != LobbyState.FinalCountdown && lobby.lobbyState != LobbyState.InGame))
         {
@@ -1314,6 +1324,11 @@ public class LobbyController
             }
 
             playerData.isReady = playerData.userData.userTag == UserTag.Bot;
+        }
+
+        if (_regenerateBoards)
+        {
+            RegenerateAllPlayerBoards();
         }
 
         InitializeTimer(lobby.playMode);

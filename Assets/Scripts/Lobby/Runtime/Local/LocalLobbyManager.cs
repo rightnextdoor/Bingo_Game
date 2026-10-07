@@ -372,7 +372,7 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
             if (lobby != null &&
                 string.Equals(lobby.GetLobbyId(), lobbyId, StringComparison.Ordinal))
             {
-                return lobby.Controller?.ResetAfterGameCreationFailure() == true;
+                return lobby.Controller?.ResetAfterCompletedGame() == true;
             }
         }
 

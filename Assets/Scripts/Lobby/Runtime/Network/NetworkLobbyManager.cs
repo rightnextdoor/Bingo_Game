@@ -1278,12 +1278,13 @@ public class NetworkLobbyManager : MonoBehaviour
         }
 
         if (lobby?.Controller == null ||
-            !lobby.Controller.ResetAfterGameCreationFailure())
+            !lobby.Controller.ResetAfterCompletedGame())
         {
             return false;
         }
 
         BroadcastLobbyStateChanged(lobby);
+        BroadcastPlayerBoardCollection(lobby, lobby.Controller.BuildPlayerBoardCollectionData().boards);
 
         IReadOnlyList<LobbyPlayerData> players = lobby.Controller.Players;
 
@@ -1301,6 +1302,7 @@ public class NetworkLobbyManager : MonoBehaviour
             }
         }
 
+        StartLobbyRuntime(lobby);
         return true;
     }
 
@@ -2275,6 +2277,7 @@ public class NetworkLobbyManager : MonoBehaviour
                     NetworkGameSessionManager.instance.HasGameForLobby(lobby.GetLobbyId()) &&
                     controller.CompleteFinalCountdown())
                 {
+                    lobby.isGameSimulation = false;
                     LobbyFinalCountdownCompleted?.Invoke(lobby);
                     BroadcastLobbyStateChanged(lobby);
                 }

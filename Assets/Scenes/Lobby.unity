@@ -12204,7 +12204,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 633853011194982010, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
       propertyPath: playMode
-      value: 3
+      value: 2
       objectReference: {fileID: 0}
     - target: {fileID: 633853011194982010, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
       propertyPath: roomSize
@@ -12212,7 +12212,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 633853011194982010, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
       propertyPath: gameModeType
-      value: 0
+      value: 2
       objectReference: {fileID: 0}
     - target: {fileID: 633853011194982010, guid: defaaeb074604b2489f9d65538f8c6ea, type: 3}
       propertyPath: ballCountType
@@ -13714,6 +13714,18 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5677004156811625341, guid: d8846def5de6d9949b26f6c0de0f962b, type: 3}
       propertyPath: m_AnchoredPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5773194749076097041, guid: d8846def5de6d9949b26f6c0de0f962b, type: 3}
+      propertyPath: m_fontColor.b
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5773194749076097041, guid: d8846def5de6d9949b26f6c0de0f962b, type: 3}
+      propertyPath: m_fontColor.g
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5773194749076097041, guid: d8846def5de6d9949b26f6c0de0f962b, type: 3}
+      propertyPath: m_fontColor.r
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 5773194749076097041, guid: d8846def5de6d9949b26f6c0de0f962b, type: 3}

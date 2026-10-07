@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 [DisallowMultipleComponent]
@@ -13,9 +14,16 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
 
     private LobbyController lobbyController;
     private Coroutine bindRoutine;
+    private LobbyViewData displayedLobby;
+    private LobbyBoardData displayedBoard;
+    private string displayedUserId;
+    private bool displayedHostSettings;
+    private bool displayedStart;
 
     private void OnEnable()
     {
+        displayedLobby = null;
+        displayedBoard = null;
         SubscribeToHeader();
         SubscribeToBoardSection();
         SubscribeToPlayerList();
@@ -46,29 +54,144 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
 
         LobbyManager lobbyManager = LobbyManager.instance;
 
-        playerListController?.DisplayLobbyInfo(
-            lobbyViewData,
-            lobbyManager != null
-                ? lobbyManager.CurrentUserId
-                : string.Empty);
+        string userId = lobbyManager != null ? lobbyManager.CurrentUserId : string.Empty;
+        bool initialDisplay = displayedLobby == null || displayedLobby.lobbyId != lobbyViewData.lobbyId || displayedUserId != userId;
+        bool canOpenSettings = CanOpenHostSettings(lobbyViewData);
+        bool canStart = CanStartLobby(lobbyViewData);
 
-        headerController?.DisplayLobbyInfo(lobbyViewData, CanOpenHostSettings(lobbyViewData), CanStartLobby(lobbyViewData));
-
-        gameInfoController?.DisplayLobbyInfo(lobbyViewData);
-
-        if (boardSectionController != null)
+        if (initialDisplay || !SamePlayers(displayedLobby, lobbyViewData))
         {
-            bool controlsInteractable = lobbyViewData.lobbyState == LobbyState.Open;
-
-            boardSectionController.DisplayBoard(GetCurrentPlayerBoard(lobbyViewData));
-            boardSectionController.SetBoardInteractable(false);
-            boardSectionController.SetRerollInteractable(controlsInteractable);
-            boardSectionController.SetReadyInteractable(controlsInteractable);
+            playerListController?.DisplayLobbyInfo(lobbyViewData, userId);
         }
 
-        customPanelController?.DisplayLobbyInfo(lobbyViewData);
+        if (initialDisplay || displayedHostSettings != canOpenSettings || displayedStart != canStart ||
+            displayedLobby.playMode != lobbyViewData.playMode || displayedLobby.gameModeType != lobbyViewData.gameModeType ||
+            displayedLobby.gameModeName != lobbyViewData.gameModeName || displayedLobby.lobbyState != lobbyViewData.lobbyState ||
+            displayedLobby.isTimerActive != lobbyViewData.isTimerActive || displayedLobby.timerEndTime != lobbyViewData.timerEndTime)
+        {
+            headerController?.DisplayLobbyInfo(lobbyViewData, canOpenSettings, canStart);
+        }
+
+        if (initialDisplay || displayedLobby.gameModeType != lobbyViewData.gameModeType ||
+            displayedLobby.gameModeName != lobbyViewData.gameModeName || displayedLobby.ballCountType != lobbyViewData.ballCountType ||
+            displayedLobby.hasRule != lobbyViewData.hasRule ||
+            (lobbyViewData.hasRule && displayedLobby.ruleType != lobbyViewData.ruleType) ||
+            !SameValues(displayedLobby.patternTypes, lobbyViewData.patternTypes))
+        {
+            gameInfoController?.DisplayLobbyInfo(lobbyViewData);
+        }
+
+        LobbyBoardData board = GetCurrentPlayerBoard(lobbyViewData);
+        if (initialDisplay || !SameBoard(displayedBoard, board))
+        {
+            boardSectionController?.DisplayBoard(board);
+            displayedBoard = board != null ? new LobbyBoardData(board) : null;
+        }
+
+        if (initialDisplay || displayedLobby.lobbyState != lobbyViewData.lobbyState)
+        {
+            bool controlsInteractable = lobbyViewData.lobbyState == LobbyState.Open;
+            boardSectionController?.SetBoardInteractable(false);
+            boardSectionController?.SetRerollInteractable(controlsInteractable);
+            boardSectionController?.SetReadyInteractable(controlsInteractable);
+        }
+
+        if (initialDisplay || displayedLobby.playMode != lobbyViewData.playMode ||
+            displayedLobby.lobbyName != lobbyViewData.lobbyName || displayedLobby.roomCode != lobbyViewData.roomCode ||
+            displayedLobby.hasPassword != lobbyViewData.hasPassword || displayedLobby.lobbyPassword != lobbyViewData.lobbyPassword)
+        {
+            customPanelController?.DisplayLobbyInfo(lobbyViewData);
+        }
+
+        CaptureLobbyDisplay(lobbyViewData);
+        displayedUserId = userId;
+        displayedHostSettings = canOpenSettings;
+        displayedStart = canStart;
 
         TryLoadGameScene(lobbyViewData);
+    }
+
+    private static bool SameValues<T>(IReadOnlyList<T> _first, IReadOnlyList<T> _second)
+    {
+        int count = _first?.Count ?? 0;
+        if (count != (_second?.Count ?? 0)) return false;
+        for (int i = 0; i < count; i++)
+        {
+            if (!EqualityComparer<T>.Default.Equals(_first[i], _second[i])) return false;
+        }
+        return true;
+    }
+
+    private static bool SameBoard(LobbyBoardData _first, LobbyBoardData _second)
+    {
+        if (_first == null || _second == null) return _first == _second;
+        return _first.ballCountType == _second.ballCountType && _first.usesFreeCell == _second.usesFreeCell &&
+               SameValues(_first.cellNumbers, _second.cellNumbers);
+    }
+
+
+    private static bool SamePlayers(LobbyViewData _first, LobbyViewData _second)
+    {
+        if (_first.playMode != _second.playMode || _first.playerCount != _second.playerCount ||
+            _first.maxPlayer != _second.maxPlayer || _first.maxPlayers != _second.maxPlayers ||
+            (_first.players?.Count ?? 0) != (_second.players?.Count ?? 0)) return false;
+        for (int i = 0; i < (_first.players?.Count ?? 0); i++)
+        {
+            LobbyPlayerViewData first = _first.players[i];
+            LobbyPlayerViewData second = _second.players[i];
+            if (first == null || second == null)
+            {
+                if (first != second) return false;
+                continue;
+            }
+            if (first.userId != second.userId || first.userTag != second.userTag || first.playerName != second.playerName ||
+                first.iconId != second.iconId || first.isHost != second.isHost || first.isReady != second.isReady) return false;
+        }
+        return true;
+    }
+
+    private void CaptureLobbyDisplay(LobbyViewData _data)
+    {
+        if (displayedLobby == null) displayedLobby = new LobbyViewData();
+        displayedLobby.lobbyId = _data.lobbyId;
+        displayedLobby.playMode = _data.playMode;
+        displayedLobby.lobbyState = _data.lobbyState;
+        displayedLobby.isTimerActive = _data.isTimerActive;
+        displayedLobby.timerEndTime = _data.timerEndTime;
+        displayedLobby.lobbyName = _data.lobbyName;
+        displayedLobby.roomCode = _data.roomCode;
+        displayedLobby.hasPassword = _data.hasPassword;
+        displayedLobby.lobbyPassword = _data.lobbyPassword;
+        displayedLobby.gameModeType = _data.gameModeType;
+        displayedLobby.gameModeName = _data.gameModeName;
+        displayedLobby.hasRule = _data.hasRule;
+        displayedLobby.ruleType = _data.ruleType;
+        displayedLobby.ballCountType = _data.ballCountType;
+        displayedLobby.playerCount = _data.playerCount;
+        displayedLobby.maxPlayer = _data.maxPlayer;
+        displayedLobby.maxPlayers = _data.maxPlayers;
+        displayedLobby.patternTypes.Clear();
+        if (_data.patternTypes != null) displayedLobby.patternTypes.AddRange(_data.patternTypes);
+        int count = _data.players?.Count ?? 0;
+        while (displayedLobby.players.Count > count) displayedLobby.players.RemoveAt(displayedLobby.players.Count - 1);
+        for (int i = 0; i < count; i++)
+        {
+            if (i == displayedLobby.players.Count) displayedLobby.players.Add(null);
+            LobbyPlayerViewData player = _data.players[i];
+            if (player == null)
+            {
+                displayedLobby.players[i] = null;
+                continue;
+            }
+            LobbyPlayerViewData copy = displayedLobby.players[i];
+            if (copy == null) displayedLobby.players[i] = copy = new LobbyPlayerViewData();
+            copy.userId = player.userId;
+            copy.userTag = player.userTag;
+            copy.playerName = player.playerName;
+            copy.iconId = player.iconId;
+            copy.isHost = player.isHost;
+            copy.isReady = player.isReady;
+        }
     }
 
     private void LeaveLobby()
@@ -226,7 +349,11 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
             return;
         }
 
-        boardSectionController?.DisplayBoard(boardData);
+        if (!SameBoard(displayedBoard, boardData))
+        {
+            boardSectionController?.DisplayBoard(boardData);
+            displayedBoard = new LobbyBoardData(boardData);
+        }
     }
 
     private void SubscribeToHeader()

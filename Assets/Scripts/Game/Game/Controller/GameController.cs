@@ -52,6 +52,9 @@ public class GameController : MonoBehaviour
     private string pendingRankedManualCheckUserId = string.Empty;
     private bool isRankedManualEndAnimationPlaying;
     private string gameOverPopupGameId = string.Empty;
+    private bool hasInitializedSections;
+    private bool refreshSections;
+    private bool displayedCheckPending;
 
     #endregion
 
@@ -88,6 +91,7 @@ public class GameController : MonoBehaviour
 
     private void OnEnable()
     {
+        hasInitializedSections = false;
         SessionPauseManager.PauseChanged -= OnSessionPauseChanged;
         SessionPauseManager.PauseChanged += OnSessionPauseChanged;
         SubscribeToHeader();
@@ -172,8 +176,19 @@ public class GameController : MonoBehaviour
             ? gameModeData.GameName
             : gameSessionData.gameModeType.ToString();
 
-        headerController?.DisplayGameInfo(gameSessionData, gameName);
-        ballDisplayController?.DisplayGameInfo(gameSessionData);
+        bool initializeSections = !hasInitializedSections || isNewGame;
+        bool refreshDisplay = initializeSections || refreshSections;
+        if (refreshDisplay || !SameHeader(previousSession, gameSessionData))
+        {
+            headerController?.DisplayGameInfo(gameSessionData, gameName);
+        }
+        if (refreshDisplay || previousSession == null ||
+            previousSession.ballCountType != gameSessionData.ballCountType ||
+            !SameValues(previousSession.gamePlayController?.BallController?.CalledNumbers,
+                gameSessionData.gamePlayController?.BallController?.CalledNumbers))
+        {
+            ballDisplayController?.DisplayGameInfo(gameSessionData);
+        }
 
         if (isNewGame &&
             GameSessionManager.instance?.ConsumeSavedSoloBallReplay(
@@ -184,12 +199,29 @@ public class GameController : MonoBehaviour
 
         ShowDeathNotifications(previousSession, gameSessionData, isNewGame);
         EnsureBoardPatternTracker(gameSessionData);
-        DisplayPlayerBoard(gameSessionData);
+        if (refreshDisplay || !hasDisplayedLocalBoard || displayedCheckPending != isBingoCheckPending ||
+            !SameLocalBoardState(previousSession, gameSessionData))
+        {
+            DisplayPlayerBoard(gameSessionData);
+        }
         TryPlayDeathEndAnimation(gameSessionData);
         TryPlayRankedManualEndAnimation(gameSessionData);
-        DisplayPlayerList(gameSessionData);
-        DisplayGameModeInfo(gameSessionData, gameModeData, gameName, gameModeManager);
-        DisplayCustomLobbyInfo(gameSessionData);
+        if (refreshDisplay || !SamePlayerList(previousSession, gameSessionData))
+        {
+            DisplayPlayerList(gameSessionData);
+        }
+        if (initializeSections)
+        {
+            DisplayGameModeInfo(gameSessionData, gameModeData, gameName, gameModeManager);
+        }
+        if (refreshDisplay || previousSession == null || previousSession.playMode != gameSessionData.playMode ||
+            previousSession.lobbyName != gameSessionData.lobbyName || previousSession.roomCode != gameSessionData.roomCode ||
+            previousSession.hasPassword != gameSessionData.hasPassword || previousSession.lobbyPassword != gameSessionData.lobbyPassword)
+        {
+            DisplayCustomLobbyInfo(gameSessionData);
+        }
+        hasInitializedSections = true;
+        refreshSections = false;
         ShowRiskSubmitNotificationIfNeeded(gameSessionData);
         CloseRiskDecisionPopupIfResolved(gameSessionData);
         TryOpenGameOverPopup(gameSessionData);
@@ -208,6 +240,7 @@ public class GameController : MonoBehaviour
             PopupManager.instance.CloseActivePopup();
         }
 
+        refreshSections = true;
         DisplayGameInfo(gameSessionData);
     }
 
@@ -219,6 +252,89 @@ public class GameController : MonoBehaviour
     public void HideTimer()
     {
         headerController?.HideTimer();
+    }
+
+    private static bool SameValues<T>(IReadOnlyList<T> _first, IReadOnlyList<T> _second)
+    {
+        int count = _first?.Count ?? 0;
+        if (count != (_second?.Count ?? 0)) return false;
+        for (int i = 0; i < count; i++)
+        {
+            if (!EqualityComparer<T>.Default.Equals(_first[i], _second[i])) return false;
+        }
+        return true;
+    }
+
+    private static bool SameBoard(LobbyBoardData _first, LobbyBoardData _second)
+    {
+        if (_first == null || _second == null) return _first == _second;
+        return _first.ballCountType == _second.ballCountType && _first.usesFreeCell == _second.usesFreeCell &&
+               SameValues(_first.cellNumbers, _second.cellNumbers);
+    }
+
+    private static bool SamePlayerList(GameSessionData _first, GameSessionData _second)
+    {
+        if (_first == null || _first.playMode != _second.playMode || _first.useRank != _second.useRank ||
+            _first.gameModeType != _second.gameModeType || _first.hasRule != _second.hasRule || _first.ruleType != _second.ruleType ||
+            (_first.players?.Count ?? 0) != (_second.players?.Count ?? 0)) return false;
+        for (int i = 0; i < (_first.players?.Count ?? 0); i++)
+        {
+            GamePlayerData first = _first.players[i];
+            GamePlayerData second = _second.players[i];
+            if (first == null || second == null)
+            {
+                if (first != second) return false;
+                continue;
+            }
+            if (first.userId != second.userId || first.userTag != second.userTag || first.playerName != second.playerName ||
+                first.iconId != second.iconId || first.isLobbyHost != second.isLobbyHost || first.isGameSceneReady != second.isGameSceneReady ||
+                first.controlType != second.controlType || first.isConnected != second.isConnected ||
+                first.rank != second.rank || first.currentMatchScore != second.currentMatchScore || first.gameStatus != second.gameStatus ||
+                !SameBoard(first.boardData, second.boardData) || !SameValues(first.markedCellIndices, second.markedCellIndices)) return false;
+        }
+        return true;
+    }
+
+    private static bool SameTimer(GamePlayTimer _first, GamePlayTimer _second)
+    {
+        if (_first == null || _second == null) return _first == _second;
+        return _first.IsActive == _second.IsActive && _first.EndTime == _second.EndTime;
+    }
+
+    private static bool SameHeader(GameSessionData _first, GameSessionData _second)
+    {
+        if (_first == null || _first.playMode != _second.playMode || _first.gameModeType != _second.gameModeType ||
+            _first.hasRule != _second.hasRule || _first.ruleType != _second.ruleType || _first.gameState != _second.gameState ||
+            _first.gamePlayController?.Phase != _second.gamePlayController?.Phase ||
+            _first.gamePlayController?.IsFinalBallCountdown != _second.gamePlayController?.IsFinalBallCountdown ||
+            !SameTimer(_first.gamePlayController?.BallTimer, _second.gamePlayController?.BallTimer) ||
+            !SameTimer(_first.gamePlayController?.RiskTimer, _second.gamePlayController?.RiskTimer) ||
+            (_first.players?.Count ?? 0) != (_second.players?.Count ?? 0) ||
+            _first.GetPlayerCountWithStatus(GamePlayerStatus.Won) != _second.GetPlayerCountWithStatus(GamePlayerStatus.Won) ||
+            _first.GetPlayerCountWithStatus(GamePlayerStatus.Eligible) != _second.GetPlayerCountWithStatus(GamePlayerStatus.Eligible) ||
+            _first.GetPlayerCountWithStatus(GamePlayerStatus.Checking) != _second.GetPlayerCountWithStatus(GamePlayerStatus.Checking)) return false;
+        GamePlayerData first = _first.GetPlayer(UserManager.instance?.UserId);
+        GamePlayerData second = _second.GetPlayer(UserManager.instance?.UserId);
+        if (first == null || second == null) return first == second;
+        return first.gameStatus == second.gameStatus && first.currentMatchScore == second.currentMatchScore &&
+               first.isSubmitTimerActive == second.isSubmitTimerActive && first.submitTimerEndTime == second.submitTimerEndTime;
+    }
+
+    private static bool SameLocalBoardState(GameSessionData _first, GameSessionData _second)
+    {
+        if (_first == null || _first.gameState != _second.gameState || _first.useRank != _second.useRank ||
+            _first.rankPlayerTotal != _second.rankPlayerTotal || (_first.players?.Count ?? 0) != (_second.players?.Count ?? 0) ||
+            _first.gameModeType != _second.gameModeType || _first.hasRule != _second.hasRule || _first.ruleType != _second.ruleType ||
+            _first.gamePlayController?.IsPlayerInputClosed != _second.gamePlayController?.IsPlayerInputClosed ||
+            _first.gamePlayController?.CanAcceptBingoChecks != _second.gamePlayController?.CanAcceptBingoChecks) return false;
+        GamePlayerData first = _first.GetPlayer(UserManager.instance?.UserId);
+        GamePlayerData second = _second.GetPlayer(UserManager.instance?.UserId);
+        if (first == null || second == null) return first == second;
+        return first.rank == second.rank && first.controlType == second.controlType && first.returnState == second.returnState &&
+               first.isConnected == second.isConnected && first.gameStatus == second.gameStatus &&
+               first.hasRiskCashedOut == second.hasRiskCashedOut && first.isRiskDecisionPending == second.isRiskDecisionPending &&
+               GameAutomaticBoardAuthority.IsAutomaticBoardEnabled(_first, first) == GameAutomaticBoardAuthority.IsAutomaticBoardEnabled(_second, second) &&
+               SameBoard(first.boardData, second.boardData) && SameValues(first.markedCellIndices, second.markedCellIndices);
     }
 
     private void DisplayPlayerList(GameSessionData gameSessionData)
@@ -352,6 +468,8 @@ public class GameController : MonoBehaviour
 
     private void ClearDisplay()
     {
+        hasInitializedSections = false;
+        refreshSections = false;
         visiblePlayers.Clear();
         markedCellsByUserId.Clear();
         boardPatternTracker.Clear();
@@ -489,6 +607,7 @@ public class GameController : MonoBehaviour
 
         boardSectionController.SetBoardInteractable(playerCanUseBoard);
         boardSectionController.SetBingoInteractable(playerCanSubmitBingo);
+        displayedCheckPending = isBingoCheckPending;
     }
 
     private void SubscribeToBoardSection()

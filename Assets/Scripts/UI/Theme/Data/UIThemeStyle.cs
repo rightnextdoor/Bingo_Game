@@ -22,6 +22,12 @@ public class UIThemeStyle
     [SerializeField] private float colorMultiplier = 1f;
     [SerializeField] private float fadeDuration = 0.1f;
 
+    [Space]
+    [Header("Navigation")]
+    [Tooltip("Navigation mode applied to themed buttons. Explicit direction references remain configured on each button.")]
+    [SerializeField] private Navigation.Mode navigationMode = Navigation.Mode.Automatic;
+
+    [Space]
     [Header("Text Component")]
     [SerializeField] private TMP_FontAsset fontAsset;
     [SerializeField] private Material textMaterial;
@@ -42,6 +48,8 @@ public class UIThemeStyle
     public Color DisabledColor => disabledColor;
     public float ColorMultiplier => colorMultiplier;
     public float FadeDuration => fadeDuration;
+
+    public Navigation.Mode NavigationMode => navigationMode;
 
     public TMP_FontAsset FontAsset => fontAsset;
     public Material TextMaterial => textMaterial;

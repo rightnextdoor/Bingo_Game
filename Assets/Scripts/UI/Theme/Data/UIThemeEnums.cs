@@ -47,8 +47,9 @@ public enum UIThemeButtonType
     Secondary,
     Close,
     Ready,
-    Send,
-    ChatTab
+    Update,
+    ChatTab,
+    Send
 }
 
 public enum UIThemeTextType

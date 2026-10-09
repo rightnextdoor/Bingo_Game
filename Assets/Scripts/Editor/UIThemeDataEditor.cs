@@ -835,6 +835,14 @@ public class UIThemeDataEditor : Editor
 
         EditorGUILayout.Space(6);
 
+        EditorGUILayout.LabelField("Navigation", EditorStyles.boldLabel);
+        EditorGUILayout.PropertyField(
+            styleProperty.FindPropertyRelative("navigationMode"),
+            new GUIContent("Navigation", "Explicit direction references are configured on each button.")
+        );
+
+        EditorGUILayout.Space(6);
+
         EditorGUILayout.LabelField("Text", EditorStyles.boldLabel);
         DrawTextComponentFields(styleProperty);
     }
@@ -1018,6 +1026,10 @@ public class UIThemeDataEditor : Editor
                 if (iterator.name == "transition")
                 {
                     iterator.enumValueIndex = (int)UnityEngine.UI.Selectable.Transition.ColorTint;
+                }
+                else if (iterator.name == "navigationMode")
+                {
+                    iterator.intValue = (int)UnityEngine.UI.Navigation.Mode.Automatic;
                 }
 
                 continue;

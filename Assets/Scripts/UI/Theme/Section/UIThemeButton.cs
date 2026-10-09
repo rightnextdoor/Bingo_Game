@@ -82,6 +82,13 @@ public class UIThemeButton : MonoBehaviour, IUIThemeTarget
 
         UIThemeApplier.ApplyImageStyle(buttonImage, style);
         UIThemeApplier.ApplySelectableVisualStyle(selectable, style);
+        if (selectable != null && style != null)
+        {
+            Navigation navigation = selectable.navigation;
+            navigation.mode = style.NavigationMode;
+            selectable.navigation = navigation;
+        }
+
         UIThemeApplier.ApplyTextStyle(buttonText, style);
     }
 }

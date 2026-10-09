@@ -1,3 +1,4 @@
+using BingoGame.UI;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -70,6 +71,7 @@ public class LobbyManager : MonoBehaviour
     public event Action<LobbyExitResult> LobbyExitFailed;
     public event Action<LobbyExitNotification> LobbyForcedExit;
     public event Action<LobbyViewData> LobbyViewUpdated;
+    public event Action<LobbyViewData, LobbyUIRefresh> LobbyUIRefreshRequested;
     public event Action<LobbyPlayerBoardUpdateData> LobbyPlayerBoardUpdated;
 
     #endregion
@@ -381,7 +383,7 @@ public class LobbyManager : MonoBehaviour
         lastEntryResult = result;
 
         ApplyPendingNetworkLobbyViewData();
-        PublishCurrentLobbyView();
+        PublishCurrentLobbyView(LobbyUIRefresh.All);
 
         if (runtimeType == SessionRuntimeType.Network)
         {
@@ -744,7 +746,7 @@ public class LobbyManager : MonoBehaviour
             return;
         }
 
-        PublishCurrentLobbyView();
+        PublishCurrentLobbyView(LobbyUIRefresh.All);
     }
 
     private void OnLocalPlayerBoardUpdateReceived(LobbyPlayerBoardUpdateData updateData)
@@ -800,7 +802,7 @@ public class LobbyManager : MonoBehaviour
 
         if (HandleNetworkApplyResult(lobbyClientState.ApplyPlayerJoined(data)))
         {
-            PublishCurrentLobbyView();
+            PublishCurrentLobbyView(LobbyUIRefresh.PlayerState);
         }
     }
 
@@ -813,7 +815,7 @@ public class LobbyManager : MonoBehaviour
 
         if (HandleNetworkApplyResult(lobbyClientState.ApplyPlayerJoinedBatch(data)))
         {
-            PublishCurrentLobbyView();
+            PublishCurrentLobbyView(LobbyUIRefresh.PlayerState);
         }
     }
 
@@ -841,7 +843,7 @@ public class LobbyManager : MonoBehaviour
             completedInitialSyncVersion++;
         }
 
-        PublishCurrentLobbyView();
+        PublishCurrentLobbyView(LobbyUIRefresh.All);
 
         if (data.boards == null)
         {
@@ -868,7 +870,7 @@ public class LobbyManager : MonoBehaviour
 
         if (HandleNetworkApplyResult(lobbyClientState.ApplyPlayerLeft(data)))
         {
-            PublishCurrentLobbyView();
+            PublishCurrentLobbyView(LobbyUIRefresh.PlayerState);
         }
     }
 
@@ -881,7 +883,7 @@ public class LobbyManager : MonoBehaviour
 
         if (HandleNetworkApplyResult(lobbyClientState.ApplyPlayerReadyChanged(data)))
         {
-            PublishCurrentLobbyView();
+            PublishCurrentLobbyView(LobbyUIRefresh.PlayerState);
         }
     }
 
@@ -894,7 +896,7 @@ public class LobbyManager : MonoBehaviour
 
         if (HandleNetworkApplyResult(lobbyClientState.ApplySettingsChanged(data)))
         {
-            PublishCurrentLobbyView();
+            PublishCurrentLobbyView(LobbyUIRefresh.Settings);
         }
     }
 
@@ -907,7 +909,7 @@ public class LobbyManager : MonoBehaviour
 
         if (HandleNetworkApplyResult(lobbyClientState.ApplyStateChanged(data)))
         {
-            PublishCurrentLobbyView();
+            PublishCurrentLobbyView(LobbyUIRefresh.Header | LobbyUIRefresh.BoardControls);
         }
     }
 
@@ -927,7 +929,7 @@ public class LobbyManager : MonoBehaviour
         isLobbyResyncPending = false;
         isInitialSyncInProgress = false;
         completedInitialSyncVersion++;
-        PublishCurrentLobbyView();
+        PublishCurrentLobbyView(LobbyUIRefresh.All);
     }
 
     private bool HandleNetworkApplyResult(LobbyStateApplyResult applyResult)
@@ -1150,7 +1152,7 @@ public class LobbyManager : MonoBehaviour
         pendingNetworkLobbyViewData = null;
     }
 
-    private void PublishCurrentLobbyView()
+    private void PublishCurrentLobbyView(LobbyUIRefresh _sections = LobbyUIRefresh.All)
     {
         if (lobbyClientState.ViewData == null)
         {
@@ -1159,6 +1161,7 @@ public class LobbyManager : MonoBehaviour
 
         PlayerProfileRegistry.instance?.SyncFromLobbyView(lobbyClientState.ViewData);
         LobbyViewUpdated?.Invoke(lobbyClientState.ViewData);
+        LobbyUIRefreshRequested?.Invoke(lobbyClientState.ViewData, _sections);
     }
 
     public LobbyBoardData GetPlayerBoard(string userId)

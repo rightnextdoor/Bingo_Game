@@ -90,6 +90,19 @@ public class GameHeaderController : MonoBehaviour
         RefreshTimersAndStatus();
     }
 
+    public void RefreshGameState(GameSessionData _gameSessionData)
+    {
+        if (_gameSessionData == null)
+        {
+            ClearHeader();
+            return;
+        }
+
+        currentGameSession = new GameSessionData(_gameSessionData);
+        SetLeaveInteractable(true);
+        RefreshTimersAndStatus();
+    }
+
     public void SetTimerSeconds(float remainingSeconds)
     {
         if (gameTimerText == null)

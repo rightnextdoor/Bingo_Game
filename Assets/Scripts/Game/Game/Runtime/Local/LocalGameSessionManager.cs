@@ -1,3 +1,4 @@
+using BingoGame.UI;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -10,7 +11,7 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
     public const string GameIdPrefix = "local_";
 
     public static LocalGameSessionManager instance;
-    public static event Action<GameSessionData> LocalGameSessionUpdated;
+    public static event Action<GameSessionData, GameUIRefresh> LocalGameSessionUpdated;
     public static event Action<GamePlayerMarkedCellChangedData> LocalGamePlayerMarkedCellChanged;
     public static event Action<GameBingoCheckResolvedData> LocalBingoCheckResolved;
 
@@ -73,6 +74,7 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
 
             if (!GameBingoCheckAuthority.UpdateSessionLoop(
                     gameSessionData,
+                    out GameUIRefresh sections,
                     CaptureSoloBallCheckpoint))
             {
                 continue;
@@ -80,7 +82,7 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
 
             GameScoreAuthority.PersistFinalizedLocalScores(gameSessionData);
             gameSessionData.revision++;
-            LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData));
+            LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData), sections);
             SendPendingMarkedCellUpdates(gameSessionData);
             SendPendingBingoCheckPresentations(gameSessionData);
         }
@@ -490,7 +492,7 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
         if (sessionChanged)
         {
             gameSessionData.revision++;
-            LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData));
+            LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData), GameUIRefresh.PlayerState);
         }
 
         return Task.FromResult(GameSessionResult.Succeeded(GameSessionOperationType.SceneReady, gameSessionData));
@@ -551,7 +553,7 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
         }
         else
         {
-            LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData));
+            LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData), GameUIRefresh.PlayerState);
         }
 
         return Task.FromResult(
@@ -584,7 +586,7 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
         }
         else
         {
-            LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData));
+            LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData), GameUIRefresh.PlayerState);
         }
 
         return true;
@@ -626,7 +628,7 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
         }
         else
         {
-            LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData));
+            LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData), GameUIRefresh.PlayerState);
         }
 
         return true;
@@ -642,7 +644,7 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
         }
 
         gameSessionData.revision++;
-        LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData));
+        LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData), GameUIRefresh.PlayerState);
         return true;
     }
 
@@ -730,7 +732,7 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
         gameSessionData.revision++;
         resolvedData.revision = gameSessionData.revision;
         resolvedData.matchCompleted = gameSessionData.gameState == GameSessionState.Completed;
-        LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData));
+        LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData), GameUIRefresh.PlayerState);
         return true;
     }
 
@@ -756,7 +758,7 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
         {
             GameScoreAuthority.PersistFinalizedLocalScores(gameSessionData);
             gameSessionData.revision++;
-            LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData));
+            LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData), GameUIRefresh.PlayerState);
             return true;
         }
 
@@ -785,7 +787,7 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
 
         GameScoreAuthority.PersistFinalizedLocalScores(gameSessionData);
         gameSessionData.revision++;
-        LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData));
+        LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData), GameUIRefresh.PlayerState);
         return true;
     }
 

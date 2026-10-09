@@ -34,6 +34,7 @@ public class LobbyPlayerListController : MonoBehaviour
     private readonly Dictionary<string, LobbyPlayerRowUI> visibleRowsByUserId = new Dictionary<string, LobbyPlayerRowUI>(StringComparer.Ordinal);
 
     private VirtualizedScrollList virtualizedList;
+    private bool refreshBoundBoards = true;
     private string selectedUserId = string.Empty;
 
     private int heldArrowDirection;
@@ -152,7 +153,7 @@ public class LobbyPlayerListController : MonoBehaviour
 
     #region Display
 
-    public void DisplayLobbyInfo(LobbyViewData lobbyViewData, string localUserId)
+    public void DisplayLobbyInfo(LobbyViewData lobbyViewData, string localUserId, bool _refreshBoards = true)
     {
         if (lobbyViewData == null)
         {
@@ -160,15 +161,15 @@ public class LobbyPlayerListController : MonoBehaviour
         }
 
         BuildLobbyPlayerListData(lobbyViewData, localUserId);
-        DisplayCurrentPlayers(lobbyViewData.playerCount, lobbyViewData.maxPlayer, lobbyViewData.maxPlayers);
+        DisplayCurrentPlayers(lobbyViewData.playerCount, lobbyViewData.maxPlayer, lobbyViewData.maxPlayers, _refreshBoards);
     }
 
-    public void DisplayPlayers(IReadOnlyList<PlayerListPlayerData> playerData, int playerCount)
+    public void DisplayPlayers(IReadOnlyList<PlayerListPlayerData> playerData, int playerCount, bool _refreshBoards = true)
     {
-        DisplayPlayers(playerData, playerCount, 0, true);
+        DisplayPlayers(playerData, playerCount, 0, true, _refreshBoards);
     }
 
-    public void DisplayPlayers(IReadOnlyList<PlayerListPlayerData> playerData, int playerCount, int maxPlayer, bool maxPlayers)
+    public void DisplayPlayers(IReadOnlyList<PlayerListPlayerData> playerData, int playerCount, int maxPlayer, bool maxPlayers, bool _refreshBoards = true)
     {
         players.Clear();
         playerIndexByUserId.Clear();
@@ -191,10 +192,10 @@ public class LobbyPlayerListController : MonoBehaviour
 
         ApplyCurrentProfiles();
         RefreshResolvedDisplayNames();
-        DisplayCurrentPlayers(playerCount, maxPlayer, maxPlayers);
+        DisplayCurrentPlayers(playerCount, maxPlayer, maxPlayers, _refreshBoards);
     }
 
-    private void DisplayCurrentPlayers(int playerCount, int maxPlayer, bool maxPlayers)
+    private void DisplayCurrentPlayers(int playerCount, int maxPlayer, bool maxPlayers, bool _refreshBoards)
     {
         UpdatePlayerCount(playerCount, maxPlayer, maxPlayers);
 
@@ -208,7 +209,9 @@ public class LobbyPlayerListController : MonoBehaviour
             InitializeVirtualizedList();
         }
 
+        refreshBoundBoards = _refreshBoards;
         virtualizedList?.SetItemCount(players.Count);
+        refreshBoundBoards = true;
         RefreshVisibleSelection();
     }
 
@@ -295,7 +298,8 @@ public class LobbyPlayerListController : MonoBehaviour
         }
 
         bool highlighted = !string.IsNullOrWhiteSpace(selectedUserId) && selectedUserId == playerData.userId;
-        row.Setup(playerData, OnRowClicked, OnKickRequested, highlighted);
+        bool refreshBoard = refreshBoundBoards || row.UserId != playerData.userId;
+        row.Setup(playerData, OnRowClicked, OnKickRequested, highlighted, refreshBoard);
         visibleRowsByUserId[playerData.userId] = row;
     }
 

@@ -1,3 +1,4 @@
+using BingoGame.UI;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -68,6 +69,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
     public event Action<GameSessionResult> GameEntryCompleted;
     public event Action<GameSessionResult> GameEntryFailed;
     public event Action<GameSessionData> GameSessionUpdated;
+    public event Action<GameSessionData, GameUIRefresh> GameUIRefreshRequested;
     public event Action<GamePlayerMarkedCellChangedData> GamePlayerMarkedCellChanged;
     public event Action<GameBingoCheckResolvedData> BingoCheckResolved;
     public event Action<string> GameDeleted;
@@ -412,6 +414,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
         }
 
         GameSessionUpdated?.Invoke(null);
+        GameUIRefreshRequested?.Invoke(null, GameUIRefresh.All);
     }
 
     public void LoadData(GameData data)
@@ -994,7 +997,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
 
             if (result.gameSessionData != null)
             {
-                ApplyAuthoritativeGameSessionSnapshot(result.gameSessionData);
+                ApplyAuthoritativeGameSessionSnapshot(result.gameSessionData, GameUIRefresh.PlayerState);
             }
 
             return true;
@@ -1341,12 +1344,12 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
                 currentGameSession.gameModeType);
         }
         ApplyFinalizedScoreForCurrentNetworkUser();
-        GameSessionUpdated?.Invoke(new GameSessionData(currentGameSession));
+        PublishGameSessionUpdate(GameUIRefresh.All);
         HandleCurrentGameCompletion();
         return true;
     }
 
-    private void ApplyGameSessionUpdate(GameSessionData gameSessionData)
+    private void ApplyGameSessionUpdate(GameSessionData gameSessionData, GameUIRefresh _sections = GameUIRefresh.All)
     {
         if (gameSessionData == null || currentGameSession == null ||
             !string.Equals(gameSessionData.gameId, currentGameSession.gameId, StringComparison.Ordinal))
@@ -1359,7 +1362,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
             return;
         }
 
-        ApplyAuthoritativeGameSessionSnapshot(gameSessionData);
+        ApplyAuthoritativeGameSessionSnapshot(gameSessionData, _sections);
     }
 
     private void ApplyGamePlayStateChanged(GamePlayStateChangedData updateData)
@@ -1407,7 +1410,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
 
         currentGameSession.revision = updateData.revision;
         ApplyFinalizedScoreForCurrentNetworkUser();
-        GameSessionUpdated?.Invoke(new GameSessionData(currentGameSession));
+        PublishGameSessionUpdate(updateData.uiRefreshSections);
         HandleCurrentGameCompletion();
     }
 
@@ -1429,7 +1432,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
         ApplyPlayerState(playerData, updateData);
         currentGameSession.revision = updateData.revision;
         ApplyFinalizedScoreForCurrentNetworkUser();
-        GameSessionUpdated?.Invoke(new GameSessionData(currentGameSession));
+        PublishGameSessionUpdate(GameUIRefresh.PlayerState);
     }
 
     private void ApplyGamePlayerMarkedCellChanged(
@@ -1476,7 +1479,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
         }
 
         currentGameSession.revision = updateData.revision;
-        GameSessionUpdated?.Invoke(new GameSessionData(currentGameSession));
+        PublishGameSessionUpdate(GameUIRefresh.PlayerState);
     }
 
     private bool CanApplyGameSessionDelta(string gameId, long revision)
@@ -1501,7 +1504,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
         return true;
     }
 
-    private void ApplyAuthoritativeGameSessionSnapshot(GameSessionData gameSessionData)
+    private void ApplyAuthoritativeGameSessionSnapshot(GameSessionData gameSessionData, GameUIRefresh _sections = GameUIRefresh.All)
     {
         if (gameSessionData == null || currentGameSession == null ||
             !string.Equals(gameSessionData.gameId, currentGameSession.gameId, StringComparison.Ordinal))
@@ -1512,8 +1515,15 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
         currentGameSession = new GameSessionData(gameSessionData);
         pendingLobbyId = currentGameSession.lobbyId;
         ApplyFinalizedScoreForCurrentNetworkUser();
-        GameSessionUpdated?.Invoke(new GameSessionData(currentGameSession));
+        PublishGameSessionUpdate(_sections);
         HandleCurrentGameCompletion();
+    }
+
+    private void PublishGameSessionUpdate(GameUIRefresh _sections)
+    {
+        GameSessionData snapshot = new GameSessionData(currentGameSession);
+        GameSessionUpdated?.Invoke(snapshot);
+        GameUIRefreshRequested?.Invoke(snapshot, _sections);
     }
 
     private void HandleCurrentGameCompletion()
@@ -2086,7 +2096,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
 
             if (result.gameSessionData != null)
             {
-                ApplyGameSessionUpdate(result.gameSessionData);
+                ApplyGameSessionUpdate(result.gameSessionData, GameUIRefresh.PlayerState);
             }
         }
         catch (Exception exception)
@@ -2117,9 +2127,9 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
         ApplyGamePlayStateChanged(updateData);
     }
 
-    private void OnLocalGameSessionUpdated(GameSessionData gameSessionData)
+    private void OnLocalGameSessionUpdated(GameSessionData gameSessionData, GameUIRefresh _sections)
     {
-        ApplyGameSessionUpdate(gameSessionData);
+        ApplyGameSessionUpdate(gameSessionData, _sections);
     }
 
     private void OnLocalGamePlayerMarkedCellChanged(
@@ -2183,6 +2193,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
             currentGameSession = null;
             SetEntryState(GameSessionEntryState.Idle);
             GameSessionUpdated?.Invoke(null);
+            GameUIRefreshRequested?.Invoke(null, GameUIRefresh.All);
         }
 
         GameDeleted?.Invoke(gameId);

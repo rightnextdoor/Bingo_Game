@@ -1,3 +1,4 @@
+using BingoGame.UI;
 using System;
 using UnityEngine;
 
@@ -11,8 +12,9 @@ public sealed class GameBotTransitionResult
 
 public static class GameBotManager
 {
-    public static bool UpdateBots(GameSessionData gameSessionData)
+    public static bool UpdateBots(GameSessionData gameSessionData, out GameUIRefresh _sections)
     {
+        _sections = GameUIRefresh.None;
         if (gameSessionData == null ||
             gameSessionData.players == null ||
             gameSessionData.gameState != GameSessionState.InProgress ||
@@ -44,15 +46,25 @@ public static class GameBotManager
 
                 if (checkRequest != null)
                 {
-                    changed |= ProcessAutomaticCheck(
+                    bool checkChanged = ProcessAutomaticCheck(
                         gameSessionData,
                         playerData,
                         checkRequest);
+                    changed |= checkChanged;
+                    if (checkChanged)
+                    {
+                        _sections |= GameUIRefresh.PlayerState;
+                    }
                 }
             }
         }
 
-        changed |= ResolvePendingRiskDecisions(gameSessionData);
+        bool decisionsChanged = ResolvePendingRiskDecisions(gameSessionData);
+        changed |= decisionsChanged;
+        if (decisionsChanged)
+        {
+            _sections |= GameUIRefresh.PlayerState;
+        }
         return changed;
     }
 

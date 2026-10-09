@@ -1,3 +1,4 @@
+using BingoGame.UI;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -31,14 +32,14 @@ public class LobbyController
 
     [NonSerialized] private Queue<UserData> pendingBotUsers = new Queue<UserData>();
     [NonSerialized] private Queue<string> pendingBoardRegenerationUserIds = new Queue<string>();
-    [NonSerialized] private bool pendingViewRefresh;
+    [NonSerialized] private LobbyUIRefresh pendingUIRefresh;
 
     public IReadOnlyList<LobbyPlayerData> Players => players;
     public int PlayerCount => players != null ? players.Count : 0;
     public int SceneReadyPlayerCount => GetVisiblePlayerCount();
     public int PendingPlayerCount => pendingBotUsers != null ? pendingBotUsers.Count : 0;
     public int ReservedPlayerCount => PlayerCount + PendingPlayerCount;
-    public bool HasPendingWork => pendingViewRefresh || PendingPlayerCount > 0 || (pendingBoardRegenerationUserIds != null && pendingBoardRegenerationUserIds.Count > 0);
+    public bool HasPendingWork => pendingUIRefresh != LobbyUIRefresh.None || PendingPlayerCount > 0 || (pendingBoardRegenerationUserIds != null && pendingBoardRegenerationUserIds.Count > 0);
     public bool IsFull => maxPlayer > 0 && ReservedPlayerCount >= maxPlayer;
     public bool IsEmpty => PlayerCount == 0;
 
@@ -155,7 +156,7 @@ public class LobbyController
         players = new List<LobbyPlayerData>();
         pendingBotUsers = new Queue<UserData>();
         pendingBoardRegenerationUserIds = new Queue<string>();
-        pendingViewRefresh = false;
+        pendingUIRefresh = LobbyUIRefresh.None;
 
         lobbyName = GetDefaultLobbyName();
         roomCode = string.Empty;
@@ -421,7 +422,7 @@ public class LobbyController
 
         if (refreshViews)
         {
-            RefreshViews();
+            RefreshViews(LobbyUIRefresh.PlayerState);
         }
 
         return true;
@@ -470,7 +471,6 @@ public class LobbyController
 
         playerData.userData.playerName = playerName;
         playerData.userData.iconId = iconId;
-        RefreshViews();
         return true;
     }
 
@@ -526,7 +526,7 @@ public class LobbyController
                 shouldCloseLobby,
                 requestedCloseReason);
 
-            RefreshViews();
+            RefreshViews(LobbyUIRefresh.PlayerState);
             PlayerExitProcessed?.Invoke(this, result);
 
             return result;
@@ -575,7 +575,7 @@ public class LobbyController
             return true;
         }
 
-        RefreshViews();
+        RefreshViews(LobbyUIRefresh.PlayerState);
 
         return true;
     }
@@ -738,7 +738,7 @@ public class LobbyController
     {
         addBots = requestedCount > 0;
         int queuedCount = QueueRandomBotsInternal(requestedCount, int.MaxValue);
-        pendingViewRefresh = true;
+        pendingUIRefresh |= LobbyUIRefresh.PlayerState;
         return queuedCount;
     }
 
@@ -757,7 +757,7 @@ public class LobbyController
 
         if (BotCount != previousBotCount)
         {
-            RefreshViews();
+            RefreshViews(LobbyUIRefresh.PlayerState);
         }
 
         return BotCount - previousBotCount;
@@ -783,7 +783,7 @@ public class LobbyController
             QueueRandomBotsInternal(clampedBotCount - currentBotCount, int.MaxValue);
         }
 
-        pendingViewRefresh = true;
+        pendingUIRefresh |= LobbyUIRefresh.PlayerState;
         return clampedBotCount;
     }
 #endif
@@ -1026,8 +1026,8 @@ public class LobbyController
         }
 
         EnsurePendingWorkCollections();
-        bool shouldRefreshViews = pendingViewRefresh;
-        pendingViewRefresh = false;
+        LobbyUIRefresh sections = pendingUIRefresh;
+        pendingUIRefresh = LobbyUIRefresh.None;
         int processedItems = 0;
 
         while (processedItems < maximumItems && pendingBotUsers.Count > 0)
@@ -1069,12 +1069,17 @@ public class LobbyController
             batchResult.changedBoards.Add(new LobbyPlayerBoardViewData(userId, playerData.boardData));
         }
 
-        if (shouldRefreshViews || batchResult.HasChanges)
+        if (batchResult.addedPlayers.Count > 0)
         {
-            RefreshViews();
+            sections |= LobbyUIRefresh.PlayerState;
         }
 
-        return shouldRefreshViews || batchResult.HasChanges;
+        if (sections != LobbyUIRefresh.None)
+        {
+            RefreshViews(sections);
+        }
+
+        return sections != LobbyUIRefresh.None || batchResult.HasChanges;
     }
 
     #endregion
@@ -1111,8 +1116,8 @@ public class LobbyController
         EnsurePendingWorkCollections();
         pendingBotUsers.Clear();
         pendingBoardRegenerationUserIds.Clear();
-        pendingViewRefresh = false;
-        RefreshViews();
+        pendingUIRefresh = LobbyUIRefresh.None;
+        RefreshViews(LobbyUIRefresh.PlayerState | LobbyUIRefresh.BoardControls);
 
         return removedUserIds;
     }
@@ -1168,7 +1173,7 @@ public class LobbyController
         lobby.lobbyState = LobbyState.FinalCountdown;
         timer.StartFinalCountdown();
 
-        RefreshViews();
+        RefreshViews(LobbyUIRefresh.PlayerState | LobbyUIRefresh.BoardControls);
         FinalCountdownStarted?.Invoke(this);
 
         return true;
@@ -1238,7 +1243,7 @@ public class LobbyController
         {
             if (botsChanged)
             {
-                RefreshViews();
+                RefreshViews(LobbyUIRefresh.PlayerState | LobbyUIRefresh.BoardControls);
             }
 
             return false;
@@ -1246,7 +1251,7 @@ public class LobbyController
 
         lobby.lobbyState = LobbyState.FinalCountdown;
 
-        RefreshViews();
+        RefreshViews(LobbyUIRefresh.PlayerState | LobbyUIRefresh.BoardControls);
         FinalCountdownStarted?.Invoke(this);
 
         return true;
@@ -1289,7 +1294,7 @@ public class LobbyController
         lobby.lobbyState = LobbyState.InGame;
         timer.Stop();
 
-        RefreshViews();
+        RefreshViews(LobbyUIRefresh.PlayerState | LobbyUIRefresh.BoardControls);
 
         return true;
     }
@@ -1332,7 +1337,7 @@ public class LobbyController
         }
 
         InitializeTimer(lobby.playMode);
-        RefreshViews();
+        RefreshViews(LobbyUIRefresh.PlayerState | LobbyUIRefresh.BoardControls);
         return true;
     }
 
@@ -1375,7 +1380,7 @@ public class LobbyController
         }
 
         roomCode = GenerateUniqueRoomCode(isRoomCodeAvailable);
-        RefreshViews();
+        RefreshViews(LobbyUIRefresh.CustomInfo);
 
         return !string.IsNullOrWhiteSpace(roomCode);
     }
@@ -1413,7 +1418,7 @@ public class LobbyController
     public void RefreshResolvedGameData()
     {
         ResolveGameModeData();
-        RefreshViews();
+        RefreshViews(LobbyUIRefresh.Header | LobbyUIRefresh.GameInfo);
     }
 
     private BingoGameModeType ResolveGameModeType(BingoGameModeType requestedGameModeType)
@@ -1593,7 +1598,7 @@ public class LobbyController
             QueueRegenerateAllPlayerBoards();
         }
 
-        pendingViewRefresh = true;
+        pendingUIRefresh |= LobbyUIRefresh.Settings;
         return true;
     }
 
@@ -1735,7 +1740,7 @@ public class LobbyController
         views.Remove(view);
     }
 
-    public void RefreshViews()
+    public void RefreshViews(LobbyUIRefresh _sections = LobbyUIRefresh.PlayerState)
     {
         if (views == null || views.Count == 0)
         {
@@ -1754,7 +1759,7 @@ public class LobbyController
                 continue;
             }
 
-            view.DisplayLobbyInfo(lobbyViewData);
+            view.RefreshLobbyUI(lobbyViewData, _sections);
         }
     }
 

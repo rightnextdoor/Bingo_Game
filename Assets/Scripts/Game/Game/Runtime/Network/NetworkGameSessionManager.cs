@@ -98,10 +98,10 @@ public class NetworkGameSessionManager : MonoBehaviour
                 continue;
             }
 
-            if (GameBingoCheckAuthority.UpdateSessionLoop(gameSessionData))
+            if (GameBingoCheckAuthority.UpdateSessionLoop(gameSessionData, out BingoGame.UI.GameUIRefresh sections))
             {
                 gameSessionData.revision++;
-                BroadcastGamePlayStateChanged(gameSessionData);
+                BroadcastGamePlayStateChanged(gameSessionData, sections);
                 SendPendingMarkedCellUpdates(gameSessionData);
                 SendPendingBingoCheckPresentations(gameSessionData);
             }
@@ -1022,7 +1022,9 @@ public class NetworkGameSessionManager : MonoBehaviour
         }
     }
 
-    private void BroadcastGamePlayStateChanged(GameSessionData gameSessionData)
+    private void BroadcastGamePlayStateChanged(
+        GameSessionData gameSessionData,
+        BingoGame.UI.GameUIRefresh _sections = BingoGame.UI.GameUIRefresh.PlayerState)
     {
         if (gameSessionData?.players == null ||
             connectionRegistry == null || !connectionRegistry.IsReady)
@@ -1031,6 +1033,7 @@ public class NetworkGameSessionManager : MonoBehaviour
         }
 
         GamePlayStateChangedData updateData = new GamePlayStateChangedData(gameSessionData);
+        updateData.uiRefreshSections = _sections;
 
         for (int i = 0; i < gameSessionData.players.Count; i++)
         {

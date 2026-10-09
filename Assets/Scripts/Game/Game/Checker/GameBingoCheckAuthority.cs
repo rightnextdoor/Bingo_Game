@@ -1,3 +1,4 @@
+using BingoGame.UI;
 using System;
 using System.Collections.Generic;
 
@@ -7,6 +8,15 @@ public static class GameBingoCheckAuthority
         GameSessionData gameSessionData,
         Action<GameSessionData> ballCalled = null)
     {
+        return UpdateSessionLoop(gameSessionData, out _, ballCalled);
+    }
+
+    public static bool UpdateSessionLoop(
+        GameSessionData gameSessionData,
+        out GameUIRefresh _sections,
+        Action<GameSessionData> ballCalled = null)
+    {
+        _sections = GameUIRefresh.None;
         if (gameSessionData == null ||
             gameSessionData.gameState != GameSessionState.InProgress ||
             gameSessionData.gamePlayController == null ||
@@ -16,18 +26,20 @@ public static class GameBingoCheckAuthority
         }
 
         GamePlayController playController = gameSessionData.gamePlayController;
-        bool changed = playController.UpdateRiskTimer();
+        bool changed = RequestRefresh(playController.UpdateRiskTimer(), GameUIRefresh.Header | GameUIRefresh.BoardControls, ref _sections);
 
         if (playController.Phase != GamePlayPhase.Ended)
         {
-            changed |= DeathGameplayAuthority.UpdateAutomaticBoards(gameSessionData);
-            changed |= GameBotManager.UpdateBots(gameSessionData);
-            changed |= DeathGameplayAuthority.ApplyFrozenPlayerThreshold(gameSessionData);
-            changed |= RiskGameplayAuthority.UpdatePatternWindows(gameSessionData);
+            changed |= DeathGameplayAuthority.UpdateAutomaticBoards(gameSessionData, out GameUIRefresh boardSections);
+            _sections |= boardSections;
+            changed |= GameBotManager.UpdateBots(gameSessionData, out GameUIRefresh botSections);
+            _sections |= botSections;
+            changed |= RequestRefresh(DeathGameplayAuthority.ApplyFrozenPlayerThreshold(gameSessionData), GameUIRefresh.PlayerState, ref _sections);
+            changed |= RequestRefresh(RiskGameplayAuthority.UpdatePatternWindows(gameSessionData), GameUIRefresh.PlayerState, ref _sections);
 
             bool deathHandledBallBoundary =
                 DeathGameplayAuthority.TryHandleBallBoundary(gameSessionData, out bool deathBoundaryChanged);
-            changed |= deathBoundaryChanged;
+            changed |= RequestRefresh(deathBoundaryChanged, GameUIRefresh.PlayerState, ref _sections);
 
             if (!deathHandledBallBoundary &&
                 playController.BallTimer?.HasExpired() == true &&
@@ -35,23 +47,26 @@ public static class GameBingoCheckAuthority
             {
                 if (!playController.HasPendingCheckAnimations)
                 {
-                    changed |= playController.EndGame(GameEndReason.NoEligiblePlayers);
+                    changed |= RequestRefresh(playController.EndGame(GameEndReason.NoEligiblePlayers), GameUIRefresh.PlayerState, ref _sections);
                 }
             }
             else if (!deathHandledBallBoundary)
             {
                 int previousBallCallCount = playController.BallCallRequestCount;
-                changed |= playController.UpdateBallCallLoop();
+                changed |= RequestRefresh(playController.UpdateBallCallLoop(), GameUIRefresh.Header | GameUIRefresh.BoardControls, ref _sections);
 
                 if (playController.BallCallRequestCount > previousBallCallCount)
                 {
+                    _sections |= GameUIRefresh.Balls;
                     ballCalled?.Invoke(gameSessionData);
                 }
             }
 
-            changed |= DeathGameplayAuthority.UpdateAutomaticBoards(gameSessionData);
-            changed |= GameBotManager.UpdateBots(gameSessionData);
-            changed |= RiskGameplayAuthority.UpdatePatternWindows(gameSessionData);
+            changed |= DeathGameplayAuthority.UpdateAutomaticBoards(gameSessionData, out boardSections);
+            _sections |= boardSections;
+            changed |= GameBotManager.UpdateBots(gameSessionData, out botSections);
+            _sections |= botSections;
+            changed |= RequestRefresh(RiskGameplayAuthority.UpdatePatternWindows(gameSessionData), GameUIRefresh.PlayerState, ref _sections);
         }
 
         if (playController.Phase == GamePlayPhase.Ended &&
@@ -75,9 +90,20 @@ public static class GameBingoCheckAuthority
 
             gameSessionData.gameState = GameSessionState.Completed;
             changed = true;
+            _sections |= GameUIRefresh.PlayerState;
         }
 
         return changed;
+    }
+
+    private static bool RequestRefresh(bool _changed, GameUIRefresh _sections, ref GameUIRefresh _requestedSections)
+    {
+        if (_changed)
+        {
+            _requestedSections |= _sections;
+        }
+
+        return _changed;
     }
 
     public static GameBingoCheckResolvedData ProcessCheck(
@@ -370,8 +396,9 @@ public static class DeathGameplayAuthority
         return gameSessionData?.gamePlayController?.IsDeathRule == true;
     }
 
-    public static bool UpdateAutomaticBoards(GameSessionData gameSessionData)
+    public static bool UpdateAutomaticBoards(GameSessionData gameSessionData, out GameUIRefresh _sections)
     {
+        _sections = GameUIRefresh.None;
         if (!IsDeathGame(gameSessionData) ||
             gameSessionData.gameState != GameSessionState.InProgress ||
             gameSessionData.gamePlayController.Phase == GamePlayPhase.Ended ||
@@ -400,23 +427,38 @@ public static class DeathGameplayAuthority
 
             if (checkRequest != null)
             {
-                changed |= CompletePendingCheck(
+                bool checkChanged = CompletePendingCheck(
                     gameSessionData,
                     playerData,
                     checkRequest);
+                changed |= checkChanged;
+                if (checkChanged)
+                {
+                    _sections |= GameUIRefresh.PlayerState;
+                }
             }
         }
 
         if (GameRankAuthority.IsEnabled(gameSessionData))
         {
-            changed |= ResolveRankedCheckingPlayers(gameSessionData);
-            changed |= FinalizeRankedDeathIfReady(gameSessionData);
+            bool rankedChanged = ResolveRankedCheckingPlayers(gameSessionData);
+            rankedChanged |= FinalizeRankedDeathIfReady(gameSessionData);
+            changed |= rankedChanged;
+            if (rankedChanged)
+            {
+                _sections |= GameUIRefresh.PlayerState;
+            }
             return changed;
         }
 
         bool resolvedCheckingPlayers = ResolveOrdinaryCheckingPlayers(gameSessionData);
         changed |= resolvedCheckingPlayers;
-        changed |= ResolveZeroEligibleTieBreak(gameSessionData);
+        bool tieBreakChanged = ResolveZeroEligibleTieBreak(gameSessionData);
+        changed |= tieBreakChanged;
+        if (resolvedCheckingPlayers || tieBreakChanged)
+        {
+            _sections |= GameUIRefresh.PlayerState;
+        }
 
         if (gameSessionData.gamePlayController.Phase == GamePlayPhase.Ended)
         {
@@ -427,7 +469,12 @@ public static class DeathGameplayAuthority
             gameSessionData.GetEligiblePlayerCount() == 1 &&
             !HasCheckingPlayers(gameSessionData))
         {
-            changed |= gameSessionData.gamePlayController.EndGame(GameEndReason.RuleCompleted);
+            bool ended = gameSessionData.gamePlayController.EndGame(GameEndReason.RuleCompleted);
+            changed |= ended;
+            if (ended)
+            {
+                _sections |= GameUIRefresh.PlayerState;
+            }
         }
 
         return changed;

@@ -459,6 +459,7 @@ public class GameSessionData
 [Serializable]
 public class GamePlayStateChangedData
 {
+    public BingoGame.UI.GameUIRefresh uiRefreshSections = BingoGame.UI.GameUIRefresh.Gameplay;
     public string gameId;
     public long revision;
     public GameSessionState gameState;
@@ -752,6 +753,7 @@ public class GamePlayStateChangedBatchData
     {
         return new GamePlayStateChangedData
         {
+            uiRefreshSections = source.uiRefreshSections,
             gameId = source.gameId ?? string.Empty,
             revision = source.revision,
             gameState = source.gameState,

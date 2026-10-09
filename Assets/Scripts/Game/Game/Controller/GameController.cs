@@ -1,3 +1,4 @@
+using BingoGame.UI;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -42,6 +43,7 @@ public class GameController : MonoBehaviour
     private string displayedBoardGameId = string.Empty;
     private string displayedBoardUserId = string.Empty;
     private bool hasDisplayedLocalBoard;
+    private bool isLocalBoardAvailable;
     private bool displayedLocalAutomaticBoardEnabled;
     private BingoCheckResult activeDeathCheckResult;
     private int activeDeathCheckNumber;
@@ -52,9 +54,6 @@ public class GameController : MonoBehaviour
     private string pendingRankedManualCheckUserId = string.Empty;
     private bool isRankedManualEndAnimationPlaying;
     private string gameOverPopupGameId = string.Empty;
-    private bool hasInitializedSections;
-    private bool refreshSections;
-    private bool displayedCheckPending;
 
     #endregion
 
@@ -91,7 +90,6 @@ public class GameController : MonoBehaviour
 
     private void OnEnable()
     {
-        hasInitializedSections = false;
         SessionPauseManager.PauseChanged -= OnSessionPauseChanged;
         SessionPauseManager.PauseChanged += OnSessionPauseChanged;
         SubscribeToHeader();
@@ -139,6 +137,11 @@ public class GameController : MonoBehaviour
 
     public void DisplayGameInfo(GameSessionData gameSessionData)
     {
+        RefreshGameUI(gameSessionData, GameUIRefresh.All);
+    }
+
+    private void RefreshGameUI(GameSessionData gameSessionData, GameUIRefresh _sections)
+    {
         if (ConnectionRecoveryManager.instance?.IsRecoveringInScene == true)
         {
             return;
@@ -167,61 +170,71 @@ public class GameController : MonoBehaviour
             ResetRankedManualCheckPresentation();
         }
 
+        if (isNewGame)
+        {
+            _sections = GameUIRefresh.All;
+        }
+
+        bool refreshSetup = (_sections & GameUIRefresh.GameInfo) != 0;
         GameModeManager gameModeManager = GameModeManager.instance;
-        BingoGameModeData gameModeData = gameModeManager != null
+        BingoGameModeData gameModeData = refreshSetup && gameModeManager != null
             ? gameModeManager.GetGameModeData(gameSessionData.gameModeType)
             : null;
-
         string gameName = gameModeData != null && !string.IsNullOrWhiteSpace(gameModeData.GameName)
             ? gameModeData.GameName
             : gameSessionData.gameModeType.ToString();
 
-        bool initializeSections = !hasInitializedSections || isNewGame;
-        bool refreshDisplay = initializeSections || refreshSections;
-        if (refreshDisplay || !SameHeader(previousSession, gameSessionData))
+        if ((_sections & GameUIRefresh.Header) != 0)
         {
-            headerController?.DisplayGameInfo(gameSessionData, gameName);
+            if (refreshSetup)
+            {
+                headerController?.DisplayGameInfo(gameSessionData, gameName);
+            }
+            else
+            {
+                headerController?.RefreshGameState(gameSessionData);
+            }
         }
-        if (refreshDisplay || previousSession == null ||
-            previousSession.ballCountType != gameSessionData.ballCountType ||
-            !SameValues(previousSession.gamePlayController?.BallController?.CalledNumbers,
-                gameSessionData.gamePlayController?.BallController?.CalledNumbers))
+
+        if ((_sections & GameUIRefresh.Balls) != 0)
         {
             ballDisplayController?.DisplayGameInfo(gameSessionData);
         }
 
         if (isNewGame &&
-            GameSessionManager.instance?.ConsumeSavedSoloBallReplay(
-                gameSessionData.gameId) == true)
+            GameSessionManager.instance?.ConsumeSavedSoloBallReplay(gameSessionData.gameId) == true)
         {
             ballDisplayController?.ReplayLatestBall(gameSessionData);
         }
 
         ShowDeathNotifications(previousSession, gameSessionData, isNewGame);
-        EnsureBoardPatternTracker(gameSessionData);
-        if (refreshDisplay || !hasDisplayedLocalBoard || displayedCheckPending != isBingoCheckPending ||
-            !SameLocalBoardState(previousSession, gameSessionData))
+        if (refreshSetup)
         {
-            DisplayPlayerBoard(gameSessionData);
-        }
-        TryPlayDeathEndAnimation(gameSessionData);
-        TryPlayRankedManualEndAnimation(gameSessionData);
-        if (refreshDisplay || !SamePlayerList(previousSession, gameSessionData))
-        {
-            DisplayPlayerList(gameSessionData);
-        }
-        if (initializeSections)
-        {
+            EnsureBoardPatternTracker(gameSessionData);
             DisplayGameModeInfo(gameSessionData, gameModeData, gameName, gameModeManager);
         }
-        if (refreshDisplay || previousSession == null || previousSession.playMode != gameSessionData.playMode ||
-            previousSession.lobbyName != gameSessionData.lobbyName || previousSession.roomCode != gameSessionData.roomCode ||
-            previousSession.hasPassword != gameSessionData.hasPassword || previousSession.lobbyPassword != gameSessionData.lobbyPassword)
+
+        if ((_sections & GameUIRefresh.Board) != 0)
+        {
+            ResetLocalBoardPresentation();
+            DisplayPlayerBoard(gameSessionData);
+        }
+        else if ((_sections & GameUIRefresh.BoardControls) != 0)
+        {
+            RefreshPlayerBoardControls(gameSessionData);
+        }
+
+        TryPlayDeathEndAnimation(gameSessionData);
+        TryPlayRankedManualEndAnimation(gameSessionData);
+        if ((_sections & GameUIRefresh.Players) != 0)
+        {
+            DisplayPlayerList(gameSessionData, (_sections & GameUIRefresh.Board) != 0);
+        }
+
+        if ((_sections & GameUIRefresh.CustomInfo) != 0)
         {
             DisplayCustomLobbyInfo(gameSessionData);
         }
-        hasInitializedSections = true;
-        refreshSections = false;
         ShowRiskSubmitNotificationIfNeeded(gameSessionData);
         CloseRiskDecisionPopupIfResolved(gameSessionData);
         TryOpenGameOverPopup(gameSessionData);
@@ -240,7 +253,6 @@ public class GameController : MonoBehaviour
             PopupManager.instance.CloseActivePopup();
         }
 
-        refreshSections = true;
         DisplayGameInfo(gameSessionData);
     }
 
@@ -254,90 +266,7 @@ public class GameController : MonoBehaviour
         headerController?.HideTimer();
     }
 
-    private static bool SameValues<T>(IReadOnlyList<T> _first, IReadOnlyList<T> _second)
-    {
-        int count = _first?.Count ?? 0;
-        if (count != (_second?.Count ?? 0)) return false;
-        for (int i = 0; i < count; i++)
-        {
-            if (!EqualityComparer<T>.Default.Equals(_first[i], _second[i])) return false;
-        }
-        return true;
-    }
-
-    private static bool SameBoard(LobbyBoardData _first, LobbyBoardData _second)
-    {
-        if (_first == null || _second == null) return _first == _second;
-        return _first.ballCountType == _second.ballCountType && _first.usesFreeCell == _second.usesFreeCell &&
-               SameValues(_first.cellNumbers, _second.cellNumbers);
-    }
-
-    private static bool SamePlayerList(GameSessionData _first, GameSessionData _second)
-    {
-        if (_first == null || _first.playMode != _second.playMode || _first.useRank != _second.useRank ||
-            _first.gameModeType != _second.gameModeType || _first.hasRule != _second.hasRule || _first.ruleType != _second.ruleType ||
-            (_first.players?.Count ?? 0) != (_second.players?.Count ?? 0)) return false;
-        for (int i = 0; i < (_first.players?.Count ?? 0); i++)
-        {
-            GamePlayerData first = _first.players[i];
-            GamePlayerData second = _second.players[i];
-            if (first == null || second == null)
-            {
-                if (first != second) return false;
-                continue;
-            }
-            if (first.userId != second.userId || first.userTag != second.userTag || first.playerName != second.playerName ||
-                first.iconId != second.iconId || first.isLobbyHost != second.isLobbyHost || first.isGameSceneReady != second.isGameSceneReady ||
-                first.controlType != second.controlType || first.isConnected != second.isConnected ||
-                first.rank != second.rank || first.currentMatchScore != second.currentMatchScore || first.gameStatus != second.gameStatus ||
-                !SameBoard(first.boardData, second.boardData) || !SameValues(first.markedCellIndices, second.markedCellIndices)) return false;
-        }
-        return true;
-    }
-
-    private static bool SameTimer(GamePlayTimer _first, GamePlayTimer _second)
-    {
-        if (_first == null || _second == null) return _first == _second;
-        return _first.IsActive == _second.IsActive && _first.EndTime == _second.EndTime;
-    }
-
-    private static bool SameHeader(GameSessionData _first, GameSessionData _second)
-    {
-        if (_first == null || _first.playMode != _second.playMode || _first.gameModeType != _second.gameModeType ||
-            _first.hasRule != _second.hasRule || _first.ruleType != _second.ruleType || _first.gameState != _second.gameState ||
-            _first.gamePlayController?.Phase != _second.gamePlayController?.Phase ||
-            _first.gamePlayController?.IsFinalBallCountdown != _second.gamePlayController?.IsFinalBallCountdown ||
-            !SameTimer(_first.gamePlayController?.BallTimer, _second.gamePlayController?.BallTimer) ||
-            !SameTimer(_first.gamePlayController?.RiskTimer, _second.gamePlayController?.RiskTimer) ||
-            (_first.players?.Count ?? 0) != (_second.players?.Count ?? 0) ||
-            _first.GetPlayerCountWithStatus(GamePlayerStatus.Won) != _second.GetPlayerCountWithStatus(GamePlayerStatus.Won) ||
-            _first.GetPlayerCountWithStatus(GamePlayerStatus.Eligible) != _second.GetPlayerCountWithStatus(GamePlayerStatus.Eligible) ||
-            _first.GetPlayerCountWithStatus(GamePlayerStatus.Checking) != _second.GetPlayerCountWithStatus(GamePlayerStatus.Checking)) return false;
-        GamePlayerData first = _first.GetPlayer(UserManager.instance?.UserId);
-        GamePlayerData second = _second.GetPlayer(UserManager.instance?.UserId);
-        if (first == null || second == null) return first == second;
-        return first.gameStatus == second.gameStatus && first.currentMatchScore == second.currentMatchScore &&
-               first.isSubmitTimerActive == second.isSubmitTimerActive && first.submitTimerEndTime == second.submitTimerEndTime;
-    }
-
-    private static bool SameLocalBoardState(GameSessionData _first, GameSessionData _second)
-    {
-        if (_first == null || _first.gameState != _second.gameState || _first.useRank != _second.useRank ||
-            _first.rankPlayerTotal != _second.rankPlayerTotal || (_first.players?.Count ?? 0) != (_second.players?.Count ?? 0) ||
-            _first.gameModeType != _second.gameModeType || _first.hasRule != _second.hasRule || _first.ruleType != _second.ruleType ||
-            _first.gamePlayController?.IsPlayerInputClosed != _second.gamePlayController?.IsPlayerInputClosed ||
-            _first.gamePlayController?.CanAcceptBingoChecks != _second.gamePlayController?.CanAcceptBingoChecks) return false;
-        GamePlayerData first = _first.GetPlayer(UserManager.instance?.UserId);
-        GamePlayerData second = _second.GetPlayer(UserManager.instance?.UserId);
-        if (first == null || second == null) return first == second;
-        return first.rank == second.rank && first.controlType == second.controlType && first.returnState == second.returnState &&
-               first.isConnected == second.isConnected && first.gameStatus == second.gameStatus &&
-               first.hasRiskCashedOut == second.hasRiskCashedOut && first.isRiskDecisionPending == second.isRiskDecisionPending &&
-               GameAutomaticBoardAuthority.IsAutomaticBoardEnabled(_first, first) == GameAutomaticBoardAuthority.IsAutomaticBoardEnabled(_second, second) &&
-               SameBoard(first.boardData, second.boardData) && SameValues(first.markedCellIndices, second.markedCellIndices);
-    }
-
-    private void DisplayPlayerList(GameSessionData gameSessionData)
+    private void DisplayPlayerList(GameSessionData gameSessionData, bool _refreshBoards)
     {
         visiblePlayers.Clear();
         bool localPlayerIsHost = gameSessionData?.GetPlayer(UserManager.instance?.UserId)?.isLobbyHost == true;
@@ -359,7 +288,7 @@ public class GameController : MonoBehaviour
             }
         }
 
-        playerListController?.DisplayPlayers(visiblePlayers, visiblePlayers.Count);
+        playerListController?.DisplayPlayers(visiblePlayers, visiblePlayers.Count, _refreshBoards);
     }
 
     private void AddVisibleHost(
@@ -468,14 +397,13 @@ public class GameController : MonoBehaviour
 
     private void ClearDisplay()
     {
-        hasInitializedSections = false;
-        refreshSections = false;
         visiblePlayers.Clear();
         markedCellsByUserId.Clear();
         boardPatternTracker.Clear();
         trackedPatternGameId = string.Empty;
         isBingoCheckPending = false;
         displayedGameSession = null;
+        isLocalBoardAvailable = false;
         riskNotificationGameId = string.Empty;
         previousRiskRemainingSeconds = -1;
         lastRiskSubmitNotificationEndTime = 0d;
@@ -517,6 +445,21 @@ public class GameController : MonoBehaviour
         {
             boardSectionController.ClearBoard();
         }
+
+        isLocalBoardAvailable = boardDisplayed;
+        RefreshPlayerBoardControls(gameSessionData);
+    }
+
+    private void RefreshPlayerBoardControls(GameSessionData gameSessionData)
+    {
+        if (boardSectionController == null)
+        {
+            return;
+        }
+
+        string localUserId = UserManager.instance?.UserId;
+        GamePlayerData localPlayer = gameSessionData?.GetPlayer(localUserId);
+        bool boardDisplayed = isLocalBoardAvailable && localPlayer != null && localPlayer.boardData != null;
 
         if (boardDisplayed &&
             gameSessionData?.useRank == true &&
@@ -607,7 +550,6 @@ public class GameController : MonoBehaviour
 
         boardSectionController.SetBoardInteractable(playerCanUseBoard);
         boardSectionController.SetBingoInteractable(playerCanSubmitBingo);
-        displayedCheckPending = isBingoCheckPending;
     }
 
     private void SubscribeToBoardSection()
@@ -691,7 +633,7 @@ public class GameController : MonoBehaviour
                 sortedCellIndices))
         {
             isBingoCheckPending = false;
-            DisplayPlayerBoard(GameSessionManager.instance?.CurrentGameSession);
+            RefreshPlayerBoardControls(GameSessionManager.instance?.CurrentGameSession);
             Debug.LogWarning("[GameController] The Bingo check request could not be sent.");
         }
     }
@@ -713,8 +655,8 @@ public class GameController : MonoBehaviour
 
         GameSessionManager gameSessionManager = GameSessionManager.instance;
 
-        gameSessionManager.GameSessionUpdated -= OnGameSessionUpdated;
-        gameSessionManager.GameSessionUpdated += OnGameSessionUpdated;
+        gameSessionManager.GameUIRefreshRequested -= OnGameUIRefreshRequested;
+        gameSessionManager.GameUIRefreshRequested += OnGameUIRefreshRequested;
 
         gameSessionManager.GamePlayerMarkedCellChanged -= OnGamePlayerMarkedCellChanged;
         gameSessionManager.GamePlayerMarkedCellChanged += OnGamePlayerMarkedCellChanged;
@@ -726,9 +668,9 @@ public class GameController : MonoBehaviour
         bindRoutine = null;
     }
 
-    private void OnGameSessionUpdated(GameSessionData gameSessionData)
+    private void OnGameUIRefreshRequested(GameSessionData _gameSessionData, GameUIRefresh _sections)
     {
-        DisplayGameInfo(gameSessionData);
+        RefreshGameUI(_gameSessionData, _sections);
     }
 
     private void OnGamePlayerMarkedCellChanged(
@@ -821,7 +763,7 @@ public class GameController : MonoBehaviour
         if (!resolvedData.wasAccepted)
         {
             isBingoCheckPending = false;
-            DisplayPlayerBoard(GameSessionManager.instance?.CurrentGameSession);
+            RefreshPlayerBoardControls(GameSessionManager.instance?.CurrentGameSession);
             Debug.LogWarning(
                 $"[GameController] Bingo check rejected: {resolvedData.failureMessage}");
             return;
@@ -835,7 +777,7 @@ public class GameController : MonoBehaviour
 
         boardPatternTracker.ApplyAvailablePatterns(
             resolvedData.availablePatternTypes);
-        DisplayPlayerBoard(GameSessionManager.instance?.CurrentGameSession);
+        RefreshPlayerBoardControls(GameSessionManager.instance?.CurrentGameSession);
 
         if (resolvedData.playerStatus != GamePlayerStatus.Eligible)
         {
@@ -1410,7 +1352,7 @@ public class GameController : MonoBehaviour
     {
         if (GameSessionManager.instance != null)
         {
-            GameSessionManager.instance.GameSessionUpdated -= OnGameSessionUpdated;
+            GameSessionManager.instance.GameUIRefreshRequested -= OnGameUIRefreshRequested;
             GameSessionManager.instance.GamePlayerMarkedCellChanged -= OnGamePlayerMarkedCellChanged;
             GameSessionManager.instance.BingoCheckResolved -= OnBingoCheckResolved;
         }
@@ -1446,7 +1388,7 @@ public class GameController : MonoBehaviour
             bingoCheckAnimationController?.ContinuePlaying();
         }
 
-        DisplayPlayerBoard(GameSessionManager.instance?.CurrentGameSession);
+        RefreshPlayerBoardControls(GameSessionManager.instance?.CurrentGameSession);
     }
 
     private void OpenRiskDecisionPopup()
@@ -1573,7 +1515,7 @@ public class GameController : MonoBehaviour
 
     private void OnSessionPauseChanged(bool isPaused)
     {
-        DisplayPlayerBoard(GameSessionManager.instance?.CurrentGameSession);
+        RefreshPlayerBoardControls(GameSessionManager.instance?.CurrentGameSession);
     }
 
     #endregion

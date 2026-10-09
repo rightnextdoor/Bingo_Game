@@ -256,7 +256,7 @@ MonoBehaviour:
       textRaycastTarget: 1
   - backgroundType: 12
     style:
-      sourceImage: {fileID: -2989345837320457496, guid: d472a20ddbd00c24b911265d148d0ac2, type: 3}
+      sourceImage: {fileID: -1955045057, guid: 3984e1ddfbdbbc049920b299b0a1fbd9, type: 3}
       color: {r: 1, g: 1, b: 1, a: 1}
       material: {fileID: 0}
       raycastTarget: 0
@@ -276,7 +276,7 @@ MonoBehaviour:
       textRaycastTarget: 1
   - backgroundType: 13
     style:
-      sourceImage: {fileID: 21300000, guid: 6c3dec426ef0c1046b711492a61e70f0, type: 3}
+      sourceImage: {fileID: 21300000, guid: 68b39d91fc3a12a45aa1d717d83012ab, type: 3}
       color: {r: 1, g: 1, b: 1, a: 0.69411767}
       material: {fileID: 0}
       raycastTarget: 0
@@ -477,24 +477,24 @@ MonoBehaviour:
       textRaycastTarget: 0
   - buttonType: 6
     style:
-      sourceImage: {fileID: 0}
+      sourceImage: {fileID: 1592617755, guid: 0c68bb536ee23d646a32b4bd521c2e19, type: 3}
       color: {r: 1, g: 1, b: 1, a: 1}
       material: {fileID: 0}
       raycastTarget: 1
       transition: 1
-      normalColor: {r: 1, g: 1, b: 1, a: 1}
-      highlightedColor: {r: 1, g: 1, b: 1, a: 1}
-      pressedColor: {r: 0.5019608, g: 0.5019608, b: 0.5019608, a: 1}
-      selectedColor: {r: 1, g: 1, b: 1, a: 1}
-      disabledColor: {r: 0.5019608, g: 0.5019608, b: 0.5019608, a: 1}
+      normalColor: {r: 0.8156863, g: 0.8156863, b: 0.8156863, a: 1}
+      highlightedColor: {r: 0.8156863, g: 0.8156863, b: 0.8156863, a: 1}
+      pressedColor: {r: 0.5568628, g: 0.54509807, b: 0.54509807, a: 1}
+      selectedColor: {r: 0.9607843, g: 0.9607843, b: 0.9607843, a: 1}
+      disabledColor: {r: 0.42352942, g: 0.42352942, b: 0.42352942, a: 0.5019608}
       colorMultiplier: 1
       fadeDuration: 0.1
-      navigationMode: 3
-      fontAsset: {fileID: 0}
+      navigationMode: 0
+      fontAsset: {fileID: 11400000, guid: 38bef3ecfe6219043899aaf649a32cea, type: 2}
       textMaterial: {fileID: 0}
       vertexColor: {r: 1, g: 1, b: 1, a: 1}
       colorGradient: {fileID: 0}
-      textRaycastTarget: 1
+      textRaycastTarget: 0
   textStyles:
   - textType: 1
     style:
@@ -511,7 +511,7 @@ MonoBehaviour:
       colorMultiplier: 0
       fadeDuration: 0
       navigationMode: 3
-      fontAsset: {fileID: 0}
+      fontAsset: {fileID: 11400000, guid: 38bef3ecfe6219043899aaf649a32cea, type: 2}
       textMaterial: {fileID: 0}
       vertexColor: {r: 1, g: 1, b: 1, a: 1}
       colorGradient: {fileID: 0}
@@ -531,9 +531,9 @@ MonoBehaviour:
       colorMultiplier: 0
       fadeDuration: 0
       navigationMode: 3
-      fontAsset: {fileID: 0}
+      fontAsset: {fileID: 11400000, guid: 9d7076e589ebbf947b58a96fcc7cb6a5, type: 2}
       textMaterial: {fileID: 0}
-      vertexColor: {r: 0.79607844, g: 0.8352941, b: 0.88235295, a: 1}
+      vertexColor: {r: 1, g: 1, b: 1, a: 1}
       colorGradient: {fileID: 0}
       textRaycastTarget: 0
   - textType: 0
@@ -551,7 +551,7 @@ MonoBehaviour:
       colorMultiplier: 1
       fadeDuration: 0.1
       navigationMode: 3
-      fontAsset: {fileID: 0}
+      fontAsset: {fileID: 11400000, guid: 494e208770c65664d82b3b9456cac1b7, type: 2}
       textMaterial: {fileID: 0}
       vertexColor: {r: 1, g: 1, b: 1, a: 1}
       colorGradient: {fileID: 0}
@@ -571,9 +571,9 @@ MonoBehaviour:
       colorMultiplier: 1
       fadeDuration: 0.1
       navigationMode: 3
-      fontAsset: {fileID: 0}
+      fontAsset: {fileID: 11400000, guid: 494e208770c65664d82b3b9456cac1b7, type: 2}
       textMaterial: {fileID: 0}
-      vertexColor: {r: 0.9098039, g: 0.42745098, b: 0.42745098, a: 1}
+      vertexColor: {r: 0.9514825, g: 0.35776755, b: 0.35776755, a: 1}
       colorGradient: {fileID: 0}
       textRaycastTarget: 0
   - textType: 4
@@ -591,7 +591,7 @@ MonoBehaviour:
       colorMultiplier: 1
       fadeDuration: 0.1
       navigationMode: 3
-      fontAsset: {fileID: 0}
+      fontAsset: {fileID: 11400000, guid: 38bef3ecfe6219043899aaf649a32cea, type: 2}
       textMaterial: {fileID: 0}
       vertexColor: {r: 0.972549, g: 0.98039216, b: 0.9882353, a: 1}
       colorGradient: {fileID: 0}
@@ -611,9 +611,9 @@ MonoBehaviour:
       colorMultiplier: 1
       fadeDuration: 0.1
       navigationMode: 3
-      fontAsset: {fileID: 0}
+      fontAsset: {fileID: 11400000, guid: 9d7076e589ebbf947b58a96fcc7cb6a5, type: 2}
       textMaterial: {fileID: 0}
-      vertexColor: {r: 0.8666667, g: 0.92156863, b: 1, a: 1}
+      vertexColor: {r: 0.972549, g: 0.98039216, b: 0.9882353, a: 1}
       colorGradient: {fileID: 0}
       textRaycastTarget: 0
   - textType: 6
@@ -631,7 +631,7 @@ MonoBehaviour:
       colorMultiplier: 1
       fadeDuration: 0.1
       navigationMode: 3
-      fontAsset: {fileID: 0}
+      fontAsset: {fileID: 11400000, guid: 494e208770c65664d82b3b9456cac1b7, type: 2}
       textMaterial: {fileID: 0}
       vertexColor: {r: 0, g: 0, b: 0, a: 1}
       colorGradient: {fileID: 0}
@@ -651,7 +651,7 @@ MonoBehaviour:
       colorMultiplier: 1
       fadeDuration: 0.1
       navigationMode: 3
-      fontAsset: {fileID: 0}
+      fontAsset: {fileID: 11400000, guid: 494e208770c65664d82b3b9456cac1b7, type: 2}
       textMaterial: {fileID: 0}
       vertexColor: {r: 1, g: 0.972549, b: 0.972549, a: 1}
       colorGradient: {fileID: 0}
@@ -671,9 +671,9 @@ MonoBehaviour:
       colorMultiplier: 1
       fadeDuration: 0.1
       navigationMode: 3
-      fontAsset: {fileID: 0}
+      fontAsset: {fileID: 11400000, guid: 494e208770c65664d82b3b9456cac1b7, type: 2}
       textMaterial: {fileID: 0}
-      vertexColor: {r: 1, g: 1, b: 1, a: 1}
+      vertexColor: {r: 0.0727762, g: 0.0716973, b: 0.0716973, a: 1}
       colorGradient: {fileID: 0}
       textRaycastTarget: 0
   - textType: 9
@@ -691,9 +691,9 @@ MonoBehaviour:
       colorMultiplier: 1
       fadeDuration: 0.1
       navigationMode: 3
-      fontAsset: {fileID: 0}
+      fontAsset: {fileID: 11400000, guid: 494e208770c65664d82b3b9456cac1b7, type: 2}
       textMaterial: {fileID: 0}
-      vertexColor: {r: 0.61942655, g: 0.9137466, b: 0.8839171, a: 1}
+      vertexColor: {r: 0.24126159, g: 0.49865216, b: 0.47090945, a: 1}
       colorGradient: {fileID: 0}
       textRaycastTarget: 0
   - textType: 10
@@ -711,9 +711,9 @@ MonoBehaviour:
       colorMultiplier: 1
       fadeDuration: 0.1
       navigationMode: 3
-      fontAsset: {fileID: 0}
+      fontAsset: {fileID: 11400000, guid: 494e208770c65664d82b3b9456cac1b7, type: 2}
       textMaterial: {fileID: 0}
-      vertexColor: {r: 0.89757407, g: 0.45322245, b: 0.23104662, a: 1}
+      vertexColor: {r: 0.6280323, g: 0.1936526, b: 0.15827765, a: 1}
       colorGradient: {fileID: 0}
       textRaycastTarget: 0
   - textType: 11
@@ -731,7 +731,7 @@ MonoBehaviour:
       colorMultiplier: 1
       fadeDuration: 0.1
       navigationMode: 3
-      fontAsset: {fileID: 0}
+      fontAsset: {fileID: 11400000, guid: 7cba7dfc457f65846bded2633da5fb51, type: 2}
       textMaterial: {fileID: 0}
       vertexColor: {r: 1, g: 0.8352941, b: 0.2901961, a: 1}
       colorGradient: {fileID: 0}
@@ -751,7 +751,7 @@ MonoBehaviour:
       colorMultiplier: 1
       fadeDuration: 0.1
       navigationMode: 3
-      fontAsset: {fileID: 0}
+      fontAsset: {fileID: 11400000, guid: 494e208770c65664d82b3b9456cac1b7, type: 2}
       textMaterial: {fileID: 0}
       vertexColor: {r: 1, g: 1, b: 1, a: 1}
       colorGradient: {fileID: 0}

@@ -1,4 +1,5 @@
 using System;
+using BingoGame.UI;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -28,12 +29,20 @@ public class GameHeaderController : MonoBehaviour
     public event Action LeaveRequested;
 
     private GameSessionData currentGameSession;
+    private FixedTimerText gameTimerDisplay;
+    private FixedTimerText submitTimerDisplay;
+    private FixedTimerText riskTimerDisplay;
+    private int displayedPlayersLeft = -1;
+    private int displayedPlayerTotal = -1;
 
     #region Unity Lifecycle
 
     private void Awake()
     {
         ConfigureTextFitting();
+        gameTimerDisplay = new FixedTimerText(gameTimerText);
+        submitTimerDisplay = new FixedTimerText(submitTimerText);
+        riskTimerDisplay = new FixedTimerText(riskTimerText);
         ClearHeader();
     }
 
@@ -113,21 +122,17 @@ public class GameHeaderController : MonoBehaviour
         int seconds = Mathf.Max(0, Mathf.CeilToInt(remainingSeconds));
         GamePlayController playController = currentGameSession?.gamePlayController;
         string timerLabel = playController?.Phase == GamePlayPhase.FirstBallCountdown
-            ? "Start Timer"
+            ? "Start Timer:"
             : playController?.IsFinalBallCountdown == true
-                ? "Game Ends In"
-                : "Next Ball";
+                ? "Game Ends In:"
+                : "Next Ball:";
 
-        gameTimerText.gameObject.SetActive(true);
-        gameTimerText.text = $"{timerLabel}: {seconds}";
+        gameTimerDisplay?.SetSeconds(timerLabel, seconds);
     }
 
     public void HideTimer()
     {
-        if (gameTimerText != null)
-        {
-            gameTimerText.gameObject.SetActive(false);
-        }
+        gameTimerDisplay?.Hide();
     }
 
     public void SetLeaveInteractable(bool isInteractable)
@@ -141,6 +146,8 @@ public class GameHeaderController : MonoBehaviour
     public void ClearHeader()
     {
         currentGameSession = null;
+        displayedPlayersLeft = -1;
+        displayedPlayerTotal = -1;
 
         if (gameTitleText != null)
         {
@@ -148,8 +155,8 @@ public class GameHeaderController : MonoBehaviour
         }
 
         HideTimer();
-        SetTextVisible(submitTimerText, false);
-        SetTextVisible(riskTimerText, false);
+        submitTimerDisplay?.Hide();
+        riskTimerDisplay?.Hide();
         SetTextVisible(localScoreStatusText, false);
         SetLeaveInteractable(false);
     }
@@ -191,10 +198,6 @@ public class GameHeaderController : MonoBehaviour
             return;
         }
 
-        // An already auto-sized label may have shrunk in the Editor preview;
-        // its configured maximum still holds the authored default size.
-        // TMP refits when either the content or the layout-provided rectangle changes,
-        // and grows back up to this size when more space becomes available.
         float defaultFontSize = Mathf.Max(1f, text.enableAutoSizing ? text.fontSizeMax : text.fontSize);
         text.fontSizeMax = defaultFontSize;
         text.fontSizeMin = Mathf.Max(1f, defaultFontSize * Mathf.Clamp(minimumFontSizeRatio, 0.5f, 1f));
@@ -232,7 +235,7 @@ public class GameHeaderController : MonoBehaviour
         if (currentGameSession?.gameState == GameSessionState.Completed ||
             playController?.Phase == GamePlayPhase.Ended)
         {
-            SetText(submitTimerText, "Game Is Over");
+            submitTimerDisplay?.ShowPlain("Game Is Over");
             return;
         }
 
@@ -240,7 +243,7 @@ public class GameHeaderController : MonoBehaviour
 
         if (localPlayer == null || !localPlayer.isSubmitTimerActive)
         {
-            SetTextVisible(submitTimerText, false);
+            submitTimerDisplay?.Hide();
             return;
         }
 
@@ -248,14 +251,16 @@ public class GameHeaderController : MonoBehaviour
             0,
             Mathf.CeilToInt((float)(localPlayer.submitTimerEndTime - GamePlayTimer.GetCurrentTime())));
 
-        SetText(submitTimerText, $"Submit Bingo In: {seconds}");
+        submitTimerDisplay?.SetSeconds("Submit Bingo In:", seconds);
     }
 
     private void RefreshRiskTimerAndPlayerStatus()
     {
         if (currentGameSession == null)
         {
-            SetTextVisible(riskTimerText, false);
+            riskTimerDisplay?.Hide();
+            displayedPlayersLeft = -1;
+            displayedPlayerTotal = -1;
             SetTextVisible(localScoreStatusText, false);
             return;
         }
@@ -277,16 +282,25 @@ public class GameHeaderController : MonoBehaviour
                 : currentGameSession.GetPlayerCountWithStatus(GamePlayerStatus.Eligible) +
                   currentGameSession.GetPlayerCountWithStatus(GamePlayerStatus.Checking);
 
-            SetText(riskTimerText, $"Players Left: {playersLeft} / {playerTotal}");
+            if (displayedPlayersLeft != playersLeft || displayedPlayerTotal != playerTotal)
+            {
+                displayedPlayersLeft = playersLeft;
+                displayedPlayerTotal = playerTotal;
+                riskTimerDisplay?.ShowPlain($"Players Left: {playersLeft} / {playerTotal}");
+            }
         }
         else if (isRiskUiActive)
         {
             int seconds = Mathf.Max(0, Mathf.CeilToInt(riskTimer.GetRemainingSeconds()));
-            SetText(riskTimerText, $"Game Time Left: {FormatMinutesAndSeconds(seconds)}");
+            displayedPlayersLeft = -1;
+            displayedPlayerTotal = -1;
+            riskTimerDisplay?.SetSeconds("Game Time Left:", seconds, true);
         }
         else
         {
-            SetTextVisible(riskTimerText, false);
+            displayedPlayersLeft = -1;
+            displayedPlayerTotal = -1;
+            riskTimerDisplay?.Hide();
         }
 
         GamePlayerData localPlayer = currentGameSession.GetPlayer(UserManager.instance?.UserId);
@@ -351,14 +365,6 @@ public class GameHeaderController : MonoBehaviour
         {
             text.gameObject.SetActive(isVisible);
         }
-    }
-
-    private static string FormatMinutesAndSeconds(int totalSeconds)
-    {
-        int minutes = totalSeconds / 60;
-        int seconds = totalSeconds % 60;
-
-        return $"{minutes:0}:{seconds:00}";
     }
 
     #endregion

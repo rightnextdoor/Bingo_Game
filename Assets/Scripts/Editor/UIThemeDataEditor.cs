@@ -961,6 +961,7 @@ public class UIThemeDataEditor : Editor
             return;
         }
 
+        UIThemeStyle defaultStyle = new UIThemeStyle();
         SerializedProperty iterator = entryProperty.Copy();
         SerializedProperty endProperty = entryProperty.GetEndProperty();
 
@@ -995,9 +996,24 @@ public class UIThemeDataEditor : Editor
             {
                 switch (iterator.name)
                 {
+                    case "normalColor":
+                        iterator.colorValue = defaultStyle.NormalColor;
+                        break;
+
+                    case "highlightedColor":
+                        iterator.colorValue = defaultStyle.HighlightedColor;
+                        break;
+
                     case "pressedColor":
+                        iterator.colorValue = defaultStyle.PressedColor;
+                        break;
+
+                    case "selectedColor":
+                        iterator.colorValue = defaultStyle.SelectedColor;
+                        break;
+
                     case "disabledColor":
-                        iterator.colorValue = new Color32(128, 128, 128, 255);
+                        iterator.colorValue = defaultStyle.DisabledColor;
                         break;
 
                     default:

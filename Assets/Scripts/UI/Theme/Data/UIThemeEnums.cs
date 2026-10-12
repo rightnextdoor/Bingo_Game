@@ -66,7 +66,8 @@ public enum UIThemeTextType
     ChatOtherUser,
     ChatPrivate,
     Winner,
-    PlayerListCell
+    PlayerListCell,
+    Pattern
 }
 
 public enum UIThemeInputType
@@ -83,7 +84,8 @@ public enum UIThemeDropdownType
 public enum UIThemeScrollType
 {
     Default,
-    Patterns
+    Patterns,
+    ThemeSettings
 }
 
 public enum UIThemeSliderType

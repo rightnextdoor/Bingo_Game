@@ -92,5 +92,11 @@ public class UIThemeInput : MonoBehaviour, IUIThemeTarget
         UIThemeApplier.ApplySelectableVisualStyle(selectable, style.FieldVisual);
         UIThemeApplier.ApplyTextStyle(inputText, style.InputText);
         UIThemeApplier.ApplyTextStyle(placeholderText, style.PlaceholderText);
+
+        TMP_InputField inputField = selectable as TMP_InputField;
+        if (inputField != null)
+        {
+            inputField.selectionColor = style.SelectionColor;
+        }
     }
 }

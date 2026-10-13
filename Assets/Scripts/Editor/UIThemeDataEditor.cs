@@ -404,6 +404,14 @@ public class UIThemeDataEditor : Editor
 
         EditorGUILayout.Space(6);
 
+        EditorGUILayout.LabelField("Text Selection", EditorStyles.boldLabel);
+        EditorGUILayout.PropertyField(
+            inputProperty.FindPropertyRelative("selectionColor"),
+            new GUIContent("Selection Color", "Highlight color behind selected input text. Alpha controls transparency.")
+        );
+
+        EditorGUILayout.Space(6);
+
         EditorGUILayout.LabelField("Placeholder", EditorStyles.boldLabel);
 
         DrawFixedStyle(

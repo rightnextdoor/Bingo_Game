@@ -38,7 +38,8 @@ public enum UIThemeBackgroundType
     ChatMessageRowB,
     ChatSuggestionRow,
     ChatSuggestionRowHighlight,
-    ChatPickerHeader
+    ChatPickerHeader,
+    Icon
 }
 
 public enum UIThemeButtonType

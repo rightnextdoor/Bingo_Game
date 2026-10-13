@@ -8,9 +8,6 @@ public class BingoBoardCellController : MonoBehaviour
 {
     #region Fields
 
-    private const float NumberFontSize = 50f;
-    private const float FreeFontSize = 27f;
-
     [SerializeField] private Button cellButton;
     [SerializeField] private TMP_Text valueText;
     [SerializeField] private Image markedHighlight;
@@ -62,8 +59,7 @@ public class BingoBoardCellController : MonoBehaviour
 
         if (valueText != null)
         {
-            valueText.enableAutoSizing = false;
-            valueText.fontSize = isFree ? FreeFontSize : NumberFontSize;
+            valueText.enableAutoSizing = true;
             valueText.text = isFree ? "FREE" : number.ToString();
         }
 
@@ -83,7 +79,6 @@ public class BingoBoardCellController : MonoBehaviour
 
         if (valueText != null)
         {
-            valueText.fontSize = NumberFontSize;
             valueText.text = string.Empty;
         }
 

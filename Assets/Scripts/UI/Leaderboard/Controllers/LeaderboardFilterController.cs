@@ -27,6 +27,11 @@ public class LeaderboardFilterController : MonoBehaviour
         BuildDropdownOptions();
     }
 
+    private void Start()
+    {
+        BuildGameModeDropdown();
+    }
+
     private void OnEnable()
     {
         if (scorePlayModeDropdown != null)
@@ -296,9 +301,16 @@ public class LeaderboardFilterController : MonoBehaviour
         PageSizeChanged?.Invoke(GetSelectedPageSize());
     }
 
-    private string GetGameModeLabel(LeaderboardModeFilter gameMode)
+    private string GetGameModeLabel(LeaderboardModeFilter _gameMode)
     {
-        return gameMode.IsOverall ? "Overall" : gameMode.gameModeType.ToString();
+        if (_gameMode.IsOverall)
+        {
+            return "Overall";
+        }
+
+        return GameModeManager.instance != null
+            ? GameModeManager.instance.GetGameModeName(_gameMode.gameModeType)
+            : _gameMode.gameModeType.ToString();
     }
 
     private string GetPageSizeLabel(LeaderboardPageSizeType pageSize)

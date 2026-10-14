@@ -41,7 +41,6 @@ public class LeaderboardUIManager : MonoBehaviour
 
     private ScorePlayMode currentScorePlayMode = ScorePlayMode.Solo;
     private LeaderboardModeFilter currentMode = LeaderboardModeFilter.CreateOverall();
-    private string currentModeTitleText;
     private LeaderboardSortType currentSortType;
 
     private readonly List<LeaderboardCellData> currentHeaderCells = new();
@@ -335,7 +334,6 @@ public class LeaderboardUIManager : MonoBehaviour
 
     private void SetupOverallMode()
     {
-        currentModeTitleText = GetCurrentModeTitleText();
         currentSortType = LeaderboardSortType.ScoreHighest;
 
         currentHeaderCells.Clear();
@@ -372,7 +370,7 @@ public class LeaderboardUIManager : MonoBehaviour
 
     private void BuildHeaderFromModeSetup()
     {
-        SetLeaderboardTitle(currentModeTitleText);
+        SetLeaderboardTitle();
 
         if (headerController == null)
         {
@@ -445,24 +443,14 @@ public class LeaderboardUIManager : MonoBehaviour
         };
     }
 
-    private void SetLeaderboardTitle(string titleText)
+    private void SetLeaderboardTitle()
     {
         if (leaderboardTitleText == null)
         {
             return;
         }
 
-        leaderboardTitleText.text = titleText;
-    }
-
-    private string GetCurrentModeTitleText()
-    {
-        if (currentMode.IsOverall)
-        {
-            return $"{currentScorePlayMode} Overall Leaderboard";
-        }
-
-        return $"{currentScorePlayMode} {currentMode.gameModeType} Leaderboard";
+        leaderboardTitleText.text = "Leaderboard";
     }
 
     #endregion

@@ -50,7 +50,9 @@ public enum UIThemeButtonType
     Ready,
     Update,
     ChatTab,
-    Send
+    Send,
+    Previous,
+    Next
 }
 
 public enum UIThemeTextType

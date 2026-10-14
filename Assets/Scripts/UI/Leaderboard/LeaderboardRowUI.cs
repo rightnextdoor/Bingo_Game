@@ -91,6 +91,12 @@ public class LeaderboardRowUI : MonoBehaviour, IPointerClickHandler
     private Action<string> rowClicked;
 
     public string UserId => userId;
+    public RectTransform RectTransform { get; private set; }
+
+    private void Awake()
+    {
+        RectTransform = transform as RectTransform;
+    }
 
     public void Setup(
         string newUserId,

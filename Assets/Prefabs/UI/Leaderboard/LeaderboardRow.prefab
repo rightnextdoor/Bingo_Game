@@ -50,7 +50,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.HorizontalLayoutGroup
   m_Padding:
     m_Left: 0
-    m_Right: 6
+    m_Right: 12
     m_Top: 0
     m_Bottom: 0
   m_ChildAlignment: 3
@@ -128,7 +128,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: -4668685142620104677, guid: d472a20ddbd00c24b911265d148d0ac2, type: 3}
+  m_Sprite: {fileID: -1322464374932762594, guid: d472a20ddbd00c24b911265d148d0ac2, type: 3}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1

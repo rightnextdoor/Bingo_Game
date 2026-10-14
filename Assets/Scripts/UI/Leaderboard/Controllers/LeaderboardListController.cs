@@ -34,6 +34,7 @@ public class LeaderboardListController : MonoBehaviour
 
     private int heldArrowDirection;
     private float nextArrowMoveTime;
+    private RectTransform viewportRect;
 
     private void Awake()
     {
@@ -55,6 +56,13 @@ public class LeaderboardListController : MonoBehaviour
         if (scrollRect == null)
         {
             scrollRect = GetComponentInParent<ScrollRect>();
+        }
+
+        if (scrollRect != null)
+        {
+            viewportRect = scrollRect.viewport != null
+                ? scrollRect.viewport
+                : scrollRect.transform as RectTransform;
         }
 
         ClearRows();
@@ -183,6 +191,7 @@ public class LeaderboardListController : MonoBehaviour
 
         if (Application.isPlaying)
         {
+            childObject.SetActive(false);
             Destroy(childObject);
         }
         else
@@ -330,14 +339,7 @@ public class LeaderboardListController : MonoBehaviour
         }
 
         RectTransform contentRect = scrollRect.content;
-        RectTransform viewportRect = scrollRect.viewport;
-
-        if (viewportRect == null)
-        {
-            viewportRect = scrollRect.GetComponent<RectTransform>();
-        }
-
-        RectTransform rowRect = row.GetComponent<RectTransform>();
+        RectTransform rowRect = row.RectTransform;
 
         if (rowRect == null || viewportRect == null)
         {
@@ -345,6 +347,7 @@ public class LeaderboardListController : MonoBehaviour
         }
 
         Canvas.ForceUpdateCanvases();
+        LayoutRebuilder.ForceRebuildLayoutImmediate(contentRect);
 
         float contentHeight = contentRect.rect.height;
         float viewportHeight = viewportRect.rect.height;

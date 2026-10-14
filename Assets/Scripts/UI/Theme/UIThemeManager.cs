@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using UnityEngine;
 #if UNITY_EDITOR
 using UnityEditor;
+using UnityEditor.SceneManagement;
+using UnityEngine.SceneManagement;
 #endif
 
 [ExecuteAlways]
@@ -31,6 +33,11 @@ public class UIThemeManager : MonoBehaviour
     private readonly List<UIThemeSliderStyle> activeSliderStyles = new();
     private readonly List<UIThemeToggleStyle> activeToggleStyles = new();
     private readonly List<UIThemeBoardStyle> activeBoardStyles = new();
+    private readonly HashSet<string> reportedMissingStyles = new();
+
+#if UNITY_EDITOR
+    private static bool editorRefreshQueued;
+#endif
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetStaticState()
@@ -61,13 +68,15 @@ public class UIThemeManager : MonoBehaviour
             return;
         }
 
-        SetTheme(selectedThemeType);
+#if UNITY_EDITOR
+        QueueEditorThemeRefresh();
+#endif
     }
 
     private void OnEnable()
     {
 #if UNITY_EDITOR
-        ReconnectActiveThemeTargetsInEditor();
+        QueueEditorThemeRefresh();
 #endif
     }
 
@@ -80,11 +89,13 @@ public class UIThemeManager : MonoBehaviour
             return;
         }
 
-        SetTheme(selectedThemeType);
-
-        if (!Application.isPlaying)
+        if (Application.isPlaying)
         {
-            ReconnectActiveThemeTargetsInEditor();
+            SetTheme(selectedThemeType);
+        }
+        else
+        {
+            QueueEditorThemeRefresh();
         }
     }
 
@@ -142,6 +153,14 @@ public class UIThemeManager : MonoBehaviour
         {
             registeredTargets.Add(target);
         }
+
+#if UNITY_EDITOR
+        if (!Application.isPlaying && activeThemeData == null)
+        {
+            QueueEditorThemeRefresh();
+            return;
+        }
+#endif
 
         if (!Application.isPlaying || hasRuntimeTheme)
         {
@@ -366,7 +385,7 @@ public class UIThemeManager : MonoBehaviour
             return defaultStyle;
         }
 
-        Debug.LogWarning($"UIThemeManager could not find background style: {backgroundType}");
+        ReportMissingStyle(UIThemeSectionType.Background, backgroundType);
         return null;
     }
 
@@ -402,7 +421,7 @@ public class UIThemeManager : MonoBehaviour
             return defaultStyle;
         }
 
-        Debug.LogWarning($"UIThemeManager could not find button style: {buttonType}");
+        ReportMissingStyle(UIThemeSectionType.Button, buttonType);
         return null;
     }
 
@@ -438,7 +457,7 @@ public class UIThemeManager : MonoBehaviour
             return defaultStyle;
         }
 
-        Debug.LogWarning($"UIThemeManager could not find text style: {textType}");
+        ReportMissingStyle(UIThemeSectionType.Text, textType);
         return null;
     }
 
@@ -474,7 +493,7 @@ public class UIThemeManager : MonoBehaviour
             return defaultStyle;
         }
 
-        Debug.LogWarning($"UIThemeManager could not find input style: {inputType}");
+        ReportMissingStyle(UIThemeSectionType.Input, inputType);
         return null;
     }
 
@@ -510,7 +529,7 @@ public class UIThemeManager : MonoBehaviour
             return defaultStyle;
         }
 
-        Debug.LogWarning($"UIThemeManager could not find dropdown style: {dropdownType}");
+        ReportMissingStyle(UIThemeSectionType.Dropdown, dropdownType);
         return null;
     }
 
@@ -546,7 +565,7 @@ public class UIThemeManager : MonoBehaviour
             return defaultStyle;
         }
 
-        Debug.LogWarning($"UIThemeManager could not find scroll style: {scrollType}");
+        ReportMissingStyle(UIThemeSectionType.Scroll, scrollType);
         return null;
     }
 
@@ -582,7 +601,7 @@ public class UIThemeManager : MonoBehaviour
             return defaultStyle;
         }
 
-        Debug.LogWarning($"UIThemeManager could not find slider style: {sliderType}");
+        ReportMissingStyle(UIThemeSectionType.Slider, sliderType);
         return null;
     }
 
@@ -618,7 +637,7 @@ public class UIThemeManager : MonoBehaviour
             return defaultStyle;
         }
 
-        Debug.LogWarning($"UIThemeManager could not find toggle style: {toggleType}");
+        ReportMissingStyle(UIThemeSectionType.Toggle, toggleType);
         return null;
     }
 
@@ -654,11 +673,25 @@ public class UIThemeManager : MonoBehaviour
             return defaultStyle;
         }
 
-        Debug.LogWarning($"UIThemeManager could not find board style: {boardType}");
+        ReportMissingStyle(UIThemeSectionType.Board, boardType);
         return null;
     }
 
     #endregion
+
+    private void ReportMissingStyle(UIThemeSectionType _sectionType, Enum _styleType)
+    {
+        string key = _sectionType + ":" + _styleType;
+        if (!reportedMissingStyles.Add(key))
+        {
+            return;
+        }
+
+        Debug.LogWarning(
+            $"UIThemeManager could not find {_sectionType} style: {_styleType}. " +
+            "Adding an enum value does not create a theme entry. Configure this style in the selected or Default theme.",
+            this);
+    }
 
     private bool TryGetEnumType<TEnum>(Enum styleType, out TEnum typedValue)
         where TEnum : struct, Enum
@@ -675,19 +708,32 @@ public class UIThemeManager : MonoBehaviour
 
     public static void RefreshThemeData(UIThemeData changedThemeData)
     {
-        if (instance == null || changedThemeData == null)
+        if (changedThemeData == null)
         {
             return;
         }
 
-        if (instance.selectedThemeType != changedThemeData.ThemeType)
+#if UNITY_EDITOR
+        if (!Application.isPlaying)
+        {
+            if (instance != null)
+            {
+                instance.reportedMissingStyles.Clear();
+            }
+
+            QueueEditorThemeRefresh();
+            return;
+        }
+#endif
+
+        if (instance == null ||
+            (instance.selectedThemeType != changedThemeData.ThemeType && changedThemeData.ThemeType != UIThemeType.Default))
         {
             return;
         }
 
-        instance.activeThemeData = changedThemeData;
-        instance.RebuildActiveThemeLists();
-        instance.ReapplyThemeToRegisteredTargets();
+        instance.reportedMissingStyles.Clear();
+        instance.SetTheme(instance.selectedThemeType);
     }
 
     #region Find Default
@@ -876,6 +922,124 @@ public class UIThemeManager : MonoBehaviour
 
 #if UNITY_EDITOR
 
+    [InitializeOnLoadMethod]
+    private static void InitializeEditorThemeRefresh()
+    {
+        AssemblyReloadEvents.afterAssemblyReload += QueueEditorThemeRefresh;
+        EditorApplication.hierarchyChanged += QueueEditorThemeRefresh;
+        EditorApplication.playModeStateChanged += OnEditorPlayModeChanged;
+        EditorSceneManager.sceneOpened += OnEditorSceneOpened;
+        PrefabStage.prefabStageOpened += OnEditorPrefabStageOpened;
+        PrefabStage.prefabStageClosing += OnEditorPrefabStageClosing;
+        QueueEditorThemeRefresh();
+    }
+
+    private static void OnEditorPlayModeChanged(PlayModeStateChange _state)
+    {
+        if (_state == PlayModeStateChange.EnteredEditMode)
+        {
+            QueueEditorThemeRefresh();
+        }
+    }
+
+    private static void OnEditorSceneOpened(Scene _scene, OpenSceneMode _mode)
+    {
+        QueueEditorThemeRefresh();
+    }
+
+    private static void OnEditorPrefabStageOpened(PrefabStage _stage)
+    {
+        QueueEditorThemeRefresh();
+    }
+
+    private static void OnEditorPrefabStageClosing(PrefabStage _stage)
+    {
+        QueueEditorThemeRefresh();
+    }
+
+    private static void QueueEditorThemeRefresh()
+    {
+        if (EditorApplication.isPlayingOrWillChangePlaymode || editorRefreshQueued)
+        {
+            return;
+        }
+
+        editorRefreshQueued = true;
+        EditorApplication.delayCall += RefreshEditorTheme;
+    }
+
+    private static void RefreshEditorTheme()
+    {
+        editorRefreshQueued = false;
+        if (EditorApplication.isPlayingOrWillChangePlaymode)
+        {
+            return;
+        }
+
+        if (EditorApplication.isCompiling || EditorApplication.isUpdating)
+        {
+            QueueEditorThemeRefresh();
+            return;
+        }
+
+        PrefabStage stage = PrefabStageUtility.GetCurrentPrefabStage();
+        UIThemeManager manager = null;
+        UIThemeManager prefabManager = null;
+        UIThemeManager[] managers = Resources.FindObjectsOfTypeAll<UIThemeManager>();
+        for (int i = 0; i < managers.Length; i++)
+        {
+            UIThemeManager candidate = managers[i];
+            if (candidate == null || !candidate.isActiveAndEnabled || EditorUtility.IsPersistent(candidate) ||
+                !candidate.gameObject.scene.IsValid() || !candidate.gameObject.scene.isLoaded)
+            {
+                continue;
+            }
+
+            if (stage != null && candidate.gameObject.scene == stage.scene)
+            {
+                if (prefabManager == null)
+                {
+                    prefabManager = candidate;
+                }
+
+                continue;
+            }
+
+            if (EditorSceneManager.IsPreviewScene(candidate.gameObject.scene))
+            {
+                continue;
+            }
+
+            if (manager == null || candidate == instance)
+            {
+                manager = candidate;
+            }
+
+            if (candidate == instance)
+            {
+                break;
+            }
+        }
+
+        if (manager == null)
+        {
+            manager = prefabManager;
+        }
+
+        if (manager == null)
+        {
+            instance = null;
+            return;
+        }
+
+        instance = manager;
+        manager.registeredTargets.Clear();
+        manager.SetTheme(manager.selectedThemeType);
+        manager.ReconnectActiveThemeTargetsInEditor();
+        SceneView.RepaintAll();
+        EditorApplication.QueuePlayerLoopUpdate();
+    }
+
     private void ReconnectActiveThemeTargetsInEditor()
     {
         if (Application.isPlaying)
@@ -886,7 +1050,7 @@ public class UIThemeManager : MonoBehaviour
         registeredTargets.Clear();
 
         MonoBehaviour[] sceneBehaviours = FindObjectsByType<MonoBehaviour>(
-            FindObjectsInactive.Exclude,
+            FindObjectsInactive.Include,
             FindObjectsSortMode.None
         );
 
@@ -894,28 +1058,38 @@ public class UIThemeManager : MonoBehaviour
         {
             MonoBehaviour behaviour = sceneBehaviours[i];
 
-            if (behaviour == null)
-            {
-                continue;
-            }
-
-            if (PrefabUtility.IsPartOfPrefabAsset(behaviour))
-            {
-                continue;
-            }
-
-            if (behaviour is not IUIThemeTarget themeTarget)
-            {
-                continue;
-            }
-
-            if (!registeredTargets.Contains(themeTarget))
-            {
-                registeredTargets.Add(themeTarget);
-            }
-
-            themeTarget.ReapplyTheme();
+            RegisterEditorThemeTarget(behaviour);
         }
+
+        PrefabStage stage = PrefabStageUtility.GetCurrentPrefabStage();
+        if (stage != null && stage.prefabContentsRoot != null)
+        {
+            MonoBehaviour[] prefabBehaviours = stage.prefabContentsRoot.GetComponentsInChildren<MonoBehaviour>(true);
+            for (int i = 0; i < prefabBehaviours.Length; i++)
+            {
+                RegisterEditorThemeTarget(prefabBehaviours[i]);
+            }
+        }
+    }
+
+    private void RegisterEditorThemeTarget(MonoBehaviour _behaviour)
+    {
+        if (_behaviour == null || !_behaviour.enabled || EditorUtility.IsPersistent(_behaviour) ||
+            _behaviour is not IUIThemeTarget themeTarget || registeredTargets.Contains(themeTarget))
+        {
+            return;
+        }
+
+        Scene scene = _behaviour.gameObject.scene;
+        PrefabStage stage = PrefabStageUtility.GetCurrentPrefabStage();
+        if (!scene.IsValid() || !scene.isLoaded ||
+            (EditorSceneManager.IsPreviewScene(scene) && (stage == null || scene != stage.scene)))
+        {
+            return;
+        }
+
+        registeredTargets.Add(themeTarget);
+        themeTarget.ReapplyTheme();
     }
 
 #endif

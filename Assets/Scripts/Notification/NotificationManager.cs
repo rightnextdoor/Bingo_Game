@@ -1,3 +1,4 @@
+using BingoGame.UI;
 using System.Collections;
 using System.Collections.Generic;
 using TMPro;
@@ -9,7 +10,6 @@ public class NotificationManager : MonoBehaviour
 {
     private const int MaximumVisibleLines = 3;
     private const int MinimumReadableFontSize = 12;
-    private const float SizeFitTolerance = 0.5f;
 
     public static NotificationManager instance;
 
@@ -242,54 +242,18 @@ public class NotificationManager : MonoBehaviour
             1f,
             Mathf.Min(Mathf.Abs(notificationAreaRect.rect.height), Mathf.Abs(textRect.rect.height)));
 
-        int startingFontSize = Mathf.Max(1, requestedFontSize);
-        int smallestFontSize = Mathf.Min(startingFontSize, MinimumReadableFontSize);
+        UITextFitResult result = UITextFitter.FitMultipleLines(
+            notificationText,
+            message,
+            requestedFontSize,
+            new Vector2(availableWidth, availableHeight),
+            MinimumReadableFontSize,
+            MaximumVisibleLines);
 
-        PrepareTextForMeasurement(startingFontSize, TextWrappingModes.NoWrap);
-
-        Vector2 oneLineSize = notificationText.GetPreferredValues(message, 0f, 0f);
-
-        if (FitsInside(oneLineSize, availableWidth, availableHeight))
-        {
-            notificationText.maxVisibleLines = 1;
-            notificationText.overflowMode = TextOverflowModes.Ellipsis;
-            return;
-        }
-
-        for (int fontSize = startingFontSize; fontSize >= smallestFontSize; fontSize--)
-        {
-            PrepareTextForMeasurement(fontSize, TextWrappingModes.Normal);
-            notificationText.ForceMeshUpdate(true, true);
-
-            Vector2 wrappedSize = notificationText.GetPreferredValues(message, availableWidth, 0f);
-            int lineCount = notificationText.textInfo.lineCount;
-
-            if (lineCount <= MaximumVisibleLines &&
-                wrappedSize.y <= availableHeight + SizeFitTolerance)
-            {
-                notificationText.maxVisibleLines = MaximumVisibleLines;
-                notificationText.overflowMode = TextOverflowModes.Ellipsis;
-                return;
-            }
-        }
-
-        PrepareTextForMeasurement(smallestFontSize, TextWrappingModes.Normal);
-        notificationText.maxVisibleLines = MaximumVisibleLines;
+        notificationText.fontSize = result.FontSize;
+        notificationText.textWrappingMode = result.Wraps ? TextWrappingModes.Normal : TextWrappingModes.NoWrap;
+        notificationText.maxVisibleLines = result.Wraps ? MaximumVisibleLines : 1;
         notificationText.overflowMode = TextOverflowModes.Ellipsis;
-    }
-
-    private void PrepareTextForMeasurement(int fontSize, TextWrappingModes wrappingMode)
-    {
-        notificationText.fontSize = fontSize;
-        notificationText.textWrappingMode = wrappingMode;
-        notificationText.maxVisibleLines = int.MaxValue;
-        notificationText.overflowMode = TextOverflowModes.Overflow;
-    }
-
-    private static bool FitsInside(Vector2 preferredSize, float availableWidth, float availableHeight)
-    {
-        return preferredSize.x <= availableWidth + SizeFitTolerance &&
-               preferredSize.y <= availableHeight + SizeFitTolerance;
     }
 
     private void ApplyBackgroundImage(TooltipImageMode imageMode, Sprite customImage)

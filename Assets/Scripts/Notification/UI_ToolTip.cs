@@ -4,6 +4,7 @@ using System.Text;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using BingoGame.UI;
 
 public enum TooltipImageMode
 {
@@ -27,6 +28,11 @@ public class UI_ToolTip : MonoBehaviour
     [SerializeField] private Image backgroundImage;
     [SerializeField] private TMP_Text messageText;
     [SerializeField] private CanvasGroup canvasGroup;
+
+    [Space]
+    [Header("Text Fitting")]
+    [SerializeField, Min(1f), Tooltip("Smallest permitted text size when a normal tooltip reaches its panel size limits.")] private float minimumReadableFontSize = 12f;
+    [SerializeField, Min(0), Tooltip("Maximum lines for normal tooltips. Zero retains the existing unlimited wrapping behavior.")] private int maximumVisibleLines;
 
     private static readonly Vector2 TextPadding = new Vector2(14f, 10f);
     private static readonly Vector2 ScreenPadding = new Vector2(12f, 12f);
@@ -239,6 +245,7 @@ public class UI_ToolTip : MonoBehaviour
             messageText.overflowMode =
                 TextOverflowModes.Ellipsis;
             messageText.enableAutoSizing = false;
+            messageText.maxVisibleLines = int.MaxValue;
 
             if (fontAsset != null)
             {
@@ -342,6 +349,20 @@ public class UI_ToolTip : MonoBehaviour
         );
 
         ApplyTooltipSize(finalWidth, finalHeight);
+        FitDefaultMessage(message);
+    }
+
+    private void FitDefaultMessage(string _message)
+    {
+        float preferredSize = messageText.fontSize;
+        Vector2 availableSize = messageText.rectTransform.rect.size;
+        int lineLimit = maximumVisibleLines > 0 ? maximumVisibleLines : int.MaxValue;
+        UITextFitResult result = UITextFitter.FitMultipleLines(messageText, _message, preferredSize,
+            availableSize, minimumReadableFontSize, lineLimit);
+        messageText.fontSize = result.FontSize;
+        messageText.textWrappingMode = result.Wraps ? TextWrappingModes.Normal : TextWrappingModes.NoWrap;
+        messageText.maxVisibleLines = lineLimit;
+        messageText.overflowMode = TextOverflowModes.Ellipsis;
     }
 
     private void ResizeChatHelpMessage(

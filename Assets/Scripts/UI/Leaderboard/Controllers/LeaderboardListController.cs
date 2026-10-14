@@ -26,6 +26,7 @@ public class LeaderboardListController : MonoBehaviour
 
     private readonly List<LeaderboardRowUI> spawnedRows = new();
     private readonly List<LeaderboardRowCellSetup> rowBlueprint = new();
+    private IReadOnlyDictionary<string, string> resolvedDisplayNames;
 
     private string selectedUserId;
 
@@ -96,6 +97,11 @@ public class LeaderboardListController : MonoBehaviour
     public IReadOnlyList<LeaderboardRowCellSetup> GetRowBlueprint()
     {
         return rowBlueprint;
+    }
+
+    public void SetResolvedDisplayNames(IReadOnlyDictionary<string, string> _displayNames)
+    {
+        resolvedDisplayNames = _displayNames;
     }
 
     public void SetRows(IReadOnlyList<LeaderboardRowData> rows, string selectedUserId)
@@ -534,7 +540,7 @@ public class LeaderboardListController : MonoBehaviour
                 return $"#{rankedUserData.rank}";
 
             case LeaderboardRowCellValueType.PlayerNameWithShortId:
-                return GetPlayerNameWithShortId(rankedUserData.userData, cellSetup.maxTextCharacters);
+                return GetResolvedDisplayName(rankedUserData.userData);
 
             case LeaderboardRowCellValueType.Score:
                 return GetUserScore(rankedUserData, cellSetup.maxNumberDigits).ToString("N0");
@@ -561,41 +567,18 @@ public class LeaderboardListController : MonoBehaviour
         }
     }
 
-    private string GetPlayerNameWithShortId(UserData userData, int maxPlayerNameCharacters)
+    private string GetResolvedDisplayName(UserData _userData)
     {
-        if (userData == null)
+        if (_userData == null)
         {
             return string.Empty;
         }
 
-        string playerName = string.IsNullOrWhiteSpace(userData.playerName) ? "Player" : userData.playerName.Trim();
-        playerName = TrimTextToMaxCharacters(playerName, maxPlayerNameCharacters);
+        string userId = _userData.userId?.Trim() ?? string.Empty;
+        if (resolvedDisplayNames != null && resolvedDisplayNames.TryGetValue(userId, out string displayName))
+            return displayName;
 
-        string shortId = GetShortUserId(userData.userId);
-
-        if (string.IsNullOrWhiteSpace(shortId))
-        {
-            return playerName;
-        }
-
-        return $"{playerName} #{shortId}";
-    }
-
-    private string GetShortUserId(string userId)
-    {
-        if (string.IsNullOrWhiteSpace(userId))
-        {
-            return string.Empty;
-        }
-
-        userId = userId.Trim();
-
-        if (userId.Length <= 4)
-        {
-            return userId;
-        }
-
-        return userId.Substring(0, 4);
+        return PlayerDisplayIdentityResolver.GetDisplayName(new PlayerProfileData(_userData), null);
     }
 
     private int GetUserScore(LeaderboardUserRankData rankedUserData, int maxNumberDigits)

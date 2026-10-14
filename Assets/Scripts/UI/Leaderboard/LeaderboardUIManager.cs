@@ -33,6 +33,8 @@ public class LeaderboardUIManager : MonoBehaviour
 
     private UserManager userManager;
     private readonly List<UserData> allUsers = new();
+    private readonly List<PlayerProfileData> displayProfiles = new();
+    private readonly Dictionary<string, string> resolvedDisplayNames = new(StringComparer.Ordinal);
     private UserData currentUser;
 
     #endregion
@@ -67,6 +69,7 @@ public class LeaderboardUIManager : MonoBehaviour
 
     private bool searchActive;
     private string currentSearchText = string.Empty;
+    private string suggestionSearchUserId = string.Empty;
     private string selectedUserId = string.Empty;
 
     #endregion
@@ -209,6 +212,8 @@ public class LeaderboardUIManager : MonoBehaviour
             searchController.SearchInputSubmitted += HandleSearchInputSubmitted;
             searchController.ClearSearchRequested += ClearSearch;
             searchController.FindMeRequested += FindCurrentUser;
+            searchController.SuggestionUserRequested += SearchSuggestedUser;
+            searchController.SetSuggestionProvider(FillSuggestionMatches);
         }
 
         if (filterController != null)
@@ -234,6 +239,8 @@ public class LeaderboardUIManager : MonoBehaviour
             searchController.SearchInputSubmitted -= HandleSearchInputSubmitted;
             searchController.ClearSearchRequested -= ClearSearch;
             searchController.FindMeRequested -= FindCurrentUser;
+            searchController.SuggestionUserRequested -= SearchSuggestedUser;
+            searchController.SetSuggestionProvider(null);
         }
 
         if (filterController != null)
@@ -472,6 +479,40 @@ public class LeaderboardUIManager : MonoBehaviour
         SearchUsers(searchText);
     }
 
+    private bool FillSuggestionMatches(string _query, List<UserData> _results)
+    {
+        BuildRankedUsersFromCurrentMode();
+        foreach (LeaderboardUserRankData entry in rankedUsers)
+        {
+            if (entry == null || entry.userData == null) continue;
+            UserData user = entry.userData;
+            if (ContainsSearchPattern(GetUserName(user), _query) || ContainsSearchPattern(user.userId, _query))
+                _results.Add(user);
+        }
+        return true;
+    }
+
+    private void SearchSuggestedUser(string _userId)
+    {
+        BuildRankedUsersFromCurrentMode();
+        LeaderboardUserRankData match = rankedUsers.Find(_entry => _entry != null && _entry.userData != null && IsSameUserId(_entry.userData.userId, _userId));
+        if (match == null) { ShowSearchError("User was not found."); return; }
+        searchActive = true;
+        currentSearchText = _userId;
+        suggestionSearchUserId = _userId;
+        selectedUserId = _userId;
+        displayRankedUsers.Clear();
+        displayRankedUsers.Add(match);
+        BuildPageListsFromDisplayRankedUsers();
+        DisplayPage(1);
+        if (listController != null) listController.SelectUserAndScrollIntoView(_userId);
+        if (searchController != null)
+        {
+            searchController.SetSearchActive(true);
+            searchController.HideError();
+        }
+    }
+
     private void HandleSearchInputSubmitted(string searchText)
     {
         if (string.IsNullOrWhiteSpace(searchText))
@@ -484,6 +525,7 @@ public class LeaderboardUIManager : MonoBehaviour
 
     private void ClearSearch()
     {
+        suggestionSearchUserId = string.Empty;
         searchActive = false;
         currentSearchText = string.Empty;
         selectedUserId = string.Empty;
@@ -499,6 +541,7 @@ public class LeaderboardUIManager : MonoBehaviour
 
     private void FindCurrentUser()
     {
+        suggestionSearchUserId = string.Empty;
         RefreshUserData();
 
         UserData userToFind = GetCurrentUserForFindMe();
@@ -530,6 +573,7 @@ public class LeaderboardUIManager : MonoBehaviour
 
     private void SearchUsers(string searchText)
     {
+        suggestionSearchUserId = string.Empty;
         searchText = searchText.Trim();
 
         if (searchText.Length < MinimumSearchCharacters)
@@ -587,6 +631,7 @@ public class LeaderboardUIManager : MonoBehaviour
 
         for (int i = 0; i < searchResults.Count; i++)
         {
+            if (!string.IsNullOrEmpty(suggestionSearchUserId) && !IsSameUserId(searchResults[i].userData.userId, suggestionSearchUserId)) continue;
             displayRankedUsers.Add(searchResults[i]);
         }
     }
@@ -684,12 +729,10 @@ public class LeaderboardUIManager : MonoBehaviour
 
         string playerName = GetUserName(userData);
         string userId = string.IsNullOrWhiteSpace(userData.userId) ? string.Empty : userData.userId.Trim();
-        string shortId = GetShortUserId(userId);
-        string displayName = GetPlayerNameWithShortId(userData);
+        string displayName = GetResolvedDisplayName(userData);
 
         return ContainsSearchPattern(playerName, searchText) ||
                ContainsSearchPattern(userId, searchText) ||
-               ContainsSearchPattern(shortId, searchText) ||
                ContainsSearchPattern(displayName, searchText);
     }
 
@@ -703,39 +746,35 @@ public class LeaderboardUIManager : MonoBehaviour
         return sourceText.IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0;
     }
 
-    private string GetPlayerNameWithShortId(UserData userData)
+    private string GetResolvedDisplayName(UserData _userData)
     {
-        if (userData == null)
+        if (_userData == null)
         {
             return string.Empty;
         }
 
-        string playerName = GetUserName(userData);
-        string shortId = GetShortUserId(userData.userId);
-
-        if (string.IsNullOrWhiteSpace(shortId))
-        {
-            return playerName;
-        }
-
-        return $"{playerName} #{shortId}";
+        string userId = _userData.userId?.Trim() ?? string.Empty;
+        return resolvedDisplayNames.TryGetValue(userId, out string displayName)
+            ? displayName
+            : PlayerDisplayIdentityResolver.GetDisplayName(new PlayerProfileData(_userData), displayProfiles);
     }
 
-    private string GetShortUserId(string userId)
+    private void RefreshResolvedDisplayNames()
     {
-        if (string.IsNullOrWhiteSpace(userId))
+        displayProfiles.Clear();
+        resolvedDisplayNames.Clear();
+        foreach (UserData user in allUsers)
         {
-            return string.Empty;
+            if (user != null) displayProfiles.Add(new PlayerProfileData(user));
         }
 
-        userId = userId.Trim();
-
-        if (userId.Length <= 4)
+        foreach (PlayerProfileData profile in displayProfiles)
         {
-            return userId;
+            if (!string.IsNullOrWhiteSpace(profile.userId))
+                resolvedDisplayNames[profile.userId] = PlayerDisplayIdentityResolver.GetDisplayName(profile, displayProfiles);
         }
 
-        return userId.Substring(0, 4);
+        if (listController != null) listController.SetResolvedDisplayNames(resolvedDisplayNames);
     }
 
     private void ShowSearchError(string message)
@@ -889,6 +928,7 @@ public class LeaderboardUIManager : MonoBehaviour
     private void BuildRankedUsersFromCurrentMode()
     {
         rankedUsers.Clear();
+        RefreshResolvedDisplayNames();
 
         List<UserData> sortedModeUsers = new();
 

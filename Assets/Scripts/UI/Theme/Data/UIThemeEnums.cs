@@ -39,7 +39,9 @@ public enum UIThemeBackgroundType
     ChatSuggestionRow,
     ChatSuggestionRowHighlight,
     ChatPickerHeader,
-    Icon
+    Icon,
+    LeaderboardSuggestionRow,
+    LeaderboardSuggestionRowHighlight
 }
 
 public enum UIThemeButtonType
@@ -70,7 +72,8 @@ public enum UIThemeTextType
     ChatPrivate,
     Winner,
     PlayerListCell,
-    Pattern
+    Pattern,
+    LeaderboardSuggestion
 }
 
 public enum UIThemeInputType

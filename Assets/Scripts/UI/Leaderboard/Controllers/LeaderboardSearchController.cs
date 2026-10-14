@@ -3,6 +3,8 @@ using System.Collections;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using BingoGame.UI.Leaderboard;
+using System.Collections.Generic;
 
 public class LeaderboardSearchController : MonoBehaviour
 {
@@ -20,6 +22,13 @@ public class LeaderboardSearchController : MonoBehaviour
 
     [Header("Error")]
     [SerializeField] private TMP_Text errorText;
+
+    [Space]
+    [Header("Suggestions")]
+    [SerializeField, Tooltip("Controller for the search suggestion panel.")] private LeaderboardSuggestionController suggestionController;
+    private readonly List<UserData> suggestionMatches = new();
+    private Func<string, List<UserData>, bool> suggestionProvider;
+    public event Action<string> SuggestionUserRequested;
 
     #endregion
 
@@ -64,6 +73,7 @@ public class LeaderboardSearchController : MonoBehaviour
     {
         SetupLayoutElements();
         SetupErrorText();
+        if (suggestionController != null) suggestionController.BindInput(searchInputField);
 
         SetSearchActive(false);
         HideError();
@@ -71,6 +81,12 @@ public class LeaderboardSearchController : MonoBehaviour
 
     private void OnEnable()
     {
+        if (suggestionController != null)
+        {
+            suggestionController.KeyboardNameSelected += SetSearchInputText;
+            suggestionController.UserSelected += RequestSuggestionUser;
+            suggestionController.InputClicked += ReopenSuggestions;
+        }
         if (searchButton != null)
         {
             searchButton.onClick.AddListener(RequestSearchFromButton);
@@ -89,11 +105,20 @@ public class LeaderboardSearchController : MonoBehaviour
         if (searchInputField != null)
         {
             searchInputField.onSubmit.AddListener(RequestSearchFromInputSubmit);
+            searchInputField.onValueChanged.AddListener(RefreshSuggestions);
+            searchInputField.onSelect.AddListener(RefreshSuggestions);
         }
     }
 
     private void OnDisable()
     {
+        if (suggestionController != null)
+        {
+            suggestionController.KeyboardNameSelected -= SetSearchInputText;
+            suggestionController.UserSelected -= RequestSuggestionUser;
+            suggestionController.InputClicked -= ReopenSuggestions;
+            suggestionController.Close();
+        }
         if (searchButton != null)
         {
             searchButton.onClick.RemoveListener(RequestSearchFromButton);
@@ -112,6 +137,8 @@ public class LeaderboardSearchController : MonoBehaviour
         if (searchInputField != null)
         {
             searchInputField.onSubmit.RemoveListener(RequestSearchFromInputSubmit);
+            searchInputField.onValueChanged.RemoveListener(RefreshSuggestions);
+            searchInputField.onSelect.RemoveListener(RefreshSuggestions);
         }
 
         StopErrorRoutine();
@@ -123,6 +150,7 @@ public class LeaderboardSearchController : MonoBehaviour
 
     public void ClearSearchInput()
     {
+        if (suggestionController != null) suggestionController.Close();
         if (searchInputField == null)
         {
             return;
@@ -212,7 +240,37 @@ public class LeaderboardSearchController : MonoBehaviour
 
     private void RequestFindMe()
     {
+        ClearSearchInput();
         FindMeRequested?.Invoke();
+    }
+
+    public void SetSuggestionProvider(Func<string, List<UserData>, bool> _provider)
+    {
+        suggestionProvider = _provider;
+    }
+
+    private void ReopenSuggestions()
+    {
+        if (suggestionController != null && !suggestionController.IsOpen) RefreshSuggestions(GetSearchInputText());
+    }
+
+    private void RefreshSuggestions(string _text)
+    {
+        if (suggestionController == null) return;
+        if (string.IsNullOrWhiteSpace(_text) || suggestionProvider == null)
+        {
+            suggestionController.Close();
+            return;
+        }
+        suggestionMatches.Clear();
+        if (suggestionProvider(_text.Trim(), suggestionMatches)) suggestionController.Show(suggestionMatches);
+        else suggestionController.Close();
+    }
+
+    private void RequestSuggestionUser(string _userId)
+    {
+        ClearSearchInput();
+        SuggestionUserRequested?.Invoke(_userId);
     }
 
     #endregion

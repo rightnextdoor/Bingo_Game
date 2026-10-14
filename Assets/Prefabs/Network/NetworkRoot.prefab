@@ -21,6 +21,7 @@ GameObject:
   - component: {fileID: 4624164359500256062}
   - component: {fileID: 3490199574268021784}
   - component: {fileID: 283096166107711725}
+  - component: {fileID: 2122387465010203041}
   m_Layer: 0
   m_Name: NetworkRoot
   m_TagString: Untagged
@@ -242,3 +243,15 @@ MonoBehaviour:
   maximumBurstBytes: 32768
   maximumItemsPerFrame: 64
   softMaximumQueuedBytes: 4194304
+--- !u!114 &2122387465010203041
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5973456699069445500}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c130408f45184aac9a8a342ed72f8dd5, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::NetworkGameSessionManager

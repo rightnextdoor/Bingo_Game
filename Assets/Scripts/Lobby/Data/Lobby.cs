@@ -9,6 +9,8 @@ public class Lobby
 
     public MainMenuPlayMode playMode;
     public LobbyState lobbyState;
+    public bool isGameSimulation;
+    public bool usesSimulationSettings;
 
     public LobbyController Controller
     {
@@ -26,6 +28,7 @@ public class Lobby
 
         playMode = MainMenuPlayMode.None;
         lobbyState = LobbyState.Open;
+        isGameSimulation = false;
 
         controller = new LobbyController();
         controller.AttachLobby(this);
@@ -37,6 +40,7 @@ public class Lobby
 
         this.playMode = playMode;
         lobbyState = LobbyState.Open;
+        isGameSimulation = false;
 
         LobbySetupData lobbySetupData = new LobbySetupData
         {
@@ -55,6 +59,8 @@ public class Lobby
             : MainMenuPlayMode.None;
 
         lobbyState = LobbyState.Open;
+        isGameSimulation = lobbySetupData != null && lobbySetupData.isGameSimulation;
+        usesSimulationSettings = lobbySetupData != null && lobbySetupData.usesSimulationSettings;
 
         controller = new LobbyController(this, lobbySetupData, isRoomCodeAvailable);
     }

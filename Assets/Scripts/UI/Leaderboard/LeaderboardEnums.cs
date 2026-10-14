@@ -81,5 +81,6 @@ public class LeaderboardRowCellSetup
 public class LeaderboardUserRankData
 {
     public int rank;
+    public int score;
     public UserData userData;
 }

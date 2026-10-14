@@ -1,0 +1,35 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6b33075be95cdb746abd148dfc70db25, type: 3}
+  m_Name: RiskTimeRemaining
+  m_EditorClassIdentifier: Assembly-CSharp::UIMessageData
+  messageType: 8
+  messageText: Risk game time remaining.
+  imageMode: 1
+  customImage: {fileID: 21300000, guid: e1704b4f49d87ac4e9a30fe0e3989c75, type: 3}
+  fontAsset: {fileID: 0}
+  fontSize: 32
+  textColor: {r: 0.007843138, g: 0.007843138, b: 0.007843138, a: 1}
+  numberColor: {r: 0.078431375, g: 0.078431375, b: 0.078431375, a: 1}
+  backgroundColor: {r: 1, g: 1, b: 1, a: 1}
+  displaySeconds: 2.5
+  fadeOutSeconds: 0.35
+  priority: 0
+  canBeCleared: 0
+  clearPendingClearableMessages: 0
+  tooltipOpenDelay: 0
+  tooltipMinimumWidth: 120
+  tooltipMaximumWidth: 360
+  tooltipMinimumHeight: 44
+  tooltipMaximumHeight: 220
+  tooltipGrowthDirection: 0
+  tooltipOffset: {x: 18, y: -18}

@@ -22,6 +22,7 @@ public class PlayerListPlayerData
     public bool canKick;
     public bool showBotIcon;
     public bool showReadyIcon;
+    public string gameplayStatusText;
 
     #endregion
 
@@ -42,6 +43,7 @@ public class PlayerListPlayerData
         canKick = false;
         showBotIcon = false;
         showReadyIcon = false;
+        gameplayStatusText = string.Empty;
     }
 
     public PlayerListPlayerData(LobbyPlayerViewData playerData) : this()

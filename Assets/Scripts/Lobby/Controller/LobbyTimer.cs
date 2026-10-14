@@ -1,5 +1,4 @@
 using System;
-using Unity.Netcode;
 using UnityEngine;
 
 [Serializable]
@@ -80,13 +79,6 @@ public class LobbyTimer
 
     public static double GetCurrentTime()
     {
-        NetworkManager networkManager = NetworkManager.Singleton;
-
-        if (networkManager != null && networkManager.IsListening)
-        {
-            return networkManager.ServerTime.Time;
-        }
-
-        return Time.unscaledTimeAsDouble;
+        return SessionPauseManager.GetCurrentTime();
     }
 }

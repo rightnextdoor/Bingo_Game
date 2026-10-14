@@ -1,0 +1,514 @@
+using System;
+using System.Collections.Generic;
+
+[Serializable]
+public class BingoChecker
+{
+    private readonly BingoPatternValidator validator = new BingoPatternValidator();
+    private readonly Dictionary<string, List<BingoCheckResult>> checkHistoryByPlayerId =
+        new Dictionary<string, List<BingoCheckResult>>();
+
+    private BingoCheckResult currentCheckResult;
+
+    public BingoCheckResult CurrentCheckResult => currentCheckResult;
+
+    public bool TryCheck(
+        string playerId,
+        LobbyBoardData boardData,
+        IReadOnlyCollection<int> pressedCellIndices,
+        IReadOnlyCollection<int> calledNumbers,
+        IReadOnlyCollection<BingoPatternType> patternTypes,
+        IReadOnlyList<BingoPatternIdentity> latePatterns)
+    {
+        if (string.IsNullOrWhiteSpace(playerId) || boardData == null)
+        {
+            return false;
+        }
+
+        List<BingoCheckResult> checkHistory = GetOrCreateCheckHistory(playerId);
+        BingoCheckResult checkResult = validator.Validate(
+            playerId,
+            boardData,
+            pressedCellIndices,
+            calledNumbers,
+            patternTypes,
+            checkHistory);
+
+        if (checkResult == null)
+        {
+            return false;
+        }
+
+        checkResult.checkNumber = checkHistory.Count + 1;
+        ApplyCurrentCheckScores(checkResult, latePatterns);
+        checkHistory.Add(checkResult);
+        currentCheckResult = checkResult;
+        return true;
+    }
+
+    private static void ApplyCurrentCheckScores(
+        BingoCheckResult checkResult,
+        IReadOnlyList<BingoPatternIdentity> latePatterns)
+    {
+        checkResult.currentCheckPatternPoints = 0;
+
+        if (checkResult.patterns == null || GameScoreManager.instance == null)
+        {
+            return;
+        }
+
+        long currentCheckPoints = 0;
+
+        for (int i = 0; i < checkResult.patterns.Count; i++)
+        {
+            BingoPatternCheckResult patternResult = checkResult.patterns[i];
+
+            if (patternResult == null || !patternResult.isWinningPattern)
+            {
+                continue;
+            }
+
+            BingoPatternIdentity identity = BingoPatternIdentity.FromResult(patternResult);
+            patternResult.wasSubmittedLate =
+                BingoPatternIdentityList.Contains(latePatterns, identity);
+            patternResult.scorePoints = patternResult.wasSubmittedLate
+                ? 0
+                : GameScoreManager.instance.GetPatternPoints(patternResult.patternType);
+            currentCheckPoints += patternResult.scorePoints;
+        }
+
+        int maximumScore = GameSettings.instance != null
+            ? GameSettings.instance.MaximumScore
+            : UserStats.DefaultMaximumScore;
+        checkResult.currentCheckPatternPoints = currentCheckPoints >= maximumScore
+            ? maximumScore
+            : (int)currentCheckPoints;
+    }
+
+    public List<BingoPatternCheckResult> GetCompletedAvailablePatterns(
+        string playerId,
+        LobbyBoardData boardData,
+        IReadOnlyCollection<int> calledNumbers,
+        IReadOnlyCollection<BingoPatternType> configuredPatternTypes)
+    {
+        List<BingoPatternCheckResult> completedPatterns =
+            new List<BingoPatternCheckResult>();
+
+        if (string.IsNullOrWhiteSpace(playerId) ||
+            boardData?.cellNumbers == null ||
+            configuredPatternTypes == null)
+        {
+            return completedPatterns;
+        }
+
+        HashSet<int> calledNumberSet = calledNumbers != null
+            ? new HashSet<int>(calledNumbers)
+            : new HashSet<int>();
+        List<int> callableCellIndices = new List<int>();
+
+        for (int i = 0; i < boardData.cellNumbers.Count; i++)
+        {
+            bool isFreeCell = boardData.usesFreeCell && i == 12;
+
+            if (isFreeCell || calledNumberSet.Contains(boardData.cellNumbers[i]))
+            {
+                callableCellIndices.Add(i);
+            }
+        }
+
+        BingoCheckResult result = validator.Validate(
+            playerId,
+            boardData,
+            callableCellIndices,
+            calledNumbers,
+            configuredPatternTypes,
+            GetCheckHistory(playerId));
+
+        if (result?.patterns == null)
+        {
+            return completedPatterns;
+        }
+
+        for (int i = 0; i < result.patterns.Count; i++)
+        {
+            BingoPatternCheckResult patternResult = result.patterns[i];
+
+            if (patternResult?.isWinningPattern == true)
+            {
+                completedPatterns.Add(patternResult);
+            }
+        }
+
+        return completedPatterns;
+    }
+
+    public List<BingoPatternCheckResult> GetCompletedAvailablePatterns(
+        string playerId,
+        LobbyBoardData boardData,
+        IReadOnlyCollection<int> markedCellIndices,
+        IReadOnlyCollection<int> calledNumbers,
+        IReadOnlyCollection<BingoPatternType> configuredPatternTypes)
+    {
+        List<BingoPatternCheckResult> completedPatterns =
+            new List<BingoPatternCheckResult>();
+
+        if (string.IsNullOrWhiteSpace(playerId) ||
+            boardData?.cellNumbers == null ||
+            configuredPatternTypes == null)
+        {
+            return completedPatterns;
+        }
+
+        BingoCheckResult result = validator.Validate(
+            playerId,
+            boardData,
+            markedCellIndices,
+            calledNumbers,
+            configuredPatternTypes,
+            GetCheckHistory(playerId));
+
+        if (result?.patterns == null)
+        {
+            return completedPatterns;
+        }
+
+        for (int i = 0; i < result.patterns.Count; i++)
+        {
+            BingoPatternCheckResult patternResult = result.patterns[i];
+
+            if (patternResult?.isWinningPattern == true)
+            {
+                completedPatterns.Add(patternResult);
+            }
+        }
+
+        return completedPatterns;
+    }
+
+    public IReadOnlyList<BingoCheckResult> GetCheckHistory(string playerId)
+    {
+        if (string.IsNullOrWhiteSpace(playerId) ||
+            !checkHistoryByPlayerId.TryGetValue(playerId, out List<BingoCheckResult> checkHistory))
+        {
+            return Array.Empty<BingoCheckResult>();
+        }
+
+        return checkHistory;
+    }
+
+    public void ClearCheckHistory(string playerId)
+    {
+        if (!string.IsNullOrWhiteSpace(playerId))
+        {
+            checkHistoryByPlayerId.Remove(playerId);
+        }
+    }
+
+    public void ClearAllCheckHistory()
+    {
+        checkHistoryByPlayerId.Clear();
+        currentCheckResult = null;
+    }
+
+    public List<BingoPlayerCheckHistoryData> CaptureCheckHistory()
+    {
+        List<BingoPlayerCheckHistoryData> historySnapshot =
+            new List<BingoPlayerCheckHistoryData>();
+
+        foreach (KeyValuePair<string, List<BingoCheckResult>> pair in checkHistoryByPlayerId)
+        {
+            BingoPlayerCheckHistoryData playerHistory =
+                new BingoPlayerCheckHistoryData
+                {
+                    playerId = pair.Key ?? string.Empty
+                };
+
+            List<BingoCheckResult> checkHistory = pair.Value;
+
+            if (checkHistory != null)
+            {
+                for (int i = 0; i < checkHistory.Count; i++)
+                {
+                    playerHistory.checks.Add(
+                        new BingoCheckHistoryEntryData(checkHistory[i]));
+                }
+            }
+
+            historySnapshot.Add(playerHistory);
+        }
+
+        return historySnapshot;
+    }
+
+    public void RestoreCheckHistory(
+        IReadOnlyList<BingoPlayerCheckHistoryData> historySnapshot)
+    {
+        ClearAllCheckHistory();
+
+        if (historySnapshot == null)
+        {
+            return;
+        }
+
+        for (int playerIndex = 0; playerIndex < historySnapshot.Count; playerIndex++)
+        {
+            BingoPlayerCheckHistoryData playerHistory = historySnapshot[playerIndex];
+
+            if (playerHistory == null ||
+                string.IsNullOrWhiteSpace(playerHistory.playerId) ||
+                playerHistory.checks == null)
+            {
+                continue;
+            }
+
+            List<BingoCheckResult> restoredChecks =
+                GetOrCreateCheckHistory(playerHistory.playerId);
+
+            for (int checkIndex = 0; checkIndex < playerHistory.checks.Count; checkIndex++)
+            {
+                BingoCheckHistoryEntryData checkEntry = playerHistory.checks[checkIndex];
+
+                if (checkEntry?.patterns == null || checkEntry.patterns.Count == 0)
+                {
+                    continue;
+                }
+
+                BingoCheckResult checkResult = new BingoCheckResult
+                {
+                    playerId = playerHistory.playerId,
+                    checkNumber = restoredChecks.Count + 1
+                };
+
+                for (int patternIndex = 0; patternIndex < checkEntry.patterns.Count; patternIndex++)
+                {
+                    BingoPatternIdentity identity = checkEntry.patterns[patternIndex];
+
+                    if (identity == null)
+                    {
+                        continue;
+                    }
+
+                    checkResult.patterns.Add(new BingoPatternCheckResult(
+                        identity.patternType,
+                        identity.primaryLine,
+                        identity.secondaryLine)
+                    {
+                        isWinningPattern = true
+                    });
+                }
+
+                if (checkResult.patterns.Count > 0)
+                {
+                    restoredChecks.Add(checkResult);
+                    currentCheckResult = checkResult;
+                }
+            }
+        }
+    }
+
+    public List<BingoPatternType> GetCheckedPatternTypes(string playerId)
+    {
+        List<BingoPatternType> checkedPatternTypes = new List<BingoPatternType>();
+        IReadOnlyList<BingoCheckResult> checkHistory = GetCheckHistory(playerId);
+
+        for (int checkIndex = 0; checkIndex < checkHistory.Count; checkIndex++)
+        {
+            BingoCheckResult checkResult = checkHistory[checkIndex];
+
+            if (checkResult?.patterns == null)
+            {
+                continue;
+            }
+
+            for (int patternIndex = 0; patternIndex < checkResult.patterns.Count; patternIndex++)
+            {
+                BingoPatternCheckResult patternResult = checkResult.patterns[patternIndex];
+
+                if (patternResult != null && !checkedPatternTypes.Contains(patternResult.patternType))
+                {
+                    checkedPatternTypes.Add(patternResult.patternType);
+                }
+            }
+        }
+
+        return checkedPatternTypes;
+    }
+
+    public List<BingoPatternType> GetAvailablePatternTypes(
+        string playerId,
+        IReadOnlyCollection<BingoPatternType> configuredPatternTypes)
+    {
+        List<BingoPatternType> availablePatternTypes = new List<BingoPatternType>();
+
+        if (configuredPatternTypes == null)
+        {
+            return availablePatternTypes;
+        }
+
+        IReadOnlyList<BingoCheckResult> checkHistory = GetCheckHistory(playerId);
+
+        foreach (BingoPatternType patternType in configuredPatternTypes)
+        {
+            if (!availablePatternTypes.Contains(patternType) &&
+                !IsPatternExhausted(checkHistory, patternType))
+            {
+                availablePatternTypes.Add(patternType);
+            }
+        }
+
+        return availablePatternTypes;
+    }
+
+    public void AddCheckedPatterns(
+        string playerId,
+        IReadOnlyCollection<BingoPatternCheckResult> patternResults)
+    {
+        if (string.IsNullOrWhiteSpace(playerId) || patternResults == null)
+        {
+            return;
+        }
+
+        BingoCheckResult checkResult = new BingoCheckResult
+        {
+            playerId = playerId
+        };
+
+        foreach (BingoPatternCheckResult patternResult in patternResults)
+        {
+            if (patternResult != null)
+            {
+                checkResult.patterns.Add(patternResult);
+            }
+        }
+
+        if (checkResult.patterns.Count == 0)
+        {
+            return;
+        }
+
+        List<BingoCheckResult> checkHistory = GetOrCreateCheckHistory(playerId);
+        checkResult.checkNumber = checkHistory.Count + 1;
+        checkHistory.Add(checkResult);
+        currentCheckResult = checkResult;
+    }
+
+    public List<BingoPatternCheckResult> GetWinningPatternsFromHistory(string playerId)
+    {
+        List<BingoPatternCheckResult> winningPatterns = new List<BingoPatternCheckResult>();
+        IReadOnlyList<BingoCheckResult> checkHistory = GetCheckHistory(playerId);
+
+        for (int checkIndex = 0; checkIndex < checkHistory.Count; checkIndex++)
+        {
+            BingoCheckResult checkResult = checkHistory[checkIndex];
+
+            if (checkResult?.patterns == null)
+            {
+                continue;
+            }
+
+            for (int patternIndex = 0; patternIndex < checkResult.patterns.Count; patternIndex++)
+            {
+                BingoPatternCheckResult patternResult = checkResult.patterns[patternIndex];
+
+                if (patternResult != null && patternResult.isWinningPattern)
+                {
+                    winningPatterns.Add(patternResult);
+                }
+            }
+        }
+
+        return winningPatterns;
+    }
+
+    public List<BingoPatternCheckResult> GetFailedPatterns(BingoCheckResult checkResult)
+    {
+        List<BingoPatternCheckResult> failedPatterns = new List<BingoPatternCheckResult>();
+
+        if (checkResult?.patterns == null)
+        {
+            return failedPatterns;
+        }
+
+        for (int i = 0; i < checkResult.patterns.Count; i++)
+        {
+            BingoPatternCheckResult patternResult = checkResult.patterns[i];
+
+            if (patternResult != null && !patternResult.isWinningPattern)
+            {
+                failedPatterns.Add(patternResult);
+            }
+        }
+
+        return failedPatterns;
+    }
+
+    private List<BingoCheckResult> GetOrCreateCheckHistory(string playerId)
+    {
+        if (!checkHistoryByPlayerId.TryGetValue(playerId, out List<BingoCheckResult> checkHistory))
+        {
+            checkHistory = new List<BingoCheckResult>();
+            checkHistoryByPlayerId.Add(playerId, checkHistory);
+        }
+
+        return checkHistory;
+    }
+
+    private bool IsPatternExhausted(
+        IReadOnlyList<BingoCheckResult> checkHistory,
+        BingoPatternType patternType)
+    {
+        if (checkHistory == null)
+        {
+            return false;
+        }
+
+        if (patternType == BingoPatternType.SingleLine)
+        {
+            HashSet<BingoLineType> checkedLines = new HashSet<BingoLineType>();
+
+            for (int checkIndex = 0; checkIndex < checkHistory.Count; checkIndex++)
+            {
+                BingoCheckResult checkResult = checkHistory[checkIndex];
+
+                if (checkResult?.patterns == null)
+                {
+                    continue;
+                }
+
+                for (int patternIndex = 0; patternIndex < checkResult.patterns.Count; patternIndex++)
+                {
+                    BingoPatternCheckResult patternResult = checkResult.patterns[patternIndex];
+
+                    if (patternResult != null &&
+                        patternResult.patternType == BingoPatternType.SingleLine &&
+                        patternResult.primaryLine != BingoLineType.None)
+                    {
+                        checkedLines.Add(patternResult.primaryLine);
+                    }
+                }
+            }
+
+            return checkedLines.Count >= 12;
+        }
+
+        for (int checkIndex = 0; checkIndex < checkHistory.Count; checkIndex++)
+        {
+            BingoCheckResult checkResult = checkHistory[checkIndex];
+
+            if (checkResult?.patterns == null)
+            {
+                continue;
+            }
+
+            for (int patternIndex = 0; patternIndex < checkResult.patterns.Count; patternIndex++)
+            {
+                if (checkResult.patterns[patternIndex]?.patternType == patternType)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+}

@@ -20,12 +20,26 @@ public class OnlineConnectionManager : MonoBehaviour
     private OnlineConnectionState connectionState = OnlineConnectionState.NotStarted;
     private Task<bool> connectionTask;
     private string lastConnectionError = string.Empty;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    private bool connectionAvailableForTesting = true;
+#endif
 
     public bool IsReady => isReady;
-    public bool IsOnline => connectionState == OnlineConnectionState.Online;
+    public bool IsOnline => connectionState == OnlineConnectionState.Online && IsConnectionAvailableForTesting;
     public bool IsConnecting => connectionState == OnlineConnectionState.Connecting;
     public OnlineConnectionState ConnectionState => connectionState;
     public string LastConnectionError => lastConnectionError;
+    public bool IsConnectionAvailableForTesting
+    {
+        get
+        {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            return connectionAvailableForTesting;
+#else
+            return true;
+#endif
+        }
+    }
 
     public event Action<OnlineConnectionState> ConnectionStateChanged;
 
@@ -60,6 +74,7 @@ public class OnlineConnectionManager : MonoBehaviour
 
     private void OnDestroy()
     {
+        isReady = false;
         UnregisterAuthenticationEvents();
 
         if (instance == this)
@@ -98,13 +113,15 @@ public class OnlineConnectionManager : MonoBehaviour
 
     public async Task<bool> EnsureConnectedAsync()
     {
-        if (!isReady)
+        if (!isReady || !IsConnectionAvailableForTesting)
         {
             return false;
         }
 
         if (HasAuthorizedSession())
         {
+            RegisterAuthenticationEvents();
+            lastConnectionError = string.Empty;
             SetConnectionState(OnlineConnectionState.Online);
             return true;
         }
@@ -142,16 +159,35 @@ public class OnlineConnectionManager : MonoBehaviour
                 await UnityServices.InitializeAsync();
             }
 
+            if (this == null || !isReady)
+            {
+                return false;
+            }
+
             RegisterAuthenticationEvents();
+
+            if (!IsConnectionAvailableForTesting)
+            {
+                lastConnectionError = "Online services are unavailable in the connection simulation.";
+                SetConnectionState(OnlineConnectionState.Offline);
+                return false;
+            }
 
             if (!AuthenticationService.Instance.IsAuthorized)
             {
                 await AuthenticationService.Instance.SignInAnonymouslyAsync();
             }
 
-            if (!AuthenticationService.Instance.IsAuthorized)
+            if (this == null || !isReady)
             {
-                lastConnectionError = "Unity Authentication did not create an authorized session.";
+                return false;
+            }
+
+            if (!AuthenticationService.Instance.IsAuthorized || !IsConnectionAvailableForTesting)
+            {
+                lastConnectionError = !IsConnectionAvailableForTesting
+                    ? "Online services are unavailable in the connection simulation."
+                    : "Unity Authentication did not create an authorized session.";
                 SetConnectionState(OnlineConnectionState.Offline);
                 return false;
             }
@@ -161,6 +197,11 @@ public class OnlineConnectionManager : MonoBehaviour
         }
         catch (Exception exception)
         {
+            if (this == null || !isReady)
+            {
+                return false;
+            }
+
             lastConnectionError = exception.Message;
             SetConnectionState(OnlineConnectionState.Offline);
             return false;
@@ -181,6 +222,49 @@ public class OnlineConnectionManager : MonoBehaviour
 
         SetConnectionState(OnlineConnectionState.Offline);
     }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    public void SetConnectionAvailableForTesting(bool available)
+    {
+        if (connectionAvailableForTesting == available)
+        {
+            return;
+        }
+
+        connectionAvailableForTesting = available;
+
+        if (!available)
+        {
+            ReportConnectionLost("Online services are unavailable in the connection simulation.");
+        }
+        else if (isReady)
+        {
+            _ = RestoreSimulatedConnectionAsync();
+        }
+    }
+
+    private async Task RestoreSimulatedConnectionAsync()
+    {
+        Task<bool> pendingConnection = connectionTask;
+
+        if (pendingConnection != null && !pendingConnection.IsCompleted)
+        {
+            try
+            {
+                await pendingConnection;
+            }
+            catch (Exception)
+            {
+                // A fresh attempt below handles the failed in-flight connection.
+            }
+        }
+
+        if (IsConnectionAvailableForTesting && !IsOnline)
+        {
+            await EnsureConnectedAsync();
+        }
+    }
+#endif
 
     #endregion
 

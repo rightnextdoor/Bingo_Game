@@ -432,31 +432,151 @@ public class UserManager : MonoBehaviour, ISceneReadyCheck
         UserChanged?.Invoke();
     }
 
+    public void SetLastGameInfo(
+        string gameId,
+        MainMenuPlayMode playMode,
+        BingoGameModeType gameModeType)
+    {
+        CurrentUser.SetLastGameInfo(gameId, playMode, gameModeType);
+
+        AddOrUpdateCurrentUser();
+
+        UserChanged?.Invoke();
+    }
+
     public void ClearLastGameId()
     {
-        CurrentUser.lastGameId = string.Empty;
+        CurrentUser.ClearLastGameInfo();
 
         AddOrUpdateCurrentUser();
 
         UserChanged?.Invoke();
     }
 
-    public void AddPoints(int amount)
+    public void DeferNetworkGameCleanup(string gameId)
     {
-        CurrentUser.stats.AddPoints(amount);
+        if (!string.IsNullOrWhiteSpace(gameId))
+        {
+            CurrentUser.pendingNetworkGameCleanupId = gameId.Trim();
+        }
 
+        CurrentUser.ClearLastGameInfo();
         AddOrUpdateCurrentUser();
-
         UserChanged?.Invoke();
     }
 
-    public void RemovePoints(int amount)
+    public void ClearDeferredNetworkGameCleanup()
     {
-        CurrentUser.stats.RemovePoints(amount);
+        if (string.IsNullOrWhiteSpace(CurrentUser.pendingNetworkGameCleanupId))
+        {
+            return;
+        }
 
+        CurrentUser.pendingNetworkGameCleanupId = string.Empty;
         AddOrUpdateCurrentUser();
-
         UserChanged?.Invoke();
+    }
+
+    public bool ApplyGameScore(
+        string userId,
+        ScorePlayMode playMode,
+        BingoGameModeType gameModeType,
+        int scoreDelta)
+    {
+        if (string.IsNullOrWhiteSpace(userId) || !UserStats.IsScoredGameMode(gameModeType))
+        {
+            return false;
+        }
+
+        bool isCurrentUser = string.Equals(
+            CurrentUser.userId,
+            userId,
+            StringComparison.Ordinal);
+        UserData userData = isCurrentUser ? CurrentUser : GetUser(userId);
+
+        if (userData == null)
+        {
+            return false;
+        }
+
+        userData.RepairData();
+
+        if (scoreDelta >= 0)
+        {
+            userData.stats.AddPoints(playMode, gameModeType, scoreDelta);
+        }
+        else
+        {
+            userData.stats.RemovePoints(playMode, gameModeType, -(long)scoreDelta > int.MaxValue
+                ? int.MaxValue
+                : -scoreDelta);
+        }
+
+        if (isCurrentUser)
+        {
+            AddOrUpdateCurrentUser();
+            UserChanged?.Invoke();
+        }
+        else
+        {
+            AddOrUpdateUser(userData);
+        }
+
+        return true;
+    }
+
+    public bool ApplyGameScoreOnce(
+        string resultId,
+        string userId,
+        ScorePlayMode playMode,
+        BingoGameModeType gameModeType,
+        int scoreDelta)
+    {
+        if (string.IsNullOrWhiteSpace(resultId) ||
+            string.IsNullOrWhiteSpace(userId) ||
+            !UserStats.IsScoredGameMode(gameModeType))
+        {
+            return false;
+        }
+
+        bool isCurrentUser = string.Equals(
+            CurrentUser.userId,
+            userId,
+            StringComparison.Ordinal);
+        UserData userData = isCurrentUser ? CurrentUser : GetUser(userId);
+
+        if (userData == null)
+        {
+            return false;
+        }
+
+        userData.RepairData();
+
+        if (userData.stats.HasAppliedGameScoreResult(resultId))
+        {
+            return true;
+        }
+
+        if (!userData.stats.TryApplyGameScoreResult(
+                resultId,
+                playMode,
+                gameModeType,
+                scoreDelta))
+        {
+            return false;
+        }
+
+        if (isCurrentUser)
+        {
+            AddOrUpdateCurrentUser();
+            UserChanged?.Invoke();
+        }
+        else
+        {
+            AddOrUpdateUser(userData);
+        }
+
+        return true;
     }
 
     #endregion

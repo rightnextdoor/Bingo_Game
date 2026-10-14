@@ -139,11 +139,12 @@ public class BotUserListDataEditor : Editor
 
         EditorGUI.indentLevel++;
 
-        EditorGUILayout.PropertyField(statsProperty.FindPropertyRelative("points"));
-        EditorGUILayout.PropertyField(statsProperty.FindPropertyRelative("gamesPlayed"));
-        EditorGUILayout.PropertyField(statsProperty.FindPropertyRelative("wins"));
-        EditorGUILayout.PropertyField(statsProperty.FindPropertyRelative("losses"));
-        EditorGUILayout.PropertyField(statsProperty.FindPropertyRelative("bingosCalled"));
+        SerializedProperty scoreMapsProperty = statsProperty.FindPropertyRelative("scoreMaps");
+
+        if (scoreMapsProperty != null)
+        {
+            EditorGUILayout.PropertyField(scoreMapsProperty, new GUIContent("Score Maps"), true);
+        }
 
         EditorGUI.indentLevel--;
     }
@@ -232,23 +233,12 @@ public class BotUserListDataEditor : Editor
             return;
         }
 
-        SetInt(statsProperty, "points", 0);
-        SetInt(statsProperty, "gamesPlayed", 0);
-        SetInt(statsProperty, "wins", 0);
-        SetInt(statsProperty, "losses", 0);
-        SetInt(statsProperty, "bingosCalled", 0);
-    }
+        SerializedProperty scoreMapsProperty = statsProperty.FindPropertyRelative("scoreMaps");
 
-    private void SetInt(SerializedProperty parentProperty, string propertyName, int value)
-    {
-        SerializedProperty property = parentProperty.FindPropertyRelative(propertyName);
-
-        if (property == null)
+        if (scoreMapsProperty != null)
         {
-            return;
+            scoreMapsProperty.arraySize = 0;
         }
-
-        property.intValue = value;
     }
 
     private string GetBotUserFoldoutKey(SerializedProperty botUserProperty, int index)

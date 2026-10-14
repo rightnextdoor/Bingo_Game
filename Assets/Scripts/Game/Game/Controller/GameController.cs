@@ -1,0 +1,1758 @@
+using BingoGame.UI;
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+[DisallowMultipleComponent]
+public class GameController : MonoBehaviour
+{
+    #region Inspector Fields
+
+    [Header("Sections")]
+    [SerializeField] private GameHeaderController headerController;
+    [SerializeField] private GameBoardSectionController boardSectionController;
+    [SerializeField] private BingoCheckAnimationController bingoCheckAnimationController;
+    [SerializeField] private LobbyPlayerListController playerListController;
+    [SerializeField] private GameInfoController gameInfoController;
+    [SerializeField] private LobbyCustomPanelController customPanelController;
+    [SerializeField] private RiskDecisionPopupController riskDecisionPopupController;
+
+    #endregion
+
+    #region Private Fields
+
+    private readonly List<PlayerListPlayerData> visiblePlayers = new List<PlayerListPlayerData>();
+    private readonly Dictionary<string, HashSet<int>> markedCellsByUserId =
+        new Dictionary<string, HashSet<int>>(StringComparer.Ordinal);
+    private readonly BingoBoardPatternTracker boardPatternTracker =
+        new BingoBoardPatternTracker();
+    private readonly Queue<int> automaticMarkQueue = new Queue<int>();
+    private readonly HashSet<int> queuedAutomaticMarks = new HashSet<int>();
+    private readonly HashSet<int> presentedAutomaticMarks = new HashSet<int>();
+    private GameBallDisplayController ballDisplayController;
+    private Coroutine bindRoutine;
+    private Coroutine automaticMarkRoutine;
+    private string trackedPatternGameId = string.Empty;
+    private bool isBingoCheckPending;
+    private GameSessionData displayedGameSession;
+    private string riskNotificationGameId = string.Empty;
+    private int previousRiskRemainingSeconds = -1;
+    private double lastRiskSubmitNotificationEndTime;
+    private string automaticBoardGameId = string.Empty;
+    private string displayedBoardGameId = string.Empty;
+    private string displayedBoardUserId = string.Empty;
+    private bool hasDisplayedLocalBoard;
+    private bool isLocalBoardAvailable;
+    private bool displayedLocalAutomaticBoardEnabled;
+    private BingoCheckResult activeDeathCheckResult;
+    private int activeDeathCheckNumber;
+    private GamePlayerStatus activeDeathCheckStatus = GamePlayerStatus.Checking;
+    private bool isDeathCheckAnimationComplete;
+    private bool isDeathEndAnimationPlaying;
+    private BingoCheckResult pendingRankedManualCheckResult;
+    private string pendingRankedManualCheckUserId = string.Empty;
+    private bool isRankedManualEndAnimationPlaying;
+    private string gameOverPopupGameId = string.Empty;
+
+    #endregion
+
+    #region Unity Lifecycle
+
+    private void Awake()
+    {
+        ballDisplayController = GetComponentInChildren<GameBallDisplayController>(true);
+
+        if (ballDisplayController == null && transform.root != null)
+        {
+            ballDisplayController =
+                transform.root.GetComponentInChildren<GameBallDisplayController>(true);
+        }
+
+        if (bingoCheckAnimationController == null)
+        {
+            bingoCheckAnimationController =
+                GetComponentInChildren<BingoCheckAnimationController>(true);
+        }
+
+        if (bingoCheckAnimationController == null && transform.root != null)
+        {
+            bingoCheckAnimationController =
+                transform.root.GetComponentInChildren<BingoCheckAnimationController>(true);
+        }
+
+        if (riskDecisionPopupController == null && transform.root != null)
+        {
+            riskDecisionPopupController =
+                transform.root.GetComponentInChildren<RiskDecisionPopupController>(true);
+        }
+    }
+
+    private void OnEnable()
+    {
+        SessionPauseManager.PauseChanged -= OnSessionPauseChanged;
+        SessionPauseManager.PauseChanged += OnSessionPauseChanged;
+        SubscribeToHeader();
+        SubscribeToBoardSection();
+        SubscribeToRiskDecisionPopup();
+        if (playerListController != null)
+        {
+            playerListController.KickRequested -= OnKickRequested;
+            playerListController.KickRequested += OnKickRequested;
+        }
+        bindRoutine = StartCoroutine(BindWhenGameIsReady());
+    }
+
+    private void OnDisable()
+    {
+        if (bindRoutine != null)
+        {
+            StopCoroutine(bindRoutine);
+            bindRoutine = null;
+        }
+
+        UnsubscribeFromHeader();
+        UnsubscribeFromBoardSection();
+        UnsubscribeFromRiskDecisionPopup();
+        if (playerListController != null)
+        {
+            playerListController.KickRequested -= OnKickRequested;
+        }
+        UnsubscribeFromGameSessionManager();
+        SessionPauseManager.PauseChanged -= OnSessionPauseChanged;
+        bingoCheckAnimationController?.StopAndClear();
+        StopAutomaticMarkPresentation();
+        isBingoCheckPending = false;
+        ResetLocalBoardPresentation();
+    }
+
+    private void Update()
+    {
+        UpdateRiskTimeNotifications();
+    }
+
+    #endregion
+
+    #region Game Display
+
+    public void DisplayGameInfo(GameSessionData gameSessionData)
+    {
+        RefreshGameUI(gameSessionData, GameUIRefresh.All);
+    }
+
+    private void RefreshGameUI(GameSessionData gameSessionData, GameUIRefresh _sections)
+    {
+        if (ConnectionRecoveryManager.instance?.IsRecoveringInScene == true)
+        {
+            return;
+        }
+
+        if (gameSessionData == null)
+        {
+            ClearDisplay();
+            return;
+        }
+
+        bool isNewGame = !string.Equals(
+            riskNotificationGameId,
+            gameSessionData.gameId,
+            StringComparison.Ordinal);
+
+        GameSessionData previousSession = displayedGameSession;
+        displayedGameSession = new GameSessionData(gameSessionData);
+
+        if (isNewGame)
+        {
+            markedCellsByUserId.Clear();
+            ResetLocalBoardPresentation();
+            ResetRiskNotificationTracking(gameSessionData);
+            ResetDeathCheckPresentation();
+            ResetRankedManualCheckPresentation();
+        }
+
+        if (isNewGame)
+        {
+            _sections = GameUIRefresh.All;
+        }
+
+        bool refreshSetup = (_sections & GameUIRefresh.GameInfo) != 0;
+        GameModeManager gameModeManager = GameModeManager.instance;
+        BingoGameModeData gameModeData = refreshSetup && gameModeManager != null
+            ? gameModeManager.GetGameModeData(gameSessionData.gameModeType)
+            : null;
+        string gameName = gameModeData != null && !string.IsNullOrWhiteSpace(gameModeData.GameName)
+            ? gameModeData.GameName
+            : gameSessionData.gameModeType.ToString();
+
+        if ((_sections & GameUIRefresh.Header) != 0)
+        {
+            if (refreshSetup)
+            {
+                headerController?.DisplayGameInfo(gameSessionData, gameName);
+            }
+            else
+            {
+                headerController?.RefreshGameState(gameSessionData);
+            }
+        }
+
+        if ((_sections & GameUIRefresh.Balls) != 0)
+        {
+            ballDisplayController?.DisplayGameInfo(gameSessionData);
+        }
+
+        if (isNewGame &&
+            GameSessionManager.instance?.ConsumeSavedSoloBallReplay(gameSessionData.gameId) == true)
+        {
+            ballDisplayController?.ReplayLatestBall(gameSessionData);
+        }
+
+        ShowDeathNotifications(previousSession, gameSessionData, isNewGame);
+        if (refreshSetup)
+        {
+            EnsureBoardPatternTracker(gameSessionData);
+            DisplayGameModeInfo(gameSessionData, gameModeData, gameName, gameModeManager);
+        }
+
+        if ((_sections & GameUIRefresh.Board) != 0)
+        {
+            ResetLocalBoardPresentation();
+            DisplayPlayerBoard(gameSessionData);
+        }
+        else if ((_sections & GameUIRefresh.BoardControls) != 0)
+        {
+            RefreshPlayerBoardControls(gameSessionData);
+        }
+
+        TryPlayDeathEndAnimation(gameSessionData);
+        TryPlayRankedManualEndAnimation(gameSessionData);
+        if ((_sections & GameUIRefresh.Players) != 0)
+        {
+            DisplayPlayerList(gameSessionData, (_sections & GameUIRefresh.Board) != 0);
+        }
+
+        if ((_sections & GameUIRefresh.CustomInfo) != 0)
+        {
+            DisplayCustomLobbyInfo(gameSessionData);
+        }
+        ShowRiskSubmitNotificationIfNeeded(gameSessionData);
+        CloseRiskDecisionPopupIfResolved(gameSessionData);
+        TryOpenGameOverPopup(gameSessionData);
+    }
+
+    public void RefreshAfterConnectionRecovery(GameSessionData gameSessionData)
+    {
+        bingoCheckAnimationController?.StopAndClear();
+        StopAutomaticMarkPresentation();
+        isBingoCheckPending = false;
+        ResetRankedManualCheckPresentation();
+        ResetDeathCheckPresentation();
+
+        if (PopupManager.instance?.ActivePopupId == PopupId.RiskDecision)
+        {
+            PopupManager.instance.CloseActivePopup();
+        }
+
+        DisplayGameInfo(gameSessionData);
+    }
+
+    public void SetTimerSeconds(float remainingSeconds)
+    {
+        headerController?.SetTimerSeconds(remainingSeconds);
+    }
+
+    public void HideTimer()
+    {
+        headerController?.HideTimer();
+    }
+
+    private void DisplayPlayerList(GameSessionData gameSessionData, bool _refreshBoards)
+    {
+        visiblePlayers.Clear();
+        bool localPlayerIsHost = gameSessionData?.GetPlayer(UserManager.instance?.UserId)?.isLobbyHost == true;
+
+        if (gameSessionData?.players != null)
+        {
+            AddVisibleHost(gameSessionData.players, gameSessionData, localPlayerIsHost);
+
+            for (int i = 0; i < gameSessionData.players.Count; i++)
+            {
+                GamePlayerData playerData = gameSessionData.players[i];
+
+                if (playerData == null || playerData.isLobbyHost)
+                {
+                    continue;
+                }
+
+                AddVisiblePlayer(playerData, gameSessionData, localPlayerIsHost);
+            }
+        }
+
+        playerListController?.DisplayPlayers(visiblePlayers, visiblePlayers.Count, _refreshBoards);
+    }
+
+    private void AddVisibleHost(
+        IReadOnlyList<GamePlayerData> players,
+        GameSessionData gameSessionData,
+        bool localPlayerIsHost)
+    {
+        for (int i = 0; i < players.Count; i++)
+        {
+            GamePlayerData playerData = players[i];
+
+            if (playerData != null && playerData.isLobbyHost)
+            {
+                AddVisiblePlayer(playerData, gameSessionData, localPlayerIsHost);
+                return;
+            }
+        }
+    }
+
+    private void AddVisiblePlayer(
+        GamePlayerData gamePlayerData,
+        GameSessionData gameSessionData,
+        bool localPlayerIsHost)
+    {
+        if (gamePlayerData == null || !gamePlayerData.HasValidPlayer || !gamePlayerData.isGameSceneReady)
+        {
+            return;
+        }
+
+        PlayerListPlayerData playerData = new PlayerListPlayerData
+        {
+            userId = gamePlayerData.userId ?? string.Empty,
+            userTag = gamePlayerData.userTag,
+            playerName = gamePlayerData.playerName ?? string.Empty,
+            iconId = gamePlayerData.iconId ?? string.Empty,
+            isHost = gamePlayerData.isLobbyHost,
+            isReady = true,
+            boardData = new LobbyBoardData(gamePlayerData.boardData),
+            markedCellIndices = GetOrCreateMarkedCellSnapshot(gamePlayerData),
+            gameplayStatusText = ResolveGameplayStatusText(
+                gamePlayerData,
+                gameSessionData),
+            canKick = gameSessionData.playMode == MainMenuPlayMode.Custom &&
+                      localPlayerIsHost &&
+                      !gamePlayerData.isLobbyHost &&
+                      gamePlayerData.userTag == UserTag.Player &&
+                      gamePlayerData.controlType == GamePlayerControlType.Human &&
+                      gamePlayerData.isConnected,
+            showBotIcon = gamePlayerData.controlType == GamePlayerControlType.Bot &&
+                          (gameSessionData.playMode == MainMenuPlayMode.Solo ||
+                           (gameSessionData.playMode == MainMenuPlayMode.Custom &&
+                            localPlayerIsHost)),
+            showReadyIcon = false
+        };
+
+        visiblePlayers.Add(playerData);
+    }
+
+    private void DisplayGameModeInfo(
+        GameSessionData gameSessionData,
+        BingoGameModeData gameModeData,
+        string gameName,
+        GameModeManager gameModeManager)
+    {
+        string gameDescription = gameModeData != null && !string.IsNullOrWhiteSpace(gameModeData.Description)
+            ? gameModeData.Description
+            : "No game information is available for this game mode.";
+
+        string ruleDescription = string.Empty;
+
+        if (gameSessionData.hasRule)
+        {
+            BingoGameRuleData ruleData = gameModeManager != null
+                ? gameModeManager.GetGameRuleData(gameSessionData.ruleType)
+                : null;
+
+            ruleDescription = ruleData != null && !string.IsNullOrWhiteSpace(ruleData.Description)
+                ? ruleData.Description
+                : "No rule description is available for this game mode.";
+        }
+
+        gameInfoController?.ShowGameInfo(
+            gameName,
+            gameDescription,
+            gameSessionData.ballCountType,
+            gameSessionData.hasRule,
+            ruleDescription,
+            gameSessionData.patternTypes,
+            true);
+    }
+
+    private void DisplayCustomLobbyInfo(GameSessionData gameSessionData)
+    {
+        LobbyViewData lobbyViewData = new LobbyViewData
+        {
+            lobbyId = gameSessionData.lobbyId ?? string.Empty,
+            playMode = gameSessionData.playMode,
+            lobbyName = gameSessionData.lobbyName ?? string.Empty,
+            roomCode = gameSessionData.roomCode ?? string.Empty,
+            hasPassword = gameSessionData.hasPassword,
+            lobbyPassword = gameSessionData.lobbyPassword ?? string.Empty
+        };
+
+        customPanelController?.DisplayLobbyInfo(lobbyViewData);
+    }
+
+    private void ClearDisplay()
+    {
+        visiblePlayers.Clear();
+        markedCellsByUserId.Clear();
+        boardPatternTracker.Clear();
+        trackedPatternGameId = string.Empty;
+        isBingoCheckPending = false;
+        displayedGameSession = null;
+        isLocalBoardAvailable = false;
+        riskNotificationGameId = string.Empty;
+        previousRiskRemainingSeconds = -1;
+        lastRiskSubmitNotificationEndTime = 0d;
+        gameOverPopupGameId = string.Empty;
+        ResetDeathCheckPresentation();
+        ResetRankedManualCheckPresentation();
+        StopAutomaticMarkPresentation();
+        ResetLocalBoardPresentation();
+        headerController?.ClearHeader();
+        boardSectionController?.ClearBoard();
+        boardSectionController?.SetBoardInteractable(false);
+        boardSectionController?.SetBingoInteractable(false);
+        boardSectionController?.SetBingoVisible(true);
+        playerListController?.DisplayPlayers(visiblePlayers, 0);
+        gameInfoController?.ClearInfo();
+        customPanelController?.DisplayLobbyInfo(null);
+        ballDisplayController?.ClearDisplay();
+    }
+
+    #endregion
+
+    #region Board
+
+    private void DisplayPlayerBoard(GameSessionData gameSessionData)
+    {
+        if (boardSectionController == null)
+        {
+            return;
+        }
+
+        string localUserId = UserManager.instance?.UserId;
+        GamePlayerData localPlayer = gameSessionData?.GetPlayer(localUserId);
+
+        bool boardDisplayed =
+            localPlayer?.boardData != null &&
+            boardSectionController.DisplayBoard(localPlayer.boardData);
+
+        if (!boardDisplayed)
+        {
+            boardSectionController.ClearBoard();
+        }
+
+        isLocalBoardAvailable = boardDisplayed;
+        RefreshPlayerBoardControls(gameSessionData);
+    }
+
+    private void RefreshPlayerBoardControls(GameSessionData gameSessionData)
+    {
+        if (boardSectionController == null)
+        {
+            return;
+        }
+
+        string localUserId = UserManager.instance?.UserId;
+        GamePlayerData localPlayer = gameSessionData?.GetPlayer(localUserId);
+        bool boardDisplayed = isLocalBoardAvailable && localPlayer != null && localPlayer.boardData != null;
+
+        if (boardDisplayed &&
+            gameSessionData?.useRank == true &&
+            localPlayer != null)
+        {
+            boardSectionController.DisplayRank(
+                localPlayer.rank,
+                gameSessionData.rankPlayerTotal > 0
+                    ? gameSessionData.rankPlayerTotal
+                    : gameSessionData.players?.Count ?? 1);
+        }
+        else
+        {
+            boardSectionController.SetRankVisible(false);
+        }
+
+        bool isDeath = DeathGameplayAuthority.IsDeathGame(gameSessionData);
+        bool usesAutomaticBoard =
+            GameAutomaticBoardAuthority.IsAutomaticBoardEnabled(
+                gameSessionData,
+                localPlayer);
+        string gameId = gameSessionData?.gameId ?? string.Empty;
+        bool boardContextChanged =
+            !hasDisplayedLocalBoard ||
+            !string.Equals(displayedBoardGameId, gameId, StringComparison.Ordinal) ||
+            !string.Equals(displayedBoardUserId, localUserId, StringComparison.Ordinal) ||
+            displayedLocalAutomaticBoardEnabled != usesAutomaticBoard;
+
+        boardSectionController.SetBingoVisible(!isDeath);
+
+        if (boardDisplayed && localPlayer != null)
+        {
+            if (boardContextChanged)
+            {
+                StopAutomaticMarkPresentation();
+                boardSectionController.SetMarkedCells(
+                    localPlayer.markedCellIndices);
+                displayedBoardGameId = gameId;
+                displayedBoardUserId = localUserId ?? string.Empty;
+                hasDisplayedLocalBoard = true;
+                displayedLocalAutomaticBoardEnabled = usesAutomaticBoard;
+
+                if (usesAutomaticBoard)
+                {
+                    automaticBoardGameId = gameId;
+
+                    if (localPlayer.markedCellIndices != null)
+                    {
+                        for (int i = 0; i < localPlayer.markedCellIndices.Count; i++)
+                        {
+                            presentedAutomaticMarks.Add(localPlayer.markedCellIndices[i]);
+                        }
+                    }
+                }
+            }
+        }
+        else
+        {
+            StopAutomaticMarkPresentation();
+            ResetLocalBoardPresentation();
+        }
+
+        if (boardDisplayed && usesAutomaticBoard && !boardContextChanged &&
+            localPlayer?.markedCellIndices != null)
+        {
+            for (int i = 0; i < localPlayer.markedCellIndices.Count; i++)
+            {
+                PresentAutomaticMark(localPlayer.markedCellIndices[i], true);
+            }
+        }
+
+        bool playerCanUseBoard =
+            boardDisplayed &&
+            !usesAutomaticBoard &&
+            !SessionPauseManager.IsPaused &&
+            localPlayer.controlType == GamePlayerControlType.Human &&
+            localPlayer.returnState == GamePlayerReturnState.Active &&
+            localPlayer.isConnected &&
+            localPlayer.gameStatus == GamePlayerStatus.Eligible &&
+            !localPlayer.hasRiskCashedOut &&
+            !localPlayer.isRiskDecisionPending &&
+            gameSessionData.gamePlayController?.IsPlayerInputClosed != true &&
+            gameSessionData.gameState != GameSessionState.Completed;
+        bool playerCanSubmitBingo =
+            playerCanUseBoard &&
+            !isBingoCheckPending &&
+            gameSessionData.gamePlayController?.CanAcceptBingoChecks == true;
+
+        boardSectionController.SetBoardInteractable(playerCanUseBoard);
+        boardSectionController.SetBingoInteractable(playerCanSubmitBingo);
+    }
+
+    private void SubscribeToBoardSection()
+    {
+        if (boardSectionController == null)
+        {
+            return;
+        }
+
+        boardSectionController.BingoRequested -= OnBingoRequested;
+        boardSectionController.BingoRequested += OnBingoRequested;
+
+        boardSectionController.MarkedCellChanged -= OnBoardMarkedCellChanged;
+        boardSectionController.MarkedCellChanged += OnBoardMarkedCellChanged;
+    }
+
+    private void UnsubscribeFromBoardSection()
+    {
+        if (boardSectionController != null)
+        {
+            boardSectionController.BingoRequested -= OnBingoRequested;
+            boardSectionController.MarkedCellChanged -= OnBoardMarkedCellChanged;
+        }
+    }
+
+    private void OnBoardMarkedCellChanged(int cellIndex, bool isMarked)
+    {
+        if (SessionPauseManager.IsPaused)
+        {
+            return;
+        }
+
+        GameSessionManager gameSessionManager = GameSessionManager.instance;
+        GamePlayerData localPlayer = gameSessionManager?.GetCurrentPlayer();
+
+        if (gameSessionManager == null ||
+            localPlayer == null ||
+            localPlayer.isAutomaticBoardEnabled)
+        {
+            return;
+        }
+
+        if (!gameSessionManager.SetCurrentPlayerMarkedCell(cellIndex, isMarked))
+        {
+            Debug.LogWarning(
+                $"[GameController] Could not update marked cell {cellIndex} for the current player.");
+        }
+    }
+
+    private void OnBingoRequested(
+        LobbyBoardData boardData,
+        IReadOnlyList<int> markedCellIndices)
+    {
+        if (SessionPauseManager.IsPaused)
+        {
+            return;
+        }
+
+        if (boardData?.cellNumbers == null)
+        {
+            Debug.LogWarning("[GameController] Bingo was pressed, but the board data was unavailable.");
+            return;
+        }
+
+        if (isBingoCheckPending)
+        {
+            return;
+        }
+
+        List<int> sortedCellIndices = markedCellIndices != null
+            ? new List<int>(markedCellIndices)
+            : new List<int>();
+        sortedCellIndices.Sort();
+
+        isBingoCheckPending = true;
+        boardSectionController?.SetBingoInteractable(false);
+
+        if (GameSessionManager.instance == null ||
+            !GameSessionManager.instance.SubmitCurrentPlayerBingoCheck(
+                new LobbyBoardData(boardData),
+                sortedCellIndices))
+        {
+            isBingoCheckPending = false;
+            RefreshPlayerBoardControls(GameSessionManager.instance?.CurrentGameSession);
+            Debug.LogWarning("[GameController] The Bingo check request could not be sent.");
+        }
+    }
+
+    #endregion
+
+    #region Session Binding
+
+    private IEnumerator BindWhenGameIsReady()
+    {
+        while (GameSessionManager.instance == null ||
+               !GameSessionManager.instance.HasEnteredGame ||
+               GameSessionManager.instance.CurrentGameSession == null ||
+               GameModeManager.instance == null ||
+               !GameModeManager.instance.IsReady)
+        {
+            yield return null;
+        }
+
+        GameSessionManager gameSessionManager = GameSessionManager.instance;
+
+        gameSessionManager.GameUIRefreshRequested -= OnGameUIRefreshRequested;
+        gameSessionManager.GameUIRefreshRequested += OnGameUIRefreshRequested;
+
+        gameSessionManager.GamePlayerMarkedCellChanged -= OnGamePlayerMarkedCellChanged;
+        gameSessionManager.GamePlayerMarkedCellChanged += OnGamePlayerMarkedCellChanged;
+
+        gameSessionManager.BingoCheckResolved -= OnBingoCheckResolved;
+        gameSessionManager.BingoCheckResolved += OnBingoCheckResolved;
+
+        DisplayGameInfo(gameSessionManager.CurrentGameSession);
+        bindRoutine = null;
+    }
+
+    private void OnGameUIRefreshRequested(GameSessionData _gameSessionData, GameUIRefresh _sections)
+    {
+        RefreshGameUI(_gameSessionData, _sections);
+    }
+
+    private void OnGamePlayerMarkedCellChanged(
+        GamePlayerMarkedCellChangedData updateData)
+    {
+        if (updateData == null || string.IsNullOrWhiteSpace(updateData.userId))
+        {
+            return;
+        }
+
+        if (!markedCellsByUserId.TryGetValue(
+                updateData.userId,
+                out HashSet<int> markedCells))
+        {
+            markedCells = new HashSet<int>();
+            markedCellsByUserId.Add(updateData.userId, markedCells);
+        }
+
+        if (updateData.isMarked)
+        {
+            markedCells.Add(updateData.cellIndex);
+        }
+        else
+        {
+            markedCells.Remove(updateData.cellIndex);
+        }
+
+        playerListController?.SetPlayerMarkedCell(
+            updateData.userId,
+            updateData.cellIndex,
+            updateData.isMarked);
+
+        string localUserId = UserManager.instance?.UserId;
+
+        if (string.Equals(updateData.userId, localUserId, StringComparison.Ordinal))
+        {
+            GamePlayerData localPlayer =
+                GameSessionManager.instance?.CurrentGameSession?.GetPlayer(localUserId);
+
+            if (localPlayer?.isAutomaticBoardEnabled == true &&
+                updateData.isAutomaticBoardUpdate)
+            {
+                PresentAutomaticMark(updateData.cellIndex, updateData.isMarked);
+            }
+        }
+    }
+
+    private List<int> GetOrCreateMarkedCellSnapshot(GamePlayerData playerData)
+    {
+        if (playerData == null || string.IsNullOrWhiteSpace(playerData.userId))
+        {
+            return new List<int>();
+        }
+
+        if (!markedCellsByUserId.ContainsKey(playerData.userId))
+        {
+            markedCellsByUserId[playerData.userId] = playerData.markedCellIndices != null
+                ? new HashSet<int>(playerData.markedCellIndices)
+                : new HashSet<int>();
+        }
+
+        return GetMarkedCellSnapshot(playerData.userId);
+    }
+
+    private List<int> GetMarkedCellSnapshot(string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId) ||
+            !markedCellsByUserId.TryGetValue(userId, out HashSet<int> markedCells))
+        {
+            return new List<int>();
+        }
+
+        List<int> snapshot = new List<int>(markedCells);
+        snapshot.Sort();
+        return snapshot;
+    }
+
+    private void OnBingoCheckResolved(GameBingoCheckResolvedData resolvedData)
+    {
+        string localUserId = UserManager.instance?.UserId;
+
+        if (resolvedData == null ||
+            string.IsNullOrWhiteSpace(localUserId) ||
+            (!string.IsNullOrWhiteSpace(resolvedData.userId) &&
+             !string.Equals(resolvedData.userId, localUserId, StringComparison.Ordinal)))
+        {
+            return;
+        }
+
+        if (!resolvedData.wasAccepted)
+        {
+            isBingoCheckPending = false;
+            RefreshPlayerBoardControls(GameSessionManager.instance?.CurrentGameSession);
+            Debug.LogWarning(
+                $"[GameController] Bingo check rejected: {resolvedData.failureMessage}");
+            return;
+        }
+
+        if (resolvedData.isAutomaticCheck)
+        {
+            PlayAutomaticDeathCheckAnimation(resolvedData);
+            return;
+        }
+
+        boardPatternTracker.ApplyAvailablePatterns(
+            resolvedData.availablePatternTypes);
+        RefreshPlayerBoardControls(GameSessionManager.instance?.CurrentGameSession);
+
+        if (resolvedData.playerStatus != GamePlayerStatus.Eligible)
+        {
+            boardSectionController?.SetBoardInteractable(false);
+            boardSectionController?.SetBingoInteractable(false);
+        }
+
+        if (resolvedData.checkResult == null || bingoCheckAnimationController == null)
+        {
+            isBingoCheckPending = false;
+            NotifyBingoCheckAnimationCompleted();
+            return;
+        }
+
+        BingoCheckResult checkResult = resolvedData.checkResult;
+        GamePlayerStatus playerStatus = resolvedData.playerStatus;
+        bool requiresRiskDecision = resolvedData.requiresRiskDecision;
+        bool awaitsRankResolution = resolvedData.awaitsRankResolution;
+        int latePatternCount = resolvedData.latePatternCount;
+        bingoCheckAnimationController.PlayCheckAnimation(
+            checkResult,
+            () => PlayFinalManualCheckAnimation(
+                checkResult,
+                playerStatus,
+                requiresRiskDecision,
+                awaitsRankResolution,
+                latePatternCount));
+    }
+
+    private void PlayAutomaticDeathCheckAnimation(
+        GameBingoCheckResolvedData resolvedData)
+    {
+        if (resolvedData?.checkResult == null)
+        {
+            return;
+        }
+
+        BingoCheckResult checkResult = resolvedData.checkResult;
+
+        if (activeDeathCheckResult != null &&
+            activeDeathCheckNumber == checkResult.checkNumber)
+        {
+            return;
+        }
+
+        activeDeathCheckResult = checkResult;
+        activeDeathCheckNumber = checkResult.checkNumber;
+        activeDeathCheckStatus = resolvedData.playerStatus;
+        isDeathCheckAnimationComplete = false;
+        isDeathEndAnimationPlaying = false;
+        isBingoCheckPending = true;
+
+        SynchronizeAutomaticBoardForCheck();
+
+        if (bingoCheckAnimationController == null)
+        {
+            isBingoCheckPending = false;
+            isDeathCheckAnimationComplete = true;
+            return;
+        }
+
+        int checkNumber = activeDeathCheckNumber;
+        bingoCheckAnimationController.PlayCheckAnimation(
+            activeDeathCheckResult,
+            () => CompleteAutomaticDeathCheckAnimation(checkNumber));
+    }
+
+    private void CompleteAutomaticDeathCheckAnimation(int checkNumber)
+    {
+        if (activeDeathCheckResult == null ||
+            checkNumber != activeDeathCheckNumber)
+        {
+            return;
+        }
+
+        isBingoCheckPending = false;
+        isDeathCheckAnimationComplete = true;
+
+        GameSessionData gameSessionData =
+            GameSessionManager.instance?.CurrentGameSession;
+
+        if (!TryPlayDeathEndAnimation(gameSessionData))
+        {
+            bingoCheckAnimationController?.ContinuePlaying();
+        }
+    }
+
+    private bool TryPlayDeathEndAnimation(GameSessionData gameSessionData)
+    {
+        if (activeDeathCheckResult == null ||
+            !isDeathCheckAnimationComplete ||
+            isDeathEndAnimationPlaying)
+        {
+            return false;
+        }
+
+        GamePlayerData localPlayer =
+            gameSessionData?.GetPlayer(UserManager.instance?.UserId);
+        GamePlayerStatus finalStatus = activeDeathCheckStatus;
+
+        if (localPlayer != null &&
+            (localPlayer.gameStatus == GamePlayerStatus.Won ||
+             localPlayer.gameStatus == GamePlayerStatus.Lost))
+        {
+            finalStatus = localPlayer.gameStatus;
+        }
+
+        if (finalStatus != GamePlayerStatus.Won &&
+            finalStatus != GamePlayerStatus.Lost)
+        {
+            return false;
+        }
+
+        isDeathEndAnimationPlaying = true;
+
+        if (bingoCheckAnimationController == null)
+        {
+            return true;
+        }
+
+        if (finalStatus == GamePlayerStatus.Won)
+        {
+            bingoCheckAnimationController.PlayWinnerAnimation(
+                activeDeathCheckResult.GetWinningPatterns());
+            return true;
+        }
+
+        IReadOnlyList<BingoPatternCheckResult> losingPatterns =
+            activeDeathCheckResult.GetFailedPatterns();
+
+        if (losingPatterns.Count == 0)
+        {
+            losingPatterns = activeDeathCheckResult.GetWinningPatterns();
+        }
+
+        if (losingPatterns.Count == 0)
+        {
+            losingPatterns = activeDeathCheckResult.patterns;
+        }
+
+        bingoCheckAnimationController.PlayLoserAnimation(
+            losingPatterns,
+            activeDeathCheckResult.failedSubmissionCells);
+        return true;
+    }
+
+    private void SynchronizeAutomaticBoardForCheck()
+    {
+        GameSessionData gameSessionData =
+            GameSessionManager.instance?.CurrentGameSession;
+        GamePlayerData localPlayer =
+            gameSessionData?.GetPlayer(UserManager.instance?.UserId);
+
+        StopAutomaticMarkPresentation();
+
+        if (gameSessionData == null || localPlayer == null)
+        {
+            return;
+        }
+
+        automaticBoardGameId = gameSessionData.gameId ?? string.Empty;
+
+        if (localPlayer.markedCellIndices != null)
+        {
+            for (int i = 0; i < localPlayer.markedCellIndices.Count; i++)
+            {
+                presentedAutomaticMarks.Add(localPlayer.markedCellIndices[i]);
+            }
+        }
+
+        boardSectionController?.SetMarkedCells(presentedAutomaticMarks);
+    }
+
+    private void ResetDeathCheckPresentation()
+    {
+        activeDeathCheckResult = null;
+        activeDeathCheckNumber = 0;
+        activeDeathCheckStatus = GamePlayerStatus.Checking;
+        isDeathCheckAnimationComplete = false;
+        isDeathEndAnimationPlaying = false;
+    }
+
+    private void PlayFinalManualCheckAnimation(
+        BingoCheckResult checkResult,
+        GamePlayerStatus playerStatus,
+        bool requiresRiskDecision,
+        bool awaitsRankResolution,
+        int latePatternCount)
+    {
+        if (checkResult == null || bingoCheckAnimationController == null)
+        {
+            isBingoCheckPending = false;
+            NotifyBingoCheckAnimationCompleted();
+            return;
+        }
+
+        GameSessionData currentSession =
+            GameSessionManager.instance?.CurrentGameSession;
+        bool matchEndIsWaitingForChecks =
+            currentSession?.gamePlayController?.IsMatchEndPendingChecks == true;
+
+        isBingoCheckPending = false;
+
+        if (awaitsRankResolution)
+        {
+            pendingRankedManualCheckResult = checkResult;
+            pendingRankedManualCheckUserId = UserManager.instance?.UserId ?? string.Empty;
+            isRankedManualEndAnimationPlaying = false;
+            NotifyBingoCheckAnimationCompleted();
+            TryPlayRankedManualEndAnimation(
+                GameSessionManager.instance?.CurrentGameSession);
+            return;
+        }
+
+        if (latePatternCount > 0 && !checkResult.HasFailedPattern)
+        {
+            NotificationService.instance?.SendLocal(
+                UIMessageType.RiskPatternSubmittedLate,
+                "One or more Bingo patterns were submitted too late. No points were awarded for those patterns.");
+        }
+
+        if (requiresRiskDecision)
+        {
+            bingoCheckAnimationController.PlayWinnerAnimation(
+                checkResult.GetWinningPatterns());
+            NotifyBingoCheckAnimationCompleted();
+
+            currentSession = GameSessionManager.instance?.CurrentGameSession;
+            GamePlayerData localPlayer =
+                currentSession?.GetPlayer(UserManager.instance?.UserId);
+
+            if (currentSession?.gameState == GameSessionState.InProgress &&
+                localPlayer?.isRiskDecisionPending == true &&
+                !matchEndIsWaitingForChecks)
+            {
+                OpenRiskDecisionPopup();
+            }
+
+            return;
+        }
+
+        if (playerStatus == GamePlayerStatus.Eligible)
+        {
+            bingoCheckAnimationController.ContinuePlaying();
+            NotifyBingoCheckAnimationCompleted();
+            return;
+        }
+
+        switch (playerStatus)
+        {
+            case GamePlayerStatus.Won:
+                bingoCheckAnimationController.PlayWinnerAnimation(
+                    checkResult.GetWinningPatterns());
+                break;
+
+            case GamePlayerStatus.Lost:
+                bingoCheckAnimationController.PlayLoserAnimation(
+                    checkResult.GetFailedPatterns(),
+                    checkResult.failedSubmissionCells);
+                break;
+        }
+
+        NotifyBingoCheckAnimationCompleted();
+    }
+
+    private bool TryPlayRankedManualEndAnimation(GameSessionData gameSessionData)
+    {
+        if (pendingRankedManualCheckResult == null ||
+            isRankedManualEndAnimationPlaying ||
+            string.IsNullOrWhiteSpace(pendingRankedManualCheckUserId))
+        {
+            return false;
+        }
+
+        GamePlayerData playerData =
+            gameSessionData?.GetPlayer(pendingRankedManualCheckUserId);
+
+        if (playerData == null ||
+            (playerData.gameStatus != GamePlayerStatus.Won &&
+             playerData.gameStatus != GamePlayerStatus.Lost))
+        {
+            return false;
+        }
+
+        isRankedManualEndAnimationPlaying = true;
+
+        if (bingoCheckAnimationController == null)
+        {
+            return true;
+        }
+
+        if (playerData.gameStatus == GamePlayerStatus.Won)
+        {
+            bingoCheckAnimationController.PlayWinnerAnimation(
+                pendingRankedManualCheckResult.GetWinningPatterns());
+        }
+        else
+        {
+            IReadOnlyList<BingoPatternCheckResult> losingPatterns =
+                pendingRankedManualCheckResult.GetFailedPatterns();
+
+            if (losingPatterns.Count == 0)
+            {
+                losingPatterns = pendingRankedManualCheckResult.GetWinningPatterns();
+            }
+
+            bingoCheckAnimationController.PlayLoserAnimation(
+                losingPatterns,
+                pendingRankedManualCheckResult.failedSubmissionCells);
+        }
+
+        return true;
+    }
+
+    private void ResetRankedManualCheckPresentation()
+    {
+        pendingRankedManualCheckResult = null;
+        pendingRankedManualCheckUserId = string.Empty;
+        isRankedManualEndAnimationPlaying = false;
+    }
+
+    private void NotifyBingoCheckAnimationCompleted()
+    {
+        if (GameSessionManager.instance == null ||
+            !GameSessionManager.instance.CompleteCurrentPlayerBingoCheckAnimation())
+        {
+            Debug.LogWarning(
+                "[GameController] The completed Bingo check animation could not be sent to the Game authority.");
+        }
+    }
+
+    private void EnsureBoardPatternTracker(GameSessionData gameSessionData)
+    {
+        if (gameSessionData == null || string.IsNullOrWhiteSpace(gameSessionData.gameId))
+        {
+            boardPatternTracker.Clear();
+            trackedPatternGameId = string.Empty;
+            return;
+        }
+
+        if (string.Equals(
+                trackedPatternGameId,
+                gameSessionData.gameId,
+                StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        trackedPatternGameId = gameSessionData.gameId;
+        boardPatternTracker.Setup(gameSessionData.patternTypes);
+    }
+
+    private static string ResolveGameplayStatusText(
+        GamePlayerData playerData,
+        GameSessionData gameSessionData)
+    {
+        if (playerData == null)
+        {
+            return string.Empty;
+        }
+
+        bool isRisk =
+            gameSessionData?.gameModeType == BingoGameModeType.Risk ||
+            (gameSessionData?.hasRule == true &&
+             gameSessionData.ruleType == BingoRuleType.Risk);
+        bool useRank = gameSessionData?.useRank == true;
+        string rankText = $"RANK {Mathf.Max(1, playerData.rank)}";
+
+        if (isRisk)
+        {
+            string scoreText = $"SCORE: {playerData.currentMatchScore}";
+
+            if (!useRank)
+            {
+                return playerData.gameStatus switch
+                {
+                    GamePlayerStatus.Won => $"WON - {scoreText}",
+                    GamePlayerStatus.Lost => $"LOST - {scoreText}",
+                    _ => scoreText
+                };
+            }
+
+            return playerData.gameStatus switch
+            {
+                GamePlayerStatus.Won => $"{rankText}\nWON - {scoreText}",
+                GamePlayerStatus.Lost => $"{rankText}\nLOST - {scoreText}",
+                _ => $"{rankText}\n{scoreText}"
+            };
+        }
+
+        bool isDeath =
+            gameSessionData?.gameModeType == BingoGameModeType.Death ||
+            (gameSessionData?.hasRule == true &&
+             gameSessionData.ruleType == BingoRuleType.Elimination);
+
+        if (isDeath)
+        {
+            return playerData.gameStatus switch
+            {
+                GamePlayerStatus.Won => useRank ? $"{rankText}\nWON" : "WON",
+                GamePlayerStatus.Lost => useRank ? $"{rankText}\nOUT" : "OUT",
+                _ => useRank ? rankText : string.Empty
+            };
+        }
+
+        if (playerData.gameStatus == GamePlayerStatus.Eligible ||
+            playerData.gameStatus == GamePlayerStatus.Checking)
+        {
+            return useRank
+                ? rankText
+                : string.Empty;
+        }
+
+        if (playerData.gameStatus == GamePlayerStatus.Won)
+        {
+            return useRank ? $"{rankText}\nWON" : "WON";
+        }
+
+        return useRank ? $"{rankText}\nLOST" : "LOST";
+    }
+
+    private void PresentAutomaticMark(int cellIndex, bool isMarked)
+    {
+        if (cellIndex < 0)
+        {
+            return;
+        }
+
+        if (!isMarked)
+        {
+            queuedAutomaticMarks.Remove(cellIndex);
+            presentedAutomaticMarks.Remove(cellIndex);
+            boardSectionController?.SetAutomaticMarkHighlight(cellIndex, false);
+            boardSectionController?.SetCellMarked(cellIndex, false);
+            return;
+        }
+
+        if (presentedAutomaticMarks.Contains(cellIndex) ||
+            queuedAutomaticMarks.Contains(cellIndex))
+        {
+            return;
+        }
+
+        queuedAutomaticMarks.Add(cellIndex);
+        automaticMarkQueue.Enqueue(cellIndex);
+
+        if (automaticMarkRoutine == null && automaticMarkQueue.Count > 0)
+        {
+            automaticMarkRoutine = StartCoroutine(PlayAutomaticMarkQueue());
+        }
+    }
+
+    private IEnumerator PlayAutomaticMarkQueue()
+    {
+        int pulseCount = GameSettings.instance != null
+            ? GameSettings.instance.AutomaticMarkPulseCount
+            : GameSettings.DefaultAutomaticMarkPulseCount;
+        float pulseSeconds = GameSettings.instance != null
+            ? GameSettings.instance.AutomaticMarkPulseSeconds
+            : GameSettings.DefaultAutomaticMarkPulseSeconds;
+
+        while (automaticMarkQueue.Count > 0)
+        {
+            int cellIndex = automaticMarkQueue.Dequeue();
+
+            if (!queuedAutomaticMarks.Contains(cellIndex))
+            {
+                continue;
+            }
+
+            for (int pulse = 0; pulse < pulseCount; pulse++)
+            {
+                boardSectionController?.SetAutomaticMarkHighlight(cellIndex, true);
+                yield return SessionPauseManager.WaitForSeconds(pulseSeconds);
+                boardSectionController?.SetAutomaticMarkHighlight(cellIndex, false);
+                yield return SessionPauseManager.WaitForSeconds(pulseSeconds);
+            }
+
+            boardSectionController?.SetCellMarked(cellIndex, true);
+            queuedAutomaticMarks.Remove(cellIndex);
+            presentedAutomaticMarks.Add(cellIndex);
+        }
+
+        automaticMarkRoutine = null;
+    }
+
+    private void StopAutomaticMarkPresentation()
+    {
+        if (automaticMarkRoutine != null)
+        {
+            StopCoroutine(automaticMarkRoutine);
+            automaticMarkRoutine = null;
+        }
+
+        automaticMarkQueue.Clear();
+        queuedAutomaticMarks.Clear();
+        presentedAutomaticMarks.Clear();
+        automaticBoardGameId = string.Empty;
+    }
+
+    private void ResetLocalBoardPresentation()
+    {
+        displayedBoardGameId = string.Empty;
+        displayedBoardUserId = string.Empty;
+        hasDisplayedLocalBoard = false;
+        displayedLocalAutomaticBoardEnabled = false;
+    }
+
+    private static void ShowDeathNotifications(
+        GameSessionData previousSession,
+        GameSessionData currentSession,
+        bool isNewGame)
+    {
+        if (isNewGame ||
+            !DeathGameplayAuthority.IsDeathGame(currentSession) ||
+            previousSession == null ||
+            currentSession.players == null)
+        {
+            return;
+        }
+
+        List<PlayerProfileData> profiles = new List<PlayerProfileData>();
+
+        for (int i = 0; i < currentSession.players.Count; i++)
+        {
+            GamePlayerData player = currentSession.players[i];
+
+            if (player != null)
+            {
+                profiles.Add(new PlayerProfileData(
+                    player.userId,
+                    player.playerName,
+                    player.iconId));
+            }
+        }
+
+        for (int i = 0; i < currentSession.players.Count; i++)
+        {
+            GamePlayerData currentPlayer = currentSession.players[i];
+            GamePlayerData previousPlayer = previousSession.GetPlayer(currentPlayer?.userId);
+
+            if (currentPlayer == null ||
+                currentPlayer.gameStatus != GamePlayerStatus.Lost ||
+                previousPlayer == null ||
+                previousPlayer.gameStatus == GamePlayerStatus.Lost)
+            {
+                continue;
+            }
+
+            string displayName = PlayerDisplayIdentityResolver.GetDisplayName(
+                new PlayerProfileData(
+                    currentPlayer.userId,
+                    currentPlayer.playerName,
+                    currentPlayer.iconId),
+                profiles);
+            string message = $"{displayName} is out.";
+            NotificationService.instance?.SendLocal(
+                UIMessageType.DeathPlayerOut,
+                message);
+        }
+
+        if (currentSession.gamePlayController?.DeathFinalChecksWereRequired == true &&
+            previousSession.gamePlayController?.DeathFinalChecksWereRequired != true)
+        {
+            NotificationService.instance?.SendLocal(
+                UIMessageType.DeathFinalChecks,
+                "Game ending - final Bingo checks are in progress.");
+        }
+    }
+
+    private void UnsubscribeFromGameSessionManager()
+    {
+        if (GameSessionManager.instance != null)
+        {
+            GameSessionManager.instance.GameUIRefreshRequested -= OnGameUIRefreshRequested;
+            GameSessionManager.instance.GamePlayerMarkedCellChanged -= OnGamePlayerMarkedCellChanged;
+            GameSessionManager.instance.BingoCheckResolved -= OnBingoCheckResolved;
+        }
+    }
+
+    #endregion
+
+    #region Risk
+
+    private void SubscribeToRiskDecisionPopup()
+    {
+        if (riskDecisionPopupController == null)
+        {
+            return;
+        }
+
+        riskDecisionPopupController.DecisionSubmitted -= OnRiskDecisionSubmitted;
+        riskDecisionPopupController.DecisionSubmitted += OnRiskDecisionSubmitted;
+    }
+
+    private void UnsubscribeFromRiskDecisionPopup()
+    {
+        if (riskDecisionPopupController != null)
+        {
+            riskDecisionPopupController.DecisionSubmitted -= OnRiskDecisionSubmitted;
+        }
+    }
+
+    private void OnRiskDecisionSubmitted(bool endPlayerGame)
+    {
+        if (!endPlayerGame)
+        {
+            bingoCheckAnimationController?.ContinuePlaying();
+        }
+
+        RefreshPlayerBoardControls(GameSessionManager.instance?.CurrentGameSession);
+    }
+
+    private void OpenRiskDecisionPopup()
+    {
+        if (PopupManager.instance == null)
+        {
+            Debug.LogWarning(
+                "[GameController] Risk decision popup could not open because PopupManager was not found.");
+            return;
+        }
+
+        PopupManager.instance.OpenRiskDecisionPopup();
+    }
+
+    private void CloseRiskDecisionPopupIfResolved(GameSessionData gameSessionData)
+    {
+        if (PopupManager.instance?.ActivePopupId != PopupId.RiskDecision)
+        {
+            return;
+        }
+
+        GamePlayerData localPlayer =
+            gameSessionData?.GetPlayer(UserManager.instance?.UserId);
+
+        if (localPlayer == null ||
+            !localPlayer.isRiskDecisionPending ||
+            gameSessionData.gameState == GameSessionState.Completed)
+        {
+            PopupManager.instance.CloseActivePopup();
+        }
+    }
+
+    private void ResetRiskNotificationTracking(GameSessionData gameSessionData)
+    {
+        riskNotificationGameId = gameSessionData?.gameId ?? string.Empty;
+        lastRiskSubmitNotificationEndTime = 0d;
+
+        GamePlayTimer riskTimer = gameSessionData?.gamePlayController?.RiskTimer;
+        previousRiskRemainingSeconds = riskTimer?.IsActive == true
+            ? Mathf.Max(0, Mathf.CeilToInt(riskTimer.GetRemainingSeconds()))
+            : -1;
+    }
+
+    private void ShowRiskSubmitNotificationIfNeeded(GameSessionData gameSessionData)
+    {
+        if (!RiskGameplayAuthority.IsRiskGame(gameSessionData))
+        {
+            return;
+        }
+
+        GamePlayerData localPlayer =
+            gameSessionData.GetPlayer(UserManager.instance?.UserId);
+
+        if (localPlayer == null ||
+            !localPlayer.isSubmitTimerActive ||
+            localPlayer.submitTimerEndTime <= GamePlayTimer.GetCurrentTime() ||
+            Math.Abs(
+                localPlayer.submitTimerEndTime -
+                lastRiskSubmitNotificationEndTime) < 0.01d)
+        {
+            return;
+        }
+
+        lastRiskSubmitNotificationEndTime = localPlayer.submitTimerEndTime;
+        NotificationService.instance?.SendLocal(
+            UIMessageType.RiskPatternAvailable,
+            "You have a Bingo pattern. Submit it before time runs out or it will not award points.");
+    }
+
+    private void UpdateRiskTimeNotifications()
+    {
+        if (SessionPauseManager.IsPaused ||
+            ConnectionRecoveryManager.instance?.IsRecoveringInScene == true)
+        {
+            return;
+        }
+
+        if (!RiskGameplayAuthority.IsRiskGame(displayedGameSession))
+        {
+            previousRiskRemainingSeconds = -1;
+            return;
+        }
+
+        GamePlayTimer riskTimer = displayedGameSession.gamePlayController?.RiskTimer;
+
+        if (riskTimer?.IsActive != true)
+        {
+            return;
+        }
+
+        int currentSeconds = Mathf.Max(
+            0,
+            Mathf.CeilToInt(riskTimer.GetRemainingSeconds()));
+
+        if (previousRiskRemainingSeconds < 0)
+        {
+            previousRiskRemainingSeconds = currentSeconds;
+            return;
+        }
+
+        for (int crossedSecond = previousRiskRemainingSeconds - 1;
+             crossedSecond >= currentSeconds;
+             crossedSecond--)
+        {
+            if (crossedSecond <= 0 ||
+                (crossedSecond != 30 &&
+                 crossedSecond != 10 &&
+                 crossedSecond % 60 != 0))
+            {
+                continue;
+            }
+
+            string message = crossedSecond >= 60
+                ? $"Risk game time: {crossedSecond / 60} minute{(crossedSecond == 60 ? string.Empty : "s")} remaining."
+                : $"Risk game time: {crossedSecond} seconds remaining.";
+
+            NotificationService.instance?.SendLocal(
+                UIMessageType.RiskTimeRemaining,
+                message);
+        }
+
+        previousRiskRemainingSeconds = currentSeconds;
+    }
+
+    private void OnSessionPauseChanged(bool isPaused)
+    {
+        RefreshPlayerBoardControls(GameSessionManager.instance?.CurrentGameSession);
+    }
+
+    #endregion
+
+    #region Header
+
+    private void SubscribeToHeader()
+    {
+        if (headerController == null)
+        {
+            return;
+        }
+
+        headerController.LeaveRequested -= LeaveGame;
+        headerController.LeaveRequested += LeaveGame;
+    }
+
+    private void UnsubscribeFromHeader()
+    {
+        if (headerController != null)
+        {
+            headerController.LeaveRequested -= LeaveGame;
+        }
+    }
+
+    private void LeaveGame()
+    {
+        headerController?.SetLeaveInteractable(false);
+
+        if (GameSessionManager.instance != null)
+        {
+            if (GameSessionManager.instance.CurrentGameSession?.playMode ==
+                MainMenuPlayMode.Solo)
+            {
+                if (GameSessionManager.instance.IsCurrentSoloCheckActive())
+                {
+                    bingoCheckAnimationController?.StopAndClear();
+                    StopAutomaticMarkPresentation();
+                    isBingoCheckPending = false;
+                    GameSessionManager.instance.LeaveCurrentSoloDuringCheck();
+                    return;
+                }
+
+                if (PopupManager.instance != null)
+                {
+                    PopupManager.instance.OpenSoloLeavePopup();
+                    headerController?.SetLeaveInteractable(true);
+                    return;
+                }
+            }
+
+            GameSessionManager.instance.LeaveCurrentGame();
+            return;
+        }
+
+        UserManager.instance?.ClearLastGameId();
+        GameSceneManager.instance?.LoadMainScene();
+    }
+
+    private void OnKickRequested(string targetUserId)
+    {
+        GameSessionData session = GameSessionManager.instance?.CurrentGameSession;
+        GamePlayerData localPlayer = session?.GetPlayer(UserManager.instance?.UserId);
+
+        if (session?.playMode != MainMenuPlayMode.Custom ||
+            localPlayer?.isLobbyHost != true ||
+            string.IsNullOrWhiteSpace(targetUserId))
+        {
+            return;
+        }
+
+        NetworkGameSessionService.instance?.TryKickGamePlayer(
+            session.gameId,
+            targetUserId);
+    }
+
+    private void TryOpenGameOverPopup(GameSessionData gameSessionData)
+    {
+        if (gameSessionData == null ||
+            gameSessionData.gameState != GameSessionState.Completed ||
+            string.Equals(
+                gameOverPopupGameId,
+                gameSessionData.gameId,
+                StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        gameOverPopupGameId = gameSessionData.gameId ?? string.Empty;
+        PopupManager.instance?.OpenGameOverPopup(
+            BuildGameOverPopupData(gameSessionData));
+    }
+
+    private static GameOverPopupData BuildGameOverPopupData(
+        GameSessionData gameSessionData)
+    {
+        GameOverPopupData popupData = new GameOverPopupData();
+        popupData.returnToMainMenuOnly = gameSessionData?.IsCustomHostGone() == true;
+        GamePlayerData localPlayer =
+            gameSessionData?.GetPlayer(UserManager.instance?.UserId);
+
+        if (localPlayer != null)
+        {
+            popupData.localPlayerStatus = localPlayer.gameStatus;
+            popupData.localPlayerScore = localPlayer.currentMatchScore;
+        }
+
+        if (gameSessionData?.players == null)
+        {
+            return popupData;
+        }
+
+        List<GamePlayerData> winners = new List<GamePlayerData>();
+        List<PlayerProfileData> profiles = new List<PlayerProfileData>();
+
+        for (int i = 0; i < gameSessionData.players.Count; i++)
+        {
+            GamePlayerData playerData = gameSessionData.players[i];
+
+            if (playerData == null)
+            {
+                continue;
+            }
+
+            profiles.Add(new PlayerProfileData(
+                playerData.userId,
+                playerData.playerName,
+                playerData.iconId));
+
+            if (playerData.gameStatus == GamePlayerStatus.Won)
+            {
+                winners.Add(playerData);
+            }
+        }
+
+        popupData.winnerCount = winners.Count;
+
+        if (winners.Count == 0)
+        {
+            return popupData;
+        }
+
+        if (!GameRankAuthority.IsEnabled(gameSessionData))
+        {
+            if (winners.Count == 1)
+            {
+                popupData.winnerDisplayText = GetGameOverDisplayName(
+                    winners[0],
+                    profiles);
+            }
+
+            return popupData;
+        }
+
+        winners.Sort(CompareGameOverWinners);
+
+        if (HasSharedWinningRank(winners))
+        {
+            return popupData;
+        }
+
+        int displayedWinnerCount = Math.Min(
+            GameRankAuthority.MaximumWinningRank,
+            winners.Count);
+        List<string> winnerLines = new List<string>(displayedWinnerCount);
+
+        for (int i = 0; i < displayedWinnerCount; i++)
+        {
+            GamePlayerData winner = winners[i];
+            winnerLines.Add(
+                $"Rank {Math.Max(1, winner.rank)} - " +
+                GetGameOverDisplayName(winner, profiles));
+        }
+
+        popupData.winnerDisplayText = string.Join("\n", winnerLines);
+        return popupData;
+    }
+
+    private static bool HasSharedWinningRank(List<GamePlayerData> winners)
+    {
+        HashSet<int> winningRanks = new HashSet<int>();
+
+        for (int i = 0; i < winners.Count; i++)
+        {
+            int rank = Math.Max(1, winners[i]?.rank ?? 1);
+
+            if (!winningRanks.Add(rank))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static int CompareGameOverWinners(
+        GamePlayerData left,
+        GamePlayerData right)
+    {
+        int rankComparison = Math.Max(1, left?.rank ?? int.MaxValue)
+            .CompareTo(Math.Max(1, right?.rank ?? int.MaxValue));
+
+        if (rankComparison != 0)
+        {
+            return rankComparison;
+        }
+
+        int orderComparison = (left?.rankResolutionOrder ?? long.MaxValue)
+            .CompareTo(right?.rankResolutionOrder ?? long.MaxValue);
+
+        if (orderComparison != 0)
+        {
+            return orderComparison;
+        }
+
+        return string.Compare(
+            left?.userId,
+            right?.userId,
+            StringComparison.Ordinal);
+    }
+
+    private static string GetGameOverDisplayName(
+        GamePlayerData playerData,
+        IReadOnlyList<PlayerProfileData> profiles)
+    {
+        if (playerData == null)
+        {
+            return "Player";
+        }
+
+        return PlayerDisplayIdentityResolver.GetDisplayName(
+            new PlayerProfileData(
+                playerData.userId,
+                playerData.playerName,
+                playerData.iconId),
+            profiles);
+    }
+
+    #endregion
+}

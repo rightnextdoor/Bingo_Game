@@ -22,6 +22,23 @@ public class ChatVivoxConnectionSimulation : MonoBehaviour
     private void Update()
     {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (!MultiplayerPlayModeTestContext.IsActive || NetworkBootstrap.instance == null ||
+            !NetworkBootstrap.instance.IsReady || !NetworkBootstrap.instance.IsConnected ||
+            !NetworkBootstrap.instance.IsAuthority || ChatManager.instance == null || !ChatManager.instance.IsReady)
+        {
+            return;
+        }
+
+        if (NetworkConnectionRegistry.instance == null || !NetworkConnectionRegistry.instance.IsReady)
+        {
+            return;
+        }
+
+        if (connectionRegistry == null || connectionRegistry != NetworkConnectionRegistry.instance)
+        {
+            isInitialized = false;
+        }
+
         TryInitialize();
 
         if (!isInitialized)
@@ -124,11 +141,12 @@ public class ChatVivoxConnectionSimulation : MonoBehaviour
     {
         clientId = ulong.MaxValue;
 
-        string targetUserId = MultiplayerPlayModeTestContext.IsActive
-            ? MultiplayerPlayModeTestContext.GetUserId((int)player)
-            : player == MultiplayerStressTargetPlayer.Player1 && UserManager.instance != null && UserManager.instance.HasUser
-                ? UserManager.instance.UserId
-                : string.Empty;
+        if (!MultiplayerPlayModeTestContext.IsActive)
+        {
+            return false;
+        }
+
+        string targetUserId = MultiplayerPlayModeTestContext.GetUserId((int)player);
 
         if (string.IsNullOrWhiteSpace(targetUserId) || connectionRegistry == null || !connectionRegistry.IsReady)
         {

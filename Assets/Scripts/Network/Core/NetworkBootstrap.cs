@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Threading;
 using System.Threading.Tasks;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
@@ -18,6 +19,7 @@ public class NetworkBootstrap : MonoBehaviour
 
     private bool isReady;
     private bool isManualShutdown;
+    private int connectionOperationVersion;
 
     private NetworkRoot networkRoot;
     private NetworkManager networkManager;
@@ -31,12 +33,30 @@ public class NetworkBootstrap : MonoBehaviour
     private NetworkConnectionMode connectionMode = NetworkConnectionMode.Offline;
     private NetworkConnectionState connectionState = NetworkConnectionState.Offline;
     private string relayJoinCode = string.Empty;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    private bool connectionAvailableForTesting = true;
+#endif
 
     public bool IsReady => isReady;
     public NetworkConnectionMode ConnectionMode => connectionMode;
     public NetworkConnectionState ConnectionState => connectionState;
     public string RelayJoinCode => relayJoinCode;
-    public bool IsConnected => networkManager != null && networkManager.IsListening && connectionState == NetworkConnectionState.Connected;
+    public string DirectClientAddress { get; private set; }
+    public int DirectClientPort { get; private set; } = -1;
+    public bool IsShuttingDown => shutdownRoutine != null || (networkManager != null && networkManager.ShutdownInProgress) || connectionState == NetworkConnectionState.Disconnecting;
+    public bool IsConnectionStarting => connectionState == NetworkConnectionState.Initializing || connectionState == NetworkConnectionState.Connecting;
+    public bool IsConnected => IsConnectionAvailableForTesting && !IsShuttingDown && networkManager != null && networkManager.IsListening && connectionState == NetworkConnectionState.Connected;
+    public bool IsConnectionAvailableForTesting
+    {
+        get
+        {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            return connectionAvailableForTesting;
+#else
+            return true;
+#endif
+        }
+    }
     public bool IsAuthority => networkManager != null && networkManager.IsListening && networkManager.IsServer;
     public bool IsHost => networkManager != null && networkManager.IsListening && networkManager.IsHost;
     public bool IsClient => networkManager != null && networkManager.IsListening && networkManager.IsClient;
@@ -89,6 +109,7 @@ public class NetworkBootstrap : MonoBehaviour
 
     private void OnDestroy()
     {
+        connectionOperationVersion++;
         UnregisterNetworkCallbacks();
 
         if (instance == this)
@@ -222,6 +243,8 @@ public class NetworkBootstrap : MonoBehaviour
 
         string resolvedAddress = ResolveDirectAddress(address);
         ushort resolvedPort = ResolvePort(port);
+        DirectClientAddress = resolvedAddress;
+        DirectClientPort = resolvedPort;
 
         unityTransport.SetConnectionData(resolvedAddress, resolvedPort);
 
@@ -250,12 +273,18 @@ public class NetworkBootstrap : MonoBehaviour
             return false;
         }
 
+        int operationVersion = ++connectionOperationVersion;
         SetConnectionMode(NetworkConnectionMode.RelayHost);
         SetConnectionState(NetworkConnectionState.Initializing);
 
         try
         {
             RelayHostConnectionData connectionData = await relayConnectionService.CreateHostConnectionAsync();
+
+            if (this == null || operationVersion != connectionOperationVersion || IsShuttingDown)
+            {
+                return false;
+            }
 
             unityTransport.SetRelayServerData(connectionData.ServerData);
 
@@ -273,6 +302,11 @@ public class NetworkBootstrap : MonoBehaviour
         }
         catch (Exception exception)
         {
+            if (this == null || operationVersion != connectionOperationVersion)
+            {
+                return false;
+            }
+
             Debug.LogException(exception);
             SetRelayJoinCode(string.Empty);
             SetConnectionState(NetworkConnectionState.Failed);
@@ -280,8 +314,9 @@ public class NetworkBootstrap : MonoBehaviour
         }
     }
 
-    public async Task<bool> StartRelayClientAsync(string bingoUserId, string joinCode)
+    public async Task<bool> StartRelayClientAsync(string bingoUserId, string joinCode, CancellationToken _cancellationToken = default)
     {
+        _cancellationToken.ThrowIfCancellationRequested();
         if (!CanStartConnection() || !CanUseRelay() || !TryPrepareConnectionPayload(bingoUserId))
         {
             return false;
@@ -293,12 +328,19 @@ public class NetworkBootstrap : MonoBehaviour
             return false;
         }
 
+        int operationVersion = ++connectionOperationVersion;
         SetConnectionMode(NetworkConnectionMode.RelayClient);
         SetConnectionState(NetworkConnectionState.Initializing);
 
         try
         {
             RelayServerData relayServerData = await relayConnectionService.JoinConnectionAsync(joinCode);
+
+            if (this == null || operationVersion != connectionOperationVersion ||
+                _cancellationToken.IsCancellationRequested || IsShuttingDown || !IsConnectionAvailableForTesting)
+            {
+                return false;
+            }
 
             unityTransport.SetRelayServerData(relayServerData);
 
@@ -316,6 +358,11 @@ public class NetworkBootstrap : MonoBehaviour
         }
         catch (Exception exception)
         {
+            if (this == null || operationVersion != connectionOperationVersion || _cancellationToken.IsCancellationRequested)
+            {
+                return false;
+            }
+
             Debug.LogException(exception);
             SetRelayJoinCode(string.Empty);
             SetConnectionState(NetworkConnectionState.Failed);
@@ -359,6 +406,8 @@ public class NetworkBootstrap : MonoBehaviour
             return;
         }
 
+        connectionOperationVersion++;
+
         if (networkManager == null)
         {
             CompleteShutdown();
@@ -388,6 +437,8 @@ public class NetworkBootstrap : MonoBehaviour
 
     private IEnumerator WaitForShutdown()
     {
+        yield return null;
+
         while (networkManager != null && (networkManager.IsListening || networkManager.ShutdownInProgress))
         {
             yield return null;
@@ -442,7 +493,7 @@ public class NetworkBootstrap : MonoBehaviour
 
     private void OnClientConnected(ulong clientId)
     {
-        if (networkManager == null)
+        if (networkManager == null || IsShuttingDown)
         {
             return;
         }
@@ -481,6 +532,21 @@ public class NetworkBootstrap : MonoBehaviour
     #region Development Testing
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
+    public void SetConnectionAvailableForTesting(bool available)
+    {
+        if (connectionAvailableForTesting == available)
+        {
+            return;
+        }
+
+        connectionAvailableForTesting = available;
+
+        if (!available)
+        {
+            SimulateUnexpectedClientDisconnectForTesting();
+        }
+    }
+
     public bool SimulateUnexpectedClientDisconnectForTesting()
     {
         if (!isReady || networkManager == null || !networkManager.IsListening || !networkManager.IsClient || networkManager.IsHost)
@@ -488,8 +554,9 @@ public class NetworkBootstrap : MonoBehaviour
             return false;
         }
 
-        SetConnectionState(NetworkConnectionState.Disconnected);
+        connectionOperationVersion++;
         networkManager.Shutdown(true);
+        SetConnectionState(NetworkConnectionState.Disconnected);
 
         return true;
     }
@@ -501,7 +568,7 @@ public class NetworkBootstrap : MonoBehaviour
 
     private bool CanStartConnection()
     {
-        if (!isReady)
+        if (!isReady || !IsConnectionAvailableForTesting)
         {
             Debug.LogWarning("Cannot start network connection because NetworkBootstrap is not ready.");
             return false;

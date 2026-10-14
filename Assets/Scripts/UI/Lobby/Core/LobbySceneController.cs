@@ -1,4 +1,5 @@
 using System.Collections;
+using BingoGame.UI;
 using UnityEngine;
 
 [DisallowMultipleComponent]
@@ -13,7 +14,6 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
 
     private LobbyController lobbyController;
     private Coroutine bindRoutine;
-    private Coroutine localStartRoutine;
 
     private void OnEnable()
     {
@@ -31,12 +31,6 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
             bindRoutine = null;
         }
 
-        if (localStartRoutine != null)
-        {
-            StopCoroutine(localStartRoutine);
-            localStartRoutine = null;
-        }
-
         UnsubscribeFromHeader();
         UnsubscribeFromLobbyManager();
         UnsubscribeFromBoardSection();
@@ -46,36 +40,55 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
 
     public void DisplayLobbyInfo(LobbyViewData lobbyViewData)
     {
-        if (lobbyViewData == null)
+        RefreshLobbyUI(lobbyViewData, LobbyUIRefresh.All);
+    }
+
+    public void RefreshLobbyUI(LobbyViewData _lobbyViewData, LobbyUIRefresh _sections)
+    {
+        if (_lobbyViewData == null)
         {
             return;
         }
 
         LobbyManager lobbyManager = LobbyManager.instance;
+        string userId = lobbyManager != null ? lobbyManager.CurrentUserId : string.Empty;
 
-        playerListController?.DisplayLobbyInfo(
-            lobbyViewData,
-            lobbyManager != null
-                ? lobbyManager.CurrentUserId
-                : string.Empty);
-
-        headerController?.DisplayLobbyInfo(lobbyViewData, CanOpenHostSettings(lobbyViewData), CanStartLobby(lobbyViewData));
-
-        gameInfoController?.DisplayLobbyInfo(lobbyViewData);
-
-        if (boardSectionController != null)
+        if ((_sections & LobbyUIRefresh.Players) != 0)
         {
-            bool controlsInteractable = lobbyViewData.lobbyState == LobbyState.Open;
-
-            boardSectionController.DisplayBoard(GetCurrentPlayerBoard(lobbyViewData));
-            boardSectionController.SetBoardInteractable(false);
-            boardSectionController.SetRerollInteractable(controlsInteractable);
-            boardSectionController.SetReadyInteractable(controlsInteractable);
+            playerListController?.DisplayLobbyInfo(
+                _lobbyViewData, userId, (_sections & LobbyUIRefresh.Board) != 0);
         }
 
-        customPanelController?.DisplayLobbyInfo(lobbyViewData);
+        if ((_sections & LobbyUIRefresh.Header) != 0)
+        {
+            headerController?.DisplayLobbyInfo(
+                _lobbyViewData, CanOpenHostSettings(_lobbyViewData), CanStartLobby(_lobbyViewData));
+        }
 
-        TryLoadGameScene(lobbyViewData);
+        if ((_sections & LobbyUIRefresh.GameInfo) != 0)
+        {
+            gameInfoController?.DisplayLobbyInfo(_lobbyViewData);
+        }
+
+        if ((_sections & LobbyUIRefresh.Board) != 0)
+        {
+            boardSectionController?.DisplayBoard(GetCurrentPlayerBoard(_lobbyViewData));
+        }
+
+        if ((_sections & LobbyUIRefresh.BoardControls) != 0)
+        {
+            bool controlsInteractable = _lobbyViewData.lobbyState == LobbyState.Open;
+            boardSectionController?.SetBoardInteractable(false);
+            boardSectionController?.SetRerollInteractable(controlsInteractable);
+            boardSectionController?.SetReadyInteractable(controlsInteractable);
+        }
+
+        if ((_sections & LobbyUIRefresh.CustomInfo) != 0)
+        {
+            customPanelController?.DisplayLobbyInfo(_lobbyViewData);
+        }
+
+        TryLoadGameScene(_lobbyViewData);
     }
 
     private void LeaveLobby()
@@ -173,8 +186,8 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
 
         LobbyManager lobbyManager = LobbyManager.instance;
 
-        lobbyManager.LobbyViewUpdated -= OnLobbyViewUpdated;
-        lobbyManager.LobbyViewUpdated += OnLobbyViewUpdated;
+        lobbyManager.LobbyUIRefreshRequested -= OnLobbyUIRefreshRequested;
+        lobbyManager.LobbyUIRefreshRequested += OnLobbyUIRefreshRequested;
 
         lobbyManager.LobbyPlayerBoardUpdated -= OnLobbyPlayerBoardUpdated;
         lobbyManager.LobbyPlayerBoardUpdated += OnLobbyPlayerBoardUpdated;
@@ -194,9 +207,9 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
         bindRoutine = null;
     }
 
-    private void OnLobbyViewUpdated(LobbyViewData lobbyViewData)
+    private void OnLobbyUIRefreshRequested(LobbyViewData _lobbyViewData, LobbyUIRefresh _sections)
     {
-        DisplayLobbyInfo(lobbyViewData);
+        RefreshLobbyUI(_lobbyViewData, _sections);
     }
 
     private void OnLobbyPlayerBoardUpdated(
@@ -272,7 +285,7 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
             return;
         }
 
-        LobbyManager.instance.LobbyViewUpdated -= OnLobbyViewUpdated;
+        LobbyManager.instance.LobbyUIRefreshRequested -= OnLobbyUIRefreshRequested;
         LobbyManager.instance.LobbyPlayerBoardUpdated -= OnLobbyPlayerBoardUpdated;
     }
 
@@ -304,7 +317,7 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
                 lobbyController.FinalCountdownStarted -= OnLocalFinalCountdownStarted;
                 lobbyController.FinalCountdownStarted += OnLocalFinalCountdownStarted;
 
-                lobbyController.RefreshViews();
+                lobbyController.RefreshViews(LobbyUIRefresh.All);
             }
 
             return;
@@ -342,7 +355,6 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
     {
         NotificationService.instance?.SendLocal(UIMessageType.GameAboutToStart);
     }
-
 
     private void SaveCurrentHostLobbySettings(LobbyManager lobbyManager)
     {
@@ -406,12 +418,6 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
                 return;
             }
 
-            if (localStartRoutine != null)
-            {
-                StopCoroutine(localStartRoutine);
-            }
-
-            localStartRoutine = StartCoroutine(WaitForLocalFinalCountdown(controller));
             return;
         }
 
@@ -425,22 +431,6 @@ public class LobbySceneController : MonoBehaviour, ILobbyView
 
         SaveCurrentHostLobbySettings(lobbyManager);
         lobbyService.StartLobby();
-    }
-
-    private IEnumerator WaitForLocalFinalCountdown(LobbyController controller)
-    {
-        while (controller != null &&
-               controller.TimerEndTime > LobbyTimer.GetCurrentTime())
-        {
-            yield return null;
-        }
-
-        if (controller != null)
-        {
-            controller.CompleteFinalCountdown();
-        }
-
-        localStartRoutine = null;
     }
 
     private void TryLoadGameScene(LobbyViewData lobbyViewData)

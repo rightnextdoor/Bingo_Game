@@ -404,6 +404,14 @@ public class UIThemeDataEditor : Editor
 
         EditorGUILayout.Space(6);
 
+        EditorGUILayout.LabelField("Text Selection", EditorStyles.boldLabel);
+        EditorGUILayout.PropertyField(
+            inputProperty.FindPropertyRelative("selectionColor"),
+            new GUIContent("Selection Color", "Highlight color behind selected input text. Alpha controls transparency.")
+        );
+
+        EditorGUILayout.Space(6);
+
         EditorGUILayout.LabelField("Placeholder", EditorStyles.boldLabel);
 
         DrawFixedStyle(
@@ -835,6 +843,14 @@ public class UIThemeDataEditor : Editor
 
         EditorGUILayout.Space(6);
 
+        EditorGUILayout.LabelField("Navigation", EditorStyles.boldLabel);
+        EditorGUILayout.PropertyField(
+            styleProperty.FindPropertyRelative("navigationMode"),
+            new GUIContent("Navigation", "Explicit direction references are configured on each button.")
+        );
+
+        EditorGUILayout.Space(6);
+
         EditorGUILayout.LabelField("Text", EditorStyles.boldLabel);
         DrawTextComponentFields(styleProperty);
     }
@@ -953,6 +969,7 @@ public class UIThemeDataEditor : Editor
             return;
         }
 
+        UIThemeStyle defaultStyle = new UIThemeStyle();
         SerializedProperty iterator = entryProperty.Copy();
         SerializedProperty endProperty = entryProperty.GetEndProperty();
 
@@ -987,9 +1004,24 @@ public class UIThemeDataEditor : Editor
             {
                 switch (iterator.name)
                 {
+                    case "normalColor":
+                        iterator.colorValue = defaultStyle.NormalColor;
+                        break;
+
+                    case "highlightedColor":
+                        iterator.colorValue = defaultStyle.HighlightedColor;
+                        break;
+
                     case "pressedColor":
+                        iterator.colorValue = defaultStyle.PressedColor;
+                        break;
+
+                    case "selectedColor":
+                        iterator.colorValue = defaultStyle.SelectedColor;
+                        break;
+
                     case "disabledColor":
-                        iterator.colorValue = new Color32(128, 128, 128, 255);
+                        iterator.colorValue = defaultStyle.DisabledColor;
                         break;
 
                     default:
@@ -1018,6 +1050,10 @@ public class UIThemeDataEditor : Editor
                 if (iterator.name == "transition")
                 {
                     iterator.enumValueIndex = (int)UnityEngine.UI.Selectable.Transition.ColorTint;
+                }
+                else if (iterator.name == "navigationMode")
+                {
+                    iterator.intValue = (int)UnityEngine.UI.Navigation.Mode.Automatic;
                 }
 
                 continue;

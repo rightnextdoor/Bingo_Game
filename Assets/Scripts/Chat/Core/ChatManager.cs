@@ -20,6 +20,7 @@ public class ChatManager : MonoBehaviour
     private ChatSettingsManager chatSettingsManager;
     private PlayerProfileRegistry profileRegistry;
     private LobbyManager lobbyManager;
+    private GameSessionManager gameSessionManager;
 
     private readonly Dictionary<string, ChatConversationData> conversations = new Dictionary<string, ChatConversationData>();
     private readonly Dictionary<string, ChatParticipantData> blockedUsers = new Dictionary<string, ChatParticipantData>(StringComparer.Ordinal);
@@ -34,6 +35,7 @@ public class ChatManager : MonoBehaviour
     private bool isSubscribedToChatSettingsManager;
     private bool isSubscribedToProfileRegistry;
     private bool isSubscribedToLobbyManager;
+    private bool isSubscribedToGameSessionManager;
     private bool lastReportedChatAvailable;
     private bool isSessionPreparationResolved = true;
     private bool suppressChatSettingsChanged;
@@ -118,10 +120,13 @@ public class ChatManager : MonoBehaviour
     {
         SubscribeToProfileRegistry();
         SubscribeToLobbyManager();
+        SubscribeToGameSessionManager();
     }
 
     private void Update()
     {
+        SubscribeToGameSessionManager();
+
         if (isSessionPreparationResolved || sessionPreparationLoadDeadline <= 0f)
         {
             return;
@@ -144,6 +149,7 @@ public class ChatManager : MonoBehaviour
         UnsubscribeFromChatSettingsManager();
         UnsubscribeFromProfileRegistry();
         UnsubscribeFromLobbyManager();
+        UnsubscribeFromGameSessionManager();
 
         if (instance == this)
         {
@@ -176,6 +182,7 @@ public class ChatManager : MonoBehaviour
         chatSettingsManager = GetComponent<ChatSettingsManager>();
         profileRegistry = PlayerProfileRegistry.instance;
         lobbyManager = LobbyManager.instance;
+        gameSessionManager = GameSessionManager.instance;
 
         if (connectionManager == null || !connectionManager.IsReady || vivoxChatService == null ||
             commandCatalog == null || !commandCatalog.IsReady || commandProcessor == null || !commandProcessor.IsReady ||
@@ -192,6 +199,7 @@ public class ChatManager : MonoBehaviour
         SubscribeToChatSettingsManager();
         SubscribeToProfileRegistry();
         SubscribeToLobbyManager();
+        SubscribeToGameSessionManager();
         ApplyCurrentChatSettings();
 
         isReady = true;
@@ -211,6 +219,13 @@ public class ChatManager : MonoBehaviour
             {
                 BeginSessionPreparation(lobbyManager.CurrentLobbyId);
             }
+        }
+        else if (gameSessionManager != null &&
+                 gameSessionManager.HasEnteredGame &&
+                 gameSessionManager.RuntimeType == SessionRuntimeType.Network)
+        {
+            BeginSessionPreparation(gameSessionManager.CurrentLobbyId);
+            RefreshSessionParticipants(gameSessionManager.CurrentGameSession);
         }
 
         return true;
@@ -411,7 +426,7 @@ public class ChatManager : MonoBehaviour
             isSessionPreparationResolved = true;
             sessionPreparationLoadDeadline = 0f;
             SetChatConnectionState(ChatConnectionState.Ready);
-            RefreshSessionParticipants(lobbyManager?.CurrentLobbyViewData);
+            RefreshCurrentSessionParticipants(normalizedLobbyId);
             return;
         }
 
@@ -483,7 +498,7 @@ public class ChatManager : MonoBehaviour
                 return false;
             }
 
-            RefreshSessionParticipants(lobbyManager?.CurrentLobbyViewData);
+            RefreshCurrentSessionParticipants(requestedSession.conversationId);
             return true;
         }
 
@@ -511,7 +526,8 @@ public class ChatManager : MonoBehaviour
 
         sessionConversationKey = requestedSession.Key;
         SetActiveConversation(requestedSession);
-        RefreshSessionParticipants(lobbyManager?.CurrentLobbyViewData);
+        RefreshCurrentSessionParticipants(requestedSession.conversationId);
+        await LoadHistoryAsync(requestedSession, GetMaximumRetainedMessages());
         return true;
     }
 
@@ -606,12 +622,23 @@ public class ChatManager : MonoBehaviour
     {
         lobbyManager ??= LobbyManager.instance;
 
-        if (lobbyManager == null || !lobbyManager.HasEnteredLobby || lobbyManager.RuntimeType != SessionRuntimeType.Network)
+        if (lobbyManager != null &&
+            lobbyManager.HasEnteredLobby &&
+            lobbyManager.RuntimeType == SessionRuntimeType.Network)
         {
+            BeginSessionPreparation(lobbyManager.CurrentLobbyId);
             return;
         }
 
-        BeginSessionPreparation(lobbyManager.CurrentLobbyId);
+        gameSessionManager ??= GameSessionManager.instance;
+
+        if (gameSessionManager != null &&
+            gameSessionManager.HasEnteredGame &&
+            gameSessionManager.RuntimeType == SessionRuntimeType.Network)
+        {
+            BeginSessionPreparation(gameSessionManager.CurrentLobbyId);
+            RefreshSessionParticipants(gameSessionManager.CurrentGameSession);
+        }
     }
 
     private bool HasMatchingSessionConversation(string lobbyId)
@@ -1134,17 +1161,91 @@ public class ChatManager : MonoBehaviour
             }
         }
 
-        if (!string.IsNullOrWhiteSpace(lastPrivateMessageUserId) && !TryGetSessionParticipant(lastPrivateMessageUserId, out _))
+        ClearMissingSessionTargets();
+        SessionParticipantsChanged?.Invoke(session);
+    }
+
+    private void RefreshSessionParticipants(GameSessionData gameSessionData)
+    {
+        ChatConversationData session = SessionConversation;
+
+        if (session == null ||
+            gameSessionData == null ||
+            gameSessionData.runtimeType != SessionRuntimeType.Network ||
+            !string.Equals(session.conversationId, gameSessionData.lobbyId, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        session.participants.Clear();
+
+        if (gameSessionData.players != null)
+        {
+            for (int i = 0; i < gameSessionData.players.Count; i++)
+            {
+                GamePlayerData gamePlayer = gameSessionData.players[i];
+
+                if (gamePlayer == null ||
+                    gamePlayer.userTag == UserTag.Bot ||
+                    string.IsNullOrWhiteSpace(gamePlayer.userId))
+                {
+                    continue;
+                }
+
+                PlayerProfileData profile = profileRegistry?.GetProfile(gamePlayer.userId) ??
+                                            new PlayerProfileData(
+                                                gamePlayer.userId,
+                                                gamePlayer.playerName,
+                                                gamePlayer.iconId);
+
+                if (profile.IsValid)
+                {
+                    session.participants.Add(new ChatParticipantData(profile));
+                }
+            }
+        }
+
+        ClearMissingSessionTargets();
+        SessionParticipantsChanged?.Invoke(session);
+    }
+
+    private void RefreshCurrentSessionParticipants(string lobbyId)
+    {
+        string normalizedLobbyId = lobbyId?.Trim() ?? string.Empty;
+        gameSessionManager ??= GameSessionManager.instance;
+
+        GameSessionData gameSessionData = gameSessionManager?.CurrentGameSession;
+
+        if (gameSessionData != null &&
+            gameSessionData.runtimeType == SessionRuntimeType.Network &&
+            string.Equals(gameSessionData.lobbyId, normalizedLobbyId, StringComparison.Ordinal))
+        {
+            RefreshSessionParticipants(gameSessionData);
+            return;
+        }
+
+        LobbyViewData lobbyViewData = lobbyManager?.CurrentLobbyViewData;
+
+        if (lobbyViewData != null &&
+            string.Equals(lobbyViewData.lobbyId, normalizedLobbyId, StringComparison.Ordinal))
+        {
+            RefreshSessionParticipants(lobbyViewData);
+        }
+    }
+
+    private void ClearMissingSessionTargets()
+    {
+        if (!string.IsNullOrWhiteSpace(lastPrivateMessageUserId) &&
+            !TryGetSessionParticipant(lastPrivateMessageUserId, out _))
         {
             lastPrivateMessageUserId = string.Empty;
         }
 
-        if (!string.IsNullOrWhiteSpace(lastSuggestedUserId) && !TryGetSessionParticipant(lastSuggestedUserId, out _))
+        if (!string.IsNullOrWhiteSpace(lastSuggestedUserId) &&
+            !TryGetSessionParticipant(lastSuggestedUserId, out _))
         {
             lastSuggestedUserId = string.Empty;
         }
-
-        SessionParticipantsChanged?.Invoke(session);
     }
 
     public bool TryGetSessionParticipant(string userId, out ChatParticipantData participant)
@@ -2074,6 +2175,94 @@ public class ChatManager : MonoBehaviour
 
     #endregion
 
+    #region Game Session Events
+
+    private void SubscribeToGameSessionManager()
+    {
+        if (isSubscribedToGameSessionManager)
+        {
+            return;
+        }
+
+        gameSessionManager ??= GameSessionManager.instance;
+
+        if (gameSessionManager == null)
+        {
+            return;
+        }
+
+        gameSessionManager.GameEntryCompleted += OnGameEntryCompleted;
+        gameSessionManager.GameEntryFailed += OnGameEntryFailed;
+        gameSessionManager.GameSessionUpdated += OnGameSessionUpdated;
+        isSubscribedToGameSessionManager = true;
+    }
+
+    private void UnsubscribeFromGameSessionManager()
+    {
+        if (isSubscribedToGameSessionManager && gameSessionManager != null)
+        {
+            gameSessionManager.GameEntryCompleted -= OnGameEntryCompleted;
+            gameSessionManager.GameEntryFailed -= OnGameEntryFailed;
+            gameSessionManager.GameSessionUpdated -= OnGameSessionUpdated;
+        }
+
+        isSubscribedToGameSessionManager = false;
+    }
+
+    private void OnGameEntryCompleted(GameSessionResult result)
+    {
+        PrepareGameSessionChat(
+            result?.gameSessionData ?? gameSessionManager?.CurrentGameSession);
+    }
+
+    private void OnGameEntryFailed(GameSessionResult _)
+    {
+        RestoreLobbySessionOrLeave();
+    }
+
+    private void OnGameSessionUpdated(GameSessionData gameSessionData)
+    {
+        if (gameSessionData == null)
+        {
+            RestoreLobbySessionOrLeave();
+            return;
+        }
+
+        PrepareGameSessionChat(gameSessionData);
+    }
+
+    private void PrepareGameSessionChat(GameSessionData gameSessionData)
+    {
+        if (gameSessionData == null ||
+            gameSessionData.runtimeType != SessionRuntimeType.Network ||
+            string.IsNullOrWhiteSpace(gameSessionData.lobbyId))
+        {
+            return;
+        }
+
+        BeginSessionPreparation(gameSessionData.lobbyId);
+        RefreshSessionParticipants(gameSessionData);
+    }
+
+    private void RestoreLobbySessionOrLeave()
+    {
+        lobbyManager ??= LobbyManager.instance;
+
+        if (lobbyManager != null &&
+            lobbyManager.HasEnteredLobby &&
+            lobbyManager.RuntimeType == SessionRuntimeType.Network)
+        {
+            BeginSessionPreparation(lobbyManager.CurrentLobbyId);
+            RefreshSessionParticipants(lobbyManager.CurrentLobbyViewData);
+            return;
+        }
+
+        ClearPendingSessionPreparation();
+        StartLeaveSession();
+    }
+
+    #endregion
+
     #region Settings
 
     private void SubscribeToChatSettingsManager()
@@ -2166,6 +2355,17 @@ public class ChatManager : MonoBehaviour
         if (lobbyManager != null && lobbyManager.HasEnteredLobby && lobbyManager.RuntimeType == SessionRuntimeType.Network)
         {
             BeginSessionPreparation(lobbyManager.CurrentLobbyId);
+            return;
+        }
+
+        gameSessionManager ??= GameSessionManager.instance;
+
+        if (gameSessionManager != null &&
+            gameSessionManager.HasEnteredGame &&
+            gameSessionManager.RuntimeType == SessionRuntimeType.Network)
+        {
+            BeginSessionPreparation(gameSessionManager.CurrentLobbyId);
+            RefreshSessionParticipants(gameSessionManager.CurrentGameSession);
             return;
         }
 

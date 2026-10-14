@@ -10,10 +10,7 @@ public static class UIThemeApplier
             return;
         }
 
-        if (style.SourceImage != null)
-        {
-            image.sprite = style.SourceImage;
-        }
+        image.sprite = style.SourceImage;
 
         image.color = style.Color;
 

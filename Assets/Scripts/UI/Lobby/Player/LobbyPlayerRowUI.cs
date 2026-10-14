@@ -8,6 +8,12 @@ using UnityEngine.UI;
 [DisallowMultipleComponent]
 public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
 {
+    private const float SingleLineStatusMaximumFontSize = 20f;
+    private const float MultiLineStatusMaximumFontSize = 17f;
+    private const float StatusMinimumFontSize = 12f;
+    private const float NormalStatusPreferredWidth = 190f;
+    private const float CompactStatusPreferredWidth = 150f;
+
     #region Fields
 
     [Header("Selection")]
@@ -22,6 +28,8 @@ public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
     [SerializeField] private LobbyPlayerBoardPreviewController boardPreviewController;
 
     [Header("Status")]
+    [SerializeField] private TMP_Text gameplayStatusText;
+    [Tooltip("Shared image for the host badge or bot icon. The host badge takes priority.")]
     [SerializeField] private Image botIconImage;
     [SerializeField] private Image readyCheckmarkImage;
 
@@ -29,6 +37,7 @@ public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
     [SerializeField] private Button kickButton;
 
     private string userId = string.Empty;
+    private LayoutElement gameplayStatusLayoutElement;
 
     private Action<string> rowClicked;
     private Action<string> kickRequested;
@@ -41,6 +50,9 @@ public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
 
     private void Awake()
     {
+        gameplayStatusLayoutElement = gameplayStatusText != null
+            ? gameplayStatusText.GetComponent<LayoutElement>()
+            : null;
         ResetVisualState();
     }
 
@@ -84,10 +96,13 @@ public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
             boardPreviewController?.DisplayBoard(playerData.boardData, playerData.markedCellIndices);
         }
 
-        SetStatusIcon(botIconImage, UIIconType.Bot, playerData.showBotIcon);
+        SetStatusIcon(
+            botIconImage,
+            playerData.isHost ? UIIconType.LobbyHost : UIIconType.Bot,
+            playerData.isHost || playerData.showBotIcon);
         SetStatusIcon(readyCheckmarkImage, UIIconType.LobbyCheckmark, playerData.showReadyIcon && playerData.isReady);
-
         SetKickButtonState(playerData.canKick);
+        SetGameplayStatus(playerData.gameplayStatusText);
         SetHighlighted(isHighlighted);
     }
 
@@ -115,6 +130,7 @@ public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
 
         SetImageActive(botIconImage, false);
         SetImageActive(readyCheckmarkImage, false);
+        SetGameplayStatus(string.Empty);
 
         SetKickButtonState(false);
         SetHighlighted(false);
@@ -169,6 +185,49 @@ public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
     #endregion
 
     #region Status
+
+    private void SetGameplayStatus(string statusText)
+    {
+        if (gameplayStatusText == null)
+        {
+            return;
+        }
+
+        bool hasStatus = !string.IsNullOrWhiteSpace(statusText);
+        string resolvedStatus = hasStatus
+            ? statusText.Trim().ToUpperInvariant()
+            : string.Empty;
+        bool hasMultipleLines = resolvedStatus.Contains("\n");
+
+        gameplayStatusText.enableAutoSizing = true;
+        gameplayStatusText.fontSizeMin = StatusMinimumFontSize;
+        gameplayStatusText.fontSizeMax = hasMultipleLines
+            ? MultiLineStatusMaximumFontSize
+            : SingleLineStatusMaximumFontSize;
+        gameplayStatusText.text = resolvedStatus;
+
+        if (gameplayStatusLayoutElement == null)
+        {
+            gameplayStatusLayoutElement =
+                gameplayStatusText.GetComponent<LayoutElement>();
+        }
+
+        if (gameplayStatusLayoutElement != null)
+        {
+            bool usesTrailingControl =
+                botIconImage?.gameObject.activeSelf == true ||
+                readyCheckmarkImage?.gameObject.activeSelf == true ||
+                kickButton?.gameObject.activeSelf == true;
+            gameplayStatusLayoutElement.preferredWidth = usesTrailingControl
+                ? CompactStatusPreferredWidth
+                : NormalStatusPreferredWidth;
+            gameplayStatusLayoutElement.preferredHeight = hasMultipleLines
+                ? 50f
+                : 30f;
+        }
+
+        gameplayStatusText.gameObject.SetActive(hasStatus);
+    }
 
     private void SetStatusIcon(Image iconImage, UIIconType iconType, bool isVisible)
     {

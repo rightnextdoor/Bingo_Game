@@ -6,6 +6,11 @@ public class LobbySetupData
 {
     public MainMenuPlayMode playMode = MainMenuPlayMode.None;
 
+    public bool startFreshEntry;
+    public bool isGameSimulation;
+    public bool usesSimulationSettings;
+    public int gameSimulationPlayerNumber;
+
     public UserData userData = new UserData();
 
     public SoloLobbySetupData soloSetupData = new SoloLobbySetupData();
@@ -15,6 +20,9 @@ public class LobbySetupData
     public LobbySetupData()
     {
         playMode = MainMenuPlayMode.None;
+        startFreshEntry = false;
+        isGameSimulation = false;
+        gameSimulationPlayerNumber = 0;
 
         userData = new UserData();
 
@@ -30,24 +38,34 @@ public class SoloLobbySetupData
     public BingoGameModeType gameModeType = BingoGameModeType.Traditional;
     public BingoBallCountType ballCountType = BingoBallCountType.Ball75;
     public bool useFreeCell = true;
+    public bool hasRiskMatchDurationOverride;
+    public float riskMatchDurationMinutes = GameSettings.DefaultRiskMatchDurationMinutes;
+    public bool usesDefaultRank = true;
+    public bool useRank;
 
     public bool usesDefaultPatterns = true;
     public List<BingoPatternType> patternTypes = new List<BingoPatternType>();
 
     public bool maxPlayers = false;
     public int maxPlayer = 6;
+    public int botCount = 6;
 
     public SoloLobbySetupData()
     {
         gameModeType = BingoGameModeType.Traditional;
         ballCountType = BingoBallCountType.Ball75;
         useFreeCell = true;
+        hasRiskMatchDurationOverride = false;
+        riskMatchDurationMinutes = GameSettings.DefaultRiskMatchDurationMinutes;
+        usesDefaultRank = true;
+        useRank = false;
 
         usesDefaultPatterns = true;
         patternTypes = new List<BingoPatternType>();
 
         maxPlayers = false;
         maxPlayer = 6;
+        botCount = 6;
     }
 }
 
@@ -58,6 +76,8 @@ public class OnlineLobbySetupData
     public OnlineSearchType searchType = OnlineSearchType.QuickPlay;
     public BingoBallCountType ballCountType = BingoBallCountType.Ball75;
     public bool useFreeCell = true;
+    public bool hasUseRankOverride;
+    public bool useRank;
 
     public bool maxPlayers = false;
     public int maxPlayer = 30;
@@ -68,6 +88,8 @@ public class OnlineLobbySetupData
         searchType = OnlineSearchType.QuickPlay;
         ballCountType = BingoBallCountType.Ball75;
         useFreeCell = true;
+        hasUseRankOverride = false;
+        useRank = false;
 
         maxPlayers = false;
         maxPlayer = 30;
@@ -100,6 +122,10 @@ public class CustomHostLobbySetupData
     public BingoGameModeType gameModeType = BingoGameModeType.Traditional;
     public BingoBallCountType ballCountType = BingoBallCountType.Ball75;
     public bool useFreeCell = true;
+    public bool hasRiskMatchDurationOverride;
+    public float riskMatchDurationMinutes = GameSettings.DefaultRiskMatchDurationMinutes;
+    public bool usesDefaultRank = true;
+    public bool useRank;
 
     public bool usesDefaultPatterns = true;
     public List<BingoPatternType> patternTypes = new List<BingoPatternType>();
@@ -115,6 +141,10 @@ public class CustomHostLobbySetupData
         gameModeType = BingoGameModeType.Traditional;
         ballCountType = BingoBallCountType.Ball75;
         useFreeCell = true;
+        hasRiskMatchDurationOverride = false;
+        riskMatchDurationMinutes = GameSettings.DefaultRiskMatchDurationMinutes;
+        usesDefaultRank = true;
+        useRank = false;
 
         usesDefaultPatterns = true;
         patternTypes = new List<BingoPatternType>();

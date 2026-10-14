@@ -165,6 +165,11 @@ public class SettingsManager : MonoBehaviour, ISaveManager, ISceneReadyCheck
 
         ClampSoundSettings();
 
+        if (ValidateLeaderboardSettings())
+        {
+            changed = true;
+        }
+
         ApplySoundSettings();
         ApplyGraphicsSettings();
 
@@ -206,6 +211,65 @@ public class SettingsManager : MonoBehaviour, ISaveManager, ISceneReadyCheck
     string ISceneReadyCheck.ReadyName => "Settings Manager";
 
     bool ISceneReadyCheck.IsReady => hasLoadedData;
+
+    #endregion
+
+    #region Leaderboard Settings
+
+    public ScorePlayMode GetSavedLeaderboardScorePlayMode()
+    {
+        EnsureSettingsData();
+        return settingsData.leaderboardScorePlayMode;
+    }
+
+    public LeaderboardModeFilter GetSavedLeaderboardGameModeFilter()
+    {
+        EnsureSettingsData();
+        return settingsData.leaderboardGameModeFilter;
+    }
+
+    public LeaderboardPageSizeType GetSavedLeaderboardPageSize()
+    {
+        EnsureSettingsData();
+        return settingsData.leaderboardPageSize;
+    }
+
+    public void SetLeaderboardFilterSettings(
+        ScorePlayMode scorePlayMode,
+        LeaderboardModeFilter gameModeFilter,
+        LeaderboardPageSizeType pageSize)
+    {
+        EnsureSettingsData();
+
+        if (!Enum.IsDefined(typeof(ScorePlayMode), scorePlayMode))
+        {
+            scorePlayMode = ScorePlayMode.Solo;
+        }
+
+        if (!IsValidLeaderboardGameModeFilter(gameModeFilter))
+        {
+            gameModeFilter = LeaderboardModeFilter.CreateOverall();
+        }
+
+        if (!Enum.IsDefined(typeof(LeaderboardPageSizeType), pageSize))
+        {
+            pageSize = LeaderboardPageSizeType.Show10;
+        }
+
+        if (settingsData.leaderboardScorePlayMode == scorePlayMode &&
+            AreSameLeaderboardFilters(settingsData.leaderboardGameModeFilter, gameModeFilter) &&
+            settingsData.leaderboardPageSize == pageSize)
+        {
+            return;
+        }
+
+        settingsData.leaderboardScorePlayMode = scorePlayMode;
+        settingsData.leaderboardGameModeFilter = gameModeFilter;
+        settingsData.leaderboardPageSize = pageSize;
+
+        MarkSettingsDirty();
+        SavePendingSettingsDeferred();
+    }
 
     #endregion
 
@@ -484,6 +548,56 @@ public class SettingsManager : MonoBehaviour, ISaveManager, ISceneReadyCheck
         }
 
         return changed;
+    }
+
+    private bool ValidateLeaderboardSettings()
+    {
+        bool changed = false;
+
+        if (settingsData.settingsVersion < 2)
+        {
+            settingsData.settingsVersion = 2;
+            changed = true;
+        }
+
+        if (!Enum.IsDefined(typeof(ScorePlayMode), settingsData.leaderboardScorePlayMode))
+        {
+            settingsData.leaderboardScorePlayMode = ScorePlayMode.Solo;
+            changed = true;
+        }
+
+        if (!IsValidLeaderboardGameModeFilter(settingsData.leaderboardGameModeFilter))
+        {
+            settingsData.leaderboardGameModeFilter = LeaderboardModeFilter.CreateOverall();
+            changed = true;
+        }
+
+        if (!Enum.IsDefined(typeof(LeaderboardPageSizeType), settingsData.leaderboardPageSize))
+        {
+            settingsData.leaderboardPageSize = LeaderboardPageSizeType.Show10;
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static bool IsValidLeaderboardGameModeFilter(LeaderboardModeFilter gameModeFilter)
+    {
+        if (!Enum.IsDefined(typeof(LeaderboardModeFilterType), gameModeFilter.filterType))
+        {
+            return false;
+        }
+
+        return gameModeFilter.IsOverall ||
+               (gameModeFilter.IsGameMode && UserStats.IsScoredGameMode(gameModeFilter.gameModeType));
+    }
+
+    private static bool AreSameLeaderboardFilters(
+        LeaderboardModeFilter firstFilter,
+        LeaderboardModeFilter secondFilter)
+    {
+        return firstFilter.filterType == secondFilter.filterType &&
+               (firstFilter.IsOverall || firstFilter.gameModeType == secondFilter.gameModeType);
     }
 
     #endregion

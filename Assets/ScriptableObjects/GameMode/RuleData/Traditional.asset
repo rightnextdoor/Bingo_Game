@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: Traditional
   m_EditorClassIdentifier: Assembly-CSharp::BingoGameRuleData
   ruleType: 0
-  description: Complete the selected winning pattern before the other players. When
-    a player completes the active pattern, they can be counted as a winner based
-    on the match settings.
+  description: Complete any enabled winning pattern and submit Bingo. A valid check
+    starts a short tie window, and every other eligible player who submits a valid
+    Bingo during that window also wins. An invalid Bingo submission makes that player
+    lose. When the match ends, every remaining eligible player loses.

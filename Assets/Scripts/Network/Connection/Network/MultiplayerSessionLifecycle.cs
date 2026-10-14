@@ -12,6 +12,7 @@ public class MultiplayerSessionLifecycle : MonoBehaviour
     private NetworkRoot networkRoot;
     private NetworkBootstrap networkBootstrap;
     private bool isReady;
+    private bool hasConnectedSession;
 
     public bool IsReady => isReady;
 
@@ -79,6 +80,7 @@ public class MultiplayerSessionLifecycle : MonoBehaviour
         }
 
         SubscribeToBootstrap();
+        hasConnectedSession = networkBootstrap.IsConnected;
         isReady = true;
         return true;
     }
@@ -108,8 +110,15 @@ public class MultiplayerSessionLifecycle : MonoBehaviour
 
     private void OnConnectionStateChanged(NetworkConnectionState connectionState)
     {
+        if (connectionState == NetworkConnectionState.Connected)
+        {
+            hasConnectedSession = true;
+            return;
+        }
+
         if (connectionState == NetworkConnectionState.Offline)
         {
+            hasConnectedSession = false;
             MultiplayerNetworkScheduler.instance?.ClearAll();
             return;
         }
@@ -121,7 +130,12 @@ public class MultiplayerSessionLifecycle : MonoBehaviour
         }
 
         MultiplayerNetworkScheduler.instance?.ClearAll();
-        ConnectionLost?.Invoke(connectionState);
+
+        if (hasConnectedSession)
+        {
+            hasConnectedSession = false;
+            ConnectionLost?.Invoke(connectionState);
+        }
     }
 
     #endregion

@@ -38,6 +38,8 @@ public class GameSceneManager : MonoBehaviour
 
     private Coroutine loadingRoutine;
     private GameSceneType currentSceneType;
+    private GameSceneType initialSceneType;
+    private int initialSceneHandle;
     private bool isLoadingScene;
 
     private bool hasPendingLoadingRedirect;
@@ -49,6 +51,12 @@ public class GameSceneManager : MonoBehaviour
 
     public bool IsLoadingScene => isLoadingScene;
     public GameSceneType CurrentSceneType => currentSceneType;
+    public bool IsActiveScene(GameSceneType sceneType) =>
+        string.Equals(UnitySceneManager.GetActiveScene().name, GetSceneName(sceneType), StringComparison.Ordinal);
+
+    public bool IsInitialScene(GameSceneType _sceneType) =>
+        initialSceneType == _sceneType && currentSceneType == _sceneType &&
+        UnitySceneManager.GetActiveScene().handle == initialSceneHandle && IsActiveScene(_sceneType);
 
     #endregion
 
@@ -71,6 +79,11 @@ public class GameSceneManager : MonoBehaviour
         instance = this;
         DontDestroyOnLoad(gameObject);
 
+        // Connection callbacks can arrive before Start begins the loading routine.
+        // Resolve the scene now so a direct Lobby or Game launch is not treated as Main.
+        currentSceneType = ResolveStartingSceneType();
+        initialSceneType = currentSceneType;
+        initialSceneHandle = UnitySceneManager.GetActiveScene().handle;
         ResolveReferences();
     }
 
@@ -89,7 +102,7 @@ public class GameSceneManager : MonoBehaviour
             return;
         }
 
-        BeginCurrentSceneLoading(startingSceneType);
+        BeginCurrentSceneLoading(ResolveStartingSceneType());
     }
 
     #endregion
@@ -135,6 +148,13 @@ public class GameSceneManager : MonoBehaviour
 
     public void ReturnToMainSceneAfterFailure()
     {
+        // A temporary disconnect can fail an in-flight network request. The
+        // recovery manager owns the decision to leave after its retries end.
+        if (ConnectionRecoveryManager.instance?.IsRecoveringInScene == true)
+        {
+            return;
+        }
+
         if (isLoadingScene)
         {
             pendingLoadingRedirectSceneType = GameSceneType.Main;
@@ -257,6 +277,14 @@ public class GameSceneManager : MonoBehaviour
 
         yield return WaitUntilSceneCanStart();
 
+        if (TryConsumeLoadingRedirect(out GameSceneType redirectSceneType))
+        {
+            isLoadingScene = false;
+            loadingRoutine = null;
+            LoadScene(redirectSceneType);
+            yield break;
+        }
+
         SceneReadyForFadeOut?.Invoke(currentSceneType);
 
         loader = CurrentLoader;
@@ -278,6 +306,11 @@ public class GameSceneManager : MonoBehaviour
 
         while (!CanStartScene())
         {
+            if (hasPendingLoadingRedirect)
+            {
+                yield break;
+            }
+
             yield return null;
         }
     }
@@ -293,9 +326,10 @@ public class GameSceneManager : MonoBehaviour
         bool minimumTimeDone = loader == null || loader.HasMinimumShowTimePassed;
         bool sceneReady = sceneReadyController == null || sceneReadyController.AreAllReady();
         bool lobbyEntryFinished = IsLobbyEntryFinished();
-        bool lobbyChatPreparationFinished = IsLobbyChatPreparationFinished();
+        bool gameEntryFinished = IsGameEntryFinished();
+        bool sessionChatPreparationFinished = IsSessionChatPreparationFinished();
 
-        return minimumTimeDone && sceneReady && lobbyEntryFinished && lobbyChatPreparationFinished;
+        return minimumTimeDone && sceneReady && lobbyEntryFinished && gameEntryFinished && sessionChatPreparationFinished;
     }
 
     #endregion
@@ -320,6 +354,28 @@ public class GameSceneManager : MonoBehaviour
         }
     }
 
+    private GameSceneType ResolveStartingSceneType()
+    {
+        string activeSceneName = UnitySceneManager.GetActiveScene().name;
+
+        if (string.Equals(activeSceneName, GetSceneName(GameSceneType.Lobby), StringComparison.Ordinal))
+        {
+            return GameSceneType.Lobby;
+        }
+
+        if (string.Equals(activeSceneName, GetSceneName(GameSceneType.Game), StringComparison.Ordinal))
+        {
+            return GameSceneType.Game;
+        }
+
+        if (string.Equals(activeSceneName, GetSceneName(GameSceneType.Main), StringComparison.Ordinal))
+        {
+            return GameSceneType.Main;
+        }
+
+        return startingSceneType;
+    }
+
     #endregion
 
     #region Helpers
@@ -340,18 +396,30 @@ public class GameSceneManager : MonoBehaviour
         }
     }
 
-    private bool IsLobbyChatPreparationFinished()
+    private bool IsSessionChatPreparationFinished()
     {
-        if (currentSceneType != GameSceneType.Lobby)
+        bool requiresNetworkSessionChat = false;
+
+        if (currentSceneType == GameSceneType.Lobby)
         {
-            return true;
+            LobbyManager lobbyManager = LobbyManager.instance;
+
+            requiresNetworkSessionChat =
+                lobbyManager != null &&
+                lobbyManager.EntryState != LobbyEntryState.Failed &&
+                lobbyManager.RuntimeType == SessionRuntimeType.Network;
+        }
+        else if (currentSceneType == GameSceneType.Game)
+        {
+            GameSessionManager gameSessionManager = GameSessionManager.instance;
+
+            requiresNetworkSessionChat =
+                gameSessionManager != null &&
+                gameSessionManager.EntryState == GameSessionEntryState.Completed &&
+                gameSessionManager.RuntimeType == SessionRuntimeType.Network;
         }
 
-        LobbyManager lobbyManager = LobbyManager.instance;
-
-        if (lobbyManager == null ||
-            lobbyManager.EntryState == LobbyEntryState.Failed ||
-            lobbyManager.RuntimeType != SessionRuntimeType.Network)
+        if (!requiresNetworkSessionChat)
         {
             return true;
         }
@@ -373,6 +441,22 @@ public class GameSceneManager : MonoBehaviour
         }
 
         return LobbyManager.instance.EntryState == LobbyEntryState.Completed || LobbyManager.instance.EntryState == LobbyEntryState.Failed;
+    }
+
+    private bool IsGameEntryFinished()
+    {
+        if (currentSceneType != GameSceneType.Game)
+        {
+            return true;
+        }
+
+        if (GameSessionManager.instance == null)
+        {
+            return false;
+        }
+
+        return GameSessionManager.instance.EntryState == GameSessionEntryState.Completed ||
+               GameSessionManager.instance.EntryState == GameSessionEntryState.Failed;
     }
 
     private bool TryConsumeLoadingRedirect(out GameSceneType sceneType)

@@ -39,8 +39,8 @@ public class LeaderboardUIManager : MonoBehaviour
 
     #region Mode Setup Fields
 
+    private ScorePlayMode currentScorePlayMode = ScorePlayMode.Solo;
     private LeaderboardModeFilter currentMode = LeaderboardModeFilter.CreateOverall();
-    private string currentModeTitleText;
     private LeaderboardSortType currentSortType;
 
     private readonly List<LeaderboardCellData> currentHeaderCells = new();
@@ -126,6 +126,7 @@ public class LeaderboardUIManager : MonoBehaviour
         initialRefreshRoutine = null;
 
         RefreshUserData();
+        ApplySavedFilterSettings();
         ApplySelectedFilterMode();
     }
 
@@ -212,8 +213,9 @@ public class LeaderboardUIManager : MonoBehaviour
 
         if (filterController != null)
         {
-            filterController.GameModeChanged += SetLeaderboardMode;
-            filterController.PageSizeChanged += SetPageSizeFromDropdown;
+            filterController.ScorePlayModeChanged += HandleScorePlayModeChanged;
+            filterController.GameModeChanged += HandleLeaderboardModeChanged;
+            filterController.PageSizeChanged += HandlePageSizeChanged;
         }
 
         if (pageController != null)
@@ -236,8 +238,9 @@ public class LeaderboardUIManager : MonoBehaviour
 
         if (filterController != null)
         {
-            filterController.GameModeChanged -= SetLeaderboardMode;
-            filterController.PageSizeChanged -= SetPageSizeFromDropdown;
+            filterController.ScorePlayModeChanged -= HandleScorePlayModeChanged;
+            filterController.GameModeChanged -= HandleLeaderboardModeChanged;
+            filterController.PageSizeChanged -= HandlePageSizeChanged;
         }
 
         if (pageController != null)
@@ -254,6 +257,23 @@ public class LeaderboardUIManager : MonoBehaviour
 
     #region Mode Setup Entry
 
+    private void ApplySavedFilterSettings()
+    {
+        if (filterController == null ||
+            SettingsManager.instance == null ||
+            !SettingsManager.instance.IsReady)
+        {
+            return;
+        }
+
+        filterController.SetScorePlayMode(
+            SettingsManager.instance.GetSavedLeaderboardScorePlayMode());
+        filterController.SetGameMode(
+            SettingsManager.instance.GetSavedLeaderboardGameModeFilter());
+        filterController.SetPageSize(
+            SettingsManager.instance.GetSavedLeaderboardPageSize());
+    }
+
     private void ApplySelectedFilterMode()
     {
         currentPageSize = GetSelectedPageSizeFromFilter();
@@ -262,10 +282,32 @@ public class LeaderboardUIManager : MonoBehaviour
 
         if (filterController != null)
         {
+            currentScorePlayMode = filterController.GetSelectedScorePlayMode();
             selectedMode = filterController.GetSelectedGameMode();
         }
 
         SetLeaderboardMode(selectedMode);
+    }
+
+    public void SetScorePlayMode(ScorePlayMode scorePlayMode)
+    {
+        currentScorePlayMode = scorePlayMode;
+        searchActive = false;
+        currentSearchText = string.Empty;
+        selectedUserId = string.Empty;
+        SetLeaderboardMode(currentMode);
+    }
+
+    private void HandleScorePlayModeChanged(ScorePlayMode scorePlayMode)
+    {
+        SetScorePlayMode(scorePlayMode);
+        SaveLeaderboardFilterSettings();
+    }
+
+    private void HandleLeaderboardModeChanged(LeaderboardModeFilter gameMode)
+    {
+        SetLeaderboardMode(gameMode);
+        SaveLeaderboardFilterSettings();
     }
 
     public void SetLeaderboardMode(LeaderboardModeFilter gameMode)
@@ -278,29 +320,12 @@ public class LeaderboardUIManager : MonoBehaviour
             return;
         }
 
-        switch (currentMode.gameModeType)
+        if (!UserStats.IsScoredGameMode(currentMode.gameModeType))
         {
-            case BingoGameModeType.Traditional:
-                SetupOverallMode();
-                break;
-
-            case BingoGameModeType.Blackout:
-                SetupPlayMode();
-                break;
-
-            case BingoGameModeType.Risk:
-                SetupOverallMode();
-                break;
-
-            case BingoGameModeType.Death:
-                SetupPlayMode();
-                break;
-
-            default:
-                currentMode = LeaderboardModeFilter.CreateOverall();
-                SetupOverallMode();
-                break;
+            currentMode = LeaderboardModeFilter.CreateOverall();
         }
+
+        SetupOverallMode();
     }
 
     #endregion
@@ -309,7 +334,6 @@ public class LeaderboardUIManager : MonoBehaviour
 
     private void SetupOverallMode()
     {
-        currentModeTitleText = GetCurrentModeTitleText();
         currentSortType = LeaderboardSortType.ScoreHighest;
 
         currentHeaderCells.Clear();
@@ -332,29 +356,6 @@ public class LeaderboardUIManager : MonoBehaviour
         ApplyModeSetup();
     }
 
-    private void SetupPlayMode()
-    {
-        currentModeTitleText = GetCurrentModeTitleText();
-        currentSortType = LeaderboardSortType.ScoreHighest;
-
-        currentHeaderCells.Clear();
-        currentRowBlueprint.Clear();
-
-        float rankCellWidth = 90f;
-        float scoreCellWidth = 210f;
-        float playerNameCellFlexibleWidth = 1f;
-
-        currentHeaderCells.Add(CreateHeaderTextCell("Rank", rankCellWidth, 0f, 18f, TextAlignmentOptions.Center));
-        currentHeaderCells.Add(CreateHeaderTextCell("Score", scoreCellWidth, 0f, 18f, TextAlignmentOptions.Right));
-        currentHeaderCells.Add(CreateHeaderTextCell("Player", 0f, playerNameCellFlexibleWidth, 18f, TextAlignmentOptions.Left));
-
-        currentRowBlueprint.Add(CreateRowTextCellSetup(LeaderboardRowCellValueType.Rank, rankCellWidth, 0f, 16f, TextAlignmentOptions.Center));
-        currentRowBlueprint.Add(CreateRowTextCellSetup(LeaderboardRowCellValueType.Score, scoreCellWidth, 0f, 16f, TextAlignmentOptions.Right, 0, maxScoreDigits));
-        currentRowBlueprint.Add(CreateRowTextCellSetup(LeaderboardRowCellValueType.PlayerNameWithShortId, 0f, playerNameCellFlexibleWidth, 16f, TextAlignmentOptions.Left, maxPlayerNameCharacters, 0));
-
-        ApplyModeSetup();
-    }
-
     #endregion
 
     #region Mode Build Methods
@@ -369,7 +370,7 @@ public class LeaderboardUIManager : MonoBehaviour
 
     private void BuildHeaderFromModeSetup()
     {
-        SetLeaderboardTitle(currentModeTitleText);
+        SetLeaderboardTitle();
 
         if (headerController == null)
         {
@@ -442,24 +443,14 @@ public class LeaderboardUIManager : MonoBehaviour
         };
     }
 
-    private void SetLeaderboardTitle(string titleText)
+    private void SetLeaderboardTitle()
     {
         if (leaderboardTitleText == null)
         {
             return;
         }
 
-        leaderboardTitleText.text = titleText;
-    }
-
-    private string GetCurrentModeTitleText()
-    {
-        if (currentMode.IsOverall)
-        {
-            return "Overall Leaderboard";
-        }
-
-        return $"{currentMode.gameModeType} Leaderboard";
+        leaderboardTitleText.text = "Leaderboard";
     }
 
     #endregion
@@ -783,7 +774,7 @@ public class LeaderboardUIManager : MonoBehaviour
 
         for (int i = 0; i < allUsers.Count; i++)
         {
-            if (allUsers[i] == null)
+            if (!ShouldIncludeUser(allUsers[i]))
             {
                 continue;
             }
@@ -847,6 +838,27 @@ public class LeaderboardUIManager : MonoBehaviour
         RebuildPagesAndDisplayPage(1);
     }
 
+    private void HandlePageSizeChanged(int pageSize)
+    {
+        SetPageSizeFromDropdown(pageSize);
+        SaveLeaderboardFilterSettings();
+    }
+
+    private void SaveLeaderboardFilterSettings()
+    {
+        if (filterController == null ||
+            SettingsManager.instance == null ||
+            !SettingsManager.instance.IsReady)
+        {
+            return;
+        }
+
+        SettingsManager.instance.SetLeaderboardFilterSettings(
+            filterController.GetSelectedScorePlayMode(),
+            filterController.GetSelectedGameMode(),
+            filterController.GetSelectedPageSizeType());
+    }
+
     private void DisplayPreviousPage()
     {
         DisplayPage(currentPage - 1);
@@ -902,6 +914,7 @@ public class LeaderboardUIManager : MonoBehaviour
             rankedUsers.Add(new LeaderboardUserRankData
             {
                 rank = i + 1,
+                score = GetUserScore(sortedModeUsers[i]),
                 userData = sortedModeUsers[i]
             });
         }
@@ -1020,7 +1033,30 @@ public class LeaderboardUIManager : MonoBehaviour
             return 0;
         }
 
-        return userData.stats.points;
+        if (currentMode.IsOverall)
+        {
+            return userData.stats.GetOverallPoints(currentScorePlayMode);
+        }
+
+        return userData.stats.GetPoints(currentScorePlayMode, currentMode.gameModeType);
+    }
+
+    private bool ShouldIncludeUser(UserData userData)
+    {
+        if (userData == null)
+        {
+            return false;
+        }
+
+        if (currentScorePlayMode == ScorePlayMode.Solo)
+        {
+            return userData.userTag == UserTag.Bot ||
+                   (currentUser != null && IsSameUserId(userData.userId, currentUser.userId));
+        }
+
+        return userData.userTag == UserTag.Player &&
+               currentUser != null &&
+               IsSameUserId(userData.userId, currentUser.userId);
     }
 
     private string GetUserName(UserData userData)

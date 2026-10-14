@@ -10,6 +10,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1290380241951259866}
   - component: {fileID: 633853011194982010}
+  - component: {fileID: 6207814632284159071}
   - component: {fileID: 3515003745649080825}
   - component: {fileID: 8635193435336926230}
   - component: {fileID: 91398956343745977}
@@ -56,6 +57,25 @@ MonoBehaviour:
   playMode: 3
   gameModeType: 0
   ballCountType: 75
+--- !u!114 &6207814632284159071
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4922679368307309324}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2fa1b0a3700eb1a4798fa5913991658a, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::GameSimulationController
+  simulateOnStart: 1
+  playMode: 3
+  gameModeType: 0
+  ballCountType: 75
+  useFreeCell: 1
+  roomSize: 9
+  botCount: 5
 --- !u!114 &3515003745649080825
 MonoBehaviour:
   m_ObjectHideFlags: 0

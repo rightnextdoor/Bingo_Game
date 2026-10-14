@@ -5,7 +5,7 @@ public static class BingoBoardGenerator
 {
     #region Constants
 
-    private const int ColumnCount = 5;
+    private const int ColumnCount = BingoNumberRangeUtility.ColumnCount;
     private const int RowCount = 5;
     private const int CellCount = ColumnCount * RowCount;
     private const int FreeCellIndex = 12;
@@ -34,7 +34,11 @@ public static class BingoBoardGenerator
 
     private static void GenerateColumn(List<int> cellNumbers, int column, int totalBallCount, bool useFreeCell)
     {
-        GetColumnRange(column, totalBallCount, out int minimum, out int maximum);
+        BingoNumberRangeUtility.GetColumnRange(
+            column,
+            totalBallCount,
+            out int minimum,
+            out int maximum);
 
         List<int> availableNumbers = BuildNumberPool(minimum, maximum);
 
@@ -54,18 +58,6 @@ public static class BingoBoardGenerator
     #endregion
 
     #region Number Range
-
-    private static void GetColumnRange(int column, int totalBallCount, out int minimum, out int maximum)
-    {
-        int baseColumnSize = totalBallCount / ColumnCount;
-        int remainder = totalBallCount % ColumnCount;
-
-        int columnSize = baseColumnSize + (column < remainder ? 1 : 0);
-        int previousExtraValues = Mathf.Min(column, remainder);
-
-        minimum = 1 + column * baseColumnSize + previousExtraValues;
-        maximum = minimum + columnSize - 1;
-    }
 
     private static List<int> BuildNumberPool(int minimum, int maximum)
     {

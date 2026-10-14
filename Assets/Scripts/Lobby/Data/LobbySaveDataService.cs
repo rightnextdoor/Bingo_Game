@@ -7,7 +7,7 @@ public static class LobbySaveDataService
 
     public static void ApplySavedDataToSetup(LobbySetupData lobbySetupData)
     {
-        if (lobbySetupData == null)
+        if (lobbySetupData == null || lobbySetupData.usesSimulationSettings)
         {
             return;
         }
@@ -39,10 +39,10 @@ public static class LobbySaveDataService
 
     #region Save
 
-    public static bool SaveHostSettings(MainMenuPlayMode playMode, LobbyHostSettingsData settingsData)
+    public static bool SaveHostSettings(LobbyViewData _lobbyViewData, LobbyHostSettingsData _settingsData)
     {
-        if (settingsData == null ||
-            (playMode != MainMenuPlayMode.Solo && playMode != MainMenuPlayMode.Custom))
+        if (_lobbyViewData == null || _lobbyViewData.usesSimulationSettings || _settingsData == null ||
+            (_lobbyViewData.playMode != MainMenuPlayMode.Solo && _lobbyViewData.playMode != MainMenuPlayMode.Custom))
         {
             return false;
         }
@@ -54,24 +54,25 @@ public static class LobbySaveDataService
             return false;
         }
 
-        switch (playMode)
+        switch (_lobbyViewData.playMode)
         {
             case MainMenuPlayMode.Solo:
-                CopyToSoloData(settingsData, lobbyData.soloLobbyData);
+                CopyToSoloData(_settingsData, lobbyData.soloLobbyData);
                 break;
 
             case MainMenuPlayMode.Custom:
-                CopyToCustomData(settingsData, lobbyData.customLobbyData);
+                CopyToCustomData(_settingsData, lobbyData.customLobbyData);
                 break;
         }
 
+        CopyRoomSettings(_lobbyViewData.playMode, _settingsData.maxPlayers, _settingsData.maxPlayer);
         SaveManager.instance?.SaveGame();
         return true;
     }
 
     public static bool SaveLobbyViewData(LobbyViewData lobbyViewData)
     {
-        if (lobbyViewData == null ||
+        if (lobbyViewData == null || lobbyViewData.usesSimulationSettings ||
             (lobbyViewData.playMode != MainMenuPlayMode.Solo && lobbyViewData.playMode != MainMenuPlayMode.Custom))
         {
             return false;
@@ -95,8 +96,40 @@ public static class LobbySaveDataService
                 break;
         }
 
+        CopyRoomSettings(lobbyViewData.playMode, lobbyViewData.maxPlayers, lobbyViewData.maxPlayer);
         SaveManager.instance?.SaveGame();
         return true;
+    }
+
+    public static void SaveSoloBotCount(Lobby _lobby)
+    {
+        SaveManager saveManager = SaveManager.instance;
+        LobbyManager lobbyManager = LobbyManager.instance;
+
+        if (_lobby == null || _lobby.usesSimulationSettings || _lobby.playMode != MainMenuPlayMode.Solo ||
+            lobbyManager == null || lobbyManager.CurrentLobby != _lobby ||
+            saveManager == null || !saveManager.HasLoadedData || saveManager.Data == null)
+        {
+            return;
+        }
+
+        LobbyController controller = _lobby.Controller;
+
+        if (controller.HasPendingWork || controller.IsEmpty || _lobby.lobbyState == LobbyState.Closed)
+        {
+            return;
+        }
+
+        MenuData menuData = GetMenuData();
+        int botCount = controller.BotCount;
+
+        if (menuData.soloMenuData.botCount == botCount)
+        {
+            return;
+        }
+
+        menuData.soloMenuData.botCount = botCount;
+        saveManager.SaveGame();
     }
 
     #endregion
@@ -115,6 +148,10 @@ public static class LobbySaveDataService
         setupData.gameModeType = savedData.gameModeType;
         setupData.ballCountType = savedData.ballCountType;
         setupData.useFreeCell = savedData.useFreeCell;
+        setupData.usesDefaultRank = savedData.usesDefaultRank;
+        setupData.useRank = savedData.useRank;
+        setupData.hasRiskMatchDurationOverride = savedData.hasRiskMatchDurationOverride;
+        setupData.riskMatchDurationMinutes = savedData.riskMatchDurationMinutes;
         setupData.usesDefaultPatterns = savedData.usesDefaultPatterns;
         setupData.patternTypes = CopyPatterns(savedData.patternTypes, savedData.usesDefaultPatterns);
     }
@@ -131,6 +168,10 @@ public static class LobbySaveDataService
         setupData.gameModeType = savedData.gameModeType;
         setupData.ballCountType = savedData.ballCountType;
         setupData.useFreeCell = savedData.useFreeCell;
+        setupData.usesDefaultRank = savedData.usesDefaultRank;
+        setupData.useRank = savedData.useRank;
+        setupData.hasRiskMatchDurationOverride = savedData.hasRiskMatchDurationOverride;
+        setupData.riskMatchDurationMinutes = savedData.riskMatchDurationMinutes;
         setupData.usesDefaultPatterns = savedData.usesDefaultPatterns;
         setupData.patternTypes = CopyPatterns(savedData.patternTypes, savedData.usesDefaultPatterns);
     }
@@ -138,6 +179,30 @@ public static class LobbySaveDataService
     #endregion
 
     #region Save Helpers
+
+    private static void CopyRoomSettings(MainMenuPlayMode _playMode, bool _maxPlayers, int _maxPlayer)
+    {
+        MenuData menuData = GetMenuData();
+
+        if (_playMode == MainMenuPlayMode.Solo)
+        {
+            menuData.soloMenuData.maxPlayers = _maxPlayers;
+
+            if (!_maxPlayers)
+            {
+                menuData.soloMenuData.lobbySize = _maxPlayer;
+            }
+        }
+        else if (_playMode == MainMenuPlayMode.Custom)
+        {
+            menuData.customMenuData.maxPlayers = _maxPlayers;
+
+            if (!_maxPlayers)
+            {
+                menuData.customMenuData.lobbySize = _maxPlayer;
+            }
+        }
+    }
 
     private static void CopyToSoloData(LobbyHostSettingsData source, SoloLobbyData target)
     {
@@ -149,6 +214,10 @@ public static class LobbySaveDataService
         target.gameModeType = source.gameModeType;
         target.ballCountType = source.ballCountType;
         target.useFreeCell = source.useFreeCell;
+        target.usesDefaultRank = source.usesDefaultRank;
+        target.useRank = source.useRank;
+        target.hasRiskMatchDurationOverride = source.hasRiskMatchDurationOverride;
+        target.riskMatchDurationMinutes = source.riskMatchDurationMinutes;
         target.usesDefaultPatterns = source.usesDefaultPatterns;
         target.patternTypes = CopyPatterns(source.patternTypes, source.usesDefaultPatterns);
     }
@@ -163,6 +232,10 @@ public static class LobbySaveDataService
         target.gameModeType = source.gameModeType;
         target.ballCountType = source.ballCountType;
         target.useFreeCell = source.useFreeCell;
+        target.usesDefaultRank = source.usesDefaultRank;
+        target.useRank = source.useRank;
+        target.hasRiskMatchDurationOverride = source.hasRiskMatchDurationOverride;
+        target.riskMatchDurationMinutes = source.riskMatchDurationMinutes;
         target.usesDefaultPatterns = source.usesDefaultPatterns;
         target.patternTypes = CopyPatterns(source.patternTypes, source.usesDefaultPatterns);
     }
@@ -177,6 +250,10 @@ public static class LobbySaveDataService
         target.gameModeType = source.gameModeType;
         target.ballCountType = source.ballCountType;
         target.useFreeCell = source.useFreeCell;
+        target.usesDefaultRank = source.usesDefaultRank;
+        target.useRank = source.useRank;
+        target.hasRiskMatchDurationOverride = source.hasRiskMatchDurationOverride;
+        target.riskMatchDurationMinutes = source.riskMatchDurationMinutes;
         target.usesDefaultPatterns = source.usesDefaultPatterns;
         target.patternTypes = CopyPatterns(source.patternTypes, source.usesDefaultPatterns);
     }
@@ -191,6 +268,10 @@ public static class LobbySaveDataService
         target.gameModeType = source.gameModeType;
         target.ballCountType = source.ballCountType;
         target.useFreeCell = source.useFreeCell;
+        target.usesDefaultRank = source.usesDefaultRank;
+        target.useRank = source.useRank;
+        target.hasRiskMatchDurationOverride = source.hasRiskMatchDurationOverride;
+        target.riskMatchDurationMinutes = source.riskMatchDurationMinutes;
         target.usesDefaultPatterns = source.usesDefaultPatterns;
         target.patternTypes = CopyPatterns(source.patternTypes, source.usesDefaultPatterns);
     }
@@ -198,6 +279,15 @@ public static class LobbySaveDataService
     #endregion
 
     #region Data Helpers
+
+    private static MenuData GetMenuData()
+    {
+        GameData gameData = SaveManager.instance.Data;
+        gameData.menuData ??= new MenuData();
+        gameData.menuData.soloMenuData ??= new SoloMenuData();
+        gameData.menuData.customMenuData ??= new CustomMenuData();
+        return gameData.menuData;
+    }
 
     private static LobbyData GetLobbyData()
     {
@@ -213,6 +303,13 @@ public static class LobbySaveDataService
         gameData.lobbyData ??= new LobbyData();
         gameData.lobbyData.soloLobbyData ??= new SoloLobbyData();
         gameData.lobbyData.customLobbyData ??= new CustomLobbyData();
+
+        if (gameData.lobbyData.lobbyVersion < 3)
+        {
+            gameData.lobbyData.soloLobbyData.usesDefaultRank = true;
+            gameData.lobbyData.customLobbyData.usesDefaultRank = true;
+            gameData.lobbyData.lobbyVersion = 3;
+        }
 
         Repair(gameData.lobbyData.soloLobbyData);
         Repair(gameData.lobbyData.customLobbyData);
@@ -252,6 +349,7 @@ public static class LobbySaveDataService
         }
 
         data.patternTypes ??= new List<BingoPatternType>();
+        data.riskMatchDurationMinutes = Math.Max(0f, data.riskMatchDurationMinutes);
 
         if (!data.usesDefaultPatterns && data.patternTypes.Count == 0)
         {
@@ -267,6 +365,7 @@ public static class LobbySaveDataService
         }
 
         data.patternTypes ??= new List<BingoPatternType>();
+        data.riskMatchDurationMinutes = Math.Max(0f, data.riskMatchDurationMinutes);
 
         if (!data.usesDefaultPatterns && data.patternTypes.Count == 0)
         {

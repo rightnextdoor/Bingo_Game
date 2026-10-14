@@ -158,14 +158,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0.14509805, g: 0.19215687, b: 0.30980393, a: 1}
+  m_Color: {r: 0.9892183, g: 0.9892183, b: 0.9892183, a: 1}
   m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 0}
+  m_Sprite: {fileID: 6841100256711490664, guid: d472a20ddbd00c24b911265d148d0ac2, type: 3}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
@@ -207,7 +207,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6fe01e88f7923374da8f6cf6c1bd5dde, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::UIThemeBackground
-  backgroundType: 2
+  backgroundType: 14
   backgroundImage: {fileID: 2454269749954149695}
 --- !u!114 &6427272835636635699
 MonoBehaviour:

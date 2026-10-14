@@ -33,7 +33,8 @@ public enum LobbyEntryFailureType
     ConnectionLost,
     LobbyStarted,
     JoinTimedOut,
-    Unknown
+    Unknown,
+    KickedFromGame
 }
 
 public enum OnlineFailureType

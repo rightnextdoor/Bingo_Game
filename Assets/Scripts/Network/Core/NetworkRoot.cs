@@ -53,6 +53,11 @@ public class NetworkRoot : MonoBehaviour
         instance = this;
         isPrimaryInstance = true;
 
+        if (GetComponent<ConnectionRecoveryManager>() == null)
+        {
+            gameObject.AddComponent<ConnectionRecoveryManager>();
+        }
+
         if (!dontDestroyOnLoad)
         {
             return;

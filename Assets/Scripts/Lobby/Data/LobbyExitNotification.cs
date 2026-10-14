@@ -4,16 +4,19 @@ using System;
 public class LobbyExitNotification
 {
     public string lobbyId;
+    public string gameId;
 
     public LobbyPlayerExitReason exitReason;
     public LobbyCloseReason closeReason;
 
     public LobbyEntryFailureType failureType;
     public string message;
+    public GameFinalScoreResultData finalScoreResult;
 
     public LobbyExitNotification()
     {
         lobbyId = string.Empty;
+        gameId = string.Empty;
 
         exitReason = LobbyPlayerExitReason.LobbyClosed;
         closeReason = LobbyCloseReason.None;
@@ -22,7 +25,9 @@ public class LobbyExitNotification
         message = string.Empty;
     }
 
-    public static LobbyExitNotification Kicked(string lobbyId)
+    public static LobbyExitNotification Kicked(
+        string lobbyId,
+        GameFinalScoreResultData finalScoreResult = null)
     {
         return new LobbyExitNotification
         {
@@ -30,7 +35,25 @@ public class LobbyExitNotification
             exitReason = LobbyPlayerExitReason.Kicked,
             closeReason = LobbyCloseReason.None,
             failureType = LobbyEntryFailureType.KickedFromLobby,
-            message = "You were removed from the lobby by the host."
+            message = "You were removed from the lobby by the host.",
+            finalScoreResult = finalScoreResult
+        };
+    }
+
+    public static LobbyExitNotification KickedFromGame(
+        string lobbyId,
+        string gameId,
+        GameFinalScoreResultData finalScoreResult)
+    {
+        return new LobbyExitNotification
+        {
+            lobbyId = lobbyId ?? string.Empty,
+            gameId = gameId ?? string.Empty,
+            exitReason = LobbyPlayerExitReason.Kicked,
+            closeReason = LobbyCloseReason.None,
+            failureType = LobbyEntryFailureType.KickedFromGame,
+            message = "You were removed from the game by the host.",
+            finalScoreResult = finalScoreResult
         };
     }
 

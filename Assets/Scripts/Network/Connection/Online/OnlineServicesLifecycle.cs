@@ -96,7 +96,7 @@ public class OnlineServicesLifecycle : MonoBehaviour
             return;
         }
 
-        FailureManager.instance?.OnlineFailure?.ReportFailure(OnlineFailureType.ConnectionLost);
+        ConnectionRecoveryManager.instance?.HandleOnlineConnectionLost();
     }
 
     #endregion

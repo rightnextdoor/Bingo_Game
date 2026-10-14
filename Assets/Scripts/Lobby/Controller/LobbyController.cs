@@ -1,3 +1,4 @@
+using BingoGame.UI;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -31,14 +32,14 @@ public class LobbyController
 
     [NonSerialized] private Queue<UserData> pendingBotUsers = new Queue<UserData>();
     [NonSerialized] private Queue<string> pendingBoardRegenerationUserIds = new Queue<string>();
-    [NonSerialized] private bool pendingViewRefresh;
+    [NonSerialized] private LobbyUIRefresh pendingUIRefresh;
 
     public IReadOnlyList<LobbyPlayerData> Players => players;
     public int PlayerCount => players != null ? players.Count : 0;
     public int SceneReadyPlayerCount => GetVisiblePlayerCount();
     public int PendingPlayerCount => pendingBotUsers != null ? pendingBotUsers.Count : 0;
     public int ReservedPlayerCount => PlayerCount + PendingPlayerCount;
-    public bool HasPendingWork => pendingViewRefresh || PendingPlayerCount > 0 || (pendingBoardRegenerationUserIds != null && pendingBoardRegenerationUserIds.Count > 0);
+    public bool HasPendingWork => pendingUIRefresh != LobbyUIRefresh.None || PendingPlayerCount > 0 || (pendingBoardRegenerationUserIds != null && pendingBoardRegenerationUserIds.Count > 0);
     public bool IsFull => maxPlayer > 0 && ReservedPlayerCount >= maxPlayer;
     public bool IsEmpty => PlayerCount == 0;
 
@@ -93,6 +94,10 @@ public class LobbyController
 
     [SerializeField] private BingoBallCountType ballCountType = BingoBallCountType.Ball75;
     [SerializeField] private bool useFreeCell = true;
+    [SerializeField] private bool usesDefaultRank = true;
+    [SerializeField] private bool useRank;
+    [SerializeField] private bool hasRiskMatchDurationOverride;
+    [SerializeField, Min(0f)] private float riskMatchDurationMinutes = GameSettings.DefaultRiskMatchDurationMinutes;
 
     public BingoGameModeType GameModeType => gameModeType;
 
@@ -104,6 +109,10 @@ public class LobbyController
 
     public BingoBallCountType BallCountType => ballCountType;
     public bool UseFreeCell => useFreeCell;
+    public bool UsesDefaultRank => usesDefaultRank;
+    public bool UseRank => useRank;
+    public bool HasRiskMatchDurationOverride => hasRiskMatchDurationOverride;
+    public float RiskMatchDurationMinutes => Mathf.Max(0f, riskMatchDurationMinutes);
 
     public bool AddBots => addBots;
     public int BotCount => GetBotCount();
@@ -147,7 +156,7 @@ public class LobbyController
         players = new List<LobbyPlayerData>();
         pendingBotUsers = new Queue<UserData>();
         pendingBoardRegenerationUserIds = new Queue<string>();
-        pendingViewRefresh = false;
+        pendingUIRefresh = LobbyUIRefresh.None;
 
         lobbyName = GetDefaultLobbyName();
         roomCode = string.Empty;
@@ -159,6 +168,10 @@ public class LobbyController
         patternTypes.Clear();
         usesDefaultPatterns = true;
         useFreeCell = true;
+        usesDefaultRank = true;
+        useRank = false;
+        hasRiskMatchDurationOverride = false;
+        riskMatchDurationMinutes = GameSettings.DefaultRiskMatchDurationMinutes;
 
         maxPlayers = false;
         maxPlayer = GetMinimumPlayers();
@@ -191,6 +204,7 @@ public class LobbyController
 
         gameModeType = ResolveGameModeType(gameModeType);
         ballCountType = ResolveBallCountType(ballCountType);
+        ResolveRiskMatchDuration();
         ResolveGameModeData();
     }
 
@@ -206,6 +220,10 @@ public class LobbyController
         gameModeType = soloSetupData.gameModeType;
         ballCountType = soloSetupData.ballCountType;
         useFreeCell = soloSetupData.useFreeCell;
+        usesDefaultRank = soloSetupData.usesDefaultRank;
+        useRank = soloSetupData.useRank;
+        hasRiskMatchDurationOverride = soloSetupData.hasRiskMatchDurationOverride;
+        riskMatchDurationMinutes = soloSetupData.riskMatchDurationMinutes;
         usesDefaultPatterns = soloSetupData.usesDefaultPatterns;
 
         if (usesDefaultPatterns)
@@ -224,6 +242,8 @@ public class LobbyController
     private void ApplyOnlineSetup(OnlineLobbySetupData onlineSetupData)
     {
         lobbyName = DefaultOnlineLobbyName;
+        usesDefaultRank = false;
+        useRank = LobbySettings.instance != null && LobbySettings.instance.RollUseRank();
 
         if (onlineSetupData == null)
         {
@@ -233,6 +253,12 @@ public class LobbyController
         gameModeType = onlineSetupData.gameModeType;
         ballCountType = onlineSetupData.ballCountType;
         useFreeCell = onlineSetupData.useFreeCell;
+
+        if (onlineSetupData.hasUseRankOverride)
+        {
+            useRank = onlineSetupData.useRank;
+        }
+
         maxPlayers = onlineSetupData.maxPlayers;
         maxPlayer = GetValidMaximumPlayers(onlineSetupData.maxPlayer, maxPlayers);
     }
@@ -264,6 +290,10 @@ public class LobbyController
         gameModeType = hostSetupData.gameModeType;
         ballCountType = hostSetupData.ballCountType;
         useFreeCell = hostSetupData.useFreeCell;
+        usesDefaultRank = hostSetupData.usesDefaultRank;
+        useRank = hostSetupData.useRank;
+        hasRiskMatchDurationOverride = hostSetupData.hasRiskMatchDurationOverride;
+        riskMatchDurationMinutes = hostSetupData.riskMatchDurationMinutes;
         usesDefaultPatterns = hostSetupData.usesDefaultPatterns;
 
         if (usesDefaultPatterns)
@@ -392,7 +422,7 @@ public class LobbyController
 
         if (refreshViews)
         {
-            RefreshViews();
+            RefreshViews(LobbyUIRefresh.PlayerState);
         }
 
         return true;
@@ -441,11 +471,13 @@ public class LobbyController
 
         playerData.userData.playerName = playerName;
         playerData.userData.iconId = iconId;
-        RefreshViews();
         return true;
     }
 
-    public LobbyExitResult RemovePlayer(string userId, LobbyPlayerExitReason exitReason)
+    public LobbyExitResult RemovePlayer(
+        string userId,
+        LobbyPlayerExitReason exitReason,
+        bool isLeavingLinkedGame = false)
     {
         if (string.IsNullOrWhiteSpace(userId))
         {
@@ -474,6 +506,8 @@ public class LobbyController
             bool customHostLeft =
                 lobby != null &&
                 lobby.playMode == MainMenuPlayMode.Custom &&
+                lobby.lobbyState != LobbyState.InGame &&
+                !isLeavingLinkedGame &&
                 wasHost;
 
             bool shouldCloseLobby = customHostLeft || IsEmpty;
@@ -492,7 +526,7 @@ public class LobbyController
                 shouldCloseLobby,
                 requestedCloseReason);
 
-            RefreshViews();
+            RefreshViews(LobbyUIRefresh.PlayerState);
             PlayerExitProcessed?.Invoke(this, result);
 
             return result;
@@ -541,7 +575,7 @@ public class LobbyController
             return true;
         }
 
-        RefreshViews();
+        RefreshViews(LobbyUIRefresh.PlayerState);
 
         return true;
     }
@@ -700,6 +734,14 @@ public class LobbyController
 
     #region Bots
 
+    public int QueueRequestedBots(int requestedCount)
+    {
+        addBots = requestedCount > 0;
+        int queuedCount = QueueRandomBotsInternal(requestedCount, int.MaxValue);
+        pendingUIRefresh |= LobbyUIRefresh.PlayerState;
+        return queuedCount;
+    }
+
     public int FillBotsToMinimumPlayers()
     {
         int botsNeeded = Mathf.Max(0, GetMinimumPlayers() - PlayerCount);
@@ -715,11 +757,36 @@ public class LobbyController
 
         if (BotCount != previousBotCount)
         {
-            RefreshViews();
+            RefreshViews(LobbyUIRefresh.PlayerState);
         }
 
         return BotCount - previousBotCount;
     }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    public int SetSimulationBotCount(int desiredBotCount)
+    {
+        EnsurePendingWorkCollections();
+        pendingBotUsers.Clear();
+
+        int humanPlayerCount = Mathf.Max(0, PlayerCount - BotCount);
+        int maximumBotCount = Mathf.Max(0, maxPlayer - humanPlayerCount);
+        int clampedBotCount = Mathf.Clamp(desiredBotCount, 0, maximumBotCount);
+        int currentBotCount = BotCount;
+
+        if (clampedBotCount < currentBotCount)
+        {
+            SetBotCountInternal(clampedBotCount);
+        }
+        else if (clampedBotCount > currentBotCount)
+        {
+            QueueRandomBotsInternal(clampedBotCount - currentBotCount, int.MaxValue);
+        }
+
+        pendingUIRefresh |= LobbyUIRefresh.PlayerState;
+        return clampedBotCount;
+    }
+#endif
 
     private bool SetBotCountInternal(int desiredBotCount)
     {
@@ -959,8 +1026,8 @@ public class LobbyController
         }
 
         EnsurePendingWorkCollections();
-        bool shouldRefreshViews = pendingViewRefresh;
-        pendingViewRefresh = false;
+        LobbyUIRefresh sections = pendingUIRefresh;
+        pendingUIRefresh = LobbyUIRefresh.None;
         int processedItems = 0;
 
         while (processedItems < maximumItems && pendingBotUsers.Count > 0)
@@ -1002,12 +1069,17 @@ public class LobbyController
             batchResult.changedBoards.Add(new LobbyPlayerBoardViewData(userId, playerData.boardData));
         }
 
-        if (shouldRefreshViews || batchResult.HasChanges)
+        if (batchResult.addedPlayers.Count > 0)
         {
-            RefreshViews();
+            sections |= LobbyUIRefresh.PlayerState;
         }
 
-        return shouldRefreshViews || batchResult.HasChanges;
+        if (sections != LobbyUIRefresh.None)
+        {
+            RefreshViews(sections);
+        }
+
+        return sections != LobbyUIRefresh.None || batchResult.HasChanges;
     }
 
     #endregion
@@ -1044,8 +1116,8 @@ public class LobbyController
         EnsurePendingWorkCollections();
         pendingBotUsers.Clear();
         pendingBoardRegenerationUserIds.Clear();
-        pendingViewRefresh = false;
-        RefreshViews();
+        pendingUIRefresh = LobbyUIRefresh.None;
+        RefreshViews(LobbyUIRefresh.PlayerState | LobbyUIRefresh.BoardControls);
 
         return removedUserIds;
     }
@@ -1059,6 +1131,11 @@ public class LobbyController
         if (lobby == null || lobby.lobbyState != LobbyState.Open)
         {
             return true;
+        }
+
+        if (lobby.isGameSimulation)
+        {
+            return false;
         }
 
         if (lobby.playMode != MainMenuPlayMode.Online || timer == null || !timer.IsActive)
@@ -1096,7 +1173,7 @@ public class LobbyController
         lobby.lobbyState = LobbyState.FinalCountdown;
         timer.StartFinalCountdown();
 
-        RefreshViews();
+        RefreshViews(LobbyUIRefresh.PlayerState | LobbyUIRefresh.BoardControls);
         FinalCountdownStarted?.Invoke(this);
 
         return true;
@@ -1166,7 +1243,7 @@ public class LobbyController
         {
             if (botsChanged)
             {
-                RefreshViews();
+                RefreshViews(LobbyUIRefresh.PlayerState | LobbyUIRefresh.BoardControls);
             }
 
             return false;
@@ -1174,7 +1251,7 @@ public class LobbyController
 
         lobby.lobbyState = LobbyState.FinalCountdown;
 
-        RefreshViews();
+        RefreshViews(LobbyUIRefresh.PlayerState | LobbyUIRefresh.BoardControls);
         FinalCountdownStarted?.Invoke(this);
 
         return true;
@@ -1217,8 +1294,50 @@ public class LobbyController
         lobby.lobbyState = LobbyState.InGame;
         timer.Stop();
 
-        RefreshViews();
+        RefreshViews(LobbyUIRefresh.PlayerState | LobbyUIRefresh.BoardControls);
 
+        return true;
+    }
+
+    public bool ResetAfterGameCreationFailure()
+    {
+        return ResetForLobby(false);
+    }
+
+    public bool ResetAfterCompletedGame()
+    {
+        return ResetForLobby(true);
+    }
+
+    private bool ResetForLobby(bool _regenerateBoards)
+    {
+        if (lobby == null ||
+            (lobby.lobbyState != LobbyState.FinalCountdown && lobby.lobbyState != LobbyState.InGame))
+        {
+            return false;
+        }
+
+        lobby.lobbyState = LobbyState.Open;
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            LobbyPlayerData playerData = players[i];
+
+            if (playerData?.userData == null)
+            {
+                continue;
+            }
+
+            playerData.isReady = playerData.userData.userTag == UserTag.Bot;
+        }
+
+        if (_regenerateBoards)
+        {
+            RegenerateAllPlayerBoards();
+        }
+
+        InitializeTimer(lobby.playMode);
+        RefreshViews(LobbyUIRefresh.PlayerState | LobbyUIRefresh.BoardControls);
         return true;
     }
 
@@ -1261,7 +1380,7 @@ public class LobbyController
         }
 
         roomCode = GenerateUniqueRoomCode(isRoomCodeAvailable);
-        RefreshViews();
+        RefreshViews(LobbyUIRefresh.CustomInfo);
 
         return !string.IsNullOrWhiteSpace(roomCode);
     }
@@ -1299,7 +1418,7 @@ public class LobbyController
     public void RefreshResolvedGameData()
     {
         ResolveGameModeData();
-        RefreshViews();
+        RefreshViews(LobbyUIRefresh.Header | LobbyUIRefresh.GameInfo);
     }
 
     private BingoGameModeType ResolveGameModeType(BingoGameModeType requestedGameModeType)
@@ -1346,6 +1465,19 @@ public class LobbyController
         return BingoBallCountType.Ball75;
     }
 
+    private void ResolveRiskMatchDuration()
+    {
+        if (hasRiskMatchDurationOverride)
+        {
+            riskMatchDurationMinutes = Mathf.Max(0f, riskMatchDurationMinutes);
+            return;
+        }
+
+        riskMatchDurationMinutes = GameSettings.instance != null
+            ? GameSettings.instance.GetRiskMatchDurationMinutes(ballCountType)
+            : GameSettings.DefaultRiskMatchDurationMinutes;
+    }
+
     private void ResolveGameModeData()
     {
         GameModeManager gameModeManager = GameModeManager.instance;
@@ -1370,6 +1502,11 @@ public class LobbyController
         {
             hasRule = true;
             ruleType = gameModeData.RuleData.RuleType;
+
+            if (usesDefaultRank)
+            {
+                useRank = gameModeData.RuleData.UseRank;
+            }
         }
 
         if (usesDefaultPatterns)
@@ -1422,6 +1559,11 @@ public class LobbyController
         gameModeType = ResolveGameModeType(settingsData.gameModeType);
         ballCountType = ResolveBallCountType(settingsData.ballCountType);
         useFreeCell = settingsData.useFreeCell;
+        usesDefaultRank = settingsData.usesDefaultRank;
+        useRank = settingsData.useRank;
+        hasRiskMatchDurationOverride = settingsData.hasRiskMatchDurationOverride;
+        riskMatchDurationMinutes = settingsData.riskMatchDurationMinutes;
+        ResolveRiskMatchDuration();
 
         usesDefaultPatterns = settingsData.usesDefaultPatterns;
 
@@ -1456,7 +1598,7 @@ public class LobbyController
             QueueRegenerateAllPlayerBoards();
         }
 
-        pendingViewRefresh = true;
+        pendingUIRefresh |= LobbyUIRefresh.Settings;
         return true;
     }
 
@@ -1598,7 +1740,7 @@ public class LobbyController
         views.Remove(view);
     }
 
-    public void RefreshViews()
+    public void RefreshViews(LobbyUIRefresh _sections = LobbyUIRefresh.PlayerState)
     {
         if (views == null || views.Count == 0)
         {
@@ -1617,7 +1759,7 @@ public class LobbyController
                 continue;
             }
 
-            view.DisplayLobbyInfo(lobbyViewData);
+            view.RefreshLobbyUI(lobbyViewData, _sections);
         }
     }
 
@@ -1637,6 +1779,7 @@ public class LobbyController
             lobbyId = lobby != null ? lobby.GetLobbyId() : string.Empty,
             playMode = lobby != null ? lobby.playMode : MainMenuPlayMode.None,
             lobbyState = lobby != null ? lobby.lobbyState : LobbyState.Open,
+            usesSimulationSettings = lobby != null && lobby.usesSimulationSettings,
             isTimerActive = IsTimerActive,
             timerEndTime = TimerEndTime,
             lobbyName = lobbyName,
@@ -1651,6 +1794,10 @@ public class LobbyController
             usesDefaultPatterns = usesDefaultPatterns,
             ballCountType = ballCountType,
             useFreeCell = useFreeCell,
+            usesDefaultRank = usesDefaultRank,
+            useRank = useRank,
+            hasRiskMatchDurationOverride = hasRiskMatchDurationOverride,
+            riskMatchDurationMinutes = RiskMatchDurationMinutes,
             playerCount = GetVisiblePlayerCount(),
             maxPlayer = maxPlayer,
             maxPlayers = maxPlayers,

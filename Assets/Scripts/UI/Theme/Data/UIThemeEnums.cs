@@ -38,7 +38,8 @@ public enum UIThemeBackgroundType
     ChatMessageRowB,
     ChatSuggestionRow,
     ChatSuggestionRowHighlight,
-    ChatPickerHeader
+    ChatPickerHeader,
+    Icon
 }
 
 public enum UIThemeButtonType
@@ -47,8 +48,9 @@ public enum UIThemeButtonType
     Secondary,
     Close,
     Ready,
-    Send,
-    ChatTab
+    Update,
+    ChatTab,
+    Send
 }
 
 public enum UIThemeTextType
@@ -63,7 +65,10 @@ public enum UIThemeTextType
     PatternTooltip,
     ChatCurrentUser,
     ChatOtherUser,
-    ChatPrivate
+    ChatPrivate,
+    Winner,
+    PlayerListCell,
+    Pattern
 }
 
 public enum UIThemeInputType
@@ -80,7 +85,8 @@ public enum UIThemeDropdownType
 public enum UIThemeScrollType
 {
     Default,
-    Patterns
+    Patterns,
+    ThemeSettings
 }
 
 public enum UIThemeSliderType

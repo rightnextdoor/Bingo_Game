@@ -4,7 +4,7 @@ using UnityEngine;
 [Serializable]
 public class SettingsData
 {
-    public int settingsVersion = 1;
+    public int settingsVersion = 2;
 
     public float masterVolume = 1f;
     public float musicVolume = 1f;
@@ -16,9 +16,13 @@ public class SettingsData
 
     public UIThemeType selectedThemeType = UIThemeType.Default;
 
+    public ScorePlayMode leaderboardScorePlayMode = ScorePlayMode.Solo;
+    public LeaderboardModeFilter leaderboardGameModeFilter = LeaderboardModeFilter.CreateOverall();
+    public LeaderboardPageSizeType leaderboardPageSize = LeaderboardPageSizeType.Show10;
+
     public SettingsData()
     {
-        settingsVersion = 1;
+        settingsVersion = 2;
 
         masterVolume = 1f;
         musicVolume = 1f;
@@ -29,5 +33,9 @@ public class SettingsData
         screenMode = FullScreenMode.FullScreenWindow;
 
         selectedThemeType = UIThemeType.Default;
+
+        leaderboardScorePlayMode = ScorePlayMode.Solo;
+        leaderboardGameModeFilter = LeaderboardModeFilter.CreateOverall();
+        leaderboardPageSize = LeaderboardPageSizeType.Show10;
     }
 }

@@ -1,0 +1,888 @@
+using BingoGame.UI;
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using UnityEngine;
+
+[DisallowMultipleComponent]
+public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
+{
+    public const string GameIdPrefix = "local_";
+
+    public static LocalGameSessionManager instance;
+    public static event Action<GameSessionData, GameUIRefresh> LocalGameSessionUpdated;
+    public static event Action<GamePlayerMarkedCellChangedData> LocalGamePlayerMarkedCellChanged;
+    public static event Action<GameBingoCheckResolvedData> LocalBingoCheckResolved;
+
+    private readonly List<GameSessionData> gameSessions = new List<GameSessionData>();
+    private bool isReady;
+
+    public SessionRuntimeType RuntimeType => SessionRuntimeType.Local;
+    public bool IsReady => isReady;
+    public IReadOnlyList<GameSessionData> GameSessions => gameSessions;
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetStaticState()
+    {
+        instance = null;
+        LocalGameSessionUpdated = null;
+        LocalGamePlayerMarkedCellChanged = null;
+        LocalBingoCheckResolved = null;
+    }
+
+    private void Awake()
+    {
+        if (instance != null && instance != this)
+        {
+            Destroy(this);
+            return;
+        }
+
+        instance = this;
+        isReady = false;
+    }
+
+    private IEnumerator Start()
+    {
+        while (GameModeManager.instance == null || !GameModeManager.instance.IsReady)
+        {
+            yield return null;
+        }
+
+        isReady = true;
+    }
+
+    private void OnDestroy()
+    {
+        if (instance == this)
+        {
+            instance = null;
+        }
+    }
+
+    private void Update()
+    {
+        if (!isReady)
+        {
+            return;
+        }
+
+        for (int i = 0; i < gameSessions.Count; i++)
+        {
+            GameSessionData gameSessionData = gameSessions[i];
+
+            if (!GameBingoCheckAuthority.UpdateSessionLoop(
+                    gameSessionData,
+                    out GameUIRefresh sections,
+                    CaptureSoloBallCheckpoint))
+            {
+                continue;
+            }
+
+            GameScoreAuthority.PersistFinalizedLocalScores(gameSessionData);
+            gameSessionData.revision++;
+            LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData), sections);
+            SendPendingMarkedCellUpdates(gameSessionData);
+            SendPendingBingoCheckPresentations(gameSessionData);
+        }
+    }
+
+    private static void SendPendingMarkedCellUpdates(GameSessionData gameSessionData)
+    {
+        List<GamePlayerMarkedCellChangedData> updates =
+            gameSessionData?.DrainMarkedCellUpdates();
+
+        if (updates == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < updates.Count; i++)
+        {
+            GamePlayerMarkedCellChangedData updateData = updates[i];
+
+            if (updateData != null)
+            {
+                LocalGamePlayerMarkedCellChanged?.Invoke(updateData);
+            }
+        }
+    }
+
+    private static void SendPendingBingoCheckPresentations(
+        GameSessionData gameSessionData)
+    {
+        List<GameBingoCheckResolvedData> presentations =
+            gameSessionData?.DrainBingoCheckPresentations();
+
+        if (presentations == null)
+        {
+            return;
+        }
+
+        string localUserId = UserManager.instance?.UserId;
+
+        for (int i = 0; i < presentations.Count; i++)
+        {
+            GameBingoCheckResolvedData resolvedData = presentations[i];
+
+            if (resolvedData == null ||
+                !string.Equals(resolvedData.userId, localUserId, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            GamePlayerData playerData = gameSessionData.GetPlayer(resolvedData.userId);
+            resolvedData.revision = gameSessionData.revision;
+            resolvedData.playerStatus =
+                playerData?.gameStatus ?? resolvedData.playerStatus;
+            resolvedData.currentMatchScore =
+                playerData?.currentMatchScore ?? resolvedData.currentMatchScore;
+            resolvedData.matchCompleted =
+                gameSessionData.gameState == GameSessionState.Completed;
+            LocalBingoCheckResolved?.Invoke(resolvedData);
+        }
+    }
+
+    public GameSessionResult CreateGame(GameSessionSetupData setupData)
+    {
+        if (!isReady)
+        {
+            return GameSessionResult.Failed(
+                GameSessionOperationType.Create,
+                GameSessionFailureType.ServiceUnavailable,
+                "The local Game session manager is not ready.",
+                lobbyId: setupData?.lobbyId);
+        }
+
+        string failureMessage = string.Empty;
+
+        if (setupData == null || setupData.runtimeType != SessionRuntimeType.Local || !setupData.IsValid(out failureMessage))
+        {
+            return GameSessionResult.Failed(
+                GameSessionOperationType.Create,
+                GameSessionFailureType.InvalidSetupData,
+                string.IsNullOrWhiteSpace(failureMessage) ? "The local Game setup data is invalid." : failureMessage,
+                lobbyId: setupData?.lobbyId);
+        }
+
+        GameSessionData existingSession = FindGameByLobbyId(setupData.lobbyId);
+        string gameId = existingSession != null
+            ? existingSession.gameId
+            : GameIdPrefix + Guid.NewGuid().ToString("N");
+
+        GameSessionData gameSessionData = new GameSessionData(gameId, setupData);
+
+        if (existingSession != null)
+        {
+            gameSessionData.revision = existingSession.revision + 1;
+        }
+
+        if (existingSession != null)
+        {
+            int existingIndex = gameSessions.IndexOf(existingSession);
+            gameSessions[existingIndex] = gameSessionData;
+        }
+        else
+        {
+            gameSessions.Add(gameSessionData);
+        }
+
+        return GameSessionResult.Succeeded(GameSessionOperationType.Create, gameSessionData);
+    }
+
+    public bool RestoreSavedSoloGame(SoloGameCheckpointData checkpointData)
+    {
+        GameSessionData savedSession = checkpointData?.gameSessionData;
+
+        if (!isReady ||
+            savedSession == null ||
+            savedSession.playMode != MainMenuPlayMode.Solo ||
+            savedSession.runtimeType != SessionRuntimeType.Local ||
+            savedSession.gameState == GameSessionState.Completed ||
+            string.IsNullOrWhiteSpace(savedSession.gameId))
+        {
+            return false;
+        }
+
+        GameSessionData restoredSession = new GameSessionData(savedSession);
+        restoredSession.gamePlayController?.RestoreSoloCheckpoint(checkpointData);
+        restoredSession.revision++;
+
+        GameSessionData existingSession = FindGame(restoredSession.gameId);
+
+        if (existingSession != null)
+        {
+            gameSessions[gameSessions.IndexOf(existingSession)] = restoredSession;
+        }
+        else
+        {
+            GameSessionData lobbySession = FindGameByLobbyId(restoredSession.lobbyId);
+
+            if (lobbySession != null)
+            {
+                gameSessions[gameSessions.IndexOf(lobbySession)] = restoredSession;
+            }
+            else
+            {
+                gameSessions.Add(restoredSession);
+            }
+        }
+
+        return true;
+    }
+
+    public bool SuspendSoloGame(string gameId)
+    {
+        GameSessionData gameSessionData = FindGame(gameId);
+
+        return gameSessionData != null &&
+               gameSessionData.playMode == MainMenuPlayMode.Solo &&
+               gameSessions.Remove(gameSessionData);
+    }
+
+    public GameSessionResult FinalizeSoloCheckAndRemoveGame(
+        string gameId,
+        UserData userData)
+    {
+        GameSessionData gameSessionData = FindGame(gameId);
+        GamePlayerData playerData = gameSessionData?.GetPlayer(userData?.userId);
+
+        if (gameSessionData == null ||
+            gameSessionData.playMode != MainMenuPlayMode.Solo ||
+            playerData == null)
+        {
+            return GameSessionResult.Failed(
+                GameSessionOperationType.Leave,
+                GameSessionFailureType.GameNotFound,
+                "The Solo game could not be finalized before leaving.",
+                gameId);
+        }
+
+        GamePlayController playController = gameSessionData.gamePlayController;
+
+        if (playController?.HasPendingCheckAnimation(playerData.userId) == true)
+        {
+            GameBingoCheckAuthority.CompleteBingoCheckAnimation(
+                gameSessionData,
+                playerData.userId);
+        }
+
+        if (playerData.isRiskDecisionPending)
+        {
+            RiskGameplayAuthority.ResolveDecision(
+                gameSessionData,
+                playerData.userId,
+                true);
+        }
+
+        if (playerData.gameStatus == GamePlayerStatus.Eligible ||
+            playerData.gameStatus == GamePlayerStatus.Checking)
+        {
+            GameScoreAuthority.TrySetFinalStatus(
+                gameSessionData,
+                playerData,
+                GamePlayerStatus.Lost);
+        }
+
+        playController?.EndGame(GameEndReason.AuthorityEnded);
+        GameBingoCheckAuthority.UpdateSessionLoop(gameSessionData);
+        GameScoreAuthority.PersistFinalizedLocalScores(gameSessionData);
+        gameSessions.Remove(gameSessionData);
+
+        return GameSessionResult
+            .Succeeded(GameSessionOperationType.Leave, gameSessionData)
+            .WithFinalScore(GameScoreAuthority.CreateFinalScoreResult(
+                gameSessionData,
+                playerData));
+    }
+
+    public Task<GameSessionResult> RejoinGameAsync(string gameId, UserData userData)
+    {
+        if (!isReady)
+        {
+            return Task.FromResult(GameSessionResult.Failed(
+                GameSessionOperationType.Rejoin,
+                GameSessionFailureType.ServiceUnavailable,
+                "The local Game session manager is not ready.",
+                gameId));
+        }
+
+        if (userData == null || !userData.HasUser)
+        {
+            return Task.FromResult(GameSessionResult.Failed(
+                GameSessionOperationType.Rejoin,
+                GameSessionFailureType.PlayerNotFound,
+                "The current player could not be resolved.",
+                gameId));
+        }
+
+        GameSessionData gameSessionData = FindGame(gameId);
+
+        if (gameSessionData == null)
+        {
+            return Task.FromResult(GameSessionResult.Failed(
+                GameSessionOperationType.Rejoin,
+                GameSessionFailureType.GameNotFound,
+                "The saved local Game no longer exists.",
+                gameId));
+        }
+
+        GamePlayerData playerData = gameSessionData.GetPlayer(userData.userId);
+
+        if (playerData == null)
+        {
+            return Task.FromResult(GameSessionResult.Failed(
+                GameSessionOperationType.Rejoin,
+                GameSessionFailureType.PlayerNotFound,
+                "The player is not part of this Game.",
+                gameId,
+                gameSessionData.lobbyId));
+        }
+
+        if (!playerData.canRejoin || gameSessionData.gameState == GameSessionState.Completed)
+        {
+            return Task.FromResult(GameSessionResult.Failed(
+                GameSessionOperationType.Rejoin,
+                GameSessionFailureType.PlayerNotEligible,
+                "The player can no longer return to this Game.",
+                gameId,
+                gameSessionData.lobbyId));
+        }
+
+        GameBotManager.RestorePlayerControl(
+            gameSessionData,
+            userData.userId,
+            false);
+        gameSessionData.revision++;
+        return Task.FromResult(GameSessionResult.Succeeded(GameSessionOperationType.Rejoin, gameSessionData));
+    }
+
+    public Task<GameSessionResult> SyncGameSessionAsync(string gameId, string lobbyId, UserData userData)
+    {
+        if (!isReady)
+        {
+            return Task.FromResult(GameSessionResult.Failed(
+                GameSessionOperationType.Sync,
+                GameSessionFailureType.ServiceUnavailable,
+                "The local Game session manager is not ready.",
+                gameId,
+                lobbyId));
+        }
+
+        if (userData == null || !userData.HasUser)
+        {
+            return Task.FromResult(GameSessionResult.Failed(
+                GameSessionOperationType.Sync,
+                GameSessionFailureType.PlayerNotFound,
+                "The current player could not be resolved.",
+                gameId,
+                lobbyId));
+        }
+
+        GameSessionData gameSessionData = !string.IsNullOrWhiteSpace(gameId)
+            ? FindGame(gameId)
+            : FindGameByLobbyId(lobbyId);
+
+        if (gameSessionData == null)
+        {
+            return Task.FromResult(GameSessionResult.Failed(
+                GameSessionOperationType.Sync,
+                GameSessionFailureType.GameNotFound,
+                "The saved local Game no longer exists.",
+                gameId,
+                lobbyId));
+        }
+
+        GamePlayerData playerData = gameSessionData.GetPlayer(userData.userId);
+
+        if (playerData == null || playerData.userTag == UserTag.Bot)
+        {
+            return Task.FromResult(GameSessionResult.Failed(
+                GameSessionOperationType.Sync,
+                GameSessionFailureType.PlayerNotFound,
+                "The player is not part of this Game.",
+                gameSessionData.gameId,
+                gameSessionData.lobbyId));
+        }
+
+        return Task.FromResult(GameSessionResult.Succeeded(GameSessionOperationType.Sync, gameSessionData));
+    }
+
+    public Task<GameSessionResult> SetGameSceneReadyAsync(string gameId, UserData userData)
+    {
+        if (!isReady)
+        {
+            return Task.FromResult(GameSessionResult.Failed(
+                GameSessionOperationType.SceneReady,
+                GameSessionFailureType.ServiceUnavailable,
+                "The local Game session manager is not ready.",
+                gameId));
+        }
+
+        if (userData == null || !userData.HasUser)
+        {
+            return Task.FromResult(GameSessionResult.Failed(
+                GameSessionOperationType.SceneReady,
+                GameSessionFailureType.PlayerNotFound,
+                "The current player could not be resolved.",
+                gameId));
+        }
+
+        GameSessionData gameSessionData = FindGame(gameId);
+
+        if (gameSessionData == null)
+        {
+            return Task.FromResult(GameSessionResult.Failed(
+                GameSessionOperationType.SceneReady,
+                GameSessionFailureType.GameNotFound,
+                "The saved local Game no longer exists.",
+                gameId));
+        }
+
+        GamePlayerData playerData = gameSessionData.GetPlayer(userData.userId);
+
+        if (playerData == null || playerData.userTag == UserTag.Bot)
+        {
+            return Task.FromResult(GameSessionResult.Failed(
+                GameSessionOperationType.SceneReady,
+                GameSessionFailureType.PlayerNotFound,
+                "The player is not part of this Game.",
+                gameId,
+                gameSessionData.lobbyId));
+        }
+
+        if (!playerData.canRejoin || gameSessionData.gameState == GameSessionState.Completed)
+        {
+            return Task.FromResult(GameSessionResult.Failed(
+                GameSessionOperationType.SceneReady,
+                GameSessionFailureType.PlayerNotEligible,
+                "The player can no longer enter this Game scene.",
+                gameId,
+                gameSessionData.lobbyId));
+        }
+
+        bool sessionChanged = false;
+
+        if (!playerData.isConnected || !playerData.isGameSceneReady)
+        {
+            GameBotManager.RestorePlayerControl(
+                gameSessionData,
+                userData.userId,
+                true);
+            sessionChanged = true;
+        }
+
+        bool startedFirstBallCountdown =
+            gameSessionData.gamePlayController != null &&
+            gameSessionData.gamePlayController.TryStartFirstBallCountdown();
+
+        if (startedFirstBallCountdown)
+        {
+            gameSessionData.gameState = GameSessionState.InProgress;
+            sessionChanged = true;
+        }
+
+        if (startedFirstBallCountdown &&
+            gameSessionData.playMode == MainMenuPlayMode.Solo)
+        {
+            GameSessionManager.instance?.CaptureSoloCheckpoint(gameSessionData);
+        }
+
+        if (sessionChanged)
+        {
+            gameSessionData.revision++;
+            LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData), GameUIRefresh.PlayerState);
+        }
+
+        return Task.FromResult(GameSessionResult.Succeeded(GameSessionOperationType.SceneReady, gameSessionData));
+    }
+
+    public Task<GameSessionResult> LeaveGameAsync(string gameId, UserData userData)
+    {
+        if (!isReady)
+        {
+            return Task.FromResult(GameSessionResult.Failed(
+                GameSessionOperationType.Leave,
+                GameSessionFailureType.ServiceUnavailable,
+                "The local Game session manager is not ready.",
+                gameId));
+        }
+
+        if (userData == null || !userData.HasUser)
+        {
+            return Task.FromResult(GameSessionResult.Failed(
+                GameSessionOperationType.Leave,
+                GameSessionFailureType.PlayerNotFound,
+                "The current player could not be resolved.",
+                gameId));
+        }
+
+        GameSessionData gameSessionData = FindGame(gameId);
+
+        if (gameSessionData == null)
+        {
+            return Task.FromResult(GameSessionResult.Failed(
+                GameSessionOperationType.Leave,
+                GameSessionFailureType.GameNotFound,
+                "The saved local Game no longer exists.",
+                gameId));
+        }
+
+        GamePlayerData playerData = gameSessionData.GetPlayer(userData.userId);
+
+        if (playerData == null || playerData.userTag == UserTag.Bot)
+        {
+            return Task.FromResult(GameSessionResult.Failed(
+                GameSessionOperationType.Leave,
+                GameSessionFailureType.PlayerNotFound,
+                "The player is not part of this Game.",
+                gameId,
+                gameSessionData.lobbyId));
+        }
+
+        GameBotTransitionResult transition = GameBotManager.HandlePlayerLeave(
+            gameSessionData,
+            userData.userId);
+        GameScoreAuthority.PersistFinalizedLocalScores(gameSessionData);
+        gameSessionData.revision++;
+
+        if (transition.shouldDeleteGame)
+        {
+            gameSessions.Remove(gameSessionData);
+        }
+        else
+        {
+            LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData), GameUIRefresh.PlayerState);
+        }
+
+        return Task.FromResult(
+            GameSessionResult
+                .Succeeded(GameSessionOperationType.Leave, gameSessionData)
+                .WithFinalScore(GameScoreAuthority.CreateFinalScoreResult(
+                    gameSessionData,
+                    playerData)));
+    }
+
+    public bool RemovePlayerFromAnyGame(string userId)
+    {
+        GameSessionData gameSessionData = FindGameByPlayerId(userId);
+        GamePlayerData playerData = gameSessionData?.GetPlayer(userId);
+
+        if (playerData == null || playerData.userTag == UserTag.Bot)
+        {
+            return false;
+        }
+
+        GameBotTransitionResult transition = GameBotManager.HandlePlayerDeclinedReturn(
+            gameSessionData,
+            userId);
+        GameScoreAuthority.PersistFinalizedLocalScores(gameSessionData);
+        gameSessionData.revision++;
+
+        if (transition.shouldDeleteGame)
+        {
+            gameSessions.Remove(gameSessionData);
+        }
+        else
+        {
+            LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData), GameUIRefresh.PlayerState);
+        }
+
+        return true;
+    }
+
+    public bool TryHostKick(
+        string gameId,
+        string requesterUserId,
+        string targetUserId)
+    {
+        GameSessionData gameSessionData = FindGame(gameId);
+        GamePlayerData requester = gameSessionData?.GetPlayer(requesterUserId);
+        GamePlayerData target = gameSessionData?.GetPlayer(targetUserId);
+
+        if (requester?.isLobbyHost != true ||
+            target == null ||
+            target.isLobbyHost ||
+            target.userTag == UserTag.Bot ||
+            target.controlType == GamePlayerControlType.Bot)
+        {
+            return false;
+        }
+
+        GameBotTransitionResult transition = GameBotManager.HandleHostKick(
+            gameSessionData,
+            targetUserId);
+
+        if (!transition.changed)
+        {
+            return false;
+        }
+
+        GameScoreAuthority.PersistFinalizedLocalScores(gameSessionData);
+        gameSessionData.revision++;
+
+        if (transition.shouldDeleteGame)
+        {
+            gameSessions.Remove(gameSessionData);
+        }
+        else
+        {
+            LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData), GameUIRefresh.PlayerState);
+        }
+
+        return true;
+    }
+
+    public bool SetPlayerFrozenAwaitingReturn(string userId)
+    {
+        GameSessionData gameSessionData = FindGameByPlayerId(userId);
+
+        if (!GameBotManager.FreezePlayerAwaitingReturn(gameSessionData, userId))
+        {
+            return false;
+        }
+
+        gameSessionData.revision++;
+        LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData), GameUIRefresh.PlayerState);
+        return true;
+    }
+
+    public bool TrySetPlayerMarkedCell(
+        string gameId,
+        UserData userData,
+        int cellIndex,
+        bool isMarked,
+        out GamePlayerMarkedCellChangedData updateData)
+    {
+        updateData = null;
+
+        if (!isReady || userData == null || !userData.HasUser)
+        {
+            return false;
+        }
+
+        GameSessionData gameSessionData = FindGame(gameId);
+        GamePlayerData playerData = gameSessionData?.GetPlayer(userData.userId);
+        LobbyBoardData boardData = playerData?.boardData;
+
+        if (playerData == null ||
+            playerData.userTag == UserTag.Bot ||
+            playerData.controlType != GamePlayerControlType.Human ||
+            playerData.returnState != GamePlayerReturnState.Active ||
+            !playerData.isConnected ||
+            !playerData.canRejoin ||
+            gameSessionData.gamePlayController?.IsDeathRule == true ||
+            gameSessionData.gameState == GameSessionState.Completed ||
+            gameSessionData.gamePlayController?.IsPlayerInputClosed == true ||
+            boardData?.cellNumbers == null ||
+            cellIndex < 0 ||
+            cellIndex >= boardData.cellNumbers.Count ||
+            (boardData.usesFreeCell && cellIndex == 12 && !isMarked))
+        {
+            return false;
+        }
+
+        playerData.TrySetMarkedCell(cellIndex, isMarked);
+        updateData = new GamePlayerMarkedCellChangedData(
+            gameSessionData.gameId,
+            playerData.userId,
+            cellIndex,
+            boardData.usesFreeCell && cellIndex == 12 ? true : isMarked);
+        return true;
+    }
+
+    public bool TrySubmitBingoCheck(
+        string gameId,
+        UserData userData,
+        LobbyBoardData boardData,
+        IReadOnlyList<int> markedCellIndices,
+        out GameBingoCheckResolvedData resolvedData)
+    {
+        resolvedData = null;
+
+        if (!isReady || userData == null || !userData.HasUser)
+        {
+            return false;
+        }
+
+        GameSessionData gameSessionData = FindGame(gameId);
+
+        if (gameSessionData == null)
+        {
+            resolvedData = GameBingoCheckResolvedData.Rejected(
+                gameId,
+                userData.userId,
+                0,
+                "The local Game could not be found.");
+            return true;
+        }
+
+        resolvedData = GameBingoCheckAuthority.ProcessCheck(
+            gameSessionData,
+            userData.userId,
+            new GameBingoCheckRequestData(boardData, markedCellIndices));
+
+        if (!resolvedData.wasAccepted)
+        {
+            return true;
+        }
+
+        GameScoreAuthority.PersistFinalizedLocalScores(gameSessionData);
+        gameSessionData.revision++;
+        resolvedData.revision = gameSessionData.revision;
+        resolvedData.matchCompleted = gameSessionData.gameState == GameSessionState.Completed;
+        LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData), GameUIRefresh.PlayerState);
+        return true;
+    }
+
+    public bool TryCompleteBingoCheckAnimation(string gameId, UserData userData)
+    {
+        if (!isReady || userData == null || !userData.HasUser)
+        {
+            return false;
+        }
+
+        GameSessionData gameSessionData = FindGame(gameId);
+        GamePlayerData playerData = gameSessionData?.GetPlayer(userData.userId);
+
+        if (gameSessionData == null ||
+            playerData == null)
+        {
+            return false;
+        }
+
+        if (GameBingoCheckAuthority.CompleteBingoCheckAnimation(
+                gameSessionData,
+                userData.userId))
+        {
+            GameScoreAuthority.PersistFinalizedLocalScores(gameSessionData);
+            gameSessionData.revision++;
+            LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData), GameUIRefresh.PlayerState);
+            return true;
+        }
+
+        return false;
+    }
+
+    public bool TryResolveRiskDecision(
+        string gameId,
+        UserData userData,
+        bool endPlayerGame)
+    {
+        if (!isReady || userData == null || !userData.HasUser)
+        {
+            return false;
+        }
+
+        GameSessionData gameSessionData = FindGame(gameId);
+
+        if (!GameBingoCheckAuthority.ResolveRiskDecision(
+                gameSessionData,
+                userData.userId,
+                endPlayerGame))
+        {
+            return false;
+        }
+
+        GameScoreAuthority.PersistFinalizedLocalScores(gameSessionData);
+        gameSessionData.revision++;
+        LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData), GameUIRefresh.PlayerState);
+        return true;
+    }
+
+    public bool DeleteGame(string gameId)
+    {
+        GameSessionData gameSessionData = FindGame(gameId);
+        return gameSessionData != null && gameSessions.Remove(gameSessionData);
+    }
+
+    private static void CaptureSoloBallCheckpoint(GameSessionData gameSessionData)
+    {
+        if (gameSessionData?.playMode == MainMenuPlayMode.Solo)
+        {
+            GameSessionManager.instance?.CaptureSoloCheckpoint(gameSessionData);
+        }
+    }
+
+    public bool DeleteGameForLobby(string lobbyId)
+    {
+        GameSessionData gameSessionData = FindGameByLobbyId(lobbyId);
+        return gameSessionData != null && gameSessions.Remove(gameSessionData);
+    }
+
+    public void ResetForFreshApplicationStart()
+    {
+        gameSessions.Clear();
+    }
+
+    public bool HasGameForLobby(string lobbyId)
+    {
+        return FindGameByLobbyId(lobbyId) != null;
+    }
+
+    public bool HasGame(string gameId)
+    {
+        return FindGame(gameId) != null;
+    }
+
+    private GameSessionData FindGame(string gameId)
+    {
+        if (string.IsNullOrWhiteSpace(gameId))
+        {
+            return null;
+        }
+
+        for (int i = 0; i < gameSessions.Count; i++)
+        {
+            GameSessionData gameSessionData = gameSessions[i];
+
+            if (gameSessionData != null && string.Equals(gameSessionData.gameId, gameId, StringComparison.Ordinal))
+            {
+                return gameSessionData;
+            }
+        }
+
+        return null;
+    }
+
+    private GameSessionData FindGameByLobbyId(string lobbyId)
+    {
+        if (string.IsNullOrWhiteSpace(lobbyId))
+        {
+            return null;
+        }
+
+        for (int i = 0; i < gameSessions.Count; i++)
+        {
+            GameSessionData gameSessionData = gameSessions[i];
+
+            if (gameSessionData != null && string.Equals(gameSessionData.lobbyId, lobbyId, StringComparison.Ordinal))
+            {
+                return gameSessionData;
+            }
+        }
+
+        return null;
+    }
+
+    private GameSessionData FindGameByPlayerId(string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return null;
+        }
+
+        for (int i = 0; i < gameSessions.Count; i++)
+        {
+            GameSessionData gameSessionData = gameSessions[i];
+
+            if (gameSessionData?.GetPlayer(userId) != null)
+            {
+                return gameSessionData;
+            }
+        }
+
+        return null;
+    }
+}

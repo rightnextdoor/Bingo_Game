@@ -14,18 +14,15 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BingoGameModeData
   gameName: Knockout Bingo
   gameModeType: 3
-  description: Be the last player alive. Completing the active pattern eliminates
-    you from the game, so players must avoid making bingo while trying to outlast
-    everyone else.
+  description: Be the last player alive while every board marks automatically. Completing
+    an active Bingo pattern puts you out. The final called ball is displayed as the
+    last warning and is not automatically marked in Death. The last connected eligible
+    player wins, and same-ball final checks or ball-pool exhaustion can produce tied
+    winners.
   ruleData: {fileID: 11400000, guid: f9714d841fd279d4e9eb08763689846b, type: 2}
-  defaultPattern: {fileID: 11400000, guid: 080b0d25fb7b5e74a8311b66676ef0e5, type: 2}
+  defaultPattern: {fileID: 11400000, guid: 6ee6d0fcbba4a81429dfcc117b3f8897, type: 2}
   specialPatterns:
-  - {fileID: 11400000, guid: 6ee6d0fcbba4a81429dfcc117b3f8897, type: 2}
-  - {fileID: 11400000, guid: 4da9ad8f48ddde74a8da01abdc9c8b37, type: 2}
   - {fileID: 11400000, guid: b0d7470275deaa04c9a96aad659a92e4, type: 2}
-  - {fileID: 11400000, guid: cce8190a323f9b24fb2839b43a0b100e, type: 2}
-  - {fileID: 11400000, guid: 080b0d25fb7b5e74a8311b66676ef0e5, type: 2}
   - {fileID: 11400000, guid: 5c7be7d87e3638840a875104f4d957c4, type: 2}
-  - {fileID: 11400000, guid: fea783843cbdd8044af84c203c4812e3, type: 2}
   - {fileID: 11400000, guid: 29183c4735543774dbb602f5cebd6182, type: 2}
-  supportsMultipleWinners: 1
+  - {fileID: 11400000, guid: 4da9ad8f48ddde74a8da01abdc9c8b37, type: 2}

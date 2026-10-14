@@ -14,6 +14,7 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
     private const int WorkBatchSize = 10;
 
     private readonly List<Lobby> lobbies = new List<Lobby>();
+    private readonly HashSet<Lobby> pendingBotCountSaves = new HashSet<Lobby>();
     private bool isReady;
 
     public SessionRuntimeType RuntimeType => SessionRuntimeType.Local;
@@ -62,11 +63,38 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
 
         for (int i = 0; i < lobbies.Count; i++)
         {
-            LobbyController controller = lobbies[i]?.Controller;
+            Lobby lobby = lobbies[i];
+            LobbyController controller = lobby?.Controller;
 
             if (controller != null && controller.HasPendingWork)
             {
                 controller.ProcessPendingWorkBatch(WorkBatchSize, out _);
+                pendingBotCountSaves.Add(lobby);
+            }
+
+            if (controller != null && !controller.HasPendingWork && pendingBotCountSaves.Remove(lobby))
+            {
+                LobbySaveDataService.SaveSoloBotCount(lobby);
+            }
+
+            if (lobby != null &&
+                lobby.lobbyState == LobbyState.FinalCountdown &&
+                controller != null &&
+                controller.Timer.HasExpired())
+            {
+                if (LocalGameSessionManager.instance != null &&
+                    LocalGameSessionManager.instance.HasGameForLobby(lobby.GetLobbyId()))
+                {
+                    controller.CompleteFinalCountdown();
+                }
+                else
+                {
+                    HandleGameCreationFailure(lobby, GameSessionResult.Failed(
+                        GameSessionOperationType.Create,
+                        GameSessionFailureType.GameCreationFailed,
+                        "The local Game was not created before the final countdown ended.",
+                        lobbyId: lobby.GetLobbyId()));
+                }
             }
         }
     }
@@ -105,6 +133,27 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
         UserData userData = lobbySetupData.userData;
         Lobby existingUserLobby = FindUserLobby(userData.userId);
 
+        if (lobbySetupData.startFreshEntry)
+        {
+            LocalGameSessionManager.instance?.RemovePlayerFromAnyGame(userData.userId);
+
+            if (existingUserLobby != null)
+            {
+                LobbyExitResult exitResult = existingUserLobby.Controller.RemovePlayer(
+                    userData.userId,
+                    LobbyPlayerExitReason.VoluntaryLeave);
+
+                if (exitResult == null || !exitResult.success)
+                {
+                    return LobbyEntryResult.Failed(
+                        LobbyEntryFailureType.LobbyJoinFailed,
+                        exitResult?.failureMessage ?? "The previous Solo lobby could not be cleared.");
+                }
+
+                existingUserLobby = null;
+            }
+        }
+
         if (existingUserLobby != null)
         {
             return LobbyEntryResult.SucceededLocal(existingUserLobby);
@@ -129,7 +178,8 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
             return LobbyEntryResult.Failed(LobbyEntryFailureType.LobbyJoinFailed, "The player could not be added to the Solo lobby.");
         }
 
-        selectedLobby.Controller.FillBotsToMinimumPlayers();
+        selectedLobby.Controller.QueueRequestedBots(lobbySetupData.soloSetupData.botCount);
+        pendingBotCountSaves.Add(selectedLobby);
         return LobbyEntryResult.SucceededLocal(selectedLobby);
     }
 
@@ -162,6 +212,7 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
 
         Lobby lobby = new Lobby(lobbySetupData);
         lobby.Controller.PlayerExitProcessed += OnLobbyPlayerExitProcessed;
+        lobby.Controller.FinalCountdownStarted += OnLobbyFinalCountdownStarted;
         lobby.Controller.SetBotUserProvider(GetLocalBotUsers);
         lobbies.Add(lobby);
         return lobby;
@@ -177,9 +228,25 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
         if (lobby.Controller != null)
         {
             lobby.Controller.PlayerExitProcessed -= OnLobbyPlayerExitProcessed;
+            lobby.Controller.FinalCountdownStarted -= OnLobbyFinalCountdownStarted;
+        }
+
+        LocalGameSessionManager.instance?.DeleteGameForLobby(lobby.GetLobbyId());
+
+        if (GameSessionManager.instance != null && GameSessionManager.instance.CurrentLobbyId == lobby.GetLobbyId())
+        {
+            GameSessionManager.instance.ClearCurrentGame(true);
         }
 
         lobbies.Remove(lobby);
+        pendingBotCountSaves.Remove(lobby);
+    }
+
+    public void ResetForFreshApplicationStart()
+    {
+        UnsubscribeFromAllLobbyControllers();
+        lobbies.Clear();
+        pendingBotCountSaves.Clear();
     }
 
     #endregion
@@ -230,9 +297,91 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
 
     #region Lobby Events
 
+    private void OnLobbyFinalCountdownStarted(LobbyController controller)
+    {
+        Lobby lobby = FindLobbyByController(controller);
+
+        if (lobby == null)
+        {
+            return;
+        }
+
+        GameSessionManager.instance?.PrepareForGameCreation(lobby.GetLobbyId(), SessionRuntimeType.Local);
+
+        if (LocalGameSessionManager.instance == null || !LocalGameSessionManager.instance.IsReady)
+        {
+            HandleGameCreationFailure(lobby, GameSessionResult.Failed(
+                GameSessionOperationType.Create,
+                GameSessionFailureType.ServiceUnavailable,
+                "The local Game session manager is not ready.",
+                lobbyId: lobby.GetLobbyId()));
+            return;
+        }
+
+        GameSessionSetupData setupData = GameSessionSetupData.FromLobby(lobby);
+        GameSessionResult result = LocalGameSessionManager.instance.CreateGame(setupData);
+
+        if (result == null || !result.success)
+        {
+            HandleGameCreationFailure(lobby, result);
+            return;
+        }
+
+        if (GameSessionManager.instance == null)
+        {
+            LocalGameSessionManager.instance.DeleteGameForLobby(lobby.GetLobbyId());
+            HandleGameCreationFailure(lobby, GameSessionResult.Failed(
+                GameSessionOperationType.Create,
+                GameSessionFailureType.ServiceUnavailable,
+                "The Game session coordinator is not available.",
+                lobbyId: lobby.GetLobbyId()));
+            return;
+        }
+
+        GameSessionManager.instance.ReceiveGameCreationResult(result);
+    }
+
+    private void HandleGameCreationFailure(Lobby lobby, GameSessionResult result)
+    {
+        if (lobby?.Controller == null)
+        {
+            return;
+        }
+
+        GameSessionResult failureResult = result ?? GameSessionResult.Failed(
+            GameSessionOperationType.Create,
+            GameSessionFailureType.GameCreationFailed,
+            "The local Game could not be created.",
+            lobbyId: lobby.GetLobbyId());
+
+        GameSessionManager.instance?.ReceiveGameCreationResult(failureResult);
+        lobby.Controller.ResetAfterGameCreationFailure();
+    }
+
+    public bool PrepareLobbyAfterCompletedGame(string lobbyId)
+    {
+        if (string.IsNullOrWhiteSpace(lobbyId))
+        {
+            return false;
+        }
+
+        for (int i = 0; i < lobbies.Count; i++)
+        {
+            Lobby lobby = lobbies[i];
+
+            if (lobby != null &&
+                string.Equals(lobby.GetLobbyId(), lobbyId, StringComparison.Ordinal))
+            {
+                return lobby.Controller?.ResetAfterCompletedGame() == true;
+            }
+        }
+
+        return false;
+    }
+
     private void OnLobbyPlayerExitProcessed(LobbyController controller, LobbyExitResult exitResult)
     {
-        if (controller == null || exitResult == null || !exitResult.success || !exitResult.shouldCloseLobby)
+        if (controller == null || exitResult == null || !exitResult.success)
         {
             return;
         }
@@ -241,6 +390,12 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
 
         if (lobby == null)
         {
+            return;
+        }
+
+        if (!exitResult.shouldCloseLobby)
+        {
+            pendingBotCountSaves.Add(lobby);
             return;
         }
 
@@ -257,6 +412,7 @@ public class LocalLobbyManager : MonoBehaviour, ILobbyService
             if (lobby?.Controller != null)
             {
                 lobby.Controller.PlayerExitProcessed -= OnLobbyPlayerExitProcessed;
+                lobby.Controller.FinalCountdownStarted -= OnLobbyFinalCountdownStarted;
             }
         }
     }

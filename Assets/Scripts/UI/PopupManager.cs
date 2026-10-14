@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 
 public enum PopupId
@@ -12,7 +13,12 @@ public enum PopupId
     Failure,
     HostSettings,
     ChatSettings,
-    ChatReport
+    ChatReport,
+    GameRejoin,
+    RiskDecision,
+    SoloLeave,
+    GameOver,
+    Reconnecting
 }
 
 [Serializable]
@@ -37,6 +43,7 @@ public class PopupManager : MonoBehaviour
     private PopupId activePopupId = PopupId.None;
     private PopupId createUserAfterCreatePopupId = PopupId.None;
     private Action createUserAfterCreateAction;
+    [SerializeField] private TMP_Text reconnectMessageText;
 
     public PopupId ActivePopupId => activePopupId;
     public bool HasOpenPopup => activePopupId != PopupId.None;
@@ -137,6 +144,82 @@ public class PopupManager : MonoBehaviour
 
         createUserAfterCreateAction = afterCreateAction;
         OpenPopup(PopupId.CreateUser);
+    }
+
+    public void OpenGameRejoinPopup()
+    {
+        GameObject popup = GetPopupObject(PopupId.GameRejoin);
+        GameRejoinController controller =
+            popup?.GetComponentInChildren<GameRejoinController>(true);
+        controller?.ConfigureNetworkRejoin(
+            GameSessionManager.instance?.GetNetworkRejoinDisplayTitle());
+        OpenPopup(PopupId.GameRejoin);
+    }
+
+    public void OpenSavedSoloGameRejoinPopup(Action declinedAction)
+    {
+        GameObject popup = GetPopupObject(PopupId.GameRejoin);
+        GameRejoinController controller =
+            popup?.GetComponentInChildren<GameRejoinController>(true);
+
+        if (controller == null)
+        {
+            Debug.LogWarning("Game Rejoin popup does not have a GameRejoinController.");
+            return;
+        }
+
+        controller.ConfigureSavedSoloRejoin(
+            GameSessionManager.instance?.SavedSoloGameDisplayTitle,
+            declinedAction);
+        OpenPopup(PopupId.GameRejoin);
+    }
+
+    public void OpenSoloLeavePopup()
+    {
+        OpenPopup(PopupId.SoloLeave);
+    }
+
+    public bool OpenGameOverPopup(GameOverPopupData data)
+    {
+        GameObject popup = GetPopupObject(PopupId.GameOver);
+        GameOverPopupController controller =
+            popup?.GetComponentInChildren<GameOverPopupController>(true);
+
+        if (controller == null)
+        {
+            Debug.LogWarning("Game Over popup does not have a GameOverPopupController.");
+            return false;
+        }
+
+        controller.SetData(data);
+        OpenPopup(PopupId.GameOver);
+        return activePopupId == PopupId.GameOver;
+    }
+
+    public void OpenRiskDecisionPopup()
+    {
+        OpenPopup(PopupId.RiskDecision);
+    }
+
+    public void OpenReconnectPopup(string message)
+    {
+        if (reconnectMessageText != null)
+        {
+            reconnectMessageText.text = message;
+        }
+
+        if (activePopupId != PopupId.Reconnecting)
+        {
+            OpenPopup(PopupId.Reconnecting);
+        }
+    }
+
+    public void CloseReconnectPopup()
+    {
+        if (activePopupId == PopupId.Reconnecting)
+        {
+            CloseActivePopup();
+        }
     }
 
     public void OpenAfterUserCreatedPopup()
@@ -304,4 +387,5 @@ public class PopupManager : MonoBehaviour
 
         return null;
     }
+
 }

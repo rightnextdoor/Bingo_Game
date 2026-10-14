@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -18,6 +19,8 @@ public class BingoBoardController : MonoBehaviour
 
     public LobbyBoardData CurrentBoardData => currentBoardData;
     public IReadOnlyList<int> MarkedCellIndices => markedCellIndices;
+
+    public event Action<int, bool> MarkedCellChanged;
 
     #endregion
 
@@ -93,11 +96,13 @@ public class BingoBoardController : MonoBehaviour
         {
             markedCellIndices.Remove(cellIndex);
             cell.SetMarked(false);
+            MarkedCellChanged?.Invoke(cellIndex, false);
             return;
         }
 
         markedCellIndices.Add(cellIndex);
         cell.SetMarked(true);
+        MarkedCellChanged?.Invoke(cellIndex, true);
     }
 
     public List<int> GetMarkedCellIndicesSnapshot()
@@ -156,13 +161,26 @@ public class BingoBoardController : MonoBehaviour
 
     public void SetMarkedCells(IReadOnlyCollection<int> cellIndices)
     {
-        ClearMarks();
+        HashSet<int> desiredMarkedCells = cellIndices != null
+            ? new HashSet<int>(cellIndices)
+            : new HashSet<int>();
 
-        if (cellIndices == null)
-            return;
+        if (currentBoardData?.usesFreeCell == true)
+            desiredMarkedCells.Add(FreeCellIndex);
 
-        foreach (int cellIndex in cellIndices)
-            SetCellMarked(cellIndex, true);
+        for (int cellIndex = 0; cellIndex < cells.Count; cellIndex++)
+        {
+            BingoBoardCellController cell = cells[cellIndex];
+
+            if (cell == null || cell.CellIndex < 0)
+                continue;
+
+            bool shouldBeMarked = desiredMarkedCells.Contains(cellIndex);
+            bool isCurrentlyMarked = markedCellIndices.Contains(cellIndex);
+
+            if (shouldBeMarked != isCurrentlyMarked)
+                SetCellMarked(cellIndex, shouldBeMarked);
+        }
     }
 
     #endregion
@@ -185,6 +203,12 @@ public class BingoBoardController : MonoBehaviour
     {
         for (int i = 0; i < cells.Count; i++)
             cells[i]?.ClearCheckHighlight();
+    }
+
+    public void SetAutomaticMarkHighlight(int cellIndex, bool highlighted)
+    {
+        BingoBoardCellController cell = GetCell(cellIndex);
+        cell?.SetAutomaticMarkHighlight(highlighted);
     }
 
     #endregion

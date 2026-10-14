@@ -68,7 +68,8 @@ public class GameInfoController : MonoBehaviour
         BingoBallCountType ballCountType,
         bool hasRule,
         string ruleDescription,
-        IReadOnlyList<BingoPatternType> patternTypes)
+        IReadOnlyList<BingoPatternType> patternTypes,
+        bool showPatternScores = false)
     {
         ClearPatternItems();
 
@@ -99,7 +100,7 @@ public class GameInfoController : MonoBehaviour
         if (hasPatterns)
         {
             SetText(patternsHeaderText, "Patterns");
-            BuildPatternList(patternTypes);
+            BuildPatternList(patternTypes, showPatternScores);
         }
         else
         {
@@ -129,7 +130,9 @@ public class GameInfoController : MonoBehaviour
 
     #region Patterns
 
-    private void BuildPatternList(IReadOnlyList<BingoPatternType> patternTypes)
+    private void BuildPatternList(
+        IReadOnlyList<BingoPatternType> patternTypes,
+        bool showPatternScores)
     {
         if (patternTypes == null || patternContent == null || patternItemPrefab == null)
         {
@@ -148,7 +151,7 @@ public class GameInfoController : MonoBehaviour
             }
 
             MainMenuPatternInfoItem patternItem = Instantiate(patternItemPrefab, patternContent);
-            patternItem.Setup(patternType);
+            patternItem.Setup(patternType, showPatternScores);
         }
     }
 

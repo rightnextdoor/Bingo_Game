@@ -73,6 +73,10 @@ public class BotUserListDataEditor : Editor
         SerializedProperty playerNameProperty = botUserProperty.FindPropertyRelative("playerName");
 
         string playerLabel = $"Player {index + 1}";
+        if (playerNameProperty != null && !string.IsNullOrWhiteSpace(playerNameProperty.stringValue))
+        {
+            playerLabel += $" - {playerNameProperty.stringValue.Trim()}";
+        }
 
         string foldoutKey = GetBotUserFoldoutKey(botUserProperty, index);
         bool expanded = SessionState.GetBool(foldoutKey, false);

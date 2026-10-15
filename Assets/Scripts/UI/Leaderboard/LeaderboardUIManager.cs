@@ -20,6 +20,13 @@ public class LeaderboardUIManager : MonoBehaviour
     [SerializeField] private LeaderboardListController listController;
     [SerializeField] private LeaderboardPageController pageController;
 
+    [Space]
+    [Header("Leaderboard Columns")]
+    [SerializeField, Min(1f), Tooltip("Reserved width for rank cells in both header and rows.")] private float rankCellWidth = 80f;
+    [SerializeField, Min(1f), Tooltip("Reserved width for the player icon column.")] private float userIconCellWidth = 44f;
+    [SerializeField, Min(1f), Tooltip("Reserved width for scores, including digit grouping separators.")] private float scoreCellWidth = 190f;
+    [SerializeField, Min(1f), Tooltip("Preferred row text size before single-line fitting.")] private float rowFontSize = 28f;
+
     #endregion
 
     #region Shared Cell Setup Values
@@ -62,8 +69,6 @@ public class LeaderboardUIManager : MonoBehaviour
     #endregion
 
     #region Search Setup Fields
-
-    private const int MinimumSearchCharacters = 3;
 
     private readonly List<LeaderboardUserRankData> displayRankedUsers = new();
 
@@ -346,19 +351,16 @@ public class LeaderboardUIManager : MonoBehaviour
         currentHeaderCells.Clear();
         currentRowBlueprint.Clear();
 
-        float rankCellWidth = 80f;
-        float userIconCellWidth = 44f;
         float playerNameCellFlexibleWidth = 1f;
-        float scoreCellWidth = 190f;
 
         currentHeaderCells.Add(CreateHeaderTextCell("Rank", rankCellWidth, 0f, 18f, TextAlignmentOptions.Center));
         currentHeaderCells.Add(CreateHeaderTextCell("Player", 0f, playerNameCellFlexibleWidth, 18f, TextAlignmentOptions.Left));
         currentHeaderCells.Add(CreateHeaderTextCell("Score", scoreCellWidth, 0f, 18f, TextAlignmentOptions.Right));
 
-        currentRowBlueprint.Add(CreateRowTextCellSetup(LeaderboardRowCellValueType.Rank, rankCellWidth, 0f, 16f, TextAlignmentOptions.Center));
+        currentRowBlueprint.Add(CreateRowTextCellSetup(LeaderboardRowCellValueType.Rank, rankCellWidth, 0f, rowFontSize, TextAlignmentOptions.Center));
         currentRowBlueprint.Add(CreateRowImageCellSetup(LeaderboardRowCellValueType.UserIcon, userIconCellWidth, 0f));
-        currentRowBlueprint.Add(CreateRowTextCellSetup(LeaderboardRowCellValueType.PlayerNameWithShortId, 0f, playerNameCellFlexibleWidth, 16f, TextAlignmentOptions.Left, maxPlayerNameCharacters, 0));
-        currentRowBlueprint.Add(CreateRowTextCellSetup(LeaderboardRowCellValueType.Score, scoreCellWidth, 0f, 16f, TextAlignmentOptions.Right, 0, maxScoreDigits));
+        currentRowBlueprint.Add(CreateRowTextCellSetup(LeaderboardRowCellValueType.PlayerNameWithShortId, 0f, playerNameCellFlexibleWidth, rowFontSize, TextAlignmentOptions.Left, maxPlayerNameCharacters, 0));
+        currentRowBlueprint.Add(CreateRowTextCellSetup(LeaderboardRowCellValueType.Score, scoreCellWidth, 0f, rowFontSize, TextAlignmentOptions.Right, 0, maxScoreDigits));
 
         ApplyModeSetup();
     }
@@ -575,12 +577,6 @@ public class LeaderboardUIManager : MonoBehaviour
     {
         suggestionSearchUserId = string.Empty;
         searchText = searchText.Trim();
-
-        if (searchText.Length < MinimumSearchCharacters)
-        {
-            ShowSearchError($"Search needs {MinimumSearchCharacters} or more characters.");
-            return;
-        }
 
         BuildRankedUsersFromCurrentMode();
 

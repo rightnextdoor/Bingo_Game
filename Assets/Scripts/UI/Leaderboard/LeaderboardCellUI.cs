@@ -1,6 +1,7 @@
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using BingoGame.UI;
 
 public class LeaderboardCellUI : MonoBehaviour
 {
@@ -13,6 +14,51 @@ public class LeaderboardCellUI : MonoBehaviour
     [SerializeField] private TMP_Text cellText;
     [SerializeField] private UIThemeText themeText;
     [SerializeField] private LayoutElement layoutElement;
+
+    [Space]
+    [Header("Text Fitting")]
+    [SerializeField, Range(0.1f, 1f), Tooltip("Smallest fitted size as a fraction of the requested font size.")] private float minimumFontSizeScale = 0.35f;
+
+    private float preferredFontSize;
+    private bool textFitPending;
+    private TMP_FontAsset fittedFont;
+    private Vector2 fittedSize;
+
+    private void OnEnable()
+    {
+        Canvas.willRenderCanvases += FitText;
+        textFitPending = true;
+    }
+
+    private void OnDisable()
+    {
+        Canvas.willRenderCanvases -= FitText;
+    }
+
+    private void OnRectTransformDimensionsChange()
+    {
+        textFitPending = true;
+    }
+
+    private void FitText()
+    {
+        if (cellText == null || !cellText.gameObject.activeInHierarchy || preferredFontSize <= 0f) return;
+        Vector2 size = cellText.rectTransform.rect.size;
+        if (!textFitPending && fittedFont == cellText.font && fittedSize == size) return;
+        if (size.x <= 0f || size.y <= 0f) return;
+
+        UITextFitResult result = UITextFitter.FitSingleLine(cellText, cellText.text, preferredFontSize,
+            size, Mathf.Max(1f, preferredFontSize * minimumFontSizeScale));
+        cellText.enableAutoSizing = false;
+        cellText.fontSize = result.FontSize;
+        cellText.textWrappingMode = TextWrappingModes.NoWrap;
+        cellText.maxVisibleLines = 1;
+        cellText.overflowMode = TextOverflowModes.Ellipsis;
+        cellText.ForceMeshUpdate(true, true);
+        fittedFont = cellText.font;
+        fittedSize = size;
+        textFitPending = false;
+    }
 
     public void SetTextCell(
         string textValue,
@@ -33,6 +79,8 @@ public class LeaderboardCellUI : MonoBehaviour
             cellText.text = textValue;
             cellText.fontSize = fontSize;
             cellText.alignment = alignment;
+            preferredFontSize = fontSize;
+            textFitPending = true;
         }
 
         if (themeText != null)
@@ -85,6 +133,8 @@ public class LeaderboardCellUI : MonoBehaviour
             cellText.text = textValue;
             cellText.fontSize = fontSize;
             cellText.alignment = alignment;
+            preferredFontSize = fontSize;
+            textFitPending = true;
         }
 
         if (themeText != null)

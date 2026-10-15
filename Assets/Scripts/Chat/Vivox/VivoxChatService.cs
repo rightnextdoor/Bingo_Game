@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Unity.Services.Vivox;
 using UnityEngine;
+using BingoGame.Chat;
 
 [DefaultExecutionOrder(-1060)]
 [DisallowMultipleComponent]
@@ -97,6 +98,7 @@ public class VivoxChatService : MonoBehaviour, IChatService
         }
 
         isAdapterReady = true;
+        VivoxConnectionLogHandler.Install();
         return true;
     }
 
@@ -160,6 +162,7 @@ public class VivoxChatService : MonoBehaviour, IChatService
 
         serviceUnavailable = false;
 
+        using VivoxConnectionLogHandler.ConnectionAttempt connectionAttempt = VivoxConnectionLogHandler.BeginAttempt();
         try
         {
             if (VivoxService.Instance == null)
@@ -218,6 +221,7 @@ public class VivoxChatService : MonoBehaviour, IChatService
         }
         catch (Exception exception)
         {
+            connectionAttempt.ReportFailure(exception);
             SetUnavailable(exception.Message);
             return false;
         }

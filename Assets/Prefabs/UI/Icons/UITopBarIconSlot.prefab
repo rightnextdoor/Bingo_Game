@@ -65,7 +65,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 0}
+  m_Sprite: {fileID: 21300000, guid: d25b809b4c00d884bb3f787b27219584, type: 3}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
@@ -85,6 +85,9 @@ GameObject:
   m_Component:
   - component: {fileID: 5988688727038341824}
   - component: {fileID: 3663825278265930071}
+  - component: {fileID: 4178918849267607033}
+  - component: {fileID: 7929889169674398847}
+  - component: {fileID: 2567078126232528946}
   m_Layer: 5
   m_Name: UITopBarIconSlot
   m_TagString: Untagged
@@ -124,7 +127,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3b9d2e7d032d32944b8b70126e45114d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::UITopBarIconSlot
-  iconImage: {fileID: 0}
+  iconImage: {fileID: 3610668801515892073}
   normalColor: {r: 1, g: 1, b: 1, a: 1}
   hoverColor: {r: 0.94509804, g: 0.9529412, b: 0.9607843, a: 1}
   pressedColor: {r: 0.7882353, g: 0.81960785, b: 0.8509804, a: 1}
@@ -132,3 +135,55 @@ MonoBehaviour:
   normalScale: 1
   hoverScale: 1.08
   pressedScale: 0.92
+--- !u!222 &4178918849267607033
+CanvasRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3281218227796308535}
+  m_CullTransparentMesh: 1
+--- !u!114 &7929889169674398847
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3281218227796308535}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
+  m_Material: {fileID: 0}
+  m_Color: {r: 0.8436657, g: 0.8175143, b: 0.8175143, a: 0.5686275}
+  m_RaycastTarget: 0
+  m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
+  m_Maskable: 1
+  m_OnCullStateChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  m_Sprite: {fileID: 0}
+  m_Type: 0
+  m_PreserveAspect: 0
+  m_FillCenter: 1
+  m_FillMethod: 4
+  m_FillAmount: 1
+  m_FillClockwise: 1
+  m_FillOrigin: 0
+  m_UseSpriteMesh: 0
+  m_PixelsPerUnitMultiplier: 1
+--- !u!114 &2567078126232528946
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3281218227796308535}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6fe01e88f7923374da8f6cf6c1bd5dde, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIThemeBackground
+  backgroundType: 17
+  backgroundImage: {fileID: 7929889169674398847}

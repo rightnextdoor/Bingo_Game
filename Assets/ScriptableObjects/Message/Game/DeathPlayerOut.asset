@@ -16,7 +16,7 @@ MonoBehaviour:
   messageText: A player is OUT.
   imageMode: 1
   customImage: {fileID: 21300000, guid: 50df7668f5ba7eb47a6c729aba0d99de, type: 3}
-  fontAsset: {fileID: 0}
+  fontAsset: {fileID: 11400000, guid: 494e208770c65664d82b3b9456cac1b7, type: 2}
   fontSize: 40
   textColor: {r: 0.7196765, g: 0, b: 0, a: 1}
   numberColor: {r: 0.078431375, g: 0.078431375, b: 0.078431375, a: 1}

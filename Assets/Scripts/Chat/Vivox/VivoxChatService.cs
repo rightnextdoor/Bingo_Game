@@ -50,6 +50,13 @@ public class VivoxChatService : MonoBehaviour, IChatService
     private Task shutdownTask;
     private static VivoxChatService activeService;
     private bool serviceUnavailable;
+    private bool recoveryInProgress;
+    private bool recoveringEstablishedConnection;
+    private bool sdkRecovering;
+    private bool awaitingRecoveryLogout;
+    private TaskCompletionSource<bool> sdkRecoveryCompletion;
+    private const int MaximumConnectionAttempts = 3;
+    private const int ConnectionAttemptMilliseconds = 10000;
 
     private Task<bool> readinessTask;
     private string lastError = string.Empty;
@@ -65,15 +72,17 @@ public class VivoxChatService : MonoBehaviour, IChatService
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         developmentConnectionAvailable &&
 #endif
-        !serviceUnavailable &&
+        !serviceUnavailable && !sdkRecovering &&
         VivoxService.Instance != null &&
         VivoxService.Instance.InitializationState == VivoxInitializationState.Initialized &&
         VivoxService.Instance.IsLoggedIn;
 
     public string LastError => lastError;
+    public bool IsRecoveringConnection => recoveryInProgress && recoveringEstablishedConnection;
 
     public event Action<ChatMessageData> MessageReceived;
     public event Action<string> ServiceUnavailable;
+    public event Action<bool> ConnectionRecoveryChanged;
 
     #endregion
 
@@ -149,15 +158,8 @@ public class VivoxChatService : MonoBehaviour, IChatService
 
         UpdateLocalParticipant(participant);
 
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-        if (!developmentConnectionAvailable)
-        {
-            if (!await WaitForDevelopmentConnectionAttemptAsync())
-            {
-                return false;
-            }
-        }
-#endif
+        if (readinessTask != null && !readinessTask.IsCompleted)
+            return await readinessTask;
 
         if (IsReady)
         {
@@ -165,12 +167,7 @@ public class VivoxChatService : MonoBehaviour, IChatService
             return true;
         }
 
-        if (readinessTask != null && !readinessTask.IsCompleted)
-        {
-            return await readinessTask;
-        }
-
-        Task<bool> activeTask = EnsureReadyInternalAsync();
+        Task<bool> activeTask = RecoverConnectionAsync(false, false);
         readinessTask = activeTask;
 
         try
@@ -749,6 +746,120 @@ public class VivoxChatService : MonoBehaviour, IChatService
 
     #region Vivox Events
 
+    private void BeginConnectionRecovery(bool _waitForSdk)
+    {
+        if (isApplicationStopping || isShuttingDown || recoveryInProgress) return;
+        readinessTask = RecoverConnectionAsync(_waitForSdk, true);
+    }
+
+    internal void RequestConnectionRecovery()
+    {
+        BeginConnectionRecovery(false);
+    }
+
+    private async Task<bool> RecoverConnectionAsync(bool _waitForSdk, bool _restoreChannels)
+    {
+        recoveryInProgress = true;
+        recoveringEstablishedConnection = _restoreChannels;
+        CancellationToken cancellation = operationCancellation.Token;
+        List<ChatConversationReference> channels = _restoreChannels
+            ? new List<ChatConversationReference>(conversationByChannelName.Values)
+            : new List<ChatConversationReference>();
+        ConnectionRecoveryChanged?.Invoke(true);
+        await Task.Yield();
+        bool recovered = false;
+        try
+        {
+            if (_waitForSdk && sdkRecoveryCompletion != null)
+            {
+                Task completed = await Task.WhenAny(sdkRecoveryCompletion.Task, Task.Delay(31000, cancellation));
+                cancellation.ThrowIfCancellationRequested();
+                recovered = completed == sdkRecoveryCompletion.Task && await sdkRecoveryCompletion.Task;
+                sdkRecovering = false;
+                if (recovered) serviceUnavailable = false;
+            }
+
+            Task<bool> pendingAttempt = null;
+            for (int attempt = 0; !recovered && attempt < MaximumConnectionAttempts; attempt++)
+            {
+                cancellation.ThrowIfCancellationRequested();
+                if (pendingAttempt == null || pendingAttempt.IsCompleted)
+                    pendingAttempt = TryRestoreConnectionAsync(channels, cancellation);
+                Task completed = await Task.WhenAny(pendingAttempt, Task.Delay(ConnectionAttemptMilliseconds, cancellation));
+                cancellation.ThrowIfCancellationRequested();
+                if (completed == pendingAttempt) recovered = await pendingAttempt;
+                else lastError = "Vivox connection attempt timed out.";
+                if (!recovered && attempt + 1 < MaximumConnectionAttempts)
+                    await Task.Delay(1000, cancellation);
+            }
+            if (!recovered && pendingAttempt != null && !pendingAttempt.IsCompleted)
+            {
+                operationCancellation.Cancel();
+                _ = ObserveStoppedOperationAsync(pendingAttempt);
+            }
+        }
+        catch (OperationCanceledException) { return false; }
+        catch (Exception exception) { lastError = exception.Message; }
+        finally
+        {
+            recoveryInProgress = false;
+            recoveringEstablishedConnection = false;
+            sdkRecovering = false;
+            sdkRecoveryCompletion = null;
+        }
+        if (this == null || isApplicationStopping || isShuttingDown || cancellation.IsCancellationRequested && recovered)
+            return false;
+        if (recovered)
+        {
+            lastError = string.Empty;
+            ConnectionRecoveryChanged?.Invoke(false);
+            return true;
+        }
+        SetUnavailable(lastError);
+        return false;
+    }
+
+    private async Task<bool> TryRestoreConnectionAsync(List<ChatConversationReference> _channels, CancellationToken _cancellation)
+    {
+        if (sdkRecovering && sdkRecoveryCompletion != null)
+        {
+            if (!await AwaitOperationAsync(sdkRecoveryCompletion.Task, _cancellation)) return false;
+            sdkRecovering = false;
+        }
+        while (awaitingRecoveryLogout && VivoxService.Instance != null && VivoxService.Instance.IsLoggedIn)
+            await Task.Delay(100, _cancellation);
+        _cancellation.ThrowIfCancellationRequested();
+        if (OnlineConnectionManager.instance == null || !OnlineConnectionManager.instance.IsOnline)
+        {
+            lastError = "Online services are unavailable.";
+            await Task.Delay(ConnectionAttemptMilliseconds, _cancellation);
+            return false;
+        }
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (!developmentConnectionAvailable && !await WaitForDevelopmentConnectionAttemptAsync()) return false;
+#endif
+        if (!await EnsureReadyInternalAsync() || _cancellation.IsCancellationRequested) return false;
+        foreach (ChatConversationReference channel in _channels)
+        {
+            if (!await JoinConversationAsync(channel) || _cancellation.IsCancellationRequested) return false;
+        }
+        return true;
+    }
+
+    private void OnConnectionRecovering()
+    {
+        if (isShuttingDown || isApplicationStopping) return;
+        sdkRecovering = true;
+        sdkRecoveryCompletion ??= new TaskCompletionSource<bool>();
+        BeginConnectionRecovery(true);
+    }
+
+    private void OnConnectionRecovered()
+    {
+        sdkRecovering = false;
+        sdkRecoveryCompletion?.TrySetResult(true);
+    }
+
     private void SubscribeToVivoxEvents()
     {
         if (eventsSubscribed || VivoxService.Instance == null)
@@ -761,6 +872,8 @@ public class VivoxChatService : MonoBehaviour, IChatService
         VivoxService.Instance.ParticipantAddedToChannel += OnParticipantAddedToChannel;
         VivoxService.Instance.ParticipantRemovedFromChannel += OnParticipantRemovedFromChannel;
         VivoxService.Instance.ConnectionFailedToRecover += OnConnectionFailedToRecover;
+        VivoxService.Instance.ConnectionRecovering += OnConnectionRecovering;
+        VivoxService.Instance.ConnectionRecovered += OnConnectionRecovered;
         VivoxService.Instance.LoggedOut += OnVivoxLoggedOut;
 
         eventsSubscribed = true;
@@ -779,6 +892,8 @@ public class VivoxChatService : MonoBehaviour, IChatService
         VivoxService.Instance.ParticipantAddedToChannel -= OnParticipantAddedToChannel;
         VivoxService.Instance.ParticipantRemovedFromChannel -= OnParticipantRemovedFromChannel;
         VivoxService.Instance.ConnectionFailedToRecover -= OnConnectionFailedToRecover;
+        VivoxService.Instance.ConnectionRecovering -= OnConnectionRecovering;
+        VivoxService.Instance.ConnectionRecovered -= OnConnectionRecovered;
         VivoxService.Instance.LoggedOut -= OnVivoxLoggedOut;
 
         eventsSubscribed = false;
@@ -786,20 +901,33 @@ public class VivoxChatService : MonoBehaviour, IChatService
 
     private void OnConnectionFailedToRecover()
     {
-        SetUnavailable("Vivox could not recover the chat connection.");
+        awaitingRecoveryLogout = true;
+        lastError = "Vivox could not recover the chat connection.";
+        if (sdkRecoveryCompletion != null) sdkRecoveryCompletion.TrySetResult(false);
+        else BeginConnectionRecovery(false);
     }
 
     private void OnVivoxLoggedOut()
     {
-        if (!isShuttingDown)
+        if (!isShuttingDown && !isApplicationStopping)
         {
-            SetUnavailable("Vivox chat was logged out.");
+            awaitingRecoveryLogout = false;
+            if (sdkRecoveryCompletion != null) sdkRecoveryCompletion.TrySetResult(false);
+            else BeginConnectionRecovery(false);
+            channelNameByConversationKey.Clear();
+            conversationByChannelName.Clear();
+            providerPlayerIdByUserIdByConversationKey.Clear();
         }
     }
 
     private void SetUnavailable(string reason)
     {
         if (isApplicationStopping || isShuttingDown) return;
+        if (recoveryInProgress)
+        {
+            lastError = string.IsNullOrWhiteSpace(reason) ? "Chat is unavailable." : reason;
+            return;
+        }
         serviceUnavailable = true;
         lastError = string.IsNullOrWhiteSpace(reason) ? "Chat is unavailable." : reason;
 
@@ -816,48 +944,17 @@ public class VivoxChatService : MonoBehaviour, IChatService
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
 
-    public async Task<bool> SetDevelopmentConnectionAvailableAsync(bool available, float retryFailureDelaySeconds = 2f)
+    public Task<bool> SetDevelopmentConnectionAvailableAsync(bool available, float retryFailureDelaySeconds = 2f)
     {
         developmentRetryFailureDelaySeconds = Mathf.Max(0f, retryFailureDelaySeconds);
         developmentConnectionAvailable = available;
-
-        if (available)
+        if (!available)
         {
-            // Deliberately do not reconnect here. The user should retry through the
-            // normal Chat setting so the real recovery path is exercised.
-            lastError = "Vivox connection is available again. Retry Chat through Settings to reconnect.";
-            return true;
+            lastError = "Vivox connection is disabled by the development simulation.";
+            BeginConnectionRecovery(false);
         }
-
-        SetUnavailable("Vivox connection is disabled by the development simulation.");
-
-        if (VivoxService.Instance == null)
-        {
-            return true;
-        }
-
-        try
-        {
-            // Keep this as an unexpected provider loss. Do not set isShuttingDown.
-            if (VivoxService.Instance.IsLoggedIn)
-            {
-                await VivoxService.Instance.LogoutAsync();
-            }
-
-            if (!serviceUnavailable)
-            {
-                SetUnavailable("Vivox connection is disabled by the development simulation.");
-            }
-
-            return !IsReady;
-        }
-        catch (Exception exception)
-        {
-            SetUnavailable(exception.Message);
-            return false;
-        }
+        return Task.FromResult(true);
     }
-
     public async Task<bool> SimulateUnexpectedConnectionLossAsync()
     {
         return await SetDevelopmentConnectionAvailableAsync(false);
@@ -869,7 +966,7 @@ public class VivoxChatService : MonoBehaviour, IChatService
 
         if (delaySeconds > 0f)
         {
-            await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
+            await Task.Delay(TimeSpan.FromSeconds(delaySeconds), operationCancellation.Token);
         }
 
         if (developmentConnectionAvailable)
@@ -893,6 +990,7 @@ public class VivoxChatService : MonoBehaviour, IChatService
         if (shutdownTask != null && !shutdownTask.IsCompleted) return shutdownTask;
         if (!isAdapterReady) return Task.CompletedTask;
         isShuttingDown = true;
+        awaitingRecoveryLogout = false;
         operationCancellation.Cancel();
         UnsubscribeFromVivoxEvents();
         channelNameByConversationKey.Clear();

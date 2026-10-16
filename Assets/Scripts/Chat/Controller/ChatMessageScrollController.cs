@@ -42,6 +42,8 @@ public class ChatMessageScrollController : MonoBehaviour
     private bool hasCachedThemeType;
 
     private bool initialized;
+    private bool displayDisabled;
+    private bool showingConnectionStatus;
     private bool suppressScrollRefresh;
     private bool followingBottom = true;
     private bool hasNewMessagesBelow;
@@ -104,7 +106,7 @@ public class ChatMessageScrollController : MonoBehaviour
 
     private void LateUpdate()
     {
-        if (!initialized)
+        if (!initialized || displayDisabled || showingConnectionStatus)
         {
             return;
         }
@@ -538,7 +540,7 @@ public class ChatMessageScrollController : MonoBehaviour
 
             if (measureView != null)
             {
-                ApplyPresentation(measureView, presentation, textSize);
+                ApplyPresentation(measureView, presentation);
                 height = Mathf.Max(1f, measureView.GetPreferredHeight(contentWidth));
             }
 
@@ -581,7 +583,7 @@ public class ChatMessageScrollController : MonoBehaviour
         }
 
         string identity = ResolveMessageIdentity(message, conversationProfiles);
-        string displayText = $"{identity}: {message.message ?? string.Empty}";
+        string displayText = message.message ?? string.Empty;
         Sprite icon = UIIconManager.instance != null ? UIIconManager.instance.GetPlayerIconSpriteById(message.senderIconId) : null;
 
         UIThemeTextType textType = GetMessageTextType(message);
@@ -594,10 +596,11 @@ public class ChatMessageScrollController : MonoBehaviour
             textType,
             useColorOverride,
             colorOverride,
-            icon != null);
+            icon != null,
+            identity);
     }
 
-    private void ApplyPresentation(ChatMessageRowUI view, MessagePresentation presentation, float textSize)
+    private void ApplyPresentation(ChatMessageRowUI view, MessagePresentation presentation)
     {
         if (view == null)
         {
@@ -607,12 +610,12 @@ public class ChatMessageScrollController : MonoBehaviour
         view.Setup(
             presentation.icon,
             presentation.text,
-            textSize,
             presentation.backgroundType,
             presentation.textType,
             presentation.useColorOverride,
             presentation.colorOverride,
-            presentation.showIcon);
+            presentation.showIcon,
+            presentation.identity);
     }
 
     private UIThemeTextType GetMessageTextType(ChatMessageData message)
@@ -701,7 +704,7 @@ public class ChatMessageScrollController : MonoBehaviour
 
     private float GetMessageTextSize()
     {
-        return ChatConfigSettings.instance != null ? ChatConfigSettings.instance.MessageTextSize : 18f;
+        return messagePrefab != null ? messagePrefab.MessageFontSize : 0f;
     }
 
     private float GetMessageSpacing()
@@ -743,7 +746,7 @@ public class ChatMessageScrollController : MonoBehaviour
 
     private void RefreshVisibleMessageViews()
     {
-        if (!initialized)
+        if (!initialized || displayDisabled || showingConnectionStatus)
         {
             return;
         }
@@ -871,7 +874,7 @@ public class ChatMessageScrollController : MonoBehaviour
 
         boundMessageIndices[poolIndex] = messageIndex;
 
-        ApplyPresentation(view, presentations[messageIndex], GetMessageTextSize());
+        ApplyPresentation(view, presentations[messageIndex]);
         view.gameObject.SetActive(true);
     }
 
@@ -1099,20 +1102,38 @@ public class ChatMessageScrollController : MonoBehaviour
 
     private void UpdateEmptyState()
     {
-        if (emptyChatText == null)
-        {
-            return;
-        }
-
         string statusText = string.Empty;
         ChatManager chatManager = ChatManager.instance;
+        bool disabled = chatManager == null || chatManager.ConnectionState == ChatConnectionState.Disabled;
+
+        if (disabled && !displayDisabled)
+        {
+            conversation = null;
+            messages.Clear();
+            presentations.Clear();
+            messageHeights.Clear();
+            messageOffsets.Clear();
+            ClearMessageViewPool();
+            DestroyMeasurementView();
+            followingBottom = true;
+            hasSavedInactiveViewAnchor = false;
+            hasObservedNewestMessage = false;
+            observedNewestMessageId = string.Empty;
+            hasNewMessagesBelow = false;
+            if (content != null)
+            {
+                content.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, 0f);
+                content.anchoredPosition = new Vector2(content.anchoredPosition.x, 0f);
+            }
+        }
+        displayDisabled = disabled;
 
         if (chatManager != null)
         {
             switch (chatManager.ConnectionState)
             {
                 case ChatConnectionState.Connecting:
-                    statusText = "Connecting to chat...";
+                    statusText = chatManager.IsChatRecovering ? "Reconnecting to chat..." : "Connecting to chat...";
                     break;
 
                 case ChatConnectionState.Unavailable:
@@ -1121,13 +1142,26 @@ public class ChatMessageScrollController : MonoBehaviour
             }
         }
 
-        emptyChatText.text = statusText;
-        emptyChatText.gameObject.SetActive(!string.IsNullOrWhiteSpace(statusText));
+        showingConnectionStatus = !string.IsNullOrWhiteSpace(statusText);
+        if (content != null)
+        {
+            content.gameObject.SetActive(!displayDisabled && !showingConnectionStatus);
+        }
+        if (emptyChatText != null)
+        {
+            emptyChatText.text = statusText;
+            emptyChatText.gameObject.SetActive(showingConnectionStatus);
+        }
+        RefreshNewMessagesButton();
     }
 
     private void OnChatConnectionStateChanged(ChatConnectionState _)
     {
         UpdateEmptyState();
+        if (!displayDisabled && !showingConnectionStatus && conversation != null)
+        {
+            RefreshConversation();
+        }
     }
 
     private void SetHasNewMessagesBelow(bool hasNewMessages)
@@ -1140,7 +1174,7 @@ public class ChatMessageScrollController : MonoBehaviour
     {
         if (newMessagesButton != null && isActiveAndEnabled)
         {
-            newMessagesButton.gameObject.SetActive(hasNewMessagesBelow);
+            newMessagesButton.gameObject.SetActive(hasNewMessagesBelow && !displayDisabled && !showingConnectionStatus);
         }
     }
 
@@ -1255,6 +1289,7 @@ public class ChatMessageScrollController : MonoBehaviour
         public readonly bool useColorOverride;
         public readonly Color colorOverride;
         public readonly bool showIcon;
+        public readonly string identity;
 
         public MessagePresentation(
             Sprite icon,
@@ -1263,7 +1298,8 @@ public class ChatMessageScrollController : MonoBehaviour
             UIThemeTextType textType,
             bool useColorOverride,
             Color colorOverride,
-            bool showIcon)
+            bool showIcon,
+            string identity = null)
         {
             this.icon = icon;
             this.text = text ?? string.Empty;
@@ -1272,6 +1308,7 @@ public class ChatMessageScrollController : MonoBehaviour
             this.useColorOverride = useColorOverride;
             this.colorOverride = colorOverride;
             this.showIcon = showIcon;
+            this.identity = identity ?? string.Empty;
         }
     }
 

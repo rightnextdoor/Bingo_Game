@@ -41,7 +41,9 @@ public enum UIThemeBackgroundType
     ChatPickerHeader,
     Icon,
     LeaderboardSuggestionRow,
-    LeaderboardSuggestionRowHighlight
+    LeaderboardSuggestionRowHighlight,
+    ChatIcon,
+    SelectIcon
 }
 
 public enum UIThemeButtonType
@@ -54,7 +56,8 @@ public enum UIThemeButtonType
     ChatTab,
     Send,
     Previous,
-    Next
+    Next,
+    ColorPickerClose
 }
 
 public enum UIThemeTextType

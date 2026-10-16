@@ -40,6 +40,7 @@ public class ChatManager : MonoBehaviour
     private bool isStopping;
     private int sessionJoinTaskVersion;
     private bool suppressChatSettingsChanged;
+    private long manuallyClearedMessagesThrough;
 
     private Task<bool> serviceReadyTask;
     private Task<bool> sessionJoinTask;
@@ -57,8 +58,9 @@ public class ChatManager : MonoBehaviour
     private ChatConnectionState connectionState = ChatConnectionState.Disabled;
 
     public bool IsReady => isReady;
+    public bool IsChatRecovering => vivoxChatService != null && vivoxChatService.IsRecoveringConnection;
     public bool IsChatEnabled => isChatEnabled;
-    public bool IsChatAvailable => isReady && isChatEnabled && chatService != null && chatService.IsReady;
+    public bool IsChatAvailable => isReady && isChatEnabled && connectionState == ChatConnectionState.Ready && chatService != null && chatService.IsReady;
     public bool HasSessionConversation => !string.IsNullOrWhiteSpace(sessionConversationKey) && conversations.ContainsKey(sessionConversationKey);
     public bool IsSessionPreparationResolved => isSessionPreparationResolved;
     public ChatConnectionState ConnectionState => connectionState;
@@ -341,7 +343,6 @@ public class ChatManager : MonoBehaviour
         isSessionPreparationResolved = true;
 
         SetChatConnectionState(ChatConnectionState.Unavailable);
-        ClearChatConversationState();
         DisableSavedChatSettingAfterFailure();
         StartShutdownChat();
         PublishChatAvailabilityIfChanged();
@@ -543,7 +544,7 @@ public class ChatManager : MonoBehaviour
         }
 
         if (!IsCurrentSessionRequest(requestedSession.conversationId, preparationVersion)) return false;
-        ClearSessionBlocks();
+        SynchronizeRoomBlocks();
 
         if (!await JoinConversationAsync(requestedSession))
         {
@@ -588,7 +589,7 @@ public class ChatManager : MonoBehaviour
             sessionConversationKey = string.Empty;
             lastPrivateMessageUserId = string.Empty;
             lastSuggestedUserId = string.Empty;
-            ClearSessionBlocks();
+            SynchronizeRoomBlocks();
             return true;
         }
 
@@ -600,7 +601,7 @@ public class ChatManager : MonoBehaviour
             sessionConversationKey = string.Empty;
             lastPrivateMessageUserId = string.Empty;
             lastSuggestedUserId = string.Empty;
-            ClearSessionBlocks();
+            SynchronizeRoomBlocks();
         }
 
         return left;
@@ -1000,13 +1001,16 @@ public class ChatManager : MonoBehaviour
         maximumMessages = Mathf.Min(maximumMessages, GetMaximumRetainedMessages());
 
         IReadOnlyList<ChatMessageData> history = await chatService.GetHistoryAsync(new ChatHistoryRequest(conversation, maximumMessages));
+        if (this == null || isStopping || !isChatEnabled ||
+            !conversations.TryGetValue(conversation.Key, out ChatConversationData currentConversation) ||
+            !ReferenceEquals(currentConversation, conversationData)) return false;
         MergeHistory(conversationData, history);
         return true;
     }
 
     private void OnChatMessageReceived(ChatMessageData message)
     {
-        if (message == null || IsUserBlocked(message.senderUserId))
+        if (!isChatEnabled || message == null || IsUserBlocked(message.senderUserId))
         {
             return;
         }
@@ -1069,7 +1073,9 @@ public class ChatManager : MonoBehaviour
         {
             ChatMessageData message = history[i];
 
-            if (message == null || IsUserBlocked(message.senderUserId) || ContainsMessage(conversation, message.messageId))
+            if (message == null ||
+                (manuallyClearedMessagesThrough > 0 && message.timestampUnixMilliseconds <= manuallyClearedMessagesThrough) ||
+                IsUserBlocked(message.senderUserId) || ContainsMessage(conversation, message.messageId))
             {
                 continue;
             }
@@ -1727,6 +1733,72 @@ public class ChatManager : MonoBehaviour
 
     #region Blocking
 
+    private string blockedRoomId = string.Empty;
+
+    private string GetCurrentBlockRoomId()
+    {
+        gameSessionManager ??= GameSessionManager.instance;
+        lobbyManager ??= LobbyManager.instance;
+        if (gameSessionManager != null && gameSessionManager.HasEnteredGame)
+            return gameSessionManager.CurrentGameSession.lobbyId ?? string.Empty;
+        return lobbyManager != null && lobbyManager.HasEnteredLobby
+            ? lobbyManager.CurrentLobbyId ?? string.Empty : string.Empty;
+    }
+
+    private void SynchronizeRoomBlocks()
+    {
+        string roomId = GetCurrentBlockRoomId();
+        if (string.Equals(blockedRoomId, roomId, StringComparison.Ordinal)) return;
+        blockedRoomId = roomId;
+        ClearSessionBlocks();
+    }
+
+    public List<ChatParticipantData> GetRoomParticipantsSnapshot()
+    {
+        SynchronizeRoomBlocks();
+        List<ChatParticipantData> participants = new List<ChatParticipantData>();
+        if (gameSessionManager != null && gameSessionManager.HasEnteredGame)
+        {
+            List<GamePlayerData> players = gameSessionManager.CurrentGameSession.players;
+            if (players != null)
+            {
+                foreach (GamePlayerData player in players)
+                {
+                    if (player == null || player.userTag == UserTag.Bot) continue;
+                    ChatParticipantData participant = new ChatParticipantData(player.userId, player.playerName, player.iconId);
+                    if (participant.IsValid) participants.Add(participant);
+                }
+            }
+        }
+        else if (lobbyManager != null && lobbyManager.HasEnteredLobby)
+        {
+            LobbyViewData room = lobbyManager.CurrentLobbyViewData;
+            if (room?.players != null)
+            {
+                foreach (LobbyPlayerViewData player in room.players)
+                {
+                    if (player == null || player.userTag == UserTag.Bot) continue;
+                    ChatParticipantData participant = new ChatParticipantData(new PlayerProfileData(player));
+                    if (participant.IsValid) participants.Add(participant);
+                }
+            }
+        }
+        return participants;
+    }
+
+    private bool TryGetRoomParticipant(string _userId, out ChatParticipantData _participant)
+    {
+        List<ChatParticipantData> participants = GetRoomParticipantsSnapshot();
+        foreach (ChatParticipantData participant in participants)
+        {
+            if (!string.Equals(participant.userId, _userId, StringComparison.Ordinal)) continue;
+            _participant = participant;
+            return true;
+        }
+        _participant = null;
+        return false;
+    }
+
     public bool IsUserBlocked(string userId)
     {
         return !string.IsNullOrWhiteSpace(userId) && blockedUsers.ContainsKey(userId.Trim());
@@ -1734,6 +1806,7 @@ public class ChatManager : MonoBehaviour
 
     public IReadOnlyList<ChatParticipantData> GetBlockedUsersSnapshot()
     {
+        SynchronizeRoomBlocks();
         List<ChatParticipantData> snapshot = new List<ChatParticipantData>(blockedUsers.Count);
 
         foreach (ChatParticipantData participant in blockedUsers.Values)
@@ -1812,6 +1885,7 @@ public class ChatManager : MonoBehaviour
 
     public bool SetUserBlocked(ChatParticipantData participant, bool blocked)
     {
+        SynchronizeRoomBlocks();
         if (participant == null || !participant.IsValid || IsCurrentLocalUser(participant.userId))
         {
             return false;
@@ -1837,6 +1911,7 @@ public class ChatManager : MonoBehaviour
 
     public bool SetUserBlocked(string userId, bool blocked)
     {
+        SynchronizeRoomBlocks();
         if (string.IsNullOrWhiteSpace(userId) || IsCurrentLocalUser(userId))
         {
             return false;
@@ -1856,7 +1931,7 @@ public class ChatManager : MonoBehaviour
         }
 
         if (blockedUsers.ContainsKey(normalizedUserId) ||
-            !TryGetSessionParticipant(normalizedUserId, out ChatParticipantData participant))
+            !TryGetRoomParticipant(normalizedUserId, out ChatParticipantData participant))
         {
             return false;
         }
@@ -1869,6 +1944,7 @@ public class ChatManager : MonoBehaviour
 
     public void ApplyBlockChanges(IEnumerable<string> userIdsToBlock, IEnumerable<string> userIdsToUnblock)
     {
+        SynchronizeRoomBlocks();
         bool changed = false;
 
         if (userIdsToBlock != null)
@@ -1883,7 +1959,7 @@ public class ChatManager : MonoBehaviour
                 string normalizedUserId = userId.Trim();
 
                 if (blockedUsers.ContainsKey(normalizedUserId) ||
-                    !TryGetSessionParticipant(normalizedUserId, out ChatParticipantData participant))
+                    !TryGetRoomParticipant(normalizedUserId, out ChatParticipantData participant))
                 {
                     continue;
                 }
@@ -2190,6 +2266,7 @@ public class ChatManager : MonoBehaviour
 
     private void OnLobbyViewUpdated(LobbyViewData lobbyViewData)
     {
+        SynchronizeRoomBlocks();
         if (lobbyManager == null || lobbyManager.RuntimeType != SessionRuntimeType.Network)
         {
             return;
@@ -2258,6 +2335,7 @@ public class ChatManager : MonoBehaviour
 
     private void PrepareGameSessionChat(GameSessionData gameSessionData)
     {
+        SynchronizeRoomBlocks();
         if (gameSessionData == null ||
             gameSessionData.runtimeType != SessionRuntimeType.Network ||
             string.IsNullOrWhiteSpace(gameSessionData.lobbyId))
@@ -2350,9 +2428,11 @@ public class ChatManager : MonoBehaviour
 
         if (!isChatEnabled)
         {
+            manuallyClearedMessagesThrough = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             lastServiceError = string.Empty;
             ClearPendingSessionPreparation();
             SetChatConnectionState(ChatConnectionState.Disabled);
+            ClearChatConversationState();
             StartShutdownChat();
             PublishChatAvailabilityIfChanged();
             return;
@@ -2441,14 +2521,10 @@ public class ChatManager : MonoBehaviour
                 break;
 
             case OnlineConnectionState.Offline:
-                ClearPendingSessionPreparation();
-
                 if (isChatEnabled)
                 {
-                    SetChatConnectionState(ChatConnectionState.Unavailable);
+                    vivoxChatService?.RequestConnectionRecovery();
                 }
-
-                StartShutdownChat();
                 break;
         }
     }
@@ -2466,6 +2542,7 @@ public class ChatManager : MonoBehaviour
 
         chatService.MessageReceived += OnChatMessageReceived;
         chatService.ServiceUnavailable += OnChatServiceUnavailable;
+        vivoxChatService.ConnectionRecoveryChanged += OnChatConnectionRecoveryChanged;
         isSubscribedToChatService = true;
     }
 
@@ -2478,7 +2555,18 @@ public class ChatManager : MonoBehaviour
 
         chatService.MessageReceived -= OnChatMessageReceived;
         chatService.ServiceUnavailable -= OnChatServiceUnavailable;
+        vivoxChatService.ConnectionRecoveryChanged -= OnChatConnectionRecoveryChanged;
         isSubscribedToChatService = false;
+    }
+
+    private void OnChatConnectionRecoveryChanged(bool _recovering)
+    {
+        if (isStopping || !isChatEnabled) return;
+        if (_recovering)
+            SetChatConnectionState(ChatConnectionState.Connecting);
+        else if (string.IsNullOrWhiteSpace(pendingSessionLobbyId) || HasMatchingSessionConversation(pendingSessionLobbyId))
+            SetChatConnectionState(ChatConnectionState.Ready);
+        PublishChatAvailabilityIfChanged();
     }
 
     private void OnChatServiceUnavailable(string reason)
@@ -2519,7 +2607,10 @@ public class ChatManager : MonoBehaviour
         RequestHelpClose();
 
         ClearPendingSessionPreparation();
-        ClearChatConversationState();
+        if (connectionState != ChatConnectionState.Unavailable)
+        {
+            ClearChatConversationState();
+        }
         if (chatService != null) await chatService.ShutdownAsync();
         if (this == null || isStopping) return;
 
@@ -2544,7 +2635,7 @@ public class ChatManager : MonoBehaviour
         lastPrivateMessageUserId = string.Empty;
         lastSuggestedUserId = string.Empty;
         lastSuggestedCommandName = string.Empty;
-        ClearSessionBlocks();
+        SynchronizeRoomBlocks();
 
         if (hadConversations)
         {

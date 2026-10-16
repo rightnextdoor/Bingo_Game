@@ -146,9 +146,9 @@ public class ChatRoomBlockController : MonoBehaviour
         ClearUi();
 
         ChatManager chatManager = ChatManager.instance;
-        ChatConversationData session = chatManager?.SessionConversation;
+        List<ChatParticipantData> roomPlayers = chatManager?.GetRoomParticipantsSnapshot();
 
-        if (session?.participants == null)
+        if (roomPlayers == null)
         {
             hasSnapshot = true;
             RefreshBlockedList();
@@ -157,9 +157,9 @@ public class ChatRoomBlockController : MonoBehaviour
 
         string localUserId = UserManager.instance != null && UserManager.instance.HasUser ? UserManager.instance.UserId : string.Empty;
 
-        for (int i = 0; i < session.participants.Count; i++)
+        for (int i = 0; i < roomPlayers.Count; i++)
         {
-            ChatParticipantData participant = session.participants[i];
+            ChatParticipantData participant = roomPlayers[i];
 
             if (participant == null || !participant.IsValid)
             {

@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 4781603396479297273}
   - component: {fileID: 9003521297445905708}
   - component: {fileID: 5367861326412274231}
+  - component: {fileID: 7943516418739446045}
   m_Layer: 5
   m_Name: UserIconSlot
   m_TagString: Untagged
@@ -60,14 +61,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 0.84313726, g: 0.8156863, b: 0.8156863, a: 0.5686275}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: -4031953319017603722, guid: 5980f4cc138cd2d42a981b124167f691, type: 3}
+  m_Sprite: {fileID: 0}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
@@ -98,6 +99,20 @@ MonoBehaviour:
   normalScale: 1
   hoverScale: 1.05
   pressedScale: 0.95
+--- !u!114 &7943516418739446045
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3867085872476170583}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6fe01e88f7923374da8f6cf6c1bd5dde, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIThemeBackground
+  backgroundType: 21
+  backgroundImage: {fileID: 9003521297445905708}
 --- !u!1 &5166320264371809591
 GameObject:
   m_ObjectHideFlags: 0

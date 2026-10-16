@@ -16,7 +16,7 @@ MonoBehaviour:
   messageText: Game is about to start!
   imageMode: 1
   customImage: {fileID: 21300000, guid: e1704b4f49d87ac4e9a30fe0e3989c75, type: 3}
-  fontAsset: {fileID: 0}
+  fontAsset: {fileID: 11400000, guid: 494e208770c65664d82b3b9456cac1b7, type: 2}
   fontSize: 40
   textColor: {r: 0.008086145, g: 0.008086145, b: 0.008086145, a: 1}
   numberColor: {r: 0.078431375, g: 0.078431375, b: 0.078431375, a: 1}

@@ -53,6 +53,7 @@ public class IconSelectPopupController : MonoBehaviour
     [SerializeField] private bool autoCloseOnSelect = true;
 
     [Header("Close Behavior")]
+    [SerializeField, Tooltip("Header button that dismisses the selector without choosing an icon.")] private Button closeButton;
     [SerializeField] private bool closeWhenClickOutside = true;
 
     private Canvas parentCanvas;
@@ -104,9 +105,22 @@ public class IconSelectPopupController : MonoBehaviour
 
     private void OnEnable()
     {
+        if (closeButton != null)
+        {
+            closeButton.onClick.RemoveListener(CloseIconPopup);
+            closeButton.onClick.AddListener(CloseIconPopup);
+        }
         if (populateOnEnable)
         {
             PopulateIconSlots();
+        }
+    }
+
+    private void OnDisable()
+    {
+        if (closeButton != null)
+        {
+            closeButton.onClick.RemoveListener(CloseIconPopup);
         }
     }
 

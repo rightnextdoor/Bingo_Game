@@ -16,7 +16,7 @@ MonoBehaviour:
   messageText: Game ending - final Bingo checks are in progress.
   imageMode: 1
   customImage: {fileID: 21300000, guid: af745548b8e8c0f41a78ac0ec898efc3, type: 3}
-  fontAsset: {fileID: 0}
+  fontAsset: {fileID: 11400000, guid: 494e208770c65664d82b3b9456cac1b7, type: 2}
   fontSize: 40
   textColor: {r: 0.9946091, g: 0.9946091, b: 0.9946091, a: 1}
   numberColor: {r: 0.078431375, g: 0.078431375, b: 0.078431375, a: 1}

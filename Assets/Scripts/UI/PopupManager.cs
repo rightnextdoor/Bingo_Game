@@ -18,7 +18,8 @@ public enum PopupId
     RiskDecision,
     SoloLeave,
     GameOver,
-    Reconnecting
+    Reconnecting,
+    IconSelect
 }
 
 [Serializable]
@@ -43,6 +44,7 @@ public class PopupManager : MonoBehaviour
     private PopupId activePopupId = PopupId.None;
     private PopupId createUserAfterCreatePopupId = PopupId.None;
     private Action createUserAfterCreateAction;
+    private IconSelectPopupController iconSelectPopup;
     [SerializeField] private TMP_Text reconnectMessageText;
 
     public PopupId ActivePopupId => activePopupId;
@@ -58,6 +60,15 @@ public class PopupManager : MonoBehaviour
 
         instance = this;
 
+        iconSelectPopup = GetComponentInChildren<IconSelectPopupController>(true);
+        if (iconSelectPopup != null && GetPopupObject(PopupId.IconSelect) == null)
+        {
+            popups.Add(new PopupBinding
+            {
+                popupId = PopupId.IconSelect,
+                popupObject = iconSelectPopup.gameObject
+            });
+        }
         CloseAllPopups();
     }
 
@@ -305,6 +316,7 @@ public class PopupManager : MonoBehaviour
 
     public void CloseActivePopup()
     {
+        if (iconSelectPopup != null) iconSelectPopup.CloseIconPopup();
         if (activePopupId == PopupId.None)
         {
             return;
@@ -341,6 +353,7 @@ public class PopupManager : MonoBehaviour
 
     private void CloseAllPopups(bool preserveCreateUserAfterCreateTarget)
     {
+        if (iconSelectPopup != null) iconSelectPopup.CloseIconPopup();
         PopupId closedPopupId = activePopupId;
 
         foreach (PopupBinding binding in popups)

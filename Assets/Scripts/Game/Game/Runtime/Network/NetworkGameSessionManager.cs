@@ -1049,6 +1049,7 @@ public class NetworkGameSessionManager : MonoBehaviour
                 continue;
             }
 
+            updateData.recipientUserId = playerData.userId;
             updateData.localAutomaticBoardMarks =
                 playerData.isAutomaticBoardEnabled && playerData.markedCellIndices != null
                     ? new List<int>(playerData.markedCellIndices)

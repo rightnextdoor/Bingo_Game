@@ -13,7 +13,8 @@ public enum MultiplayerNetworkPriority
 public enum MultiplayerNetworkWorkType
 {
     Event,
-    State
+    State,
+    LatestState
 }
 
 [DefaultExecutionOrder(-1150)]
@@ -45,6 +46,9 @@ public class MultiplayerNetworkScheduler : MonoBehaviour
 
     private bool isReady;
     private float availableBytes;
+    private float bulkAvailableBytes;
+    private bool bulkTurn;
+    private readonly List<string> sessionIdBuffer = new List<string>();
     private long queuedBytes;
 
     private NetworkRoot networkRoot;
@@ -103,7 +107,8 @@ public class MultiplayerNetworkScheduler : MonoBehaviour
             return;
         }
 
-        availableBytes = Mathf.Min(maximumBurstBytes, availableBytes + bytesPerSecondBudget * Time.unscaledDeltaTime);
+        availableBytes = Mathf.Min(maximumBurstBytes, availableBytes + bytesPerSecondBudget * 0.75f * Time.unscaledDeltaTime);
+        bulkAvailableBytes = Mathf.Min(maximumBurstBytes, bulkAvailableBytes + bytesPerSecondBudget * 0.25f * Time.unscaledDeltaTime);
         ProcessQueuedWork();
     }
 
@@ -133,7 +138,8 @@ public class MultiplayerNetworkScheduler : MonoBehaviour
             return false;
         }
 
-        availableBytes = maximumBurstBytes;
+        availableBytes = maximumBurstBytes * 0.75f;
+        bulkAvailableBytes = maximumBurstBytes * 0.25f;
         isReady = true;
         return true;
     }
@@ -163,7 +169,8 @@ public class MultiplayerNetworkScheduler : MonoBehaviour
         sessionId = string.IsNullOrWhiteSpace(sessionId) ? GlobalSessionId : sessionId.Trim();
         estimatedBytes = Mathf.Max(1, estimatedBytes);
 
-        if (workType == MultiplayerNetworkWorkType.State && !string.IsNullOrWhiteSpace(coalesceKey))
+        if ((workType == MultiplayerNetworkWorkType.State || workType == MultiplayerNetworkWorkType.LatestState) &&
+            !string.IsNullOrWhiteSpace(coalesceKey))
         {
             string resolvedCoalesceKey = BuildCoalesceKey(sessionId, coalesceKey);
 
@@ -175,7 +182,7 @@ public class MultiplayerNetworkScheduler : MonoBehaviour
 
                 existingItem.EstimatedBytes = estimatedBytes;
                 existingItem.SendAction = sendAction;
-                existingItem.EnqueuedTime = Time.unscaledTimeAsDouble;
+                // Keep the original queue age when replacing an unsent state.
 
                 queuedBytes += estimatedBytes;
                 return true;
@@ -250,7 +257,8 @@ public class MultiplayerNetworkScheduler : MonoBehaviour
 
         coalescedStateByKey.Clear();
         queuedBytes = 0L;
-        availableBytes = maximumBurstBytes;
+        availableBytes = maximumBurstBytes * 0.75f;
+        bulkAvailableBytes = maximumBurstBytes * 0.25f;
     }
 
     public void ClearSession(string sessionId)
@@ -283,45 +291,47 @@ public class MultiplayerNetworkScheduler : MonoBehaviour
 
     private void ProcessQueuedWork()
     {
-        int processedItems = 0;
-
-        while (processedItems < maximumItemsPerFrame &&
-               TryGetNextItem(availableBytes, out NetworkWorkItem item))
+        int processed = 0;
+        if (maximumItemsPerFrame == 1)
         {
-            int budgetCost = GetBudgetCost(item);
-
-            DequeueItem(item);
-            availableBytes -= budgetCost;
-            processedItems++;
-
-            if (item.IsCancelled)
-            {
-                continue;
-            }
-
-            try
-            {
-                item.SendAction?.Invoke();
-            }
-            catch (Exception)
-            {
-            }
+            bulkTurn = !bulkTurn;
+            ProcessLane(!bulkTurn, 1, ref processed);
+            ProcessLane(bulkTurn, 1, ref processed);
+            return;
         }
+        int bulkReservation = Mathf.Max(1, maximumItemsPerFrame / 4);
+        ProcessLane(true, maximumItemsPerFrame - bulkReservation, ref processed);
+        ProcessLane(false, maximumItemsPerFrame, ref processed);
+        ProcessLane(true, maximumItemsPerFrame, ref processed);
     }
 
-    private bool TryGetNextItem(float byteBudget, out NetworkWorkItem item)
+    private void ProcessLane(bool _gameplay, int _itemLimit, ref int _processed)
     {
-        item = null;
-
-        foreach (MultiplayerNetworkPriority priority in Enum.GetValues(typeof(MultiplayerNetworkPriority)))
+        while (_processed < _itemLimit)
         {
-            if (TryGetNextItem(priority, byteBudget, out item))
-            {
-                return true;
-            }
+            float ownBudget = _gameplay ? availableBytes : bulkAvailableBytes;
+            bool otherLaneEmpty = _gameplay
+                ? queues[MultiplayerNetworkPriority.Normal].Count == 0 && queues[MultiplayerNetworkPriority.Low].Count == 0
+                : queues[MultiplayerNetworkPriority.Critical].Count == 0 && queues[MultiplayerNetworkPriority.High].Count == 0;
+            float borrowable = otherLaneEmpty ? (_gameplay ? bulkAvailableBytes : availableBytes) : 0f;
+            float budget = ownBudget + borrowable;
+            NetworkWorkItem item;
+            bool found = _gameplay
+                ? TryGetNextItem(MultiplayerNetworkPriority.Critical, budget, out item) ||
+                  TryGetNextItem(MultiplayerNetworkPriority.High, budget, out item)
+                : TryGetNextItem(MultiplayerNetworkPriority.Normal, budget, out item) ||
+                  TryGetNextItem(MultiplayerNetworkPriority.Low, budget, out item);
+            if (!found) break;
+            int cost = GetBudgetCost(item);
+            float ownCost = Mathf.Min(ownBudget, cost);
+            if (_gameplay) { availableBytes -= ownCost; bulkAvailableBytes -= cost - ownCost; }
+            else { bulkAvailableBytes -= ownCost; availableBytes -= cost - ownCost; }
+            DequeueItem(item);
+            _processed++;
+            if (item.IsCancelled) continue;
+            try { item.SendAction?.Invoke(); }
+            catch (Exception) { }
         }
-
-        return false;
     }
 
     private bool TryGetNextItem(MultiplayerNetworkPriority priority, float byteBudget, out NetworkWorkItem item)
@@ -335,7 +345,9 @@ public class MultiplayerNetworkScheduler : MonoBehaviour
             return false;
         }
 
-        List<string> sessionIds = new List<string>(priorityQueues.Keys);
+        sessionIdBuffer.Clear();
+        sessionIdBuffer.AddRange(priorityQueues.Keys);
+        List<string> sessionIds = sessionIdBuffer;
 
         if (sessionIds.Count == 0)
         {

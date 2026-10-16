@@ -29,6 +29,19 @@ public class VivoxChatService : MonoBehaviour, IChatService
 
     private const string MetadataType = "BingoChatMessage";
 
+    // Temporary isolation switch for investigating Play-mode loading and shutdown.
+    private static bool IsDisabledForShutdownInvestigation
+    {
+        get
+        {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            return true;
+#else
+            return false;
+#endif
+        }
+    }
+
     #endregion
 
     #region Fields
@@ -56,6 +69,7 @@ public class VivoxChatService : MonoBehaviour, IChatService
 #endif
 
     public bool IsReady =>
+        !IsDisabledForShutdownInvestigation &&
         isAdapterReady &&
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         developmentConnectionAvailable &&
@@ -98,12 +112,19 @@ public class VivoxChatService : MonoBehaviour, IChatService
         }
 
         isAdapterReady = true;
+        if (IsDisabledForShutdownInvestigation)
+        {
+            serviceUnavailable = true;
+            lastError = "Vivox is temporarily disabled for loading and shutdown investigation.";
+            return true;
+        }
         VivoxConnectionLogHandler.Install();
         return true;
     }
 
     public async Task<bool> EnsureReadyAsync(ChatParticipantData participant)
     {
+        if (IsDisabledForShutdownInvestigation) return false;
         if (!isAdapterReady || participant == null || !participant.IsValid)
         {
             return false;
@@ -769,6 +790,7 @@ public class VivoxChatService : MonoBehaviour, IChatService
 
     public async Task<bool> SetDevelopmentConnectionAvailableAsync(bool available, float retryFailureDelaySeconds = 2f)
     {
+        if (IsDisabledForShutdownInvestigation) return false;
         developmentRetryFailureDelaySeconds = Mathf.Max(0f, retryFailureDelaySeconds);
         developmentConnectionAvailable = available;
 
@@ -840,6 +862,7 @@ public class VivoxChatService : MonoBehaviour, IChatService
 
     public async Task ShutdownAsync()
     {
+        if (IsDisabledForShutdownInvestigation) return;
         if (!isAdapterReady)
         {
             return;

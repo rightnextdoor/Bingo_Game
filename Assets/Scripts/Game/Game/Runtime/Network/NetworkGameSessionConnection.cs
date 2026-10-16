@@ -28,6 +28,10 @@ public class NetworkGameSessionConnection : NetworkBehaviour
 
     public static event Action<GameSessionResult> LocalGameCreationResultReceived;
     public static event Action<GameSessionData> LocalGameSessionUpdatedReceived;
+    private string scheduledMatchStateGameId = string.Empty;
+    private readonly Dictionary<string, GamePlayerMatchStateData> scheduledMatchStates =
+        new Dictionary<string, GamePlayerMatchStateData>(StringComparer.Ordinal);
+    public static event Action<string, long, GamePlayerMatchStateData> LocalPlayerMatchStateReceived;
     public static event Action<GamePlayStateChangedData> LocalGamePlayStateChangedReceived;
     public static event Action<GamePlayerStateChangedData> LocalGamePlayerStateChangedReceived;
     public static event Action<GamePlayerMarkedCellChangedData> LocalGamePlayerMarkedCellChangedReceived;
@@ -56,6 +60,7 @@ public class NetworkGameSessionConnection : NetworkBehaviour
         LocalGameCreationResultReceived = null;
         LocalGameSessionUpdatedReceived = null;
         LocalGamePlayStateChangedReceived = null;
+        LocalPlayerMatchStateReceived = null;
         LocalGamePlayerStateChangedReceived = null;
         LocalGamePlayerMarkedCellChangedReceived = null;
         LocalBingoCheckResolvedReceived = null;
@@ -714,33 +719,70 @@ public class NetworkGameSessionConnection : NetworkBehaviour
             return false;
         }
 
-        List<GamePlayStateChangedBatchData> batches =
-            BuildGamePlayStateBatches(updateData);
-
-        if (batches == null || batches.Count == 0)
+        if (connection.scheduledMatchStateGameId != updateData.gameId)
         {
-            return false;
+            connection.scheduledMatchStates.Clear();
+            connection.scheduledMatchStateGameId = updateData.gameId;
+        }
+        bool allScheduled = true;
+        if (updateData.playerStates != null)
+        {
+            for (int i = 0; i < updateData.playerStates.Count; i++)
+            {
+                GamePlayerMatchStateData state = updateData.playerStates[i];
+                if (state == null) continue;
+                string key = updateData.gameId + ":" + state.userId;
+                if (connection.scheduledMatchStates.TryGetValue(key, out GamePlayerMatchStateData previous) &&
+                    state.Matches(previous)) continue;
+                string json = JsonUtility.ToJson(state);
+                string gameId = updateData.gameId;
+                long revision = updateData.revision;
+                bool isOwnState = state.userId == updateData.recipientUserId;
+                bool accepted = ScheduleAuthoritySend(gameId, json,
+                    isOwnState ? MultiplayerNetworkPriority.High : MultiplayerNetworkPriority.Normal,
+                    MultiplayerNetworkWorkType.LatestState, $"match:{clientId}:{state.userId}",
+                    () =>
+                    {
+                        bool sent = TrySend(connection, () => connection.ReceivePlayerMatchStateRpc(
+                            gameId, revision, json, connection.RpcTarget.Single(clientId, RpcTargetUse.Temp)));
+                        if (!sent) connection.scheduledMatchStates.Remove(key);
+                        return sent;
+                    });
+                if (accepted) connection.scheduledMatchStates[key] = state;
+                allScheduled &= accepted;
+            }
         }
 
-        bool allScheduled = true;
-
+        GamePlayStateChangedData header = GamePlayStateChangedBatchData.CopyGamePlayStateWithoutPlayers(updateData);
+        // Keep final results together for the game-over popup.
+        if (updateData.gameState == GameSessionState.Completed) header.playerStates = updateData.playerStates;
+        else
+        {
+            header.uiRefreshSections &= ~BingoGame.UI.GameUIRefresh.Players;
+            header.uiRefreshSections |= BingoGame.UI.GameUIRefresh.Header |
+                BingoGame.UI.GameUIRefresh.Balls | BingoGame.UI.GameUIRefresh.BoardControls;
+        }
+        List<GamePlayStateChangedBatchData> batches = BuildGamePlayStateBatches(header);
         for (int i = 0; i < batches.Count; i++)
         {
-            GamePlayStateChangedBatchData batch = batches[i];
-            string batchJson = JsonUtility.ToJson(batch);
-
-            allScheduled &= ScheduleAuthoritySend(
-                updateData.gameId,
-                batchJson,
-                MultiplayerNetworkPriority.High,
-                MultiplayerNetworkWorkType.Event,
-                string.Empty,
+            string json = JsonUtility.ToJson(batches[i]);
+            bool completed = updateData.gameState == GameSessionState.Completed;
+            bool replaceableHeader = !completed && batches.Count == 1;
+            allScheduled &= ScheduleAuthoritySend(updateData.gameId, json,
+                completed ? MultiplayerNetworkPriority.Normal : MultiplayerNetworkPriority.Critical,
+                replaceableHeader ? MultiplayerNetworkWorkType.LatestState : MultiplayerNetworkWorkType.Event,
+                replaceableHeader ? $"play-header:{clientId}" : string.Empty,
                 () => TrySend(connection, () => connection.ReceiveGamePlayStateBatchRpc(
-                    batchJson,
-                    connection.RpcTarget.Single(clientId, RpcTargetUse.Temp))));
+                    json, connection.RpcTarget.Single(clientId, RpcTargetUse.Temp))));
         }
-
         return allScheduled;
+    }
+
+    [Rpc(SendTo.SpecifiedInParams)]
+    private void ReceivePlayerMatchStateRpc(string gameId, long revision, string json, RpcParams rpcParams = default)
+    {
+        GamePlayerMatchStateData state = JsonUtility.FromJson<GamePlayerMatchStateData>(json);
+        if (state != null) LocalPlayerMatchStateReceived?.Invoke(gameId, revision, state);
     }
 
     public static bool TrySendGamePlayerStateChanged(ulong clientId, GamePlayerStateChangedData updateData)

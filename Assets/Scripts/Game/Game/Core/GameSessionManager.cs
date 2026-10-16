@@ -104,7 +104,9 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
         NetworkGameSessionConnection.LocalGameSessionUpdatedReceived -= OnNetworkGameSessionUpdated;
         NetworkGameSessionConnection.LocalGameSessionUpdatedReceived += OnNetworkGameSessionUpdated;
         NetworkGameSessionConnection.LocalGamePlayStateChangedReceived -= OnNetworkGamePlayStateChanged;
+        NetworkGameSessionConnection.LocalPlayerMatchStateReceived -= OnPlayerMatchStateReceived;
         NetworkGameSessionConnection.LocalGamePlayStateChangedReceived += OnNetworkGamePlayStateChanged;
+        NetworkGameSessionConnection.LocalPlayerMatchStateReceived += OnPlayerMatchStateReceived;
         NetworkGameSessionConnection.LocalGamePlayerStateChangedReceived -= OnNetworkGamePlayerStateChanged;
         NetworkGameSessionConnection.LocalGamePlayerStateChangedReceived += OnNetworkGamePlayerStateChanged;
         NetworkGameSessionConnection.LocalGamePlayerMarkedCellChangedReceived -= OnNetworkGamePlayerMarkedCellChanged;
@@ -127,6 +129,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
         NetworkGameSessionConnection.LocalGameCreationResultReceived -= ReceiveGameCreationResult;
         NetworkGameSessionConnection.LocalGameSessionUpdatedReceived -= OnNetworkGameSessionUpdated;
         NetworkGameSessionConnection.LocalGamePlayStateChangedReceived -= OnNetworkGamePlayStateChanged;
+        NetworkGameSessionConnection.LocalPlayerMatchStateReceived -= OnPlayerMatchStateReceived;
         NetworkGameSessionConnection.LocalGamePlayerStateChangedReceived -= OnNetworkGamePlayerStateChanged;
         NetworkGameSessionConnection.LocalGamePlayerMarkedCellChangedReceived -= OnNetworkGamePlayerMarkedCellChanged;
         NetworkGameSessionConnection.LocalBingoCheckResolvedReceived -= OnNetworkBingoCheckResolved;
@@ -143,6 +146,7 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
         NetworkGameSessionConnection.LocalGameCreationResultReceived -= ReceiveGameCreationResult;
         NetworkGameSessionConnection.LocalGameSessionUpdatedReceived -= OnNetworkGameSessionUpdated;
         NetworkGameSessionConnection.LocalGamePlayStateChangedReceived -= OnNetworkGamePlayStateChanged;
+        NetworkGameSessionConnection.LocalPlayerMatchStateReceived -= OnPlayerMatchStateReceived;
         NetworkGameSessionConnection.LocalGamePlayerStateChangedReceived -= OnNetworkGamePlayerStateChanged;
         NetworkGameSessionConnection.LocalGamePlayerMarkedCellChangedReceived -= OnNetworkGamePlayerMarkedCellChanged;
         NetworkGameSessionConnection.LocalBingoCheckResolvedReceived -= OnNetworkBingoCheckResolved;
@@ -154,6 +158,48 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
         {
             instance = null;
         }
+    }
+
+    private readonly Dictionary<string, long> playerMatchRevisions = new Dictionary<string, long>();
+    private readonly Dictionary<string, long> playerStateRevisions = new Dictionary<string, long>();
+    private string playerMatchRevisionGameId = string.Empty;
+    private long playerMatchSnapshotRevision = -1;
+    private bool hasPendingPlayerListRefresh;
+
+    private void LateUpdate()
+    {
+        if (!hasPendingPlayerListRefresh || currentGameSession == null) return;
+        hasPendingPlayerListRefresh = false;
+        PublishGameSessionUpdate(GameUIRefresh.Players);
+    }
+
+    private void OnPlayerMatchStateReceived(string _gameId, long _revision, GamePlayerMatchStateData _state)
+    {
+        if (currentGameSession == null || _state == null || string.IsNullOrWhiteSpace(_state.userId) ||
+            !string.Equals(currentGameSession.gameId, _gameId, StringComparison.Ordinal)) return;
+        PreparePlayerMatchRevisions();
+        if (_revision <= playerMatchSnapshotRevision ||
+            playerMatchRevisions.TryGetValue(_state.userId, out long previous) && _revision <= previous) return;
+        GamePlayerData player = currentGameSession.GetPlayer(_state.userId);
+        if (player == null) return;
+        ApplyPlayerMatchState(player, _state);
+        playerMatchRevisions[_state.userId] = _revision;
+        hasPendingPlayerListRefresh = true;
+        if (_state.userId == UserManager.instance?.UserId)
+        {
+            ApplyFinalizedScoreForCurrentNetworkUser();
+            PublishGameSessionUpdate(GameUIRefresh.BoardControls);
+        }
+    }
+
+    private void PreparePlayerMatchRevisions()
+    {
+        if (playerMatchRevisionGameId == currentGameSession.gameId) return;
+        playerMatchRevisionGameId = currentGameSession.gameId;
+        playerMatchRevisions.Clear();
+        playerStateRevisions.Clear();
+        playerMatchSnapshotRevision = -1;
+        hasPendingPlayerListRefresh = false;
     }
 
     private void Update()
@@ -1407,7 +1453,13 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
                     continue;
                 }
 
-                ApplyPlayerMatchState(playerData, playerState);
+                PreparePlayerMatchRevisions();
+                if (!playerMatchRevisions.TryGetValue(playerState.userId, out long playerRevision) ||
+                    updateData.revision >= playerRevision)
+                {
+                    ApplyPlayerMatchState(playerData, playerState);
+                    playerMatchRevisions[playerState.userId] = updateData.revision;
+                }
             }
         }
 
@@ -1431,11 +1483,12 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
 
     private void ApplyGamePlayerStateChanged(GamePlayerStateChangedData updateData)
     {
-        if (updateData == null || !CanApplyGameSessionDelta(updateData.gameId, updateData.revision))
-        {
+        if (updateData == null || currentGameSession == null ||
+            !string.Equals(updateData.gameId, currentGameSession.gameId, StringComparison.Ordinal)) return;
+        PreparePlayerMatchRevisions();
+        if (updateData.revision <= playerMatchSnapshotRevision ||
+            playerStateRevisions.TryGetValue(updateData.userId, out long stateRevision) && updateData.revision <= stateRevision)
             return;
-        }
-
         GamePlayerData playerData = currentGameSession.GetPlayer(updateData.userId);
 
         if (playerData == null)
@@ -1444,8 +1497,19 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
             return;
         }
 
-        ApplyPlayerState(playerData, updateData);
-        currentGameSession.revision = updateData.revision;
+        if (!playerMatchRevisions.TryGetValue(updateData.userId, out long matchRevision) || updateData.revision >= matchRevision)
+        {
+            ApplyPlayerState(playerData, updateData);
+            playerMatchRevisions[updateData.userId] = updateData.revision;
+        }
+        else
+        {
+            playerData.queuedRiskPatterns = BingoPatternIdentityList.Clone(updateData.queuedRiskPatterns);
+            playerData.activeRiskSubmitPatterns = BingoPatternIdentityList.Clone(updateData.activeRiskSubmitPatterns);
+            playerData.lateRiskPatterns = BingoPatternIdentityList.Clone(updateData.lateRiskPatterns);
+            playerData.pendingRiskCheckPatterns = BingoPatternIdentityList.Clone(updateData.pendingRiskCheckPatterns);
+        }
+        playerStateRevisions[updateData.userId] = updateData.revision;
         ApplyFinalizedScoreForCurrentNetworkUser();
         PublishGameSessionUpdate(GameUIRefresh.PlayerState);
     }
@@ -1527,7 +1591,34 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
             return;
         }
 
-        currentGameSession = new GameSessionData(gameSessionData);
+        PreparePlayerMatchRevisions();
+        GameSessionData incoming = new GameSessionData(gameSessionData);
+        for (int i = 0; i < incoming.players.Count; i++)
+        {
+            GamePlayerData next = incoming.players[i];
+            if (next == null) continue;
+            GamePlayerData previous = currentGameSession.GetPlayer(next.userId);
+            if (previous == null) continue;
+            if (playerMatchRevisions.TryGetValue(next.userId, out long matchRevision) && matchRevision > gameSessionData.revision)
+                ApplyPlayerMatchState(next, new GamePlayerMatchStateData(previous));
+            if (playerStateRevisions.TryGetValue(next.userId, out long stateRevision) && stateRevision > gameSessionData.revision)
+            {
+                next.queuedRiskPatterns = BingoPatternIdentityList.Clone(previous.queuedRiskPatterns);
+                next.activeRiskSubmitPatterns = BingoPatternIdentityList.Clone(previous.activeRiskSubmitPatterns);
+                next.lateRiskPatterns = BingoPatternIdentityList.Clone(previous.lateRiskPatterns);
+                next.pendingRiskCheckPatterns = BingoPatternIdentityList.Clone(previous.pendingRiskCheckPatterns);
+            }
+            if (gameSessionData.revision < currentGameSession.revision)
+                next.markedCellIndices = previous.markedCellIndices != null ? new List<int>(previous.markedCellIndices) : new List<int>();
+        }
+        if (incoming.revision < currentGameSession.revision)
+        {
+            incoming.gamePlayController = currentGameSession.gamePlayController;
+            incoming.gameState = currentGameSession.gameState;
+            incoming.revision = currentGameSession.revision;
+        }
+        playerMatchSnapshotRevision = Math.Max(playerMatchSnapshotRevision, gameSessionData.revision);
+        currentGameSession = incoming;
         pendingLobbyId = currentGameSession.lobbyId;
         ApplyFinalizedScoreForCurrentNetworkUser();
         PublishGameSessionUpdate(_sections);

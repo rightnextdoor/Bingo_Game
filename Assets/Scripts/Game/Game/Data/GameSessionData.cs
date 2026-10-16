@@ -459,6 +459,7 @@ public class GameSessionData
 [Serializable]
 public class GamePlayStateChangedData
 {
+    [NonSerialized] public string recipientUserId;
     public BingoGame.UI.GameUIRefresh uiRefreshSections = BingoGame.UI.GameUIRefresh.Gameplay;
     public string gameId;
     public long revision;
@@ -562,6 +563,34 @@ public class GamePlayerMatchStateData
     public double submitTimerEndTime;
     public bool isRiskSubmitReconnectGrace;
     public bool isRiskDecisionPending;
+
+    public bool Matches(GamePlayerMatchStateData _other)
+    {
+        return _other != null &&
+            userId == _other.userId &&
+            isConnected == _other.isConnected &&
+            isGameSceneReady == _other.isGameSceneReady &&
+            canRejoin == _other.canRejoin &&
+            returnState == _other.returnState &&
+            controlType == _other.controlType &&
+            isAutomaticBoardEnabled == _other.isAutomaticBoardEnabled &&
+            gameStatus == _other.gameStatus &&
+            currentMatchScore == _other.currentMatchScore &&
+            rank == _other.rank &&
+            isRankFinal == _other.isRankFinal &&
+            isRankWinBlocked == _other.isRankWinBlocked &&
+            hasRiskCashedOut == _other.hasRiskCashedOut &&
+            hasPendingRankCheck == _other.hasPendingRankCheck &&
+            pendingRankCheckScore == _other.pendingRankCheckScore &&
+            rankResolutionOrder == _other.rankResolutionOrder &&
+            areStatisticsFinalized == _other.areStatisticsFinalized &&
+            finalizedScoreDelta == _other.finalizedScoreDelta &&
+            isScorePersisted == _other.isScorePersisted &&
+            isSubmitTimerActive == _other.isSubmitTimerActive &&
+            submitTimerEndTime == _other.submitTimerEndTime &&
+            isRiskSubmitReconnectGrace == _other.isRiskSubmitReconnectGrace &&
+            isRiskDecisionPending == _other.isRiskDecisionPending;
+    }
 
     public GamePlayerMatchStateData()
     {
@@ -748,7 +777,7 @@ public class GamePlayStateChangedBatchData
         }
     }
 
-    private static GamePlayStateChangedData CopyGamePlayStateWithoutPlayers(
+    public static GamePlayStateChangedData CopyGamePlayStateWithoutPlayers(
         GamePlayStateChangedData source)
     {
         return new GamePlayStateChangedData

@@ -104,6 +104,8 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
 
             if (updateData != null)
             {
+                LocalBoardTrace.Log("MarkEventDispatched", updateData.userId, updateData.cellIndex,
+                    _detail: $"marked={updateData.isMarked}", _session: gameSessionData);
                 LocalGamePlayerMarkedCellChanged?.Invoke(updateData);
             }
         }
@@ -734,6 +736,18 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
         resolvedData.matchCompleted = gameSessionData.gameState == GameSessionState.Completed;
         LocalGameSessionUpdated?.Invoke(new GameSessionData(gameSessionData), GameUIRefresh.PlayerState);
         return true;
+    }
+
+    public bool ApplyAutomaticBoardProgress(string _gameId, string _userId, GameBingoCheckRequestData _request)
+    {
+        GameSessionData session = FindGame(_gameId);
+        if (!isReady || session == null) return false;
+        GameBingoCheckResolvedData result = GameBingoCheckAuthority.ProcessCheck(session, _userId, _request);
+        session.revision++;
+        LocalGameSessionUpdated?.Invoke(new GameSessionData(session), GameUIRefresh.PlayerState);
+        SendPendingMarkedCellUpdates(session);
+        if (!result.wasAccepted || result.checkResult != null) LocalBingoCheckResolved?.Invoke(result);
+        return result.wasAccepted;
     }
 
     public bool TryCompleteBingoCheckAnimation(string gameId, UserData userData)

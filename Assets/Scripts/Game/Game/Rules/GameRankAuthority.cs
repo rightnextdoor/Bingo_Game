@@ -304,16 +304,17 @@ public static class GameRankAuthority
 
     public static int ApplyPlacementPercentage(int baseScore, int rank)
     {
-        float percentage = rank switch
-        {
-            1 => 1f,
-            2 => 0.75f,
-            3 => 0.5f,
-            _ => 0f
-        };
+        if (rank < 1 || rank > MaximumWinningRank) return 0;
 
-        int adjustedScore = Mathf.RoundToInt(Mathf.Max(0, baseScore) * percentage);
-        return Mathf.Max(0, ((adjustedScore + 5) / 10) * 10);
+        long score = Math.Max(0, baseScore);
+        long previousAward = long.MaxValue;
+        for (int placement = 1; placement <= rank; placement++)
+        {
+            int percentage = placement == 1 ? 100 : placement == 2 ? 75 : 50;
+            long roundedAward = ((score * percentage + 250L) / 500L) * 5L;
+            previousAward = Math.Max(0L, Math.Min(roundedAward, previousAward - 5L));
+        }
+        return (int)Math.Min(int.MaxValue, previousAward);
     }
 
     private static bool FinalizeRankedRiskMatch(GameSessionData gameSessionData)

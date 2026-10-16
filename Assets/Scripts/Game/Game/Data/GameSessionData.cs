@@ -386,6 +386,8 @@ public class GameSessionData
             return;
         }
 
+        LocalBoardTrace.Log("MarkEventQueued", playerData.userId, cellIndex,
+            _detail: $"marked={isMarked} automatic={isAutomaticBoardUpdate}", _session: this);
         pendingMarkedCellUpdates ??= new List<GamePlayerMarkedCellChangedData>();
         GamePlayerMarkedCellChangedData updateData =
             new GamePlayerMarkedCellChangedData(
@@ -932,6 +934,8 @@ public class GamePlayerMarkedCellChangedData
 [Serializable]
 public class GameBingoCheckRequestData
 {
+    public int automaticBallCallId;
+    public bool automaticMarkOnly;
     public LobbyBoardData boardData;
     public List<int> markedCellIndices;
 

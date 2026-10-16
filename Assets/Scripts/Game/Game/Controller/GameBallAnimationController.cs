@@ -44,6 +44,15 @@ public class GameBallAnimationController : MonoBehaviour
         new Stack<GameBallItemController>();
 
     private Coroutine animationRoutine;
+    private readonly HashSet<int> pendingAnimationNumbers = new();
+    private readonly Dictionary<int, double> presentationEndTimes = new();
+
+    public bool IsBallAnimationPending(int _number) => pendingAnimationNumbers.Contains(_number);
+    public bool TryGetPresentationEndTime(int _number, out double _endTime)
+    {
+        return presentationEndTimes.TryGetValue(_number, out _endTime);
+    }
+
     private bool hasLoggedMissingSetup;
 
     private void Awake()
@@ -59,6 +68,8 @@ public class GameBallAnimationController : MonoBehaviour
         }
 
         pendingBalls.Enqueue(presentationData);
+        pendingAnimationNumbers.Add(presentationData.Number);
+        presentationEndTimes.Remove(presentationData.Number);
 
         if (animationRoutine == null && isActiveAndEnabled)
         {
@@ -110,6 +121,8 @@ public class GameBallAnimationController : MonoBehaviour
         }
 
         pendingBalls.Clear();
+        pendingAnimationNumbers.Clear();
+        presentationEndTimes.Clear();
         activeItems.Clear();
         availableItems.Clear();
 
@@ -133,7 +146,11 @@ public class GameBallAnimationController : MonoBehaviour
         while (pendingBalls.Count > 0)
         {
             GameBallPresentationData presentationData = pendingBalls.Dequeue();
+            LocalBoardTrace.Log("BallAnimationStarted", _number: presentationData.Number);
             yield return AnimateBall(presentationData);
+            presentationEndTimes[presentationData.Number] = GamePlayTimer.GetCurrentTime();
+            LocalBoardTrace.Log("BallAnimationCompleted", _number: presentationData.Number);
+            pendingAnimationNumbers.Remove(presentationData.Number);
         }
 
         animationRoutine = null;

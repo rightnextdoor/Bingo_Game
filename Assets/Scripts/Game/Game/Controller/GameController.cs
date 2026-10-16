@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 [DisallowMultipleComponent]
-public class GameController : MonoBehaviour
+public partial class GameController : MonoBehaviour
 {
     #region Inspector Fields
 
@@ -33,6 +33,8 @@ public class GameController : MonoBehaviour
     private GameBallDisplayController ballDisplayController;
     private Coroutine bindRoutine;
     private Coroutine automaticMarkRoutine;
+    private GameBingoCheckResolvedData pendingAutomaticCheckPresentation;
+    private double pendingAutomaticCheckPresentationTime;
     private string trackedPatternGameId = string.Empty;
     private bool isBingoCheckPending;
     private GameSessionData displayedGameSession;
@@ -129,6 +131,22 @@ public class GameController : MonoBehaviour
     private void Update()
     {
         UpdateRiskTimeNotifications();
+        UpdateLocalAutomaticSequence();
+        if (pendingAutomaticCheckPresentation != null && automaticMarkRoutine == null && automaticMarkQueue.Count == 0)
+        {
+            if (pendingAutomaticCheckPresentationTime <= 0d)
+            {
+                float minimum = GameSettings.instance != null ? GameSettings.instance.AutomaticBingoDelayMinimumSeconds : GameSettings.DefaultAutomaticBingoDelayMinimumSeconds;
+                float maximum = GameSettings.instance != null ? GameSettings.instance.AutomaticBingoDelayMaximumSeconds : GameSettings.DefaultAutomaticBingoDelayMaximumSeconds;
+                pendingAutomaticCheckPresentationTime = SessionPauseManager.GetCurrentTime() + UnityEngine.Random.Range(minimum, maximum);
+            }
+            if (SessionPauseManager.IsPaused || SessionPauseManager.GetCurrentTime() < pendingAutomaticCheckPresentationTime) return;
+            GameBingoCheckResolvedData resolvedData = pendingAutomaticCheckPresentation;
+            pendingAutomaticCheckPresentation = null;
+            pendingAutomaticCheckPresentationTime = 0d;
+            if (string.Equals(resolvedData.gameId, displayedGameSession?.gameId, StringComparison.Ordinal))
+                PlayAutomaticDeathCheckAnimation(resolvedData);
+        }
     }
 
     #endregion
@@ -230,6 +248,8 @@ public class GameController : MonoBehaviour
         {
             DisplayPlayerList(gameSessionData, (_sections & GameUIRefresh.Board) != 0);
         }
+
+        ReconcileMarkedCells(gameSessionData);
 
         if ((_sections & GameUIRefresh.CustomInfo) != 0)
         {
@@ -501,6 +521,7 @@ public class GameController : MonoBehaviour
                 displayedBoardUserId = localUserId ?? string.Empty;
                 hasDisplayedLocalBoard = true;
                 displayedLocalAutomaticBoardEnabled = usesAutomaticBoard;
+                localAutomaticLastCallId = localPlayer.automaticBoardLastProcessedBallCallId;
 
                 if (usesAutomaticBoard)
                 {
@@ -527,7 +548,10 @@ public class GameController : MonoBehaviour
         {
             for (int i = 0; i < localPlayer.markedCellIndices.Count; i++)
             {
-                PresentAutomaticMark(localPlayer.markedCellIndices[i], true);
+                int cellIndex = localPlayer.markedCellIndices[i];
+                if (!presentedAutomaticMarks.Contains(cellIndex) && !queuedAutomaticMarks.Contains(cellIndex))
+                    LocalBoardTrace.Log("RefreshDiscoveredUnpresentedMark", localUserId, cellIndex);
+                PresentAutomaticMark(cellIndex, true);
             }
         }
 
@@ -681,6 +705,8 @@ public class GameController : MonoBehaviour
             return;
         }
 
+        LocalBoardTrace.Log("ControllerMarkReceived", updateData.userId, updateData.cellIndex,
+            _detail: $"marked={updateData.isMarked} automatic={updateData.isAutomaticBoardUpdate}");
         if (!markedCellsByUserId.TryGetValue(
                 updateData.userId,
                 out HashSet<int> markedCells))
@@ -714,6 +740,65 @@ public class GameController : MonoBehaviour
                 updateData.isAutomaticBoardUpdate)
             {
                 PresentAutomaticMark(updateData.cellIndex, updateData.isMarked);
+            }
+        }
+    }
+
+    private void ReconcileMarkedCells(GameSessionData _session)
+    {
+        if (_session?.players == null) return;
+        string localUserId = UserManager.instance?.UserId;
+        for (int playerIndex = 0; playerIndex < _session.players.Count; playerIndex++)
+        {
+            GamePlayerData player = _session.players[playerIndex];
+            if (player == null || string.IsNullOrWhiteSpace(player.userId)) continue;
+            if (!markedCellsByUserId.TryGetValue(player.userId, out HashSet<int> cachedMarks))
+            {
+                GetOrCreateMarkedCellSnapshot(player);
+                continue;
+            }
+            bool localSequence = string.Equals(player.userId, localUserId, StringComparison.Ordinal) &&
+                GameAutomaticBoardAuthority.UsesLocalSequence(player);
+            if (localSequence)
+            {
+                GamePlayerData currentPlayer = GameSessionManager.instance?.GetCurrentPlayer();
+                foreach (int cellIndex in cachedMarks)
+                {
+                    player.TrySetMarkedCell(cellIndex, true);
+                    currentPlayer?.TrySetMarkedCell(cellIndex, true);
+                }
+            }
+            if (player.markedCellIndices != null)
+            {
+                for (int i = 0; i < player.markedCellIndices.Count; i++)
+                {
+                    int cellIndex = player.markedCellIndices[i];
+                    if (!cachedMarks.Add(cellIndex)) continue;
+                    LocalBoardTrace.Log("SnapshotRecoveredMark", player.userId, cellIndex);
+                    playerListController?.SetPlayerMarkedCell(player.userId, cellIndex, true);
+                    if (string.Equals(player.userId, localUserId, StringComparison.Ordinal))
+                    {
+                        if (player.isAutomaticBoardEnabled) PresentAutomaticMark(cellIndex, true);
+                        else boardSectionController?.SetCellMarked(cellIndex, true);
+                    }
+                }
+            }
+            if (localSequence || cachedMarks.Count <= (player.markedCellIndices?.Count ?? 0)) continue;
+            List<int> removedMarks = null;
+            foreach (int cellIndex in cachedMarks)
+            {
+                if (player.markedCellIndices?.Contains(cellIndex) == true) continue;
+                removedMarks ??= new List<int>();
+                removedMarks.Add(cellIndex);
+            }
+            if (removedMarks == null) continue;
+            for (int i = 0; i < removedMarks.Count; i++)
+            {
+                int cellIndex = removedMarks[i];
+                cachedMarks.Remove(cellIndex);
+                playerListController?.SetPlayerMarkedCell(player.userId, cellIndex, false);
+                if (string.Equals(player.userId, localUserId, StringComparison.Ordinal))
+                    PresentAutomaticMark(cellIndex, false);
             }
         }
     }
@@ -771,6 +856,19 @@ public class GameController : MonoBehaviour
 
         if (resolvedData.isAutomaticCheck)
         {
+            LocalBoardTrace.Log("AutomaticCheckResultReceived", _detail: $"accepted={resolvedData.wasAccepted}");
+            if (GameAutomaticBoardAuthority.UsesLocalSequence(GameSessionManager.instance?.GetCurrentPlayer()))
+            {
+                LocalBoardTrace.Log("AutomaticCheckAnimationStarted");
+                PlayAutomaticDeathCheckAnimation(resolvedData);
+                return;
+            }
+            if (automaticMarkRoutine != null || automaticMarkQueue.Count > 0)
+            {
+                pendingAutomaticCheckPresentation = resolvedData;
+                pendingAutomaticCheckPresentationTime = 0d;
+                return;
+            }
             PlayAutomaticDeathCheckAnimation(resolvedData);
             return;
         }
@@ -847,6 +945,7 @@ public class GameController : MonoBehaviour
 
     private void CompleteAutomaticDeathCheckAnimation(int checkNumber)
     {
+        LocalBoardTrace.Log("AutomaticCheckAnimationCompleted", _detail: $"checkNumber={checkNumber}");
         if (activeDeathCheckResult == null ||
             checkNumber != activeDeathCheckNumber)
         {
@@ -953,6 +1052,8 @@ public class GameController : MonoBehaviour
 
     private void ResetDeathCheckPresentation()
     {
+        pendingAutomaticCheckPresentation = null;
+        pendingAutomaticCheckPresentationTime = 0d;
         activeDeathCheckResult = null;
         activeDeathCheckNumber = 0;
         activeDeathCheckStatus = GamePlayerStatus.Checking;
@@ -1201,6 +1302,8 @@ public class GameController : MonoBehaviour
 
     private void PresentAutomaticMark(int cellIndex, bool isMarked)
     {
+        if (GameAutomaticBoardAuthority.UsesLocalSequence(GameSessionManager.instance?.GetCurrentPlayer()))
+            return;
         if (cellIndex < 0)
         {
             return;
@@ -1221,6 +1324,7 @@ public class GameController : MonoBehaviour
             return;
         }
 
+        LocalBoardTrace.Log("LocalMarkPresentationQueued", _cellIndex: cellIndex);
         queuedAutomaticMarks.Add(cellIndex);
         automaticMarkQueue.Enqueue(cellIndex);
 
@@ -1248,6 +1352,36 @@ public class GameController : MonoBehaviour
                 continue;
             }
 
+            GamePlayerData localPlayer = GameSessionManager.instance?.GetCurrentPlayer();
+            if (localPlayer?.boardData?.cellNumbers != null && cellIndex < localPlayer.boardData.cellNumbers.Count)
+            {
+                int number = localPlayer.boardData.cellNumbers[cellIndex];
+                double presentationEnd = 0d;
+                bool loggedWaiting = false;
+                while (ballDisplayController != null &&
+                       !ballDisplayController.TryGetBallPresentationEndTime(number, out presentationEnd))
+                {
+                    if (!loggedWaiting)
+                    {
+                        LocalBoardTrace.Log("LocalMarkWaitingForBall", _cellIndex: cellIndex);
+                        loggedWaiting = true;
+                    }
+                    yield return null;
+                }
+                if (presentationEnd > 0d)
+                {
+                    float minimum = GameSettings.instance != null ? GameSettings.instance.AutomaticMarkDelayMinimumSeconds : GameSettings.DefaultAutomaticMarkDelayMinimumSeconds;
+                    float maximum = GameSettings.instance != null ? GameSettings.instance.AutomaticMarkDelayMaximumSeconds : GameSettings.DefaultAutomaticMarkDelayMaximumSeconds;
+                    double visualMarkDue = presentationEnd + UnityEngine.Random.Range(minimum, maximum);
+                    LocalBoardTrace.Log("LocalMarkVisualDue", _cellIndex: cellIndex,
+                        _detail: $"ballFinished={presentationEnd:F3} due={visualMarkDue:F3}");
+                    while (GamePlayTimer.GetCurrentTime() < visualMarkDue)
+                        yield return null;
+                }
+            }
+
+            LocalBoardTrace.Log("LocalMarkAnimationStarted", _cellIndex: cellIndex,
+                _detail: $"boardAvailable={boardSectionController != null}");
             for (int pulse = 0; pulse < pulseCount; pulse++)
             {
                 boardSectionController?.SetAutomaticMarkHighlight(cellIndex, true);
@@ -1259,6 +1393,8 @@ public class GameController : MonoBehaviour
             boardSectionController?.SetCellMarked(cellIndex, true);
             queuedAutomaticMarks.Remove(cellIndex);
             presentedAutomaticMarks.Add(cellIndex);
+            LocalBoardTrace.Log("LocalMarkAnimationCompleted", _cellIndex: cellIndex,
+                _detail: $"boardAvailable={boardSectionController != null}");
         }
 
         automaticMarkRoutine = null;
@@ -1266,6 +1402,9 @@ public class GameController : MonoBehaviour
 
     private void StopAutomaticMarkPresentation()
     {
+        StopLocalAutomaticSequence();
+        if (automaticMarkRoutine != null || automaticMarkQueue.Count > 0)
+            LocalBoardTrace.Log("LocalMarkPresentationStopped", _detail: $"queued={automaticMarkQueue.Count}");
         if (automaticMarkRoutine != null)
         {
             StopCoroutine(automaticMarkRoutine);
@@ -1658,57 +1797,23 @@ public class GameController : MonoBehaviour
             return popupData;
         }
 
-        if (!GameRankAuthority.IsEnabled(gameSessionData))
+        if (GameRankAuthority.IsEnabled(gameSessionData))
         {
-            if (winners.Count == 1)
-            {
-                popupData.winnerDisplayText = GetGameOverDisplayName(
-                    winners[0],
-                    profiles);
-            }
-
-            return popupData;
+            winners.Sort(CompareGameOverWinners);
         }
-
-        winners.Sort(CompareGameOverWinners);
-
-        if (HasSharedWinningRank(winners))
-        {
-            return popupData;
-        }
-
-        int displayedWinnerCount = Math.Min(
-            GameRankAuthority.MaximumWinningRank,
-            winners.Count);
-        List<string> winnerLines = new List<string>(displayedWinnerCount);
-
-        for (int i = 0; i < displayedWinnerCount; i++)
-        {
-            GamePlayerData winner = winners[i];
-            winnerLines.Add(
-                $"Rank {Math.Max(1, winner.rank)} - " +
-                GetGameOverDisplayName(winner, profiles));
-        }
-
-        popupData.winnerDisplayText = string.Join("\n", winnerLines);
-        return popupData;
-    }
-
-    private static bool HasSharedWinningRank(List<GamePlayerData> winners)
-    {
-        HashSet<int> winningRanks = new HashSet<int>();
 
         for (int i = 0; i < winners.Count; i++)
         {
-            int rank = Math.Max(1, winners[i]?.rank ?? 1);
-
-            if (!winningRanks.Add(rank))
+            GamePlayerData winner = winners[i];
+            popupData.winners.Add(new GameOverWinnerData
             {
-                return true;
-            }
+                rank = winner.rank,
+                displayName = GetGameOverDisplayName(winner, profiles),
+                score = Mathf.Max(0, winner.currentMatchScore)
+            });
         }
 
-        return false;
+        return popupData;
     }
 
     private static int CompareGameOverWinners(

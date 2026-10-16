@@ -343,6 +343,13 @@ public class NetworkGameSessionConnection : NetworkBehaviour
         return true;
     }
 
+    public bool RequestAutomaticBoardProgress(string _gameId, GameBingoCheckRequestData _request)
+    {
+        if (!IsSpawned || !IsOwner || string.IsNullOrWhiteSpace(_gameId)) return false;
+        RequestBingoCheckRpc(_gameId, JsonUtility.ToJson(_request));
+        return true;
+    }
+
     public bool RequestBingoCheckAnimationCompleted(string gameId)
     {
         if (!IsSpawned || !IsOwner || string.IsNullOrWhiteSpace(gameId))
@@ -612,6 +619,7 @@ public class NetworkGameSessionConnection : NetworkBehaviour
             return;
         }
 
+        if (resolvedData?.wasAccepted == true && resolvedData.checkResult == null) return;
         string resultJson = JsonUtility.ToJson(resolvedData);
         ScheduleAuthoritySend(
             resolvedData?.gameId ?? gameId,
@@ -757,7 +765,8 @@ public class NetworkGameSessionConnection : NetworkBehaviour
 
     public static bool TrySendGamePlayerMarkedCellChanged(
         ulong clientId,
-        GamePlayerMarkedCellChangedData updateData)
+        GamePlayerMarkedCellChangedData updateData,
+        Action _onSendFailed = null)
     {
         if (updateData == null ||
             !TryGetServerConnection(clientId, out NetworkGameSessionConnection connection))
@@ -770,12 +779,19 @@ public class NetworkGameSessionConnection : NetworkBehaviour
         return ScheduleAuthoritySend(
             updateData.gameId,
             updateJson,
-            MultiplayerNetworkPriority.Normal,
-            MultiplayerNetworkWorkType.State,
-            $"game-board-cell:{clientId}:{updateData.userId}:{updateData.cellIndex}",
-            () => TrySend(connection, () => connection.ReceiveGamePlayerMarkedCellChangedRpc(
-                updateJson,
-                connection.RpcTarget.Single(clientId, RpcTargetUse.Temp))));
+            MultiplayerNetworkPriority.High,
+            MultiplayerNetworkWorkType.Event,
+            string.Empty,
+            () =>
+            {
+                bool sent = TrySend(connection, () => connection.ReceiveGamePlayerMarkedCellChangedRpc(
+                    updateJson,
+                    connection.RpcTarget.Single(clientId, RpcTargetUse.Temp)));
+                LocalBoardTrace.Log("NetworkMarkSendExecuted", updateData.userId, updateData.cellIndex,
+                    _detail: $"client={clientId} sent={sent}");
+                if (!sent) _onSendFailed?.Invoke();
+                return sent;
+            });
     }
 
     public static bool TrySendBingoCheckResolved(
@@ -954,6 +970,8 @@ public class NetworkGameSessionConnection : NetworkBehaviour
 
             if (updateData != null)
             {
+                LocalBoardTrace.Log("NetworkMarkRpcReceived", updateData.userId, updateData.cellIndex,
+                    _detail: $"marked={updateData.isMarked}");
                 LocalGamePlayerMarkedCellChangedReceived?.Invoke(updateData);
             }
         }

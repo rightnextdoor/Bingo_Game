@@ -329,6 +329,8 @@ public class LobbyPlayerRowUI : MonoBehaviour, IPointerClickHandler
 
     public void SetMarkedCell(int cellIndex, bool isMarked)
     {
+        LocalBoardTrace.Log("PlayerListPreviewMarkForwarded", UserId, cellIndex,
+            _detail: $"marked={isMarked} previewAvailable={boardPreviewController != null}");
         boardPreviewController?.SetMarkedCell(cellIndex, isMarked);
     }
 

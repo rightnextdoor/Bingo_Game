@@ -1231,6 +1231,21 @@ public class GameSessionManager : MonoBehaviour, ISceneReadyCheck, ISaveManager
         return true;
     }
 
+    public bool ReportLocalAutomaticBoardProgress(int _callId, bool _markOnly)
+    {
+        GamePlayerData player = GetCurrentPlayer();
+        if (!HasEnteredGame || SessionPauseManager.IsPaused ||
+            ConnectionRecoveryManager.instance?.IsRecoveringInScene == true ||
+            !GameAutomaticBoardAuthority.UsesLocalSequence(player)) return false;
+        GameBingoCheckRequestData request = new GameBingoCheckRequestData(player.boardData, player.markedCellIndices)
+        {
+            automaticBallCallId = _callId, automaticMarkOnly = _markOnly
+        };
+        return runtimeType == SessionRuntimeType.Network
+            ? NetworkGameSessionConnection.GetLocalConnection()?.RequestAutomaticBoardProgress(currentGameSession.gameId, request) == true
+            : LocalGameSessionManager.instance?.ApplyAutomaticBoardProgress(currentGameSession.gameId, player.userId, request) == true;
+    }
+
     public bool CompleteCurrentPlayerBingoCheckAnimation()
     {
         if (!HasEnteredGame || SessionPauseManager.IsPaused ||

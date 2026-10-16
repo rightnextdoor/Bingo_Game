@@ -10,6 +10,7 @@ public class GameBallDisplayController : MonoBehaviour
     private string currentSessionKey = string.Empty;
     private int processedCalledNumberCount;
     private bool hasSession;
+    private readonly HashSet<int> historicalNumbers = new();
 
     private void Awake()
     {
@@ -59,11 +60,27 @@ public class GameBallDisplayController : MonoBehaviour
         processedCalledNumberCount = calledNumberCount;
     }
 
+    public bool IsBallAnimationPending(int _number)
+    {
+        return animationController != null && animationController.IsBallAnimationPending(_number);
+    }
+
+    public bool TryGetBallPresentationEndTime(int _number, out double _endTime)
+    {
+        _endTime = 0d;
+        if (animationController != null && animationController.IsBallAnimationPending(_number))
+            return false;
+        if (animationController != null && animationController.TryGetPresentationEndTime(_number, out _endTime))
+            return true;
+        return historicalNumbers.Contains(_number);
+    }
+
     public void ClearDisplay()
     {
         currentSessionKey = string.Empty;
         processedCalledNumberCount = 0;
         hasSession = false;
+        historicalNumbers.Clear();
         animationController?.ClearDisplay();
     }
 
@@ -82,6 +99,8 @@ public class GameBallDisplayController : MonoBehaviour
         currentSessionKey = ResolveSessionKey(gameSessionData);
         processedCalledNumberCount = calledNumberCount;
         hasSession = true;
+        historicalNumbers.Clear();
+        for (int i = 0; i < calledNumberCount - 1; i++) historicalNumbers.Add(calledNumbers[i]);
 
         List<GameBallPresentationData> history = new List<GameBallPresentationData>();
         int replayIndex = calledNumberCount - 1;
@@ -120,6 +139,8 @@ public class GameBallDisplayController : MonoBehaviour
         currentSessionKey = sessionKey;
         processedCalledNumberCount = calledNumbers?.Count ?? 0;
         hasSession = true;
+        historicalNumbers.Clear();
+        for (int i = 0; i < processedCalledNumberCount; i++) historicalNumbers.Add(calledNumbers[i]);
 
         List<GameBallPresentationData> history = new List<GameBallPresentationData>();
         int firstHistoryIndex = Mathf.Max(0, processedCalledNumberCount - 4);

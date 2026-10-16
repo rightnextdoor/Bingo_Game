@@ -98,13 +98,16 @@ public class NetworkGameSessionManager : MonoBehaviour
                 continue;
             }
 
-            if (GameBingoCheckAuthority.UpdateSessionLoop(gameSessionData, out BingoGame.UI.GameUIRefresh sections))
+            bool sessionChanged = GameBingoCheckAuthority.UpdateSessionLoop(
+                gameSessionData, out BingoGame.UI.GameUIRefresh sections);
+            if (sessionChanged)
             {
                 gameSessionData.revision++;
                 BroadcastGamePlayStateChanged(gameSessionData, sections);
-                SendPendingMarkedCellUpdates(gameSessionData);
-                SendPendingBingoCheckPresentations(gameSessionData);
             }
+
+            SendPendingMarkedCellUpdates(gameSessionData);
+            if (sessionChanged) SendPendingBingoCheckPresentations(gameSessionData);
 
             if (gameSessionData.gameState == GameSessionState.Completed &&
                 gameSessionData.GetConnectedRealHumanCount() == 0)
@@ -131,6 +134,8 @@ public class NetworkGameSessionManager : MonoBehaviour
 
             if (updateData != null)
             {
+                LocalBoardTrace.Log("NetworkMarkEventDispatched", updateData.userId, updateData.cellIndex,
+                    _session: gameSessionData);
                 BroadcastGamePlayerMarkedCellChanged(gameSessionData, updateData);
             }
         }
@@ -1097,10 +1102,25 @@ public class NetworkGameSessionManager : MonoBehaviour
                 continue;
             }
 
-            NetworkGameSessionConnection.TrySendGamePlayerMarkedCellChanged(
+            bool accepted = NetworkGameSessionConnection.TrySendGamePlayerMarkedCellChanged(
                 clientId,
-                updateData);
+                updateData,
+                () => RequeueMarkedCellUpdate(gameSessionData, updateData));
+            LocalBoardTrace.Log("NetworkMarkQueueResult", updateData.userId, updateData.cellIndex,
+                _detail: $"client={clientId} accepted={accepted}", _session: gameSessionData);
+            if (!accepted) RequeueMarkedCellUpdate(gameSessionData, updateData);
         }
+    }
+
+    private static void RequeueMarkedCellUpdate(
+        GameSessionData _session, GamePlayerMarkedCellChangedData _update)
+    {
+        GamePlayerData player = _session?.GetPlayer(_update.userId);
+        if (player == null) return;
+        bool marked = player.markedCellIndices?.Contains(_update.cellIndex) == true;
+        LocalBoardTrace.Log("NetworkMarkRetryQueued", _update.userId, _update.cellIndex,
+            _detail: $"marked={marked}", _session: _session);
+        _session.QueueMarkedCellUpdate(player, _update.cellIndex, marked, _update.isAutomaticBoardUpdate);
     }
 
     private void BroadcastGamePlayerLeft(GameSessionData gameSessionData, string userId)

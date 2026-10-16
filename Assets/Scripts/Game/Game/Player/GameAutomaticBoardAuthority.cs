@@ -17,6 +17,14 @@ public static class GameAutomaticBoardAuthority
 {
     public const int TakeoverVisibleBallCount = 4;
 
+    public static bool UsesLocalSequence(GamePlayerData _player)
+    {
+        return _player != null && _player.isAutomaticBoardEnabled &&
+            _player.userTag != UserTag.Bot && _player.isConnected && _player.isGameSceneReady &&
+            _player.controlType == GamePlayerControlType.Human &&
+            _player.returnState == GamePlayerReturnState.Active;
+    }
+
     public static bool UpdatePlayer(
         GameSessionData gameSessionData,
         GamePlayerData playerData,
@@ -28,6 +36,7 @@ public static class GameAutomaticBoardAuthority
         if (gameSessionData == null ||
             playerData == null ||
             !IsAutomaticBoardEnabled(gameSessionData, playerData) ||
+            UsesLocalSequence(playerData) ||
             playerData.gameStatus != GamePlayerStatus.Eligible ||
             playerData.boardData?.cellNumbers == null ||
             gameSessionData.gameState != GameSessionState.InProgress ||
@@ -51,7 +60,8 @@ public static class GameAutomaticBoardAuthority
         changed |= CompletePendingMark(gameSessionData, playerData, currentTime);
 
         if (playerData.automaticBoardPendingCellIndex >= 0 ||
-            playerData.automaticBoardPendingCheckBallCallId > 0)
+            playerData.automaticBoardPendingCheckBallCallId > 0 ||
+            currentTime < playerData.automaticBoardMarkPresentationEndTime)
         {
             return changed;
         }
@@ -98,6 +108,7 @@ public static class GameAutomaticBoardAuthority
         playerData.automaticBoardPendingCellIndex = -1;
         playerData.automaticBoardPendingBallCallId = 0;
         playerData.automaticBoardMarkDueTime = 0d;
+        playerData.automaticBoardMarkPresentationEndTime = 0d;
         playerData.automaticBoardPendingCheckBallCallId = 0;
         playerData.automaticBoardCheckDueTime = 0d;
     }
@@ -127,8 +138,12 @@ public static class GameAutomaticBoardAuthority
         }
 
         int nextCallId = playerData.automaticBoardLastProcessedBallCallId + 1;
+        double presentationEnd = gameSessionData.gamePlayController.GetAutomaticBallPresentationEndTime(nextCallId);
+        if (currentTime < presentationEnd) return false;
         int calledNumber = calledNumbers[nextCallId - 1];
         int cellIndex = FindBoardCell(playerData.boardData, calledNumber);
+        LocalBoardTrace.Log("AuthorityBallExamined", playerData.userId, cellIndex, calledNumber,
+            nextCallId, $"presentationEnd={presentationEnd:F3}", gameSessionData);
 
         if (cellIndex < 0)
         {
@@ -145,6 +160,8 @@ public static class GameAutomaticBoardAuthority
             GameSettings.instance != null
                 ? GameSettings.instance.AutomaticMarkDelayMaximumSeconds
                 : GameSettings.DefaultAutomaticMarkDelayMaximumSeconds);
+        LocalBoardTrace.Log("MarkScheduled", playerData.userId, cellIndex, calledNumber,
+            nextCallId, $"due={playerData.automaticBoardMarkDueTime:F3}", gameSessionData);
         return false;
     }
 
@@ -162,6 +179,12 @@ public static class GameAutomaticBoardAuthority
         int cellIndex = playerData.automaticBoardPendingCellIndex;
         int ballCallId = playerData.automaticBoardPendingBallCallId;
         bool markedCellChanged = playerData.TrySetMarkedCell(cellIndex, true);
+        LocalBoardTrace.Log("AuthorityMarkApplied", playerData.userId, cellIndex,
+            _ballCallId: ballCallId, _detail: $"changed={markedCellChanged} due={playerData.automaticBoardMarkDueTime:F3}",
+            _session: gameSessionData);
+        int pulseCount = GameSettings.instance != null ? GameSettings.instance.AutomaticMarkPulseCount : GameSettings.DefaultAutomaticMarkPulseCount;
+        float pulseSeconds = GameSettings.instance != null ? GameSettings.instance.AutomaticMarkPulseSeconds : GameSettings.DefaultAutomaticMarkPulseSeconds;
+        playerData.automaticBoardMarkPresentationEndTime = currentTime + pulseCount * pulseSeconds * 2d;
 
         if (markedCellChanged)
         {
@@ -193,7 +216,7 @@ public static class GameAutomaticBoardAuthority
         }
 
         playerData.automaticBoardPendingCheckBallCallId = ballCallId;
-        playerData.automaticBoardCheckDueTime = currentTime + GetRandomDelay(
+        playerData.automaticBoardCheckDueTime = playerData.automaticBoardMarkPresentationEndTime + GetRandomDelay(
             GameSettings.instance != null
                 ? GameSettings.instance.AutomaticBingoDelayMinimumSeconds
                 : GameSettings.DefaultAutomaticBingoDelayMinimumSeconds,

@@ -37,6 +37,7 @@ public class GamePlayController
     [SerializeField] private bool deathFinalChecksWereRequired;
 
     [NonSerialized] private BingoChecker bingoChecker = new BingoChecker();
+    [NonSerialized] private List<double> automaticBallPresentationEndTimes = new();
 
     public GamePlayPhase Phase => phase;
     public GameEndReason EndReason => endReason;
@@ -125,6 +126,8 @@ public class GamePlayController
         nextBallCountdownSeconds = controller.nextBallCountdownSeconds;
         riskMatchDurationSeconds = controller.riskMatchDurationSeconds;
         ballCallRequestCount = controller.ballCallRequestCount;
+        automaticBallPresentationEndTimes = controller.automaticBallPresentationEndTimes != null
+            ? new List<double>(controller.automaticBallPresentationEndTimes) : new List<double>();
         isFinalBallCountdown = controller.isFinalBallCountdown;
         matchEndingCheckPlayerId = controller.matchEndingCheckPlayerId ?? string.Empty;
         pendingCheckAnimationPlayerIds = controller.pendingCheckAnimationPlayerIds != null
@@ -166,6 +169,8 @@ public class GamePlayController
         phase = GamePlayPhase.WaitingForFirstPlayer;
         endReason = GameEndReason.None;
         ballCallRequestCount = 0;
+        automaticBallPresentationEndTimes ??= new List<double>();
+        automaticBallPresentationEndTimes.Clear();
         isFinalBallCountdown = false;
         matchEndingCheckPlayerId = string.Empty;
         pendingCheckAnimationPlayerIds ??= new List<string>();
@@ -290,8 +295,32 @@ public class GamePlayController
         }
 
         ballCallRequestCount++;
+        LocalBoardTrace.Log("BallCalled", _number: calledNumber, _ballCallId: ballCallRequestCount);
+        ScheduleAutomaticBallPresentation();
         isFinalBallCountdown = !ballController.HasRemainingNumbers;
         return true;
+    }
+
+    private void ScheduleAutomaticBallPresentation()
+    {
+        automaticBallPresentationEndTimes ??= new List<double>();
+        int calledCount = ballController?.CalledNumbers?.Count ?? 0;
+        while (automaticBallPresentationEndTimes.Count < calledCount) automaticBallPresentationEndTimes.Add(0d);
+        if (calledCount == 0) return;
+        double previousEnd = calledCount > 1 ? automaticBallPresentationEndTimes[calledCount - 2] : 0d;
+        float duration = GameSettings.instance != null ? GameSettings.instance.BallSlideDurationSeconds : GameSettings.DefaultBallSlideDurationSeconds;
+        automaticBallPresentationEndTimes[calledCount - 1] = Math.Max(GamePlayTimer.GetCurrentTime(), previousEnd) + duration;
+    }
+
+    public double GetAutomaticBallPresentationEndTime(int _ballCallId)
+    {
+        int calledCount = ballController?.CalledNumbers?.Count ?? 0;
+        if (_ballCallId <= 0 || _ballCallId > calledCount) return 0d;
+        automaticBallPresentationEndTimes ??= new List<double>();
+        while (automaticBallPresentationEndTimes.Count < calledCount) automaticBallPresentationEndTimes.Add(0d);
+        if (_ballCallId == calledCount && automaticBallPresentationEndTimes[_ballCallId - 1] <= 0d)
+            ScheduleAutomaticBallPresentation();
+        return automaticBallPresentationEndTimes[_ballCallId - 1];
     }
 
     public bool TryCheckBingo(

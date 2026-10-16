@@ -31,5 +31,5 @@ MonoBehaviour:
     points: 65
   - scoreType: 8
     points: 50
-  - scoreType: 8
+  - scoreType: 9
     points: 200

@@ -134,9 +134,7 @@ public static class GameScoreAuthority
 
             if (GameRankAuthority.IsEnabled(gameSessionData))
             {
-                deathWinPoints = GameRankAuthority.ApplyPlacementPercentage(
-                    deathWinPoints,
-                    playerData.rank);
+                deathWinPoints = GetPlacementAward(gameSessionData, playerData, deathWinPoints);
             }
 
             playerData.currentMatchScore = ClampMatchScore(deathWinPoints);
@@ -148,9 +146,7 @@ public static class GameScoreAuthority
 
             if (GameRankAuthority.UsesDefaultRankRules(gameSessionData))
             {
-                awardedScore = GameRankAuthority.ApplyPlacementPercentage(
-                    awardedScore,
-                    playerData.rank);
+                awardedScore = GetPlacementAward(gameSessionData, playerData, awardedScore);
             }
 
             playerData.currentMatchScore = ClampMatchScore(awardedScore);
@@ -159,6 +155,27 @@ public static class GameScoreAuthority
 
         MarkStatisticsFinalized(playerData);
         return true;
+    }
+
+    private static int GetPlacementAward(GameSessionData _session, GamePlayerData _player, int _baseScore)
+    {
+        int award = GameRankAuthority.ApplyPlacementPercentage(_baseScore, _player.rank);
+        int precedingRank = 0;
+        int precedingAward = int.MaxValue;
+        if (_session.players == null) return award;
+        foreach (GamePlayerData other in _session.players)
+        {
+            if (other == null || other == _player || !other.areStatisticsFinalized ||
+                other.gameStatus != GamePlayerStatus.Won || other.rank <= 0 || other.rank >= _player.rank) continue;
+            if (other.rank > precedingRank)
+            {
+                precedingRank = other.rank;
+                precedingAward = other.currentMatchScore;
+            }
+            else if (other.rank == precedingRank) precedingAward = Math.Min(precedingAward, other.currentMatchScore);
+        }
+        int maximumAward = (int)Math.Max(0L, ((long)precedingAward - 1L) / 5L * 5L);
+        return precedingRank > 0 ? Math.Min(award, maximumAward) : award;
     }
 
     public static bool FinalizeDepartingHumanLoss(

@@ -39,6 +39,7 @@ public class GamePlayerData
     public int automaticBoardPendingCellIndex;
     public int automaticBoardPendingBallCallId;
     public double automaticBoardMarkDueTime;
+    public double automaticBoardMarkPresentationEndTime;
     public int automaticBoardPendingCheckBallCallId;
     public double automaticBoardCheckDueTime;
 
@@ -91,6 +92,7 @@ public class GamePlayerData
         automaticBoardPendingCellIndex = -1;
         automaticBoardPendingBallCallId = 0;
         automaticBoardMarkDueTime = 0d;
+        automaticBoardMarkPresentationEndTime = 0d;
         automaticBoardPendingCheckBallCallId = 0;
         automaticBoardCheckDueTime = 0d;
         deathCheckBallCallId = 0;
@@ -168,6 +170,7 @@ public class GamePlayerData
         automaticBoardPendingCellIndex = playerData.automaticBoardPendingCellIndex;
         automaticBoardPendingBallCallId = playerData.automaticBoardPendingBallCallId;
         automaticBoardMarkDueTime = playerData.automaticBoardMarkDueTime;
+        automaticBoardMarkPresentationEndTime = playerData.automaticBoardMarkPresentationEndTime;
         automaticBoardPendingCheckBallCallId = playerData.automaticBoardPendingCheckBallCallId;
         automaticBoardCheckDueTime = playerData.automaticBoardCheckDueTime;
         deathCheckBallCallId = playerData.deathCheckBallCallId;

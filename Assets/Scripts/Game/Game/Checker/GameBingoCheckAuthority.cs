@@ -96,6 +96,59 @@ public static class GameBingoCheckAuthority
         return changed;
     }
 
+    private static GameBingoCheckResolvedData ProcessAutomaticProgress(
+        GameSessionData _session, GamePlayerData _player, GameBingoCheckRequestData _request)
+    {
+        int callId = _request.automaticBallCallId;
+        var play = _session.gamePlayController;
+        var numbers = play.BallController?.CalledNumbers;
+        GameBingoCheckResolvedData Reject(string _reason) => GameBingoCheckResolvedData.Rejected(
+            _session.gameId, _player.userId, _session.revision, _reason);
+        if (!GameAutomaticBoardAuthority.UsesLocalSequence(_player) || numbers == null ||
+            callId <= 0 || callId > numbers.Count ||
+            callId < _player.automaticBoardLastProcessedBallCallId)
+            return Reject("The automatic board progress is no longer valid.");
+
+        List<int> prefix = new List<int>(callId);
+        for (int i = 0; i < callId; i++) prefix.Add(numbers[i]);
+        if (_request.markedCellIndices == null) return Reject("Automatic marks were missing.");
+        foreach (int cell in _request.markedCellIndices)
+        {
+            if (cell < 0 || cell >= _player.boardData.cellNumbers.Count ||
+                !(_player.boardData.usesFreeCell && cell == 12) &&
+                !prefix.Contains(_player.boardData.cellNumbers[cell]))
+                return Reject("An automatic mark does not match a called ball.");
+        }
+        foreach (int cell in _request.markedCellIndices)
+            if (_player.TrySetMarkedCell(cell, true))
+                _session.QueueMarkedCellUpdate(_player, cell, true, true);
+        _player.automaticBoardLastProcessedBallCallId = callId;
+        _player.automaticBoardPendingCellIndex = -1;
+        _player.automaticBoardPendingBallCallId = 0;
+        _player.automaticBoardMarkDueTime = 0d;
+        _player.automaticBoardCheckDueTime = 0d;
+        bool hasBingo = play.GetCompletedAvailablePatterns(_player.userId, _player.boardData,
+            _player.markedCellIndices, prefix, _session.patternTypes).Count > 0;
+        _player.automaticBoardPendingCheckBallCallId = hasBingo && _request.automaticMarkOnly ? callId : 0;
+        LocalBoardTrace.Log("AuthorityLocalProgressReceived", _player.userId,
+            _ballCallId: callId, _detail: $"markOnly={_request.automaticMarkOnly} hasBingo={hasBingo}", _session: _session);
+        if (!_request.automaticMarkOnly && hasBingo)
+        {
+            if (play.IsDeathRule)
+                return DeathGameplayAuthority.ProcessLocalAutomaticCheck(_session, _player,
+                    new GameAutomaticBoardCheckRequest(callId, prefix));
+            _request.automaticBallCallId = 0;
+            GameBingoCheckResolvedData result = ProcessCheck(_session, _player.userId, _request);
+            result.isAutomaticCheck = true;
+            return result;
+        }
+        return new GameBingoCheckResolvedData
+        {
+            gameId = _session.gameId, userId = _player.userId, wasAccepted = true,
+            revision = _session.revision, playerStatus = _player.gameStatus
+        };
+    }
+
     private static bool RequestRefresh(bool _changed, GameUIRefresh _sections, ref GameUIRefresh _requestedSections)
     {
         if (_changed)
@@ -183,6 +236,9 @@ public static class GameBingoCheckAuthority
         }
 
         GamePlayController playController = gameSessionData.gamePlayController;
+
+        if (requestData.automaticBallCallId > 0)
+            return ProcessAutomaticProgress(gameSessionData, playerData, requestData);
 
         if (playController.IsDeathRule)
         {
@@ -901,10 +957,20 @@ public static class DeathGameplayAuthority
         return changed;
     }
 
+    public static GameBingoCheckResolvedData ProcessLocalAutomaticCheck(
+        GameSessionData _session, GamePlayerData _player, GameAutomaticBoardCheckRequest _request)
+    {
+        GameBingoCheckResolvedData result = null;
+        CompletePendingCheck(_session, _player, _request, _result => result = _result);
+        return result ?? GameBingoCheckResolvedData.Rejected(_session.gameId, _player.userId,
+            _session.revision, "The automatic Bingo check could not start.");
+    }
+
     private static bool CompletePendingCheck(
         GameSessionData gameSessionData,
         GamePlayerData playerData,
-        GameAutomaticBoardCheckRequest checkRequest)
+        GameAutomaticBoardCheckRequest checkRequest,
+        Action<GameBingoCheckResolvedData> _receivePresentation = null)
     {
         if (checkRequest == null)
         {
@@ -940,8 +1006,7 @@ public static class DeathGameplayAuthority
         if (playerData.controlType == GamePlayerControlType.Human &&
             playerData.isConnected)
         {
-            gameSessionData.QueueBingoCheckPresentation(
-                new GameBingoCheckResolvedData
+            GameBingoCheckResolvedData presentation = new GameBingoCheckResolvedData
                 {
                     gameId = gameSessionData.gameId,
                     userId = playerData.userId,
@@ -956,7 +1021,9 @@ public static class DeathGameplayAuthority
                         gameSessionData.gamePlayController.GetAvailablePatternTypes(
                             playerData.userId,
                             gameSessionData.patternTypes)
-                });
+                };
+            if (_receivePresentation != null) _receivePresentation(presentation);
+            else gameSessionData.QueueBingoCheckPresentation(presentation);
         }
 
         return true;

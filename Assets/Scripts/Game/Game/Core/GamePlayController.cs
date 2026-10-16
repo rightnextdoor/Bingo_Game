@@ -295,7 +295,7 @@ public class GamePlayController
         }
 
         ballCallRequestCount++;
-        LocalBoardTrace.Log("BallCalled", _number: calledNumber, _ballCallId: ballCallRequestCount);
+
         ScheduleAutomaticBallPresentation();
         isFinalBallCountdown = !ballController.HasRemainingNumbers;
         return true;

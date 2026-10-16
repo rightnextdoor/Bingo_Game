@@ -130,8 +130,7 @@ public static class GameBingoCheckAuthority
         bool hasBingo = play.GetCompletedAvailablePatterns(_player.userId, _player.boardData,
             _player.markedCellIndices, prefix, _session.patternTypes).Count > 0;
         _player.automaticBoardPendingCheckBallCallId = hasBingo && _request.automaticMarkOnly ? callId : 0;
-        LocalBoardTrace.Log("AuthorityLocalProgressReceived", _player.userId,
-            _ballCallId: callId, _detail: $"markOnly={_request.automaticMarkOnly} hasBingo={hasBingo}", _session: _session);
+
         if (!_request.automaticMarkOnly && hasBingo)
         {
             if (play.IsDeathRule)

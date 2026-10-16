@@ -787,8 +787,7 @@ public class NetworkGameSessionConnection : NetworkBehaviour
                 bool sent = TrySend(connection, () => connection.ReceiveGamePlayerMarkedCellChangedRpc(
                     updateJson,
                     connection.RpcTarget.Single(clientId, RpcTargetUse.Temp)));
-                LocalBoardTrace.Log("NetworkMarkSendExecuted", updateData.userId, updateData.cellIndex,
-                    _detail: $"client={clientId} sent={sent}");
+
                 if (!sent) _onSendFailed?.Invoke();
                 return sent;
             });
@@ -970,8 +969,7 @@ public class NetworkGameSessionConnection : NetworkBehaviour
 
             if (updateData != null)
             {
-                LocalBoardTrace.Log("NetworkMarkRpcReceived", updateData.userId, updateData.cellIndex,
-                    _detail: $"marked={updateData.isMarked}");
+
                 LocalGamePlayerMarkedCellChangedReceived?.Invoke(updateData);
             }
         }

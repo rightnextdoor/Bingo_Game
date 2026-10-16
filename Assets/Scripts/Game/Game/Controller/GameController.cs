@@ -549,8 +549,7 @@ public partial class GameController : MonoBehaviour
             for (int i = 0; i < localPlayer.markedCellIndices.Count; i++)
             {
                 int cellIndex = localPlayer.markedCellIndices[i];
-                if (!presentedAutomaticMarks.Contains(cellIndex) && !queuedAutomaticMarks.Contains(cellIndex))
-                    LocalBoardTrace.Log("RefreshDiscoveredUnpresentedMark", localUserId, cellIndex);
+
                 PresentAutomaticMark(cellIndex, true);
             }
         }
@@ -705,8 +704,6 @@ public partial class GameController : MonoBehaviour
             return;
         }
 
-        LocalBoardTrace.Log("ControllerMarkReceived", updateData.userId, updateData.cellIndex,
-            _detail: $"marked={updateData.isMarked} automatic={updateData.isAutomaticBoardUpdate}");
         if (!markedCellsByUserId.TryGetValue(
                 updateData.userId,
                 out HashSet<int> markedCells))
@@ -774,7 +771,7 @@ public partial class GameController : MonoBehaviour
                 {
                     int cellIndex = player.markedCellIndices[i];
                     if (!cachedMarks.Add(cellIndex)) continue;
-                    LocalBoardTrace.Log("SnapshotRecoveredMark", player.userId, cellIndex);
+
                     playerListController?.SetPlayerMarkedCell(player.userId, cellIndex, true);
                     if (string.Equals(player.userId, localUserId, StringComparison.Ordinal))
                     {
@@ -856,10 +853,10 @@ public partial class GameController : MonoBehaviour
 
         if (resolvedData.isAutomaticCheck)
         {
-            LocalBoardTrace.Log("AutomaticCheckResultReceived", _detail: $"accepted={resolvedData.wasAccepted}");
+
             if (GameAutomaticBoardAuthority.UsesLocalSequence(GameSessionManager.instance?.GetCurrentPlayer()))
             {
-                LocalBoardTrace.Log("AutomaticCheckAnimationStarted");
+
                 PlayAutomaticDeathCheckAnimation(resolvedData);
                 return;
             }
@@ -945,7 +942,7 @@ public partial class GameController : MonoBehaviour
 
     private void CompleteAutomaticDeathCheckAnimation(int checkNumber)
     {
-        LocalBoardTrace.Log("AutomaticCheckAnimationCompleted", _detail: $"checkNumber={checkNumber}");
+
         if (activeDeathCheckResult == null ||
             checkNumber != activeDeathCheckNumber)
         {
@@ -1324,7 +1321,6 @@ public partial class GameController : MonoBehaviour
             return;
         }
 
-        LocalBoardTrace.Log("LocalMarkPresentationQueued", _cellIndex: cellIndex);
         queuedAutomaticMarks.Add(cellIndex);
         automaticMarkQueue.Enqueue(cellIndex);
 
@@ -1357,15 +1353,9 @@ public partial class GameController : MonoBehaviour
             {
                 int number = localPlayer.boardData.cellNumbers[cellIndex];
                 double presentationEnd = 0d;
-                bool loggedWaiting = false;
                 while (ballDisplayController != null &&
                        !ballDisplayController.TryGetBallPresentationEndTime(number, out presentationEnd))
                 {
-                    if (!loggedWaiting)
-                    {
-                        LocalBoardTrace.Log("LocalMarkWaitingForBall", _cellIndex: cellIndex);
-                        loggedWaiting = true;
-                    }
                     yield return null;
                 }
                 if (presentationEnd > 0d)
@@ -1373,15 +1363,12 @@ public partial class GameController : MonoBehaviour
                     float minimum = GameSettings.instance != null ? GameSettings.instance.AutomaticMarkDelayMinimumSeconds : GameSettings.DefaultAutomaticMarkDelayMinimumSeconds;
                     float maximum = GameSettings.instance != null ? GameSettings.instance.AutomaticMarkDelayMaximumSeconds : GameSettings.DefaultAutomaticMarkDelayMaximumSeconds;
                     double visualMarkDue = presentationEnd + UnityEngine.Random.Range(minimum, maximum);
-                    LocalBoardTrace.Log("LocalMarkVisualDue", _cellIndex: cellIndex,
-                        _detail: $"ballFinished={presentationEnd:F3} due={visualMarkDue:F3}");
+
                     while (GamePlayTimer.GetCurrentTime() < visualMarkDue)
                         yield return null;
                 }
             }
 
-            LocalBoardTrace.Log("LocalMarkAnimationStarted", _cellIndex: cellIndex,
-                _detail: $"boardAvailable={boardSectionController != null}");
             for (int pulse = 0; pulse < pulseCount; pulse++)
             {
                 boardSectionController?.SetAutomaticMarkHighlight(cellIndex, true);
@@ -1393,8 +1380,7 @@ public partial class GameController : MonoBehaviour
             boardSectionController?.SetCellMarked(cellIndex, true);
             queuedAutomaticMarks.Remove(cellIndex);
             presentedAutomaticMarks.Add(cellIndex);
-            LocalBoardTrace.Log("LocalMarkAnimationCompleted", _cellIndex: cellIndex,
-                _detail: $"boardAvailable={boardSectionController != null}");
+
         }
 
         automaticMarkRoutine = null;
@@ -1403,8 +1389,7 @@ public partial class GameController : MonoBehaviour
     private void StopAutomaticMarkPresentation()
     {
         StopLocalAutomaticSequence();
-        if (automaticMarkRoutine != null || automaticMarkQueue.Count > 0)
-            LocalBoardTrace.Log("LocalMarkPresentationStopped", _detail: $"queued={automaticMarkQueue.Count}");
+
         if (automaticMarkRoutine != null)
         {
             StopCoroutine(automaticMarkRoutine);

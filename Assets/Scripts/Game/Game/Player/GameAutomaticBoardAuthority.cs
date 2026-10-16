@@ -142,8 +142,7 @@ public static class GameAutomaticBoardAuthority
         if (currentTime < presentationEnd) return false;
         int calledNumber = calledNumbers[nextCallId - 1];
         int cellIndex = FindBoardCell(playerData.boardData, calledNumber);
-        LocalBoardTrace.Log("AuthorityBallExamined", playerData.userId, cellIndex, calledNumber,
-            nextCallId, $"presentationEnd={presentationEnd:F3}", gameSessionData);
+
 
         if (cellIndex < 0)
         {
@@ -160,8 +159,7 @@ public static class GameAutomaticBoardAuthority
             GameSettings.instance != null
                 ? GameSettings.instance.AutomaticMarkDelayMaximumSeconds
                 : GameSettings.DefaultAutomaticMarkDelayMaximumSeconds);
-        LocalBoardTrace.Log("MarkScheduled", playerData.userId, cellIndex, calledNumber,
-            nextCallId, $"due={playerData.automaticBoardMarkDueTime:F3}", gameSessionData);
+
         return false;
     }
 
@@ -179,9 +177,7 @@ public static class GameAutomaticBoardAuthority
         int cellIndex = playerData.automaticBoardPendingCellIndex;
         int ballCallId = playerData.automaticBoardPendingBallCallId;
         bool markedCellChanged = playerData.TrySetMarkedCell(cellIndex, true);
-        LocalBoardTrace.Log("AuthorityMarkApplied", playerData.userId, cellIndex,
-            _ballCallId: ballCallId, _detail: $"changed={markedCellChanged} due={playerData.automaticBoardMarkDueTime:F3}",
-            _session: gameSessionData);
+
         int pulseCount = GameSettings.instance != null ? GameSettings.instance.AutomaticMarkPulseCount : GameSettings.DefaultAutomaticMarkPulseCount;
         float pulseSeconds = GameSettings.instance != null ? GameSettings.instance.AutomaticMarkPulseSeconds : GameSettings.DefaultAutomaticMarkPulseSeconds;
         playerData.automaticBoardMarkPresentationEndTime = currentTime + pulseCount * pulseSeconds * 2d;

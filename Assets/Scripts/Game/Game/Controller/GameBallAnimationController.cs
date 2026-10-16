@@ -146,10 +146,10 @@ public class GameBallAnimationController : MonoBehaviour
         while (pendingBalls.Count > 0)
         {
             GameBallPresentationData presentationData = pendingBalls.Dequeue();
-            LocalBoardTrace.Log("BallAnimationStarted", _number: presentationData.Number);
+
             yield return AnimateBall(presentationData);
             presentationEndTimes[presentationData.Number] = GamePlayTimer.GetCurrentTime();
-            LocalBoardTrace.Log("BallAnimationCompleted", _number: presentationData.Number);
+
             pendingAnimationNumbers.Remove(presentationData.Number);
         }
 

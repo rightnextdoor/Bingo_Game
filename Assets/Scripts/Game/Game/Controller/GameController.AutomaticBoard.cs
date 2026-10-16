@@ -36,7 +36,7 @@ public partial class GameController
         GamePlayerData player = session?.GetPlayer(UserManager.instance?.UserId);
         if (!IsLocalAutomaticSequenceValid(_gameId, player)) { localAutomaticSequence = null; yield break; }
         int number = session.gamePlayController.BallController.CalledNumbers[_callId - 1];
-        LocalBoardTrace.Log("LocalSequenceBallReceived", _number: number, _ballCallId: _callId);
+
         double presentationEnd;
         while (ballDisplayController != null &&
                !ballDisplayController.TryGetBallPresentationEndTime(number, out presentationEnd))
@@ -50,14 +50,13 @@ public partial class GameController
             float minimum = GameSettings.instance != null ? GameSettings.instance.AutomaticMarkDelayMinimumSeconds : GameSettings.DefaultAutomaticMarkDelayMinimumSeconds;
             float maximum = GameSettings.instance != null ? GameSettings.instance.AutomaticMarkDelayMaximumSeconds : GameSettings.DefaultAutomaticMarkDelayMaximumSeconds;
             double markDue = GamePlayTimer.GetCurrentTime() + UnityEngine.Random.Range(minimum, maximum);
-            LocalBoardTrace.Log("LocalSequenceMarkDelayStarted", _cellIndex: cellIndex, _ballCallId: _callId,
-                _detail: $"due={markDue:F3}");
+
             while (SessionPauseManager.IsPaused || GamePlayTimer.GetCurrentTime() < markDue) yield return null;
             player = GameSessionManager.instance?.GetCurrentPlayer();
             if (!IsLocalAutomaticSequenceValid(_gameId, player)) { localAutomaticSequence = null; yield break; }
             int pulses = GameSettings.instance != null ? GameSettings.instance.AutomaticMarkPulseCount : GameSettings.DefaultAutomaticMarkPulseCount;
             float pulseSeconds = GameSettings.instance != null ? GameSettings.instance.AutomaticMarkPulseSeconds : GameSettings.DefaultAutomaticMarkPulseSeconds;
-            LocalBoardTrace.Log("LocalSequenceMarkAnimationStarted", _cellIndex: cellIndex, _ballCallId: _callId);
+
             for (int i = 0; i < pulses; i++)
             {
                 boardSectionController?.SetAutomaticMarkHighlight(cellIndex, true);
@@ -70,43 +69,40 @@ public partial class GameController
             boardSectionController?.SetCellMarked(cellIndex, true);
             player.TrySetMarkedCell(cellIndex, true);
             presentedAutomaticMarks.Add(cellIndex);
-            LocalBoardTrace.Log("LocalSequenceMarkCompleted", _cellIndex: cellIndex, _ballCallId: _callId);
+
 
             float bingoMinimum = GameSettings.instance != null ? GameSettings.instance.AutomaticBingoDelayMinimumSeconds : GameSettings.DefaultAutomaticBingoDelayMinimumSeconds;
             float bingoMaximum = GameSettings.instance != null ? GameSettings.instance.AutomaticBingoDelayMaximumSeconds : GameSettings.DefaultAutomaticBingoDelayMaximumSeconds;
             double bingoDue = GamePlayTimer.GetCurrentTime() + UnityEngine.Random.Range(bingoMinimum, bingoMaximum);
-            LocalBoardTrace.Log("LocalSequenceBingoDelayStarted", _cellIndex: cellIndex, _ballCallId: _callId,
-                _detail: $"due={bingoDue:F3}");
+
             OnGamePlayerMarkedCellChanged(new GamePlayerMarkedCellChangedData(_gameId, player.userId, cellIndex, true, true));
-            bool reported = GameSessionManager.instance.ReportLocalAutomaticBoardProgress(_callId, true);
-            LocalBoardTrace.Log("LocalSequenceMarkReported", _cellIndex: cellIndex, _ballCallId: _callId,
-                _detail: $"sent={reported}");
+            GameSessionManager.instance.ReportLocalAutomaticBoardProgress(_callId, true);
+
             session = GameSessionManager.instance.CurrentGameSession;
             player = session.GetPlayer(UserManager.instance.UserId);
             List<int> prefix = new List<int>(_callId);
             for (int i = 0; i < _callId; i++) prefix.Add(session.gamePlayController.BallController.CalledNumbers[i]);
             bool hasBingo = session.gamePlayController.GetCompletedAvailablePatterns(player.userId,
                 player.boardData, player.markedCellIndices, prefix, session.patternTypes).Count > 0;
-            LocalBoardTrace.Log("LocalSequenceBingoEvaluated", _cellIndex: cellIndex, _ballCallId: _callId,
-                _detail: $"hasBingo={hasBingo}");
+
             while (SessionPauseManager.IsPaused || GamePlayTimer.GetCurrentTime() < bingoDue) yield return null;
-            LocalBoardTrace.Log("LocalSequenceBingoDelayCompleted", _cellIndex: cellIndex, _ballCallId: _callId);
+
             player = GameSessionManager.instance?.GetCurrentPlayer();
             if (hasBingo && IsLocalAutomaticSequenceValid(_gameId, player))
             {
                 isBingoCheckPending = true;
-                LocalBoardTrace.Log("LocalSequenceBingoSubmitted", _cellIndex: cellIndex, _ballCallId: _callId);
+
                 if (!GameSessionManager.instance.ReportLocalAutomaticBoardProgress(_callId, false))
                 {
                     isBingoCheckPending = false;
-                    LocalBoardTrace.Log("LocalSequenceBingoSendFailed", _ballCallId: _callId);
+
                 }
             }
         }
         else
         {
             GameSessionManager.instance.ReportLocalAutomaticBoardProgress(_callId, true);
-            LocalBoardTrace.Log("LocalSequenceBallSkipped", _number: number, _ballCallId: _callId);
+
         }
         localAutomaticLastCallId = _callId;
         localAutomaticSequence = null;
@@ -125,7 +121,7 @@ public partial class GameController
         {
             StopCoroutine(localAutomaticSequence);
             localAutomaticSequence = null;
-            LocalBoardTrace.Log("LocalSequenceStopped");
+
         }
         localAutomaticSessionId = string.Empty;
     }

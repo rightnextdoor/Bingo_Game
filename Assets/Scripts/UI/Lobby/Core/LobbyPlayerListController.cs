@@ -299,8 +299,7 @@ public class LobbyPlayerListController : MonoBehaviour
 
         bool highlighted = !string.IsNullOrWhiteSpace(selectedUserId) && selectedUserId == playerData.userId;
         bool refreshBoard = refreshBoundBoards || row.UserId != playerData.userId;
-        LocalBoardTrace.Log("PlayerListRowBound", playerData.userId,
-            _detail: $"refreshBoard={refreshBoard} storedMarkCount={playerData.markedCellIndices?.Count ?? 0}");
+
         row.Setup(playerData, OnRowClicked, OnKickRequested, highlighted, refreshBoard);
         visibleRowsByUserId[playerData.userId] = row;
     }
@@ -499,7 +498,6 @@ public class LobbyPlayerListController : MonoBehaviour
             return;
         }
 
-        LocalBoardTrace.Log("PlayerListMarkReceived", userId, cellIndex, _detail: $"marked={isMarked}");
         if (TryGetPlayerData(userId, out PlayerListPlayerData playerData))
         {
             playerData.markedCellIndices ??= new List<int>();
@@ -522,12 +520,10 @@ public class LobbyPlayerListController : MonoBehaviour
             }
         }
 
-        LocalBoardTrace.Log("PlayerListMarkState", userId, cellIndex,
-            _detail: $"storedPlayerFound={playerData != null} storedMarked={playerData?.markedCellIndices?.Contains(cellIndex)} visible={visibleRowsByUserId.ContainsKey(userId)}");
         if (visibleRowsByUserId.TryGetValue(userId, out LobbyPlayerRowUI row) && row != null)
         {
             row.SetMarkedCell(cellIndex, isMarked);
-            LocalBoardTrace.Log("PlayerListVisibleMarkApplied", userId, cellIndex, _detail: $"marked={isMarked}");
+
         }
     }
 

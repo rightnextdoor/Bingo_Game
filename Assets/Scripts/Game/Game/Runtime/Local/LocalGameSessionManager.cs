@@ -104,8 +104,7 @@ public class LocalGameSessionManager : MonoBehaviour, IGameSessionService
 
             if (updateData != null)
             {
-                LocalBoardTrace.Log("MarkEventDispatched", updateData.userId, updateData.cellIndex,
-                    _detail: $"marked={updateData.isMarked}", _session: gameSessionData);
+
                 LocalGamePlayerMarkedCellChanged?.Invoke(updateData);
             }
         }

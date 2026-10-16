@@ -134,8 +134,7 @@ public class NetworkGameSessionManager : MonoBehaviour
 
             if (updateData != null)
             {
-                LocalBoardTrace.Log("NetworkMarkEventDispatched", updateData.userId, updateData.cellIndex,
-                    _session: gameSessionData);
+
                 BroadcastGamePlayerMarkedCellChanged(gameSessionData, updateData);
             }
         }
@@ -1106,8 +1105,7 @@ public class NetworkGameSessionManager : MonoBehaviour
                 clientId,
                 updateData,
                 () => RequeueMarkedCellUpdate(gameSessionData, updateData));
-            LocalBoardTrace.Log("NetworkMarkQueueResult", updateData.userId, updateData.cellIndex,
-                _detail: $"client={clientId} accepted={accepted}", _session: gameSessionData);
+
             if (!accepted) RequeueMarkedCellUpdate(gameSessionData, updateData);
         }
     }
@@ -1118,8 +1116,7 @@ public class NetworkGameSessionManager : MonoBehaviour
         GamePlayerData player = _session?.GetPlayer(_update.userId);
         if (player == null) return;
         bool marked = player.markedCellIndices?.Contains(_update.cellIndex) == true;
-        LocalBoardTrace.Log("NetworkMarkRetryQueued", _update.userId, _update.cellIndex,
-            _detail: $"marked={marked}", _session: _session);
+
         _session.QueueMarkedCellUpdate(player, _update.cellIndex, marked, _update.isAutomaticBoardUpdate);
     }
 

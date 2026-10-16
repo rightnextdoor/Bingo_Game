@@ -327,9 +327,7 @@ public class GameSceneManager : MonoBehaviour
         bool sceneReady = sceneReadyController == null || sceneReadyController.AreAllReady();
         bool lobbyEntryFinished = IsLobbyEntryFinished();
         bool gameEntryFinished = IsGameEntryFinished();
-        bool sessionChatPreparationFinished = IsSessionChatPreparationFinished();
-
-        return minimumTimeDone && sceneReady && lobbyEntryFinished && gameEntryFinished && sessionChatPreparationFinished;
+        return minimumTimeDone && sceneReady && lobbyEntryFinished && gameEntryFinished;
     }
 
     #endregion
@@ -394,38 +392,6 @@ public class GameSceneManager : MonoBehaviour
         {
             return LoadingFaderManager.instance;
         }
-    }
-
-    private bool IsSessionChatPreparationFinished()
-    {
-        bool requiresNetworkSessionChat = false;
-
-        if (currentSceneType == GameSceneType.Lobby)
-        {
-            LobbyManager lobbyManager = LobbyManager.instance;
-
-            requiresNetworkSessionChat =
-                lobbyManager != null &&
-                lobbyManager.EntryState != LobbyEntryState.Failed &&
-                lobbyManager.RuntimeType == SessionRuntimeType.Network;
-        }
-        else if (currentSceneType == GameSceneType.Game)
-        {
-            GameSessionManager gameSessionManager = GameSessionManager.instance;
-
-            requiresNetworkSessionChat =
-                gameSessionManager != null &&
-                gameSessionManager.EntryState == GameSessionEntryState.Completed &&
-                gameSessionManager.RuntimeType == SessionRuntimeType.Network;
-        }
-
-        if (!requiresNetworkSessionChat)
-        {
-            return true;
-        }
-
-        ChatManager chatManager = ChatManager.instance;
-        return chatManager == null || !chatManager.IsReady || chatManager.IsSessionPreparationResolved;
     }
 
     private bool IsLobbyEntryFinished()

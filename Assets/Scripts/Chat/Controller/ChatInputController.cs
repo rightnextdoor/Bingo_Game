@@ -20,7 +20,6 @@ public class ChatInputController : MonoBehaviour
     [SerializeField] private ChatSuggestionController suggestionController;
 
     private ChatCommandCatalog commandCatalog;
-    private bool submitting;
     private bool suppressValueChanged;
 
     #endregion
@@ -135,19 +134,17 @@ public class ChatInputController : MonoBehaviour
 
     public void SetInteractable(bool interactable)
     {
-        bool finalInteractable = interactable && !submitting;
-
         if (chatInputField != null)
         {
-            chatInputField.interactable = finalInteractable;
+            chatInputField.interactable = true;
         }
 
         if (sendButton != null)
         {
-            sendButton.interactable = finalInteractable;
+            sendButton.interactable = true;
         }
 
-        if (!finalInteractable)
+        if (!interactable)
         {
             suggestionController?.ClearSuggestions();
         }
@@ -188,6 +185,7 @@ public class ChatInputController : MonoBehaviour
     private string GetSubmissionInput(string input)
     {
         string submittedInput = chatInputField != null ? chatInputField.text : input ?? string.Empty;
+        if (!CanSendChat(ChatManager.instance)) return submittedInput;
 
         if (!ShouldAcceptPlayerSuggestionOnSubmit(submittedInput))
         {
@@ -254,15 +252,15 @@ public class ChatInputController : MonoBehaviour
 
     private async Task SubmitAsync(string input)
     {
-        if (submitting)
-        {
-            return;
-        }
-
         string submittedInput = input ?? string.Empty;
         ClearInput();
 
         ChatManager chatManager = ChatManager.instance;
+        if (!CanSendChat(chatManager))
+        {
+            FocusInput();
+            return;
+        }
         ChatErrorType inputError = ChatError.CheckInput(submittedInput, chatManager);
 
         if (inputError != ChatErrorType.None)
@@ -274,14 +272,19 @@ public class ChatInputController : MonoBehaviour
 
         RememberCompletedCommand(submittedInput);
 
-        submitting = true;
-        RefreshInteractableState();
-
-        ChatSendResult result = await chatManager.SubmitMessageAsync(submittedInput);
-
-        submitting = false;
-        RefreshInteractableState();
-
+        FocusInput();
+        ChatSendResult result;
+        try
+        {
+            result = await chatManager.SubmitMessageAsync(submittedInput);
+        }
+        catch (Exception exception)
+        {
+            if (this != null && isActiveAndEnabled && CanSendChat(ChatManager.instance))
+                HandleChatError(ChatErrorType.SendFailed, exception.Message);
+            return;
+        }
+        if (this == null || !isActiveAndEnabled || !CanSendChat(ChatManager.instance)) return;
         if (result == null || !result.success)
         {
             HandleChatError(
@@ -290,8 +293,12 @@ public class ChatInputController : MonoBehaviour
                     ? ChatError.GetMessage(ChatErrorType.SendFailed)
                     : result.failureMessage);
         }
+    }
 
-        FocusInput();
+    private static bool CanSendChat(ChatManager _manager)
+    {
+        return _manager != null && _manager.IsChatEnabled &&
+            _manager.IsChatAvailable && _manager.HasSessionConversation;
     }
 
     public void HandleChatError(ChatErrorType errorType, string message)
@@ -322,6 +329,7 @@ public class ChatInputController : MonoBehaviour
     private void RefreshSuggestions(string input)
     {
         suggestionController?.ClearSuggestions();
+        if (!CanSendChat(ChatManager.instance)) return;
 
         ChatManager chatManager = ChatManager.instance;
 

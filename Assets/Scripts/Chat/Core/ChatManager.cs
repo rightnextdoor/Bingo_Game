@@ -25,7 +25,6 @@ public class ChatManager : MonoBehaviour
     private readonly Dictionary<string, ChatConversationData> conversations = new Dictionary<string, ChatConversationData>();
     private readonly Dictionary<string, ChatParticipantData> blockedUsers = new Dictionary<string, ChatParticipantData>(StringComparer.Ordinal);
 
-    private const float SessionPreparationLoadTimeoutSeconds = 15f;
 
     private bool isReady;
     private bool isChatEnabled = true;
@@ -38,6 +37,8 @@ public class ChatManager : MonoBehaviour
     private bool isSubscribedToGameSessionManager;
     private bool lastReportedChatAvailable;
     private bool isSessionPreparationResolved = true;
+    private bool isStopping;
+    private int sessionJoinTaskVersion;
     private bool suppressChatSettingsChanged;
 
     private Task<bool> serviceReadyTask;
@@ -52,7 +53,6 @@ public class ChatManager : MonoBehaviour
     private string lastSuggestedCommandName = string.Empty;
     private string lastServiceError = string.Empty;
     private string pendingSessionLobbyId = string.Empty;
-    private float sessionPreparationLoadDeadline;
     private int sessionPreparationVersion;
     private ChatConnectionState connectionState = ChatConnectionState.Disabled;
 
@@ -125,24 +125,26 @@ public class ChatManager : MonoBehaviour
 
     private void Update()
     {
-        SubscribeToGameSessionManager();
+        if (!isStopping) SubscribeToGameSessionManager();
+    }
 
-        if (isSessionPreparationResolved || sessionPreparationLoadDeadline <= 0f)
-        {
-            return;
-        }
+    internal void PrepareForApplicationShutdown()
+    {
+        if (isStopping) return;
+        isStopping = true;
+        sessionPreparationVersion++;
+    }
 
-        if (Time.realtimeSinceStartup < sessionPreparationLoadDeadline)
-        {
-            return;
-        }
-
-        sessionPreparationLoadDeadline = 0f;
-        isSessionPreparationResolved = true;
+    private void OnApplicationQuit()
+    {
+        PrepareForApplicationShutdown();
     }
 
     private void OnDestroy()
     {
+        isStopping = true;
+        isReady = false;
+        sessionPreparationVersion++;
         UnsubscribeFromConnectionManager();
         UnsubscribeFromUserManager();
         UnsubscribeFromChatService();
@@ -293,6 +295,7 @@ public class ChatManager : MonoBehaviour
     private async Task<bool> EnsureChatServiceReadyInternalAsync(ChatParticipantData localParticipant)
     {
         bool ready = await chatService.EnsureReadyAsync(localParticipant);
+        if (this == null || isStopping) return false;
 
         if (!ready)
         {
@@ -336,7 +339,7 @@ public class ChatManager : MonoBehaviour
         lastServiceError = string.IsNullOrWhiteSpace(reason) ? "Chat is unavailable." : reason;
         isChatEnabled = false;
         isSessionPreparationResolved = true;
-        sessionPreparationLoadDeadline = 0f;
+
         SetChatConnectionState(ChatConnectionState.Unavailable);
         ClearChatConversationState();
         DisableSavedChatSettingAfterFailure();
@@ -368,6 +371,7 @@ public class ChatManager : MonoBehaviour
 
     private void SetChatConnectionState(ChatConnectionState state)
     {
+        if (isStopping) return;
         if (connectionState == state)
         {
             return;
@@ -379,6 +383,7 @@ public class ChatManager : MonoBehaviour
 
     private void PublishChatAvailabilityIfChanged()
     {
+        if (isStopping) return;
         bool currentAvailability = IsChatAvailable;
 
         if (lastReportedChatAvailable == currentAvailability)
@@ -396,22 +401,25 @@ public class ChatManager : MonoBehaviour
 
     public void BeginSessionPreparation(string lobbyId)
     {
+        if (isStopping) return;
         string normalizedLobbyId = lobbyId?.Trim() ?? string.Empty;
 
         if (!isReady || string.IsNullOrWhiteSpace(normalizedLobbyId))
         {
             isSessionPreparationResolved = true;
-            sessionPreparationLoadDeadline = 0f;
+
             return;
         }
 
+        if (!isSessionPreparationResolved &&
+            string.Equals(pendingSessionLobbyId, normalizedLobbyId, StringComparison.Ordinal)) return;
         pendingSessionLobbyId = normalizedLobbyId;
         sessionPreparationVersion++;
 
         if (!isChatEnabled)
         {
             isSessionPreparationResolved = true;
-            sessionPreparationLoadDeadline = 0f;
+
 
             if (connectionState != ChatConnectionState.Unavailable)
             {
@@ -424,14 +432,14 @@ public class ChatManager : MonoBehaviour
         if (HasMatchingSessionConversation(normalizedLobbyId) && chatService != null && chatService.IsReady)
         {
             isSessionPreparationResolved = true;
-            sessionPreparationLoadDeadline = 0f;
+
             SetChatConnectionState(ChatConnectionState.Ready);
             RefreshCurrentSessionParticipants(normalizedLobbyId);
             return;
         }
 
         isSessionPreparationResolved = false;
-        sessionPreparationLoadDeadline = Time.realtimeSinceStartup + SessionPreparationLoadTimeoutSeconds;
+
         SetChatConnectionState(ChatConnectionState.Connecting);
         StartJoinSession(normalizedLobbyId, sessionPreparationVersion);
     }
@@ -444,14 +452,18 @@ public class ChatManager : MonoBehaviour
         }
 
         string normalizedLobbyId = lobbyId.Trim();
+        int preparationVersion = sessionPreparationVersion;
 
         if (sessionJoinTask != null && !sessionJoinTask.IsCompleted)
         {
             Task<bool> activeJoinTask = sessionJoinTask;
             string activeJoinLobbyId = sessionJoinTaskLobbyId;
+            int activeJoinVersion = sessionJoinTaskVersion;
             bool activeResult = await activeJoinTask;
+            if (!IsCurrentSessionRequest(normalizedLobbyId, preparationVersion)) return false;
 
-            if (string.Equals(activeJoinLobbyId, normalizedLobbyId, StringComparison.Ordinal))
+            if (activeJoinVersion == preparationVersion &&
+                string.Equals(activeJoinLobbyId, normalizedLobbyId, StringComparison.Ordinal))
             {
                 return activeResult;
             }
@@ -468,6 +480,7 @@ public class ChatManager : MonoBehaviour
         Task<bool> activeTask = JoinSessionRequestInternalAsync(requestedSession);
         sessionJoinTask = activeTask;
         sessionJoinTaskLobbyId = normalizedLobbyId;
+        sessionJoinTaskVersion = preparationVersion;
 
         try
         {
@@ -483,8 +496,17 @@ public class ChatManager : MonoBehaviour
         }
     }
 
+    private bool IsCurrentSessionRequest(string _lobbyId, int _version)
+    {
+        return this != null && !isStopping && isReady && isChatEnabled &&
+            _version == sessionPreparationVersion &&
+            (string.IsNullOrWhiteSpace(pendingSessionLobbyId) ||
+             string.Equals(pendingSessionLobbyId, _lobbyId, StringComparison.Ordinal));
+    }
+
     private async Task<bool> JoinSessionRequestInternalAsync(ChatConversationReference requestedSession)
     {
+        int preparationVersion = sessionPreparationVersion;
         if (HasSessionConversation && string.Equals(SessionConversation.conversationId, requestedSession.conversationId, StringComparison.Ordinal))
         {
             if (!await EnsureChatReadyAsync())
@@ -492,12 +514,14 @@ public class ChatManager : MonoBehaviour
                 return false;
             }
 
+            if (!IsCurrentSessionRequest(requestedSession.conversationId, preparationVersion)) return false;
             if (!await chatService.JoinConversationAsync(requestedSession))
             {
                 lastServiceError = chatService.LastError;
                 return false;
             }
 
+            if (!IsCurrentSessionRequest(requestedSession.conversationId, preparationVersion)) return false;
             RefreshCurrentSessionParticipants(requestedSession.conversationId);
             return true;
         }
@@ -507,6 +531,7 @@ public class ChatManager : MonoBehaviour
 
     private async Task<bool> JoinSessionInternalAsync(ChatConversationReference requestedSession)
     {
+        int preparationVersion = sessionPreparationVersion;
         if (HasSessionConversation)
         {
             ChatConversationReference currentSession = SessionConversation.Reference;
@@ -517,6 +542,7 @@ public class ChatManager : MonoBehaviour
             }
         }
 
+        if (!IsCurrentSessionRequest(requestedSession.conversationId, preparationVersion)) return false;
         ClearSessionBlocks();
 
         if (!await JoinConversationAsync(requestedSession))
@@ -524,11 +550,12 @@ public class ChatManager : MonoBehaviour
             return false;
         }
 
+        if (!IsCurrentSessionRequest(requestedSession.conversationId, preparationVersion)) return false;
         sessionConversationKey = requestedSession.Key;
         SetActiveConversation(requestedSession);
         RefreshCurrentSessionParticipants(requestedSession.conversationId);
         await LoadHistoryAsync(requestedSession, GetMaximumRetainedMessages());
-        return true;
+        return IsCurrentSessionRequest(requestedSession.conversationId, preparationVersion);
     }
 
     public async Task<bool> LeaveSessionAsync()
@@ -568,7 +595,7 @@ public class ChatManager : MonoBehaviour
         ChatConversationReference session = SessionConversation.Reference;
         bool left = await LeaveConversationAsync(session);
 
-        if (left)
+        if (left && sessionConversationKey == session.Key)
         {
             sessionConversationKey = string.Empty;
             lastPrivateMessageUserId = string.Empty;
@@ -583,14 +610,14 @@ public class ChatManager : MonoBehaviour
     {
         bool joined = await JoinSessionAsync(lobbyId);
 
-        if (preparationVersion != sessionPreparationVersion ||
+        if (this == null || isStopping || preparationVersion != sessionPreparationVersion ||
             !string.Equals(pendingSessionLobbyId, lobbyId, StringComparison.Ordinal))
         {
             return;
         }
 
         isSessionPreparationResolved = true;
-        sessionPreparationLoadDeadline = 0f;
+
 
         if (!isChatEnabled)
         {
@@ -653,7 +680,7 @@ public class ChatManager : MonoBehaviour
         pendingSessionLobbyId = string.Empty;
         sessionPreparationVersion++;
         isSessionPreparationResolved = true;
-        sessionPreparationLoadDeadline = 0f;
+
     }
 
     #endregion
@@ -662,16 +689,15 @@ public class ChatManager : MonoBehaviour
 
     public async Task<bool> JoinConversationAsync(ChatConversationReference conversation)
     {
-        if (conversation == null || !conversation.IsValid || !isChatEnabled)
+        if (isStopping || conversation == null || !conversation.IsValid || !isChatEnabled)
         {
             return false;
         }
 
-        if (!await EnsureChatReadyAsync())
-        {
-            return false;
-        }
-
+        int preparationVersion = sessionPreparationVersion;
+        if (!await EnsureChatReadyAsync()) return false;
+        if (this == null || isStopping || conversation.conversationType == ChatConversationType.Session &&
+            !IsCurrentSessionRequest(conversation.conversationId, preparationVersion)) return false;
         string conversationKey = conversation.Key;
 
         if (conversations.ContainsKey(conversationKey))
@@ -680,6 +706,13 @@ public class ChatManager : MonoBehaviour
         }
 
         bool joined = await chatService.JoinConversationAsync(conversation);
+        if (this == null || isStopping) return false;
+        if (conversation.conversationType == ChatConversationType.Session &&
+            !IsCurrentSessionRequest(conversation.conversationId, preparationVersion))
+        {
+            if (joined) await chatService.LeaveConversationAsync(conversation);
+            return false;
+        }
 
         if (!joined)
         {
@@ -715,24 +748,16 @@ public class ChatManager : MonoBehaviour
             return true;
         }
 
-        bool left = chatService == null || await chatService.LeaveConversationAsync(conversation);
-
-        if (!left)
-        {
-            lastServiceError = chatService?.LastError ?? string.Empty;
-            return false;
-        }
-
         conversations.Remove(conversationKey);
-
         if (activeConversationKey == conversationKey)
         {
             activeConversationKey = string.Empty;
             ActiveConversationChanged?.Invoke(null);
         }
-
         ConversationLeft?.Invoke(new ChatConversationReference(conversation.conversationId, conversation.conversationType));
-        return true;
+        bool left = chatService == null || await chatService.LeaveConversationAsync(conversation);
+        if (this != null && !isStopping && !left) lastServiceError = chatService?.LastError ?? string.Empty;
+        return left;
     }
 
     public bool SetActiveConversation(ChatConversationReference conversation)
@@ -2493,12 +2518,10 @@ public class ChatManager : MonoBehaviour
     {
         RequestHelpClose();
 
-        if (chatService != null)
-        {
-            await chatService.ShutdownAsync();
-        }
-
+        ClearPendingSessionPreparation();
         ClearChatConversationState();
+        if (chatService != null) await chatService.ShutdownAsync();
+        if (this == null || isStopping) return;
 
         if (!isChatEnabled)
         {

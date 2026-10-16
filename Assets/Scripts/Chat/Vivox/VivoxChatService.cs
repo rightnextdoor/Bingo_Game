@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Unity.Services.Vivox;
 using UnityEngine;
@@ -29,19 +30,6 @@ public class VivoxChatService : MonoBehaviour, IChatService
 
     private const string MetadataType = "BingoChatMessage";
 
-    // Temporary isolation switch for investigating Play-mode loading and shutdown.
-    private static bool IsDisabledForShutdownInvestigation
-    {
-        get
-        {
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-            return true;
-#else
-            return false;
-#endif
-        }
-    }
-
     #endregion
 
     #region Fields
@@ -57,6 +45,10 @@ public class VivoxChatService : MonoBehaviour, IChatService
     private bool isAdapterReady;
     private bool eventsSubscribed;
     private bool isShuttingDown;
+    private bool isApplicationStopping;
+    private CancellationTokenSource operationCancellation = new CancellationTokenSource();
+    private Task shutdownTask;
+    private static VivoxChatService activeService;
     private bool serviceUnavailable;
 
     private Task<bool> readinessTask;
@@ -69,8 +61,7 @@ public class VivoxChatService : MonoBehaviour, IChatService
 #endif
 
     public bool IsReady =>
-        !IsDisabledForShutdownInvestigation &&
-        isAdapterReady &&
+        isAdapterReady && !isShuttingDown && !isApplicationStopping &&
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         developmentConnectionAvailable &&
 #endif
@@ -88,9 +79,40 @@ public class VivoxChatService : MonoBehaviour, IChatService
 
     #region Unity Methods
 
+    private void OnApplicationQuit()
+    {
+        BeginApplicationShutdown();
+    }
+
+#if UNITY_EDITOR
+    [UnityEditor.InitializeOnLoadMethod]
+    private static void RegisterEditorShutdown()
+    {
+        UnityEditor.EditorApplication.playModeStateChanged -= OnEditorPlayModeChanged;
+        UnityEditor.EditorApplication.playModeStateChanged += OnEditorPlayModeChanged;
+    }
+
+    private static void OnEditorPlayModeChanged(UnityEditor.PlayModeStateChange _state)
+    {
+        if (_state == UnityEditor.PlayModeStateChange.ExitingPlayMode && activeService != null)
+            activeService.BeginApplicationShutdown();
+    }
+#endif
+
+    private void BeginApplicationShutdown()
+    {
+        if (isApplicationStopping) return;
+        isApplicationStopping = true;
+        ChatManager.instance?.PrepareForApplicationShutdown();
+        _ = ShutdownAsync();
+    }
+
     private void OnDestroy()
     {
+        BeginApplicationShutdown();
         UnsubscribeFromVivoxEvents();
+        operationCancellation.Dispose();
+        if (activeService == this) activeService = null;
     }
 
     #endregion
@@ -112,20 +134,15 @@ public class VivoxChatService : MonoBehaviour, IChatService
         }
 
         isAdapterReady = true;
-        if (IsDisabledForShutdownInvestigation)
-        {
-            serviceUnavailable = true;
-            lastError = "Vivox is temporarily disabled for loading and shutdown investigation.";
-            return true;
-        }
+        activeService = this;
         VivoxConnectionLogHandler.Install();
         return true;
     }
 
     public async Task<bool> EnsureReadyAsync(ChatParticipantData participant)
     {
-        if (IsDisabledForShutdownInvestigation) return false;
-        if (!isAdapterReady || participant == null || !participant.IsValid)
+        if (!isAdapterReady || isShuttingDown || isApplicationStopping || !Application.isPlaying ||
+            participant == null || !participant.IsValid)
         {
             return false;
         }
@@ -171,6 +188,7 @@ public class VivoxChatService : MonoBehaviour, IChatService
 
     private async Task<bool> EnsureReadyInternalAsync()
     {
+        CancellationToken cancellation = operationCancellation.Token;
         lastError = string.Empty;
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
@@ -196,7 +214,7 @@ public class VivoxChatService : MonoBehaviour, IChatService
 
             if (VivoxService.Instance.InitializationState != VivoxInitializationState.Initialized)
             {
-                await VivoxService.Instance.InitializeAsync();
+                if (!await AwaitOperationAsync(VivoxService.Instance.InitializeAsync(), cancellation)) return false;
             }
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
@@ -207,6 +225,7 @@ public class VivoxChatService : MonoBehaviour, IChatService
             }
 #endif
 
+            if (this == null || cancellation.IsCancellationRequested || isApplicationStopping) return false;
             if (!VivoxService.Instance.IsLoggedIn)
             {
                 LoginOptions loginOptions = new LoginOptions
@@ -214,7 +233,7 @@ public class VivoxChatService : MonoBehaviour, IChatService
                     DisplayName = localParticipant.userId
                 };
 
-                await VivoxService.Instance.LoginAsync(loginOptions);
+                if (!await AwaitOperationAsync(VivoxService.Instance.LoginAsync(loginOptions), cancellation)) return false;
             }
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
@@ -230,6 +249,7 @@ public class VivoxChatService : MonoBehaviour, IChatService
             }
 #endif
 
+            if (this == null || cancellation.IsCancellationRequested || isApplicationStopping) return false;
             if (!VivoxService.Instance.IsLoggedIn)
             {
                 SetUnavailable("Vivox did not create a logged-in session.");
@@ -242,6 +262,7 @@ public class VivoxChatService : MonoBehaviour, IChatService
         }
         catch (Exception exception)
         {
+            if (this == null || cancellation.IsCancellationRequested || isApplicationStopping) return false;
             connectionAttempt.ReportFailure(exception);
             SetUnavailable(exception.Message);
             return false;
@@ -264,6 +285,7 @@ public class VivoxChatService : MonoBehaviour, IChatService
             return false;
         }
 
+        CancellationToken cancellation = operationCancellation.Token;
         string conversationKey = conversation.Key;
 
         if (channelNameByConversationKey.ContainsKey(conversationKey))
@@ -276,7 +298,9 @@ public class VivoxChatService : MonoBehaviour, IChatService
 
         try
         {
-            await VivoxService.Instance.JoinGroupChannelAsync(channelName, ChatCapability.TextOnly);
+            if (!await AwaitOperationAsync(
+                    VivoxService.Instance.JoinGroupChannelAsync(channelName, ChatCapability.TextOnly), cancellation)) return false;
+            if (this == null || cancellation.IsCancellationRequested || isApplicationStopping) return false;
 
             channelNameByConversationKey[conversationKey] = channelName;
             conversationByChannelName[channelName] = new ChatConversationReference(conversation.conversationId, conversation.conversationType);
@@ -287,7 +311,8 @@ public class VivoxChatService : MonoBehaviour, IChatService
         }
         catch (Exception exception)
         {
-            lastError = exception.Message;
+            if (this != null && !cancellation.IsCancellationRequested && !isApplicationStopping)
+                lastError = exception.Message;
             return false;
         }
     }
@@ -307,16 +332,18 @@ public class VivoxChatService : MonoBehaviour, IChatService
             return true;
         }
 
+        channelNameByConversationKey.Remove(conversationKey);
+        conversationByChannelName.Remove(channelName);
+        providerPlayerIdByUserIdByConversationKey.Remove(conversationKey);
+        if (isApplicationStopping || isShuttingDown) return true;
+        CancellationToken cancellation = operationCancellation.Token;
         try
         {
             if (VivoxService.Instance != null && VivoxService.Instance.IsLoggedIn)
             {
-                await VivoxService.Instance.LeaveChannelAsync(channelName);
+                if (!await AwaitOperationAsync(VivoxService.Instance.LeaveChannelAsync(channelName), cancellation)) return false;
             }
 
-            channelNameByConversationKey.Remove(conversationKey);
-            conversationByChannelName.Remove(channelName);
-            providerPlayerIdByUserIdByConversationKey.Remove(conversationKey);
             return true;
         }
         catch (Exception exception)
@@ -772,6 +799,7 @@ public class VivoxChatService : MonoBehaviour, IChatService
 
     private void SetUnavailable(string reason)
     {
+        if (isApplicationStopping || isShuttingDown) return;
         serviceUnavailable = true;
         lastError = string.IsNullOrWhiteSpace(reason) ? "Chat is unavailable." : reason;
 
@@ -790,7 +818,6 @@ public class VivoxChatService : MonoBehaviour, IChatService
 
     public async Task<bool> SetDevelopmentConnectionAvailableAsync(bool available, float retryFailureDelaySeconds = 2f)
     {
-        if (IsDisabledForShutdownInvestigation) return false;
         developmentRetryFailureDelaySeconds = Mathf.Max(0f, retryFailureDelaySeconds);
         developmentConnectionAvailable = available;
 
@@ -860,43 +887,63 @@ public class VivoxChatService : MonoBehaviour, IChatService
 
     #region Shutdown
 
-    public async Task ShutdownAsync()
+    public Task ShutdownAsync()
     {
-        if (IsDisabledForShutdownInvestigation) return;
-        if (!isAdapterReady)
-        {
-            return;
-        }
-
+        if (isApplicationStopping && shutdownTask != null) return shutdownTask;
+        if (shutdownTask != null && !shutdownTask.IsCompleted) return shutdownTask;
+        if (!isAdapterReady) return Task.CompletedTask;
         isShuttingDown = true;
+        operationCancellation.Cancel();
+        UnsubscribeFromVivoxEvents();
+        channelNameByConversationKey.Clear();
+        conversationByChannelName.Clear();
+        providerPlayerIdByUserIdByConversationKey.Clear();
+        shutdownTask = LogoutInternalAsync();
+        return shutdownTask;
+    }
 
+    private async Task LogoutInternalAsync()
+    {
         try
         {
-            Task<bool> activeReadinessTask = readinessTask;
-
-            if (activeReadinessTask != null && !activeReadinessTask.IsCompleted)
-            {
-                await activeReadinessTask;
-            }
-
             if (VivoxService.Instance != null && VivoxService.Instance.IsLoggedIn)
-            {
-                await VivoxService.Instance.LeaveAllChannelsAsync();
                 await VivoxService.Instance.LogoutAsync();
-            }
         }
         catch (Exception exception)
         {
-            lastError = exception.Message;
+            if (this != null && !isApplicationStopping) lastError = exception.Message;
         }
         finally
         {
-            channelNameByConversationKey.Clear();
-            conversationByChannelName.Clear();
-            providerPlayerIdByUserIdByConversationKey.Clear();
-            serviceUnavailable = false;
-            isShuttingDown = false;
+            if (this != null && !isApplicationStopping)
+            {
+                operationCancellation.Dispose();
+                operationCancellation = new CancellationTokenSource();
+                readinessTask = null;
+                isShuttingDown = false;
+            }
         }
+    }
+
+    private static async Task<bool> AwaitOperationAsync(Task _operation, CancellationToken _cancellation)
+    {
+        TaskCompletionSource<bool> stopped = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using (_cancellation.Register(() => stopped.TrySetResult(true)))
+        {
+            if (await Task.WhenAny(_operation, stopped.Task) != _operation)
+            {
+                _ = ObserveStoppedOperationAsync(_operation);
+                return false;
+            }
+            await _operation;
+            return !_cancellation.IsCancellationRequested;
+        }
+    }
+
+    private static async Task ObserveStoppedOperationAsync(Task _operation)
+    {
+        try { await _operation; }
+        catch (Exception) { }
     }
 
     #endregion

@@ -93,6 +93,7 @@ namespace BingoGame.Chat
             if (_logType == LogType.Error || _logType == LogType.Exception)
             {
                 string message = FormatMessage(_format, _args);
+                if (IsSdkLogoutCancellation(message)) return;
                 if (IsSdkConnectionLog(message) && CaptureFailure(message)) return;
             }
             previousHandler.LogFormat(_logType, _context, _format, _args);
@@ -125,6 +126,14 @@ namespace BingoGame.Chat
                 }
                 return true;
             }
+        }
+
+        private static bool IsSdkLogoutCancellation(string _message)
+        {
+            return _message.StartsWith("[Vivox]", StringComparison.Ordinal) &&
+                _message.Contains("vx_req_account_logout_t failed") &&
+                _message.Contains("System.OperationCanceledException:") &&
+                _message.Contains("The Vivox SDK was uninitialized before this operation completed.");
         }
 
         private static bool IsSdkConnectionLog(string _message)
